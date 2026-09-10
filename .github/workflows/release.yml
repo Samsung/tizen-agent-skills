@@ -1,0 +1,153 @@
+name: Release (tizen-sdk-skills)
+
+# Lives at the ROOT of the tizen-agent-skills repository. Tags are prefixed with
+# the project name so that several projects can release independently from the
+# same repository: tizen-sdk-skills-v1.2.0 -> assets tizen-sdk-v1.2.0.zip and
+# tizen-ai-extension-v1.2.0.vsix.
+on:
+  push:
+    tags:
+      - "tizen-sdk-skills-v*"
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to create (for example, tizen-sdk-skills-v1.2.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Serialize runs per tag: concurrent runs built from different commits
+# would race each other updating the same release.
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-release:
+    name: Build & Release
+    runs-on: ubuntu-latest
+    env:
+      # A tag push supplies github.ref_name. A manual run supplies release_tag.
+      RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          clean: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tizen-sdk-skills/.nvmrc
+
+      - name: Install pnpm
+        run: npm install -g pnpm@10
+
+      - name: Verify toolchain
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Derive version from tag
+        id: ver
+        run: |
+          set -euo pipefail
+          case "${RELEASE_TAG}" in
+            tizen-sdk-skills-v*) ;;
+            *) echo "Tag '${RELEASE_TAG}' must look like tizen-sdk-skills-vX.Y.Z" >&2; exit 1 ;;
+          esac
+          VERSION="${RELEASE_TAG#tizen-sdk-skills-v}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # The ZIP stamps plugin.json from tizen-cli/package.json while the VSIX
+      # takes the tag's version, so a tag that does not match the manifests
+      # would publish two assets claiming different versions. Refuse it.
+      - name: Check tag against package manifests
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+          status=0
+          for manifest in tizen-sdk-skills/package.json \
+                          tizen-sdk-skills/tizen-cli/package.json \
+                          tizen-sdk-skills/vscode/package.json; do
+            declared="$(node -p "require('./${manifest}').version")"
+            if [ "${declared}" != "${VERSION}" ]; then
+              echo "::error file=${manifest}::version ${declared} does not match tag version ${VERSION}"
+              status=1
+            fi
+          done
+          exit "${status}"
+
+      # tizen-cli and the VS Code extension are pnpm-managed (pnpm-lock.yaml),
+      # the same way ci.yml installs them.
+      - name: Install dependencies (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm run build
+
+      - name: Package dist directory
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: zip -r "tizen-sdk-v${{ steps.ver.outputs.version }}.zip" dist/
+
+      - name: Install dependencies (vscode extension)
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm install --frozen-lockfile
+
+      # Pass the tag's semver value to vsce so the packaged extension version
+      # changes with each release. This modifies package.json only on the
+      # ephemeral runner; --no-git-tag-version avoids creating a commit/tag.
+      - name: Build VSIX
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm exec vsce package "${{ steps.ver.outputs.version }}" --no-git-tag-version --out "tizen-ai-extension-v${{ steps.ver.outputs.version }}.vsix"
+
+      # Re-running an existing tag updates the release in place instead of
+      # deleting it: assets are replaced by name (--clobber), so the
+      # name-based download URLs stay valid for anyone they were shared
+      # with; the notes are regenerated so they don't stay frozen at the
+      # tag's original commit.
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          CLI_ZIP="tizen-sdk-skills/tizen-cli/tizen-sdk-v${VERSION}.zip"
+          VSIX="tizen-sdk-skills/vscode/tizen-ai-extension-v${VERSION}.vsix"
+
+          if gh release view "${RELEASE_TAG}" &>/dev/null; then
+            echo "Release ${RELEASE_TAG} exists; updating it in place"
+
+            # Only a manual run may move the tag. A tag-push run must NEVER
+            # push the tag back: once runs for two different commits exist,
+            # each re-push really moves the tag, every real move fires
+            # another tag-push event, and the runs retrigger each other
+            # forever, ping-ponging the tag between commits.
+            if [ "${EVENT_NAME}" = "workflow_dispatch" ]; then
+              git tag -f "${RELEASE_TAG}" "${SHA}"
+              git push -f origin "refs/tags/${RELEASE_TAG}"
+            fi
+
+            # Replace assets by name so their download URLs stay stable.
+            gh release upload "${RELEASE_TAG}" --clobber "${CLI_ZIP}" "${VSIX}"
+
+            # Regenerate the notes at the new commit and publish a leftover draft
+            # (a no-op when the release is already live).
+            gh release edit "${RELEASE_TAG}" --target "${SHA}" --generate-notes --draft=false
+          else
+            echo "Creating new release ${RELEASE_TAG}"
+            gh release create "${RELEASE_TAG}" \
+              --target "${SHA}" \
+              --title "${RELEASE_TAG}" \
+              --generate-notes \
+              "${CLI_ZIP}" "${VSIX}"
+          fi

@@ -1,0 +1,27 @@
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+
+  # tizen-sdk-skills — one entry per package manifest
+  - package-ecosystem: npm
+    directory: /tizen-sdk-skills
+    schedule:
+      interval: monthly
+    groups:
+      lint-tooling:
+        patterns: ["*"]
+  - package-ecosystem: npm
+    directory: /tizen-sdk-skills/tizen-cli
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /tizen-sdk-skills/vscode
+    schedule:
+      interval: monthly
+  - package-ecosystem: npm
+    directory: /tizen-sdk-skills/tests
+    schedule:
+      interval: monthly

@@ -1,0 +1,33 @@
+# Node
+node_modules/
+*/tizen-cli/dist/
+*/vscode/dist/
+*.vsix
+*.tgz
+
+# Credentials and local settings — never commit
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+settings.local.json
+# Allow the documented throwaway test fixture
+!tizen-sdk-skills/tests/fixtures/certs/test-fixture-author.p12
+
+# AI-assistant working directories and per-user instructions
+.claude/
+.codex/
+.gemini/
+.cline/
+.wolf/
+.workspace_rag/
+CLAUDE.md
+AGENTS.md
+GEMINI.md
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.swp

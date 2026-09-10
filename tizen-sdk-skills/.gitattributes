@@ -1,0 +1,36 @@
+# Default: auto-detect text files, EOL set per file type below
+* text=auto
+
+# Text files — LF enforced
+*.md        text eol=lf
+*.sh        text eol=lf
+*.py        text eol=lf
+*.js        text eol=lf
+*.json      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.xml       text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.h         text eol=lf
+*.c         text eol=lf
+*.cs        text eol=lf
+*.csproj    text eol=lf
+*.prop      text eol=lf
+*.txt       text eol=lf
+# Source files formatted by Prettier (endOfLine: lf) must check out LF on
+# Windows too, otherwise `pnpm run format:check` fails on every line.
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.ts        text eol=lf
+# Extensionless Cline hook adapter — a CRLF checkout breaks it on macOS/Linux.
+cline/hooks/PreToolUse text eol=lf
+
+# PowerShell / Batch — Windows target, keep CRLF
+*.ps1       text eol=crlf
+*.bat       text eol=crlf
+
+# Binary — no EOL conversion
+*.png       binary
+# tizen-dlog-analyzer native binaries (no file extension)
+tizen-dlog-analyzer binary

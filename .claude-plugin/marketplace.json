@@ -1,0 +1,19 @@
+{
+  "name": "tizen-platform",
+  "displayName": "Tizen Platform Plugins",
+  "owner": {
+    "name": "Samsung Electronics"
+  },
+  "description": "Claude Code plugins for Tizen Platform development — build, debug, analyze, and review Tizen projects.",
+  "version": "1.2.0",
+  "plugins": [
+    {
+      "name": "tizen-sdk-skills",
+      "source": "./tizen-sdk-skills/common",
+      "description": "Automate Tizen SDK setup, project creation, build, and debugging",
+      "version": "1.2.0",
+      "category": "Productivity",
+      "keywords": ["tizen", "sdk", "gdb", "debug", "project", "automation"]
+    }
+  ]
+}
