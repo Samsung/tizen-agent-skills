@@ -1,0 +1,15 @@
+# TC-CLI-021: Delete project
+id: tizen-sdk.project-delete.happy
+plugin: tizen-sdk
+command: project-delete
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "project-delete --project returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "project-delete", "--project", "/tmp/tizen-apps/MyTizenApp01"]
+    timeout_sec: 30
+    expect:
+      status: success

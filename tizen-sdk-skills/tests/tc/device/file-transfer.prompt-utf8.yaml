@@ -1,0 +1,19 @@
+# TC-P-082: Prompt — Transfer file with UTF-8 path
+id: tizen-sdk.file-transfer.prompt-utf8
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to file-transfer command"
+
+lanes:
+  prompt:
+    text: "Push a file with Korean characters in the path to the device."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk file-transfer"
+      envelope_status: success
+    pass_rate: "2/3"

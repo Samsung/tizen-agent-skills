@@ -1,0 +1,15 @@
+# TC-CLI-082: With breakpoints
+id: tizen-sdk.dotnet-debug.breakpoints
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug --app-id --breakpoints returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp", "--breakpoints", "Program.cs:25,App.cs:10"]
+    timeout_sec: 120
+    expect:
+      status: success

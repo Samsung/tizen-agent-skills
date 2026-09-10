@@ -1,0 +1,17 @@
+# TC-CLI-062: Emulator manager invalid action
+id: tizen-sdk.emulator-manager.invalid-action
+plugin: tizen-sdk
+command: emulator-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager with unknown --action returns failure"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "bogus"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

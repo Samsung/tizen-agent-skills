@@ -1,0 +1,15 @@
+# TC-CLI-119: Edit bookmark (rename)
+id: tizen-sdk.remote-device.edit-rename
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action edit --ip --name returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "edit", "--ip", "192.168.1.50", "--name", "Bedroom TV"]
+    timeout_sec: 30
+    expect:
+      status: success

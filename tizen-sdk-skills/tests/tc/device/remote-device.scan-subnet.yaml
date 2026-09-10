@@ -1,0 +1,15 @@
+# TC-CLI-111: Scan specific subnet
+id: tizen-sdk.remote-device.scan-subnet
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action scan --subnet returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "scan", "--subnet", "192.168.1"]
+    timeout_sec: 120
+    expect:
+      status: success

@@ -1,0 +1,22 @@
+# Verify validate-repo-url succeeds with a valid Tizen repository URL.
+# Source: command-specs/sdk.ts — --repo-url required, read-only
+id: tizen-sdk.validate-repo-url.happy
+plugin: tizen-sdk
+command: validate-repo-url
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "validate-repo-url returns success for the official Tizen SDK repository"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "validate-repo-url",
+        "--repo-url",
+        "https://download.tizen.org/sdk/tizenstudio/official",
+      ]
+    timeout_sec: 60
+    expect:
+      status: success

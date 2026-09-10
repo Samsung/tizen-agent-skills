@@ -1,0 +1,15 @@
+# TC-CLI-049: List templates / platforms
+id: tizen-sdk.emulator-manager.list-template
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action list-template returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "list-template"]
+    timeout_sec: 30
+    expect:
+      status: success

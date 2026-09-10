@@ -1,0 +1,17 @@
+# TC-CLI-015: List all templates
+id: tizen-sdk.list-templates.happy
+plugin: tizen-sdk
+command: list-templates
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "list-templates returns success with templates array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "list-templates"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.templates", min_length: 1 }

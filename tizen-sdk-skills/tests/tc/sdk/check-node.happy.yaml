@@ -1,0 +1,21 @@
+# Verify check-node returns success with a node version string.
+# Source: command-specs/check.ts — no options, requiresSdk: false
+id: tizen-sdk.check-node.happy
+plugin: tizen-sdk
+command: check-node
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "check-node returns success with version matching v<digits>"
+
+lanes:
+  cli:
+    # The actual field is "version" (see common/lib/core/check.js), not
+    # "node_version" — the TC named it after the option's purpose rather
+    # than the real response key.
+    argv: ["tizen-sdk", "check-node"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.version", matches: "^v\\d+" }

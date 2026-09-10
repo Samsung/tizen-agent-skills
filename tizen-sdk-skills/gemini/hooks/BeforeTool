@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Samsung Electronics Co., Ltd.
+
+# Gemini CLI BeforeTool hook — tizen-sdk-skills guard adapter.
+# marker: tizen-sdk-skills (setup uses this to detect its own install)
+#
+# Bridges Gemini CLI's hook protocol to the shared guard scripts installed next
+# to this file (check-tizen-commands.sh, check-project-writes.sh), so every
+# harness enforces the same rules from ONE source.
+#
+#   Gemini stdin : {"hook_event_name":"BeforeTool","tool_name":"run_shell_command",
+#                   "tool_input":{"command":"..."}, ...}
+#   Guard stdin  : {"tool_name":"Bash","tool_input":{"command":"..."}}
+#   Guard stdout : {"hookSpecificOutput":{"permissionDecision":"deny","permissionDecisionReason":"..."}}
+#   Gemini stdout: {"decision":"deny","reason":"..."} to block; nothing (exit 0) to allow.
+#
+# Gemini's stdin already carries tool_name + tool_input, so this only renames
+# the tool (run_shell_command -> Bash, write_file/replace -> Write) and converts
+# the deny JSON. Exit code is always 0; deny is signalled via JSON.
+#
+# Installed by common/setup (hosts/gemini.sh) to ~/.gemini/hooks/tizen-sdk-skills/
+# and referenced from ~/.gemini/settings.json:
+#   hooks.BeforeTool[{ matcher: "run_shell_command|write_file|replace",
+#                      hooks: [{ type: "command", command: "bash \"<this file>\"" }] }]
+
+input="$(cat)"
+guard_dir="$(cd "$(dirname "$0")" && pwd)"
+
+allow() { exit 0; }
+
+# Raw JSON-escaped string value for a key (keeps \\ and \" pairs intact — the
+# guard rules depend on the escaped encoding).
+json_val() {
+  printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
+}
+
+tool="$(json_val "$input" tool_name)"
+
+case "$tool" in
+  run_shell_command)
+    cmd="$(json_val "$input" command)"
+    [ -n "$cmd" ] || allow
+    payload='{"tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}'
+    ;;
+  write_file|replace)
+    # Cut from "content"/"old_string"/"new_string" on before extracting the path,
+    # so a file body containing "file_path":"…" cannot hijack the match.
+    head_part="${input%%\"content\"*}"
+    head_part="${head_part%%\"old_string\"*}"
+    head_part="${head_part%%\"new_string\"*}"
+    fp="$(json_val "$head_part" file_path)"
+    [ -n "$fp" ] || allow
+    payload='{"tool_name":"Write","tool_input":{"file_path":"'"$fp"'"}}'
+    ;;
+  *)
+    allow
+    ;;
+esac
+
+for guard in check-tizen-commands.sh check-project-writes.sh; do
+  [ -f "$guard_dir/$guard" ] || continue
+  out="$(printf '%s' "$payload" | bash "$guard_dir/$guard" 2>/dev/null)" || continue
+  if printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then
+    reason="$(printf '%s' "$out" | sed -nE 's/.*"permissionDecisionReason":"((\\.|[^"\\])*)".*/\1/p')"
+    printf '{"decision":"deny","reason":"%s"}\n' "$reason"
+    exit 0
+  fi
+done
+
+allow

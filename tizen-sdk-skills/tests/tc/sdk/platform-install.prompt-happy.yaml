@@ -1,0 +1,19 @@
+# TC-P-009: Prompt — Install Tizen platform package
+id: tizen-sdk.platform-install.prompt-happy
+plugin: tizen-sdk
+command: platform-install
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Install the Tizen platform package version 10.0' to platform-install"
+
+lanes:
+  prompt:
+    text: "Install the Tizen platform package version 10.0"
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk platform-install"
+      envelope_status: success
+    pass_rate: "2/3"

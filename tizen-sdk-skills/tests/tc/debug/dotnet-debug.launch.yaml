@@ -1,0 +1,15 @@
+# TC-CLI-081: Launch mode
+id: tizen-sdk.dotnet-debug.launch
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug --app-id --mode launch returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp", "--mode", "launch"]
+    timeout_sec: 120
+    expect:
+      status: success

@@ -1,0 +1,29 @@
+# TC-P-108: Prompt — Run doctor health check
+#
+# `--doctor` under the tizen-sdk PLUGIN is a meta-flag handled inside
+# the plugin's own entry point (index.ts), never registered as a Commander
+# command — so it never appears in the plugin's schema and the MCP gateway's
+# tizen_cli_run_commands rejects it with "Command not found" (verified live).
+# The reachable, and actually more complete, equivalent is the CLI's own
+# `doctor` — a CORE command (plugin: "core") that aggregates health checks
+# across every installed plugin, tizen-sdk included. Confirmed live:
+# run_commands(plugin="core", command="doctor", args={}) -> status: success,
+# 13 checks across core/gbs/tizen-sdk (Node, SDK path, sdb, em-cli...).
+id: tizen-sdk.meta.prompt-doctor
+plugin: tizen-sdk
+command: --doctor
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves a health-check prompt to the core plugin's doctor command"
+
+lanes:
+  prompt:
+    text: "Run a health check on my Tizen development environment."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "core doctor"
+      envelope_status: success
+    pass_rate: "2/3"

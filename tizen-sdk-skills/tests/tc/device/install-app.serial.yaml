@@ -1,0 +1,17 @@
+# TC-CLI-073: Install on specific device
+id: tizen-sdk.install-app.serial
+plugin: tizen-sdk
+command: install-app
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "install-app --package --serial returns success on specific device"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk", "--serial", "emulator-26101"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.device_id", min_length: 1 }

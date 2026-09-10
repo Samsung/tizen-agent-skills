@@ -1,0 +1,19 @@
+# Required-omission negative TC: --repo-url is required (collectAllMissing).
+# Source: command-specs/sdk.ts — collectAllMissing: true, --repo-url required
+id: tizen-sdk.sdk-install-custom-repo.missing-required
+plugin: tizen-sdk
+command: sdk-install-custom-repo
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-install-custom-repo fails with invalid_argument when --repo-url is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install-custom-repo"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

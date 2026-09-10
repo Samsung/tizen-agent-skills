@@ -1,0 +1,17 @@
+# TC-CLI-079: GDB debug missing required
+id: tizen-sdk.gdb-debug.missing-required-explicit
+plugin: tizen-sdk
+command: gdb-debug
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "gdb-debug without --app-id returns failure with invalid_argument"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "gdb-debug", "--binary", "/tmp/MyApp/bin/MyApp"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

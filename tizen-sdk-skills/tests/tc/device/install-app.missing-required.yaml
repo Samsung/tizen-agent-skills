@@ -1,0 +1,19 @@
+# Required-omission: --package is required.
+# Source: command-specs/device.ts — --package required
+id: tizen-sdk.install-app.missing-required
+plugin: tizen-sdk
+command: install-app
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "install-app fails with invalid_argument when --package is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-app"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

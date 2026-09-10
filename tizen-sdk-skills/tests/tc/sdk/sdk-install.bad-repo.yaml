@@ -1,0 +1,23 @@
+# TC-CLI-010: Install from non-existent repo
+id: tizen-sdk.sdk-install.bad-repo
+plugin: tizen-sdk
+command: sdk-install
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-install with unreachable repo URL returns failure"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install", "--repo-url", "http://localhost:1/bogus"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      # The actual category is the more specific "repo_url_unreachable" (URL
+      # is well-formed but serves no pkg_list for this OS) — see
+      # common/lib/envelope/envelope.js. "network_error" was never a category
+      # this plugin emits; the actual response is more informative (includes
+      # a suggested_fix), so the TC is corrected to match it rather than
+      # widening the product's error taxonomy.
+      errors:
+        - { error_category: "repo_url_unreachable" }

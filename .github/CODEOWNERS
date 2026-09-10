@@ -1,0 +1,59 @@
+# Code owners for the tizen-agent-skills repository.
+#
+# Lives at the repository ROOT; every project path is prefixed with its
+# directory. The tizen-sdk-skills section mirrors
+# tizen-sdk-skills/GOVERNANCE.md §2.1.1 (roster) / §1.1.2 (modules) — keep the
+# two in sync. Later lines override earlier ones.
+#
+# TODO(open-source release): fill in the github.com handles of the Maintainers
+# and Reviewers before enabling branch protection. Every line below is
+# commented out until then so that GitHub does not error on unknown handles.
+
+# ---------------------------------------------------------------------------
+# tizen-sdk-skills
+# ---------------------------------------------------------------------------
+
+# Fallback: all code owners (Maintainers + Reviewers)
+# /tizen-sdk-skills/                       @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+
+# Module: common (single source of truth) + repo scripts
+# /tizen-sdk-skills/common/                @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/scripts/               @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+
+# Module: tizen-cli
+# /tizen-sdk-skills/tizen-cli/             @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+
+# Module: vscode
+# /tizen-sdk-skills/vscode/                @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-3>
+
+# Module: harness wrappers
+# /tizen-sdk-skills/claude/                @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/cline/                 @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/codex/                 @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/gemini/                @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+
+# Module: tests & docs
+# /tizen-sdk-skills/tests/                 @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/docs/                  @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/usage/                 @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+# /tizen-sdk-skills/*.md                   @<maintainer-1> @<maintainer-2> @<maintainer-3> @<reviewer-1> @<reviewer-2> @<reviewer-3>
+
+# Project infrastructure & governance: Maintainers only (must come after *.md)
+# /tizen-sdk-skills/package.json           @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/pnpm-lock.yaml         @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/eslint.config.mjs      @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/.prettierrc.json       @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/.prettierignore        @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/.gitattributes         @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/LICENSE                @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/NOTICE                 @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/GOVERNANCE.md          @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/GOVERNANCE.ko.md       @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/CONTRIBUTING.md        @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /tizen-sdk-skills/CONTRIBUTING.ko.md     @<maintainer-1> @<maintainer-2> @<maintainer-3>
+
+# Repository-root infrastructure (shared by every project)
+# /.github/                                @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /.claude-plugin/                         @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /LICENSE                                 @<maintainer-1> @<maintainer-2> @<maintainer-3>
+# /*.md                                    @<maintainer-1> @<maintainer-2> @<maintainer-3>

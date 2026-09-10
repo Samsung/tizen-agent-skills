@@ -1,0 +1,34 @@
+tizen-sdk-skills
+Copyright 2026 Samsung Electronics Co., Ltd.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes or redistributes the following third-party material:
+
+1. tizen-dlog-analyzer prebuilt binaries
+   common/tools/tizen-dlog-analyzer/{linux,windows}/
+   PyInstaller bundles of the Tizen DLog Analyzer (Apache-2.0, Samsung Electronics)
+   embedding CPython, OpenSSL, zlib, bzip2, xz, Expat, libffi, libuuid, pydantic,
+   typer, click, rich, Pygments, colorama and others. The component list, licenses
+   and SHA-256 checksums are in common/tools/tizen-dlog-analyzer/NOTICE.md.
+
+2. Samsung TV developer CA certificates
+   common/assets/samsung-tv-ca/vd_tizen_dev_author_ca.cer
+   common/assets/samsung-tv-ca/vd_tizen_dev_partner2.crt
+   common/assets/samsung-tv-ca/vd_tizen_dev_public2.crt
+   Public CA certificates (no private keys) as distributed with the Samsung TV SDK
+   extension, used by the certificate manager to build TV signing profiles.
+   Copyright Samsung Electronics Co., Ltd.
+
+3. Tizen project templates
+   common/scripts/tizen-create-project/templates/{native,web,dotnet,platform}/
+   Derived from the sample project templates shipped with Tizen Studio and the
+   Tizen DALi demo (https://www.tizen.org), used to scaffold new user projects.
+   The DALi demo packaging spec declares Apache-2.0; the remaining template
+   files carry no per-file license header and are redistributed here under
+   Apache-2.0.
+
+4. Runtime dependencies
+   The tizen-cli harness bundles `commander` (MIT) via esbuild; the VS Code
+   extension and the test suite declare their npm dependencies in their own
+   package.json files, each under the license recorded in the npm registry.

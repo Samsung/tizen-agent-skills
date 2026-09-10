@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Samsung/tizen-agent-skills/tizen-sdk-skills/tests/schema/tc-schema.json",
+  "title": "tizen-sdk test case",
+  "description": "TC YAML schema for the tizen-sdk plugin test suite. Each TC verifies a command's envelope output (cli lane) and/or LLM tool-call behavior (prompt lane).",
+  "type": "object",
+  "required": [
+    "id",
+    "plugin",
+    "command",
+    "tier",
+    "status",
+    "since_cli",
+    "lanes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+\\.[a-z0-9-]+(\\.[a-z0-9-]+)+$",
+      "description": "<plugin>.<command>.<variant> — globally unique"
+    },
+    "plugin": { "type": "string", "minLength": 1 },
+    "command": { "type": "string", "minLength": 1 },
+    "tier": { "enum": ["safe", "mutating", "device", "skip"] },
+    "status": {
+      "enum": ["draft", "candidate", "approved", "quarantined"],
+      "description": "Verification lifecycle. draft = authored but never executed, assertions unproven. candidate = executed and passing, but not every lane is verified yet. approved = every lane executed and passing; a regression here is a release blocker. quarantined = known unstable or environment-broken; excluded from runs unless --status=quarantined is passed."
+    },
+    "since_cli": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Auto-SKIP below this tizen-cli release version"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this TC verifies"
+    },
+    "fixtures": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "description": "Fixture IDs required by this TC (future use)"
+    },
+    "requires": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "capabilities": {
+          "type": "array",
+          "items": { "enum": ["kvm", "dind", "chroot", "net-device"] }
+        },
+        "forbid_capabilities": {
+          "type": "array",
+          "items": { "enum": ["kvm", "dind", "chroot", "net-device"] }
+        }
+      }
+    },
+    "lanes": {
+      "type": "object",
+      "description": "At least one lane. A TC may be cli-only, prompt-only, or both.",
+      "anyOf": [{ "required": ["cli"] }, { "required": ["prompt"] }],
+      "additionalProperties": false,
+      "properties": {
+        "cli": { "$ref": "#/$defs/cliLane" },
+        "prompt": { "$ref": "#/$defs/promptLane" }
+      }
+    }
+  },
+
+  "$defs": {
+    "argv": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+
+    "cliLane": {
+      "type": "object",
+      "required": ["argv", "timeout_sec", "expect"],
+      "additionalProperties": false,
+      "properties": {
+        "argv": { "$ref": "#/$defs/argv" },
+        "timeout_sec": { "type": "integer", "minimum": 1, "maximum": 14400 },
+        "env": {
+          "type": "object",
+          "additionalProperties": { "type": "string" },
+          "description": "Per-TC env overrides applied to the exec only"
+        },
+        "expect": { "$ref": "#/$defs/cliExpect" }
+      }
+    },
+
+    "cliExpect": {
+      "type": "object",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": { "enum": ["success", "failure"] },
+        "jsonpath": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/jsonpathMatcher" }
+        },
+        "errors": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/errorMatcher" }
+        }
+      }
+    },
+
+    "jsonpathMatcher": {
+      "type": "object",
+      "required": ["path"],
+      "additionalProperties": false,
+      "minProperties": 2,
+      "properties": {
+        "path": { "type": "string", "pattern": "^\\$" },
+        "matches": { "type": "string", "description": "Regex over the value" },
+        "equals": {},
+        "min_length": { "type": "integer", "minimum": 0 },
+        "not_contains": { "type": "string" }
+      }
+    },
+
+    "errorMatcher": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "error_code": { "type": "string" },
+        "error_category": { "type": "string" },
+        "has_suggested_fix": { "type": "boolean" }
+      }
+    },
+
+    "promptLane": {
+      "type": "object",
+      "required": [
+        "text",
+        "timeout_sec",
+        "max_tool_calls",
+        "expect",
+        "pass_rate"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "timeout_sec": { "type": "integer", "minimum": 1, "maximum": 14400 },
+        "max_tool_calls": { "type": "integer", "minimum": 1, "maximum": 32 },
+        "expect": {
+          "type": "object",
+          "additionalProperties": false,
+          "minProperties": 1,
+          "description": "Every key is judged from the MCP trace or envelope — never from LLM narrative",
+          "properties": {
+            "must_call_tool": { "type": "string", "minLength": 1 },
+            "must_resolve_command": { "type": "string", "minLength": 1 },
+            "must_pass_args": {
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": true
+            },
+            "envelope_status": { "enum": ["success", "failure"] }
+          }
+        },
+        "pass_rate": {
+          "type": "string",
+          "pattern": "^[1-9]\\d*/[1-9]\\d*$",
+          "description": "M/N — PASS if at least M of N attempts pass"
+        }
+      }
+    }
+  }
+}

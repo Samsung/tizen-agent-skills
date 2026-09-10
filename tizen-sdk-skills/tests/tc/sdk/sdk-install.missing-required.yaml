@@ -1,0 +1,17 @@
+# TC-CLI-008: Install missing required (no version)
+id: tizen-sdk.sdk-install.missing-required
+plugin: tizen-sdk
+command: sdk-install
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-install fails with invalid_argument when --version-format is invalid"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install", "--version-format", "bogus"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

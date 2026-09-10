@@ -1,0 +1,17 @@
+# TC-CLI-133: Scaffold without --project-dir → failure
+id: tizen-sdk.playwright-test.scaffold-missing-project-dir
+plugin: tizen-sdk
+command: playwright-test
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --scaffold without --project-dir fails (missing required)"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--scaffold", "--app-id", "abcDEF1234.MyWebApp"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

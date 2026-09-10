@@ -1,0 +1,19 @@
+# TC-P-057: Prompt — Debug native app with breakpoints
+id: tizen-sdk.gdb-debug.prompt-breakpoints
+plugin: tizen-sdk
+command: gdb-debug
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to gdb-debug command"
+
+lanes:
+  prompt:
+    text: "Debug my native Tizen app with breakpoints set at main."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk gdb-debug"
+      envelope_status: success
+    pass_rate: "2/3"

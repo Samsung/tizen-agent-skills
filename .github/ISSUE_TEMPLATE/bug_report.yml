@@ -1,0 +1,65 @@
+name: Bug report
+description: Something in a Tizen agent skill does not work as documented
+title: "[tizen-sdk-skills] "
+labels: ["bug", "tizen-sdk-skills"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please **remove any internal hostnames,
+        private IP addresses, personal paths or credentials** from logs before pasting them.
+  - type: dropdown
+    id: project
+    attributes:
+      label: Project
+      options:
+        - tizen-sdk-skills
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options:
+        - Claude Code
+        - Cline
+        - Codex CLI
+        - Gemini CLI
+        - tizen-cli
+        - VS Code extension
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: From `plugin.json` / `tizen-cli tizen-sdk --doctor`
+      placeholder: "1.1.1"
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Host OS
+      placeholder: "Windows 11 / Ubuntu 22.04 / macOS 14"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The prompt you gave the agent and/or the command you ran
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: envelope
+    attributes:
+      label: Standard JSON Envelope / logs
+      description: Paste the envelope returned by the runner (redact private data)
+      render: json

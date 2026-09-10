@@ -1,0 +1,22 @@
+# Verify certificate-manager get-sdk-data-path returns success (read-only action).
+# Source: command-specs/certificate.ts — action get-sdk-data-path, no side effects
+id: tizen-sdk.certificate-manager.get-sdk-data-path.happy
+plugin: tizen-sdk
+command: certificate-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager get-sdk-data-path returns success with SDK data path"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "certificate-manager",
+        "--action",
+        "get-sdk-data-path",
+      ]
+    timeout_sec: 30
+    expect:
+      status: success

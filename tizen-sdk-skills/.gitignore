@@ -1,0 +1,34 @@
+# Temp/scratch files
+_tmp_*.ps1
+
+# tizen-cli harness build outputs (tizen-cli)
+node_modules/
+tizen-cli/dist/
+
+# Cline
+.workspace_rag/
+
+# code2spec tool installation and generated output
+.code2spec-tools/
+code2spec/
+
+# Credentials and local settings — never commit
+*.p12
+*.pfx
+*.pem
+*.key
+.env
+.env.*
+settings.local.json
+# Allow the documented throwaway test fixture (see tests/fixtures/README.md)
+!tests/fixtures/certs/test-fixture-author.p12
+
+# AI extension related directories and files
+.claude/
+.codex/
+.gemini/
+.cline/
+.wolf/
+CLAUDE.md
+AGENTS.md
+GEMINI.md

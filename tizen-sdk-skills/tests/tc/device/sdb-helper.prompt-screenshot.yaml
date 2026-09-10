@@ -1,0 +1,33 @@
+# TC-P-075: Prompt — Take screenshot via sdb
+#
+# 6 trials on 2026-08-31: 4/6 resolved to
+# sdb-helper as expected, 2/6 to the standalone `screenshot` command. The
+# majority reasoning was consistent: "using sdb" pins the mechanism, and
+# sdb-helper is the command that maps a natural-language sdb request to the
+# right sdb invocation, whereas `screenshot` is a multi-method flow that
+# prefers host-side xwd for emulators — i.e. not strictly sdb.
+#
+# Note for maintainers: sdb-helper's own intent table marks the screenshot
+# intent `handoff: "tizen-screenshot"` and its handler calls captureScreenshot()
+# first, so both routes converge on the same implementation. That handoff is
+# internal to sdb-helper and does NOT mean callers should skip it — resolving
+# to sdb-helper is correct at the agent level. The 2/6 minority is recorded
+# here so the near-miss is not lost if this TC ever starts flapping.
+id: tizen-sdk.sdb-helper.prompt-screenshot
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to sdb-helper command"
+
+lanes:
+  prompt:
+    text: "Take a screenshot of the device using sdb."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdb-helper"
+      envelope_status: success
+    pass_rate: "2/3"

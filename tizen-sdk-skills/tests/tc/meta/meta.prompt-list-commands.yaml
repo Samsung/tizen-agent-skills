@@ -1,0 +1,30 @@
+# TC-P-110: Prompt — List available commands
+#
+# Calling the tizen-sdk plugin with no args (the CLI's own "list
+# commands" behavior) is not a plugin+command+args triple and cannot be
+# expressed through tizen_cli_run_commands — there is no command name for
+# "no command". The reachable equivalent is the discovery tool
+# tizen_cli_list_commands({ plugin: "tizen-sdk" }) (no `command`),
+# which returns the same 33 commands with descriptions — verified live. This
+# is the identical call as meta.prompt-schema; the CLI happens to expose two
+# different flags (bare vs --schema) for a lightweight list vs full arg
+# detail, but the MCP gateway only exposes the lightweight form either way.
+id: tizen-sdk.meta.prompt-list-commands
+plugin: tizen-sdk
+command: no-args
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves a list-commands prompt to the list_commands discovery tool"
+
+lanes:
+  prompt:
+    text: "List all available Tizen SDK commands."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_list_commands
+      # list_commands has no CLI-invocation concept, so this records the
+      # `plugin` argument the call must carry (no `command`).
+      must_resolve_command: "tizen-sdk"
+    pass_rate: "2/3"

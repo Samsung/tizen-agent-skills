@@ -1,0 +1,17 @@
+# TC-CLI-110: Scan all local subnets
+id: tizen-sdk.remote-device.scan-all
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action scan returns success with devices array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "scan"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.devices", min_length: 0 }

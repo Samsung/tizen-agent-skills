@@ -1,0 +1,19 @@
+{
+  "name": "tizen-sdk-skills",
+  "displayName": "TIZEN SDK SKILLS",
+  "version": "1.2.0",
+  "description": "Claude Code plugin for Tizen SDK installation, project creation, build, and debugging automation",
+  "author": {
+    "name": "Samsung Electronics"
+  },
+  "license": "Apache-2.0",
+  "repository": "https://github.com/Samsung/tizen-agent-skills",
+  "keywords": [
+    "tizen",
+    "sdk",
+    "gdb",
+    "debug",
+    "project",
+    "automation"
+  ]
+}

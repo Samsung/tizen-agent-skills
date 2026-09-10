@@ -1,0 +1,16 @@
+id: tizen-sdk.file-transfer.pull-missing-remote
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "file-transfer --direction pull of a remote path that does not exist on the device fails with remote_path_not_found (issue #95) — not a bare io_error, so the agent stops instead of retrying"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer", "--direction", "pull", "--remote", "/tmp/tizen-sdk-skills-definitely-missing-95.txt", "--local", "/tmp/logs/"]
+    timeout_sec: 60
+    expect:
+      status: failure
+      errors:
+        - { error_category: "remote_path_not_found", has_suggested_fix: true }

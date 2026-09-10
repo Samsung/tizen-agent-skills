@@ -1,0 +1,15 @@
+# TC-CLI-083: On specific device
+id: tizen-sdk.dotnet-debug.serial
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug --app-id --serial returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp", "--serial", "emulator-26101"]
+    timeout_sec: 120
+    expect:
+      status: success

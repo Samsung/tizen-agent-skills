@@ -1,0 +1,23 @@
+# TC-CLI-042: Samsung: generate distributor cert
+id: tizen-sdk.certificate-manager.generate-samsung-distributor
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action generate-samsung-distributor returns success"
+
+# NOTE (2026-09-01): --profile-name is required (see
+# generateSamsungDistributorCertificate() in common/lib/core/samsung-cert.js)
+# but was missing from the original argv. Added it — this fixes the
+# argument shape, verified by static reading only. Not executed: this
+# action calls the real Samsung online-CA backend against the operator's
+# real Samsung account (issuing a real distributor certificate), which is
+# a live-service side effect this suite should not trigger without
+# explicit sign-off. Left as draft.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "generate-samsung-distributor", "--password", "${FIXTURE_CERT_UNLOCK}", "--duid-list", "abc123,def456", "--privilege", "Public", "--profile-name", "myProfile"]
+    timeout_sec: 120
+    expect:
+      status: success

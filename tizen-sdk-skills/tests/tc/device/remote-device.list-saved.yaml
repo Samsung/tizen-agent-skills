@@ -1,0 +1,15 @@
+# TC-CLI-117: List saved bookmarks
+id: tizen-sdk.remote-device.list-saved
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action list-saved returns success with saved bookmarks"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "list-saved"]
+    timeout_sec: 30
+    expect:
+      status: success

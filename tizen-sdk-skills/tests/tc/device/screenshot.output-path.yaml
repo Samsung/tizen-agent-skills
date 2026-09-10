@@ -1,0 +1,17 @@
+# TC-CLI-092: Screenshot with output path
+id: tizen-sdk.screenshot.output-path
+plugin: tizen-sdk
+command: screenshot
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "screenshot --output returns success with screenshot_path at specified location"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "screenshot", "--output", "/tmp/shots/screen.png"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.screenshot_path", min_length: 1 }

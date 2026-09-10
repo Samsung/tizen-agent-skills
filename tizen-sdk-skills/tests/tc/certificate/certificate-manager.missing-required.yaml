@@ -1,0 +1,19 @@
+# Required-omission: generate-author action requires --name and --password.
+# Source: command-specs/certificate.ts — default action generate-author, --name/--password required
+id: tizen-sdk.certificate-manager.missing-required
+plugin: tizen-sdk
+command: certificate-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager generate-author fails when --name and --password are missing"
+
+lanes:
+  cli:
+    argv:
+      ["tizen-sdk", "certificate-manager", "--action", "generate-author"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

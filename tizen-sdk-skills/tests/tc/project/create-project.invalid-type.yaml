@@ -1,0 +1,28 @@
+# Invalid choice: --type must be one of native|dotnet|webapp|rpk|tv|platform.
+# Source: command-specs/project.ts — choices: PROJECT_TYPES
+id: tizen-sdk.create-project.invalid-type
+plugin: tizen-sdk
+command: create-project
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "create-project fails with invalid_argument when --type is not a valid choice"
+
+lanes:
+  cli:
+    argv:
+      - "tizen-sdk"
+      - "create-project"
+      - "--type"
+      - "invalid-type"
+      - "--template"
+      - "EmptyApplication"
+      - "--parent-path"
+      - "/tmp"
+      - "--name"
+      - "TestApp"
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"

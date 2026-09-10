@@ -1,0 +1,26 @@
+# TC-CLI-001: Init with explicit path
+id: tizen-sdk.sdk-init.explicit-path
+plugin: tizen-sdk
+command: sdk-init
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-init with explicit --path returns success"
+
+lanes:
+  cli:
+    # Two bugs: the flag is --sdk-path, not --path (sdk-init's own spec has no
+    # --path option, so this hit commander.unknownOption before ever reaching
+    # the handler); and "C:\tizen-sdk" isn't a real path on Linux/macOS. Use
+    # the real flag name and a directory that exists on this OS.
+    #
+    # NOTE: sdk-init really does write ~/.tizen.sdk.path.config on every run
+    # despite tier: safe — running this TC changes the machine's configured
+    # Tizen SDK path as a side effect. Re-run `sdk-init` with the real path
+    # afterward if you need the machine's SDK path restored.
+    argv: ["tizen-sdk", "sdk-init", "--sdk-path", "/tmp"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.sdk_path", min_length: 1 }

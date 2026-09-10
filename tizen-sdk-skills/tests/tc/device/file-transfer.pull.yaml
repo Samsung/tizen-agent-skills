@@ -1,0 +1,18 @@
+# TC-CLI-106: Pull
+id: tizen-sdk.file-transfer.pull
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "file-transfer --direction pull returns success with bytes_transferred"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer", "--direction", "pull", "--remote", "/tmp/log.txt", "--local", "/tmp/logs/"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.direction", matches: "pull" }
+        - { path: "$.result.bytes_transferred", matches: "^\\d+" }

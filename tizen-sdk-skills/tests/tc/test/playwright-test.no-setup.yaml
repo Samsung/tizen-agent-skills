@@ -1,0 +1,15 @@
+# TC-CLI-129: Run with --no-setup (reuse existing CDP)
+id: tizen-sdk.playwright-test.no-setup
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --app-id --test-file --no-setup returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--no-setup"]
+    timeout_sec: 120
+    expect:
+      status: success

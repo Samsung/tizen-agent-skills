@@ -1,0 +1,19 @@
+# TC-P-026: Prompt 1 — Generate an author certificate
+id: tizen-sdk.certificate-manager.prompt-happy
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Generate an author certificate with name Jane Dev' to certificate-manager generate-author WITHOUT a --password argument. The password policy (issue #99) forbids passing a secret on the command line, so the unattended call fails (generate-author requires a password source) and the LLM must then offer the two sanctioned routes (interactive --prompt-password command, or a protected --password-file) — never a successful unattended generation. The prompt deliberately carries no password; a prompt that includes one must still not be forwarded as --password."
+
+lanes:
+  prompt:
+    text: "Generate an author certificate with name Jane Dev"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk certificate-manager"
+      envelope_status: failure
+    pass_rate: "2/3"

@@ -1,0 +1,15 @@
+# TC-CLI-050: Emulator manager detail
+id: tizen-sdk.emulator-manager.detail
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action detail returns success with VM details"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "detail", "--vm-name", "test-vm"]
+    timeout_sec: 30
+    expect:
+      status: success

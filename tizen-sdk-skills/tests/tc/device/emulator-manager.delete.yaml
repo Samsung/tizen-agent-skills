@@ -1,0 +1,15 @@
+# TC-CLI-059: Delete VM
+id: tizen-sdk.emulator-manager.delete
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action delete --vm-name returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "delete", "--vm-name", "test-vm"]
+    timeout_sec: 60
+    expect:
+      status: success

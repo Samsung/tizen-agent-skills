@@ -1,0 +1,15 @@
+# TC-CLI-131: On specific device
+id: tizen-sdk.playwright-test.serial
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --app-id --test-file --serial returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--serial", "emulator-26101"]
+    timeout_sec: 120
+    expect:
+      status: success

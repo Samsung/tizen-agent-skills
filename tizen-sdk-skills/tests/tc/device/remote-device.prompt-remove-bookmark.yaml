@@ -1,0 +1,19 @@
+# TC-P-095: Prompt — Remove remote device bookmark
+id: tizen-sdk.remote-device.prompt-remove-bookmark
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to remote-device command"
+
+lanes:
+  prompt:
+    text: "Remove the bookmark for My TV."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk remote-device"
+      envelope_status: success
+    pass_rate: "2/3"

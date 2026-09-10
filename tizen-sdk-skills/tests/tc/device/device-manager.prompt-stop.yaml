@@ -1,0 +1,19 @@
+# TC-P-034: Prompt — Stop all emulators
+id: tizen-sdk.device-manager.prompt-stop
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to device-manager command"
+
+lanes:
+  prompt:
+    text: "Stop all running Tizen emulators."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk device-manager"
+      envelope_status: success
+    pass_rate: "2/3"

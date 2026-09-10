@@ -1,0 +1,31 @@
+# csproj file path
+csproj_file: {{project_name}}.csproj
+
+# Default profile, Tizen API version
+profile: {{ProfileID}}
+api_version: "{{APIVersion}}"
+
+# Build type [Debug/ Release/ Test]
+build_type: {{BuildType}}
+
+# Signing profile to be used for Tizen package signing
+# If value is empty: "", active signing profile will be used
+# Else If value is ".", default signing profile will be used
+signing_profile: "{{SigningProfile}}"
+
+# files monitored for dirty/modified status
+files:
+  - {{project_name}}.csproj
+  - {{project_name}}.cs
+  - tizen-manifest.xml
+  - shared/res/{{project_name}}.png
+
+# project dependencies
+{{- if .Deps }}
+deps:
+  {{- range unique .Deps}}
+  - {{to_slash .}}
+  {{- end}}
+{{- else}}
+deps: []
+{{- end}}

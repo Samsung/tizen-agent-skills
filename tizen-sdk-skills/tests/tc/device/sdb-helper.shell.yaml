@@ -1,0 +1,17 @@
+# TC-CLI-100: Shell command
+id: tizen-sdk.sdb-helper.shell
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "sdb-helper --request 'run shell command ls -la' returns success with command"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdb-helper", "--request", "run shell command ls -la"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.command", min_length: 1 }

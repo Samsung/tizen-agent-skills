@@ -1,0 +1,19 @@
+# Required-omission: --project is required.
+# Source: command-specs/project.ts — --project required
+id: tizen-sdk.project-delete.missing-required
+plugin: tizen-sdk
+command: project-delete
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "project-delete fails with invalid_argument when --project is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "project-delete"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

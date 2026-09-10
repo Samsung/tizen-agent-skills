@@ -1,0 +1,28 @@
+# TC-CLI-031: Generate author with existing cert (overwrite)
+#
+# CORRECTED (2026-09-01): the original TC passed a --force flag that has
+# never existed on this command, expecting it to overwrite an existing
+# author cert. Neither part holds up: generate-author has no overwrite
+# mechanism at all (--overwrite is only wired to import-certificate, a
+# different action — see importCertificate() vs generateAuthorCertificate()
+# in common/lib/core/certificate.js), and the product deliberately refuses
+# to overwrite regardless — "Certificates are never overwritten" — pointing
+# the caller at a unique --file instead. Rewritten to exercise that actual,
+# documented path: same --name, different --file, so the collision (which
+# is keyed on the output filename, not the author name) doesn't occur.
+id: tizen-sdk.certificate-manager.generate-author-overwrite
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager generate-author with a duplicate --name but unique --file succeeds (no filename collision)"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "generate-author", "--name", "TestDev", "--password", "${FIXTURE_CERT_UNLOCK}", "--file", "TestDev-v2"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.cert_path", min_length: 1 }

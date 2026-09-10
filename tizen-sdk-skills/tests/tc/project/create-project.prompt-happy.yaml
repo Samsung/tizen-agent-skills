@@ -1,0 +1,19 @@
+# TC-P-013: Prompt 1 — Create a new Tizen web app
+id: tizen-sdk.create-project.prompt-happy
+plugin: tizen-sdk
+command: create-project
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Create a new Tizen web app called MyWebApp01' to create-project"
+
+lanes:
+  prompt:
+    text: "Create a new Tizen web app called MyWebApp01 in C:\\tizen-apps"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk create-project"
+      envelope_status: success
+    pass_rate: "2/3"

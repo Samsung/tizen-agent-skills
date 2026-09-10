@@ -1,0 +1,19 @@
+# TC-P-011: Prompt — Install custom rootstrap
+id: tizen-sdk.install-rootstrap.prompt-happy
+plugin: tizen-sdk
+command: install-rootstrap
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Install a custom rootstrap from ZIP file' to install-rootstrap"
+
+lanes:
+  prompt:
+    text: "Install a custom rootstrap from C:\\downloads\\custom-rootstrap.zip"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk install-rootstrap"
+      envelope_status: success
+    pass_rate: "2/3"

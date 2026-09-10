@@ -1,0 +1,29 @@
+# TC-CLI-020: Create with --force (overwrite existing)
+id: tizen-sdk.create-project.force
+plugin: tizen-sdk
+command: create-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "create-project --force overwrites existing project and returns success"
+
+# NOTE (2026-09-01): two fixes. First, the environment issue that also hit
+# the other create-project TCs: --parent-path didn't exist and this SDK had
+# zero webapp templates installed at the time (Basic is a real template
+# name; both were fixed by mutating-tier installs earlier in this session).
+# Second, --name was "MyWebApp01" — identical to create-project.webapp-happy's
+# target. Since these two TCs' files sort alphabetically with .force before
+# .webapp-happy, .force created that project first and .webapp-happy's own
+# (non---force) create then failed on "already exists". Renamed to a
+# dedicated target so this TC no longer depends on sibling-TC ordering; it
+# also means a single run creates fresh rather than genuinely overwriting,
+# but a second run of the suite will then exercise the real overwrite path
+# (--force's documented purpose: "makes fresh-project runs repeatable").
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-project", "--type", "webapp", "--template", "Basic", "--parent-path", "/tmp/tizen-apps", "--name", "MyForceApp01", "--force"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.project_path", min_length: 1 }

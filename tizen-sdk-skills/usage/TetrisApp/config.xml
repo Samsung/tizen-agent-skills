@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://yourdomain/TetrisApp" version="1.0.0" viewmodes="maximized">
+   <name>TetrisApp</name>
+   <icon src="icon.png"></icon>
+   <content src="index.html"></content>
+   <feature name="http://tizen.org/feature/screen.size.all"></feature>
+   <tizen:application id="YJgrMEIE3w.TetrisApp" package="YJgrMEIE3w" required_version="10.0"></tizen:application>
+   <tizen:profile name="tizen"></tizen:profile>
+</widget>

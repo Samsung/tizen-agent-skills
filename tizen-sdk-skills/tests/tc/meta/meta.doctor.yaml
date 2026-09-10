@@ -1,0 +1,17 @@
+# TC-CLI-135: Doctor (environment health check)
+id: tizen-sdk.meta.doctor
+plugin: tizen-sdk
+command: "--doctor"
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "--doctor returns environment checks for Node, shell, scripts dir, SDK, sdb"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "--doctor"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.checks", min_length: 1 }

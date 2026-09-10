@@ -1,0 +1,18 @@
+id: tizen-sdk.file-transfer.prompt-pull-missing
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "Issue #95 — pull of a non-existent device path with a Windows destination: LLM resolves to file-transfer, gets remote_path_not_found, reports it and STOPS (no retry loop). max_tool_calls bounds the retries."
+
+lanes:
+  prompt:
+    text: "Pull /tmp/tizen-sdk-skills-definitely-missing-95.txt from the device to C:\\logs\\"
+    timeout_sec: 300
+    max_tool_calls: 3
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk file-transfer"
+      envelope_status: failure
+    pass_rate: "2/3"

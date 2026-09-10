@@ -1,0 +1,19 @@
+# Required-omission: --request is required.
+# Source: command-specs/device.ts — --request required
+id: tizen-sdk.sdb-helper.missing-required
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "sdb-helper fails with invalid_argument when --request is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdb-helper"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

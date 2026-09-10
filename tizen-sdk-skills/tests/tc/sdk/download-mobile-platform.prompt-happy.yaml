@@ -1,0 +1,19 @@
+# TC-P-010: Prompt — Download Tizen mobile platform
+id: tizen-sdk.download-mobile-platform.prompt-happy
+plugin: tizen-sdk
+command: download-mobile-platform
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Download the Tizen mobile platform version 10.0' to download-mobile-platform"
+
+lanes:
+  prompt:
+    text: "Download the Tizen mobile platform version 10.0"
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk download-mobile-platform"
+      envelope_status: success
+    pass_rate: "2/3"

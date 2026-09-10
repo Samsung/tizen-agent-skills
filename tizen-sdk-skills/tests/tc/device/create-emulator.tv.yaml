@@ -1,0 +1,18 @@
+# TC-CLI-053: Create TV emulator
+id: tizen-sdk.create-emulator.tv
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "create-emulator --action create --vm-name --size 3840 --profile tv --assume-defaults returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "tv-vm", "--size", "3840", "--profile", "tv", "--assume-defaults"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.emulator_name", min_length: 1 }
+        - { path: "$.result.status", matches: "created" }

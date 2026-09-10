@@ -1,0 +1,38 @@
+Tizen AI Extension for VS Code (tizen-ai-extension)
+Copyright 2026 Samsung Electronics Co., Ltd.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+The packaged extension (.vsix) bundles the tizen-sdk-skills runtime under
+dist/assets/ and therefore redistributes the following third-party material:
+
+1. tizen-dlog-analyzer prebuilt binaries
+   dist/assets/tools/tizen-dlog-analyzer/{linux,windows}/
+   PyInstaller bundles of the Tizen DLog Analyzer (Apache-2.0, Samsung Electronics)
+   embedding CPython, OpenSSL, zlib, bzip2, xz, Expat, libffi, libuuid, pydantic,
+   typer, click, rich, Pygments, colorama and others. The component list, licenses
+   and SHA-256 checksums are in dist/assets/tools/tizen-dlog-analyzer/NOTICE.md.
+
+2. Samsung TV developer CA certificates
+   dist/assets/assets/samsung-tv-ca/vd_tizen_dev_author_ca.cer
+   dist/assets/assets/samsung-tv-ca/vd_tizen_dev_partner2.crt
+   dist/assets/assets/samsung-tv-ca/vd_tizen_dev_public2.crt
+   Public CA certificates (no private keys) as distributed with the Samsung TV SDK
+   extension, used by the certificate manager to build TV signing profiles.
+   Copyright Samsung Electronics Co., Ltd.
+
+3. Tizen project templates
+   dist/assets/scripts/tizen-create-project/templates/{native,web,dotnet,platform}/
+   Derived from the sample project templates shipped with Tizen Studio and the
+   Tizen DALi demo (https://www.tizen.org), used to scaffold new user projects.
+   The DALi demo packaging spec declares Apache-2.0; the remaining template
+   files carry no per-file license header and are redistributed here under
+   Apache-2.0.
+
+4. Runtime dependencies
+   The extension bundle (dist/extension.js) is produced by esbuild from the
+   dependencies declared in package.json, each under the license recorded in
+   the npm registry.
+
+The repository-level NOTICE of tizen-sdk-skills is the source of this file;
+keep the two in sync.

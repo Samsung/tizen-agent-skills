@@ -1,0 +1,15 @@
+# TC-CLI-118: Remove bookmark
+id: tizen-sdk.remote-device.remove-bookmark
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action remove --ip returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "remove", "--ip", "192.168.1.50"]
+    timeout_sec: 30
+    expect:
+      status: success

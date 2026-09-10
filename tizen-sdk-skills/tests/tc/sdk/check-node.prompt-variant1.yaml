@@ -1,0 +1,19 @@
+# TC-P-017: Prompt — Check Node.js version
+id: tizen-sdk.check-node.prompt-variant1
+plugin: tizen-sdk
+command: check-node
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to check-node command"
+
+lanes:
+  prompt:
+    text: "Do I have Node.js installed? Check the version."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk check-node"
+      envelope_status: success
+    pass_rate: "2/3"

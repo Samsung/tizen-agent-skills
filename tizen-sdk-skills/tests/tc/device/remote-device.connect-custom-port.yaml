@@ -1,0 +1,15 @@
+# TC-CLI-113: Connect with custom port
+id: tizen-sdk.remote-device.connect-custom-port
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action connect --ip --port returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "connect", "--ip", "192.168.1.50", "--port", "26101"]
+    timeout_sec: 30
+    expect:
+      status: success

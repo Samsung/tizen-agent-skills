@@ -1,0 +1,19 @@
+# TC-P-072: Prompt — Run shell command on device
+id: tizen-sdk.sdb-helper.prompt-shell
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to sdb-helper command"
+
+lanes:
+  prompt:
+    text: "Run ls /tmp on the connected Tizen device."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdb-helper"
+      envelope_status: success
+    pass_rate: "2/3"

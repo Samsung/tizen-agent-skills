@@ -1,0 +1,20 @@
+# TC-CLI-038: Import certificate
+#
+# NOTE (2026-09-01): --source pointed at a nonexistent /tmp/import.p12.
+# Swapped for a real, committed fixture cert.
+id: tizen-sdk.certificate-manager.import-certificate
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action import-certificate returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "import-certificate", "--source", "fixtures/certs/test-fixture-author.p12", "--certificate-type", "author", "--password", "${FIXTURE_CERT_UNLOCK}"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.imported_path", min_length: 1 }

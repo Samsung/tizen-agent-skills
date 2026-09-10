@@ -1,0 +1,17 @@
+# TC-CLI-121: Remote device invalid action
+id: tizen-sdk.remote-device.invalid-action
+plugin: tizen-sdk
+command: remote-device
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "remote-device with unknown --action returns failure"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "bogus"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

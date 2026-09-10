@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Samsung Electronics Co., Ltd.
+
+# Cline PreToolUse hook - tizen-sdk-skills guard adapter.
+# marker: tizen-sdk-skills (setup-and-sync uses this to detect its own install)
+#
+# Bridges Cline's hook protocol to the Cline PreToolUse guard scripts in
+# ./tizen-sdk-skills/ so both harnesses enforce the same rules from ONE source:
+#   stdin : {"hookName":"PreToolUse","preToolUse":{"toolName":"...","parameters":{...}}}
+#   stdout: {"cancel": true, "errorMessage": "..."} to block, {"cancel": false} to allow
+# Cline parses the LAST JSON object on stdout. Exit code is always 0.
+#
+# NOTE: Requires a Cline build with hooks support (check your build; upstream
+# Cline may differ). Cline hooks do not run on Windows - this hook is
+# effective on macOS/Linux only. Install location (global): ~/Documents/Cline/Hooks/
+# and enable it in the Cline settings UI.
+
+input="$(cat)"
+guard_dir="$(cd "$(dirname "$0")" && pwd)/tizen-sdk-skills"
+
+allow() { printf '{"cancel": false}\n'; exit 0; }
+
+# Extract a raw JSON-escaped string value for a key (keeps escape pairs like
+# \\ and \" intact - the guard rules depend on the escaped encoding).
+json_val() {
+  printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
+}
+
+tool="$(printf '%s' "$input" | sed -nE 's/.*"toolName"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p')"
+
+# Map the Cline tool call onto the Cline payload shape the guards expect.
+case "$tool" in
+  execute_command)
+    cmd="$(json_val "$input" command)"
+    [ -n "$cmd" ] || allow
+    payload='{"tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}'
+    ;;
+  write_to_file|replace_in_file)
+    # Cut everything from "content"/"diff" on before extracting "path", so a
+    # file body that itself contains a "path":"..." string cannot win the
+    # greedy match and hijack the extraction.
+    head_part="${input%%\"content\"*}"
+    head_part="${head_part%%\"diff\"*}"
+    fp="$(json_val "$head_part" path)"
+    [ -n "$fp" ] || allow
+    payload='{"tool_name":"Write","tool_input":{"file_path":"'"$fp"'"}}'
+    ;;
+  *)
+    allow
+    ;;
+esac
+
+for guard in check-tizen-commands.sh check-project-writes.sh; do
+  [ -f "$guard_dir/$guard" ] || continue
+  out="$(printf '%s' "$payload" | bash "$guard_dir/$guard" 2>/dev/null)" || continue
+  if printf '%s' "$out" | grep -q '"permissionDecision":"deny"'; then
+    # The reason is already JSON-escaped in the guard's output - embed it raw.
+    reason="$(printf '%s' "$out" | sed -nE 's/.*"permissionDecisionReason":"((\\.|[^"\\])*)".*/\1/p')"
+    printf '{"cancel": true, "errorMessage": "%s"}\n' "$reason"
+    exit 0
+  fi
+done
+
+allow

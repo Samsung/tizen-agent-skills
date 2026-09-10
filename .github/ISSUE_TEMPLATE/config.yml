@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Samsung/tizen-agent-skills/blob/main/SECURITY.md
+    about: Please do NOT open a public issue for security problems — follow SECURITY.md instead.
+  - name: Tizen developer documentation
+    url: https://docs.tizen.org/
+    about: Questions about the Tizen SDK itself (not this plugin) are answered by the Tizen docs.

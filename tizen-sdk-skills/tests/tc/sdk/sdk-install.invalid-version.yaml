@@ -1,0 +1,29 @@
+# TC-CLI-009: Install invalid version
+id: tizen-sdk.sdk-install.invalid-version
+plugin: tizen-sdk
+command: sdk-install
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-install with non-existent version returns failure"
+
+lanes:
+  cli:
+    # sdk-install has no --version option — that flag collides with
+    # Commander's own reserved --version (prints the CLI's own version,
+    # "1.0.0", and exits via the commander.version code path with no JSON
+    # envelope at all, which is why the runner reported "no envelope
+    # returned"). The real flag for the platform version is --tizen-version.
+    #
+    # NOTE: on a host where the SDK is already installed, sdk-install's fast
+    # pre-check short-circuits to success (sdk.info found) before it ever
+    # validates --tizen-version against a real package list, so this TC can
+    # only be verified end-to-end on a host without an existing SDK install.
+    # error_category left as-is pending that verification — do not trust it
+    # without re-running on a clean host.
+    argv: ["tizen-sdk", "sdk-install", "--tizen-version", "99.99.99"]
+    timeout_sec: 60
+    expect:
+      status: failure
+      errors:
+        - { error_category: "not_found" }

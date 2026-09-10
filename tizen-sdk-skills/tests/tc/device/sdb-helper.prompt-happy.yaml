@@ -1,0 +1,19 @@
+# TC-P-078: Prompt 1 — Run shell command on the device
+id: tizen-sdk.sdb-helper.prompt-happy
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Run shell command ls -la on the device' to sdb-helper"
+
+lanes:
+  prompt:
+    text: "Run shell command ls -la on the device"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdb-helper"
+      envelope_status: success
+    pass_rate: "2/3"

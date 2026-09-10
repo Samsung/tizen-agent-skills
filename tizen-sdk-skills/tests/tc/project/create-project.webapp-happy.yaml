@@ -1,0 +1,24 @@
+# TC-CLI-017: Create webapp
+id: tizen-sdk.create-project.webapp-happy
+plugin: tizen-sdk
+command: create-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "create-project --type webapp returns success with project_path"
+
+# NOTE (2026-09-01): originally failed for two reasons that had nothing to
+# do with the template name (Basic is correct): the --parent-path didn't
+# exist, and this SDK had zero webapp templates installed at the time —
+# fixed by the mutating-tier download-mobile-platform/tv-sdk-install runs
+# earlier in this session. Also fixed the result field: it is
+# project_type, not app_type.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-project", "--type", "webapp", "--template", "Basic", "--parent-path", "/tmp/tizen-apps", "--name", "MyWebApp01"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.project_path", min_length: 1 }
+        - { path: "$.result.project_type", matches: "webapp" }

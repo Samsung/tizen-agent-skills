@@ -1,0 +1,19 @@
+# Required-omission: --platform-version is required (collectAllMissing).
+# Source: command-specs/sdk.ts — collectAllMissing: true, --platform-version required
+id: tizen-sdk.platform-install.missing-required
+plugin: tizen-sdk
+command: platform-install
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "platform-install fails with invalid_argument when --platform-version is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "platform-install"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

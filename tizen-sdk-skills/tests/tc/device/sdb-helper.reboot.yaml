@@ -1,0 +1,17 @@
+# TC-CLI-102: Reboot
+id: tizen-sdk.sdb-helper.reboot
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "sdb-helper --request 'reboot the device' returns success with command"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdb-helper", "--request", "reboot the device"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.command", min_length: 1 }

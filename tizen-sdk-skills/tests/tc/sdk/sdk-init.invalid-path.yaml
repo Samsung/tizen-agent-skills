@@ -1,0 +1,18 @@
+# Verify sdk-init fails with a non-existent path.
+id: tizen-sdk.sdk-init.invalid-path
+plugin: tizen-sdk
+command: sdk-init
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-init fails when path does not exist"
+
+lanes:
+  cli:
+    argv:
+      ["tizen-sdk", "sdk-init", "--sdk-path", "/nonexistent/sdk/path"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

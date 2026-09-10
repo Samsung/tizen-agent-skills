@@ -1,0 +1,15 @@
+# TC-CLI-136: Capabilities
+id: tizen-sdk.meta.capabilities
+plugin: tizen-sdk
+command: "--capabilities"
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "--capabilities returns plugin capabilities listing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "--capabilities"]
+    timeout_sec: 30
+    expect:
+      status: success

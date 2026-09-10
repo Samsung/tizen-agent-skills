@@ -1,0 +1,18 @@
+# TC-CLI-052: Create with defaults (no prompt)
+id: tizen-sdk.create-emulator.assume-defaults
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "create-emulator --action create --vm-name --assume-defaults returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "test-vm", "--assume-defaults"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.emulator_name", min_length: 1 }
+        - { path: "$.result.status", matches: "created" }

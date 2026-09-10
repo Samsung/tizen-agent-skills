@@ -1,0 +1,15 @@
+# TC-CLI-045: Stop emulators
+id: tizen-sdk.device-manager.stop
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "device-manager --action stop returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "device-manager", "--action", "stop"]
+    timeout_sec: 60
+    expect:
+      status: success

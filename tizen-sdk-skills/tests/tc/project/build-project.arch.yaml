@@ -1,0 +1,27 @@
+# TC-CLI-026: Build with specific arch (GBS)
+id: tizen-sdk.build-project.arch
+plugin: tizen-sdk
+command: build-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "build-project --arch armv7l returns success with artifacts"
+
+# NOTE (2026-09-01): two problems. --project pointed at /tmp/tizen-apps/MyApp,
+# a path create-project can never produce (package IDs must be exactly 10
+# alphanumeric characters; "myapp" is 5). Separately — and this is why the
+# TC title says "(GBS)" while the original argv pointed at a plain native
+# project — --arch is documented as "for GBS/platform builds" and is a
+# silent no-op otherwise: requesting armv7l against a native .tpk project
+# still produces an x86_64.tpk with no warning. Repointed at a `platform`
+# type project (create-project --type platform --template dali-demo), where
+# --arch genuinely changes the output (verified: produces
+# GBS-ROOT/.../armv7l/RPMS/*.armv7l.rpm).
+lanes:
+  cli:
+    argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyPlatformApp01", "--arch", "armv7l"]
+    timeout_sec: 300
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.artifacts", min_length: 1 }

@@ -1,0 +1,19 @@
+# TC-P-058: Prompt — Debug native app on specific device
+id: tizen-sdk.gdb-debug.prompt-serial
+plugin: tizen-sdk
+command: gdb-debug
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to gdb-debug command"
+
+lanes:
+  prompt:
+    text: "Debug my native app on the emulator with serial emulator-26101."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk gdb-debug"
+      envelope_status: success
+    pass_rate: "2/3"

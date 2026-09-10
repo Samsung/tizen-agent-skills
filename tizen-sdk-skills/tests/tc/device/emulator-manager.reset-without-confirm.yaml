@@ -1,0 +1,17 @@
+# TC-CLI-063: Missing --confirm on reset → failure
+id: tizen-sdk.emulator-manager.reset-without-confirm
+plugin: tizen-sdk
+command: emulator-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action reset --vm-name without --confirm fails (user_input_required)"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "reset", "--vm-name", "test-vm"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

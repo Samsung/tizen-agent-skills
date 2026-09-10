@@ -1,0 +1,19 @@
+# TC-P-033: Prompt 1 — List connected Tizen devices
+id: tizen-sdk.device-manager.prompt-happy
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'List connected Tizen devices' to device-manager"
+
+lanes:
+  prompt:
+    text: "List connected Tizen devices"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk device-manager"
+      envelope_status: success
+    pass_rate: "2/3"

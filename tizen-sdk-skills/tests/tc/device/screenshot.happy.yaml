@@ -1,0 +1,17 @@
+# TC-CLI-091: Screenshot default
+id: tizen-sdk.screenshot.happy
+plugin: tizen-sdk
+command: screenshot
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "screenshot returns success with screenshot_path"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "screenshot"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.screenshot_path", min_length: 1 }

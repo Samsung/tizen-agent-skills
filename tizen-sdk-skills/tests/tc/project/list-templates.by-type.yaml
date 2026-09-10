@@ -1,0 +1,20 @@
+# TC-CLI-016: List by type
+id: tizen-sdk.list-templates.by-type
+plugin: tizen-sdk
+command: list-templates
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "list-templates --type native returns success with filtered templates"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "list-templates", "--type", "native"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.templates", min_length: 1 }
+        # Issue #72: an empty list for the requested type is a template_not_found
+        # failure, so a success envelope must carry at least one native template.
+        - { path: "$.result.templates.native", min_length: 1 }

@@ -1,0 +1,19 @@
+# TC-P-025: Prompt — Build with specific architecture
+id: tizen-sdk.build-project.prompt-arch
+plugin: tizen-sdk
+command: build-project
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to build-project command"
+
+lanes:
+  prompt:
+    text: "Build my Tizen project for arm64 architecture."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk build-project"
+      envelope_status: success
+    pass_rate: "2/3"

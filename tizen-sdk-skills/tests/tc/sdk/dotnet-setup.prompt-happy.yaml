@@ -1,0 +1,19 @@
+# TC-P-012: Prompt — Set up .NET development environment for Tizen
+id: tizen-sdk.dotnet-setup.prompt-happy
+plugin: tizen-sdk
+command: dotnet-setup
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Set up the .NET development environment for Tizen' to dotnet-setup"
+
+lanes:
+  prompt:
+    text: "Set up the .NET development environment for Tizen"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk dotnet-setup"
+      envelope_status: success
+    pass_rate: "2/3"

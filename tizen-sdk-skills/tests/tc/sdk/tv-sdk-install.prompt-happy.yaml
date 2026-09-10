@@ -1,0 +1,19 @@
+# TC-P-006: Prompt — Install TV SDK
+id: tizen-sdk.tv-sdk-install.prompt-happy
+plugin: tizen-sdk
+command: tv-sdk-install
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Install the Samsung TV SDK extension' to tv-sdk-install"
+
+lanes:
+  prompt:
+    text: "Install the Samsung TV SDK extension"
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk tv-sdk-install"
+      envelope_status: success
+    pass_rate: "2/3"

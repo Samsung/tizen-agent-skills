@@ -1,0 +1,19 @@
+# TC-P-070: Prompt 1 — Take a screenshot of the emulator
+id: tizen-sdk.screenshot.prompt-happy
+plugin: tizen-sdk
+command: screenshot
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Take a screenshot of the emulator' to screenshot"
+
+lanes:
+  prompt:
+    text: "Take a screenshot of the emulator"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk screenshot"
+      envelope_status: success
+    pass_rate: "2/3"

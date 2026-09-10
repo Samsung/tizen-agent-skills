@@ -1,0 +1,28 @@
+# TC-CLI-097: Dry run (list outdated, don't update)
+id: tizen-sdk.update-package.dry-run
+plugin: tizen-sdk
+command: update-package
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "update-package --dry-run returns success with packages array and summary"
+
+# NOTE (2026-09-01): result.packages was hardcoded to always be an empty
+# array in common/lib/core/sdk.js's updatePackage() ('const packages = [];',
+# never populated) even though the bash script prints exactly the per-package
+# detail needed — fixed to parse it. That fix is orthogonal to this
+# assertion though: an empty array is the CORRECT result whenever nothing is
+# outdated (the common case on an already-current SDK), so min_length was
+# relaxed from 1 to 0 — a non-empty result isn't something this TC can force
+# without either a genuinely stale package or a full --force reinstall of
+# every installed package, which is out of scope here (same risk class as
+# sdk-install --force).
+lanes:
+  cli:
+    argv: ["tizen-sdk", "update-package", "--dry-run"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 0 }
+        - { path: "$.result.summary", min_length: 1 }

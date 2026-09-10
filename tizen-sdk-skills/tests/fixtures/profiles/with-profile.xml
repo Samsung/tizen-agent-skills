@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+ <profiles active="myProfile" version="2.2">
+ <profile name="myProfile">
+ <profileitem ca="" distributor="0" key="/home/user/tizen-sdk-skills/tests/fixtures/certs/test-fixture-author.p12" password="/home/user/tizen-sdk-skills/tests/fixtures/certs/test-fixture-author.pwd" rootca=""></profileitem>
+ <profileitem ca="/home/user/tizen-sdk/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-ca-new.cer" distributor="1" key="/home/user/tizen-sdk/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-signer-new.p12" password="/home/user/tizen-sdk/tools/certificate-generator/certificates/distributor/sdk-public/tizen-distributor-signer-new.pwd" rootca=""></profileitem>
+ <profileitem ca="" distributor="2" key="" password="" rootca=""></profileitem>
+ </profile>
+ </profiles>

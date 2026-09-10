@@ -1,0 +1,19 @@
+# TC-P-038: Prompt — List Tizen emulator VMs
+id: tizen-sdk.emulator-manager.prompt-happy
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'List all Tizen emulator VMs' to emulator-manager"
+
+lanes:
+  prompt:
+    text: "List all Tizen emulator VMs"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk emulator-manager"
+      envelope_status: success
+    pass_rate: "2/3"

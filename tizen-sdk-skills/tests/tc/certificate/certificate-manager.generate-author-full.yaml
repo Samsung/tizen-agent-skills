@@ -1,0 +1,24 @@
+# TC-CLI-030: Generate with full details
+id: tizen-sdk.certificate-manager.generate-author-full
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action generate-author with full details returns success"
+
+# NOTE (2026-09-01): the actual field is cert_path, not author_certificate.
+# Also: this TC is not repeatable without cleanup — generateAuthorCertificate()
+# deliberately refuses to overwrite an existing .p12 (see
+# certificate-manager.generate-author-overwrite), so a second run against the
+# same --name fails with cert_already_exists until the file under
+# <sdk-data>/keystore/author/ is removed. Known limitation of the current
+# single-shot TC model (no per-TC setup/teardown).
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "generate-author", "--name", "Jane Dev", "--password", "${FIXTURE_CERT_UNLOCK}", "--email", "jane@dev.com", "--organization", "Acme", "--country", "US"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.cert_path", min_length: 1 }

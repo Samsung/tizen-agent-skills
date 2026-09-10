@@ -1,0 +1,26 @@
+# TC-CLI-023: Build (defaults to Debug)
+id: tizen-sdk.build-project.happy
+plugin: tizen-sdk
+command: build-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "build-project defaults to Debug and returns success with artifacts"
+
+# NOTE (2026-09-01): --project pointed at /tmp/tizen-apps/MyApp, a path
+# create-project can never produce (package IDs must be exactly 10
+# alphanumeric characters; "myapp" is 5). Renamed to a valid target and
+# fixed the surrounding setup gaps: build-project needs the project to
+# exist, an active signing profile (for non-GBS builds), and the target
+# rootstrap installed — all separately fixed elsewhere in this session
+# (create-project.*, certificate-manager profile fixtures,
+# download-emulator-package/platform-install auto-detect bug).
+lanes:
+  cli:
+    argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyTizenApp01"]
+    timeout_sec: 300
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.artifacts", min_length: 1 }
+        - { path: "$.result.build_time_ms", matches: "^\\d+" }

@@ -1,0 +1,51 @@
+# Command tier classification for tizen-sdk plugin.
+# tier = how large the side effects are; requires = which privileges are needed.
+# The two axes are orthogonal. Unclassified commands default to skip — the
+# safe default: nothing runs until a human classifies it.
+#
+# Source: tizen-cli/src/command-specs/*.ts
+# 34 commands total across 8 domain modules (safe 6 / mutating 14 / device 14).
+
+defaults:
+  tier: skip
+
+commands:
+  # ── safe — 부작용 없음, 인자 없이 실행 가능 ──────────────────────────
+  tizen-sdk.check-node: { tier: safe }
+  tizen-sdk.check-disk-space: { tier: safe }
+  tizen-sdk.sdk-init: { tier: safe }
+  tizen-sdk.sdk-repo-info: { tier: safe }
+  tizen-sdk.validate-repo-url: { tier: safe }
+  tizen-sdk.list-templates: { tier: safe }
+
+  # ── mutating — 설치/변경/삭제 부작용 ──────────────────────────────────
+  tizen-sdk.sdk-install: { tier: mutating }
+  tizen-sdk.sdk-install-custom-repo: { tier: mutating }
+  tizen-sdk.tv-sdk-install: { tier: mutating }
+  tizen-sdk.tv-sdk-install-from-zip: { tier: mutating }
+  tizen-sdk.update-package: { tier: mutating }
+  tizen-sdk.download-emulator-package: { tier: mutating }
+  tizen-sdk.platform-install: { tier: mutating }
+  tizen-sdk.download-mobile-platform: { tier: mutating }
+  tizen-sdk.install-rootstrap: { tier: mutating }
+  tizen-sdk.dotnet-setup: { tier: mutating }
+  tizen-sdk.create-project: { tier: mutating }
+  tizen-sdk.project-delete: { tier: mutating }
+  tizen-sdk.build-project: { tier: mutating }
+  tizen-sdk.certificate-manager: { tier: mutating }
+
+  # ── device — 에뮬레이터/기기 필요 ────────────────────────────────────
+  tizen-sdk.create-emulator: { tier: device, requires: [kvm] }
+  tizen-sdk.launch-emulator: { tier: device, requires: [kvm] }
+  tizen-sdk.emulator-manager: { tier: device, requires: [kvm] }
+  tizen-sdk.device-manager: { tier: device, requires: [kvm] }
+  tizen-sdk.install-app: { tier: device, requires: [kvm] }
+  tizen-sdk.sdb-helper: { tier: device, requires: [kvm] }
+  tizen-sdk.screenshot: { tier: device, requires: [kvm] }
+  tizen-sdk.file-transfer: { tier: device, requires: [kvm] }
+  tizen-sdk.remote-device: { tier: device, requires: [net-device] }
+  tizen-sdk.gdb-debug: { tier: device, requires: [kvm] }
+  tizen-sdk.dotnet-debug: { tier: device, requires: [kvm] }
+  tizen-sdk.webapp-debug: { tier: device, requires: [kvm] }
+  tizen-sdk.playwright-test: { tier: device, requires: [kvm] }
+  tizen-sdk.dlog-analyzer: { tier: device, requires: [kvm] }

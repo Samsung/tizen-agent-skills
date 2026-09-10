@@ -1,0 +1,19 @@
+# TC-P-044: Prompt — Launch first available emulator
+id: tizen-sdk.launch-emulator.prompt-first
+plugin: tizen-sdk
+command: launch-emulator
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to launch-emulator command"
+
+lanes:
+  prompt:
+    text: "Launch the first available Tizen emulator."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk launch-emulator"
+      envelope_status: success
+    pass_rate: "2/3"

@@ -1,0 +1,17 @@
+# TC-CLI-044: Find connected device (default)
+id: tizen-sdk.device-manager.happy
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "device-manager returns success with devices array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "device-manager"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.devices", min_length: 0 }

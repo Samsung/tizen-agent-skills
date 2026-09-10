@@ -1,0 +1,17 @@
+# TC-CLI-125: SDK install custom repo missing required
+id: tizen-sdk.sdk-install-custom-repo.missing-required-explicit
+plugin: tizen-sdk
+command: sdk-install-custom-repo
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-install-custom-repo without --repo-url returns failure with invalid_argument"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install-custom-repo"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

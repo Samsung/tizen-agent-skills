@@ -1,0 +1,15 @@
+# TC-CLI-058: Reset (requires --confirm)
+id: tizen-sdk.emulator-manager.reset
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action reset --vm-name --confirm returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "reset", "--vm-name", "test-vm", "--confirm"]
+    timeout_sec: 60
+    expect:
+      status: success

@@ -1,0 +1,7 @@
+# pnpm v11+ moved settings from package.json "pnpm" field and .npmrc to this file.
+# esbuild needs its postinstall script to download the native binary.
+# onlyBuiltDependencies alone doesn't work in pnpm 11.17.0 (possible bug),
+# so dangerouslyAllowAllBuilds is used as a workaround.
+# This project has only 4 dependencies, so the security risk is minimal.
+# See: https://pnpm.io/settings#dangerouslyallowallbuilds
+dangerouslyAllowAllBuilds: true

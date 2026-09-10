@@ -1,0 +1,19 @@
+# TC-P-018: Prompt — Verify disk space for SDK
+id: tizen-sdk.check-disk-space.prompt-variant1
+plugin: tizen-sdk
+command: check-disk-space
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to check-disk-space command"
+
+lanes:
+  prompt:
+    text: "Check if I have enough disk space for the Tizen SDK."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk check-disk-space"
+      envelope_status: success
+    pass_rate: "2/3"

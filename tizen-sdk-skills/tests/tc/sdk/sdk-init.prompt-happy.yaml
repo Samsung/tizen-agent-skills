@@ -1,0 +1,19 @@
+# TC-P-001: Prompt 1 — Set SDK path
+id: tizen-sdk.sdk-init.prompt-happy
+plugin: tizen-sdk
+command: sdk-init
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Set my Tizen SDK path' to sdk-init command"
+
+lanes:
+  prompt:
+    text: "Set my Tizen SDK path to C:\\tizen-sdk"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdk-init"
+      envelope_status: success
+    pass_rate: "2/3"

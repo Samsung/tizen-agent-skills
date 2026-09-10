@@ -1,0 +1,26 @@
+# TC-CLI-043: Import certificate as a distributor cert
+#
+# CORRECTED (2026-09-01): the original TC used `--action import` and
+# `--file-path`, neither of which exists — the real action is
+# `import-certificate` with `--source` (see command-specs/certificate.ts).
+# It was also an exact duplicate of import-certificate.happy once the names
+# were fixed, so rewritten to cover the untested `--certificate-type
+# distributor` path instead of re-testing `author`, and to assert on the
+# real result field (`imported_path`; there is no boolean `imported` field).
+id: tizen-sdk.certificate-manager.import-certificate-from-file
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager import-certificate --certificate-type distributor returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "import-certificate", "--source", "fixtures/certs/test-fixture-author.p12", "--certificate-type", "distributor", "--password", "${FIXTURE_CERT_UNLOCK}"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.imported_path", min_length: 1 }
+        - { path: "$.result.certificate_type", equals: "distributor" }

@@ -1,0 +1,19 @@
+# TC-P-061: Prompt — Debug .NET app with breakpoints
+id: tizen-sdk.dotnet-debug.prompt-breakpoints
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to dotnet-debug command"
+
+lanes:
+  prompt:
+    text: "Debug my Tizen .NET app with breakpoints at OnCreate."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk dotnet-debug"
+      envelope_status: success
+    pass_rate: "2/3"

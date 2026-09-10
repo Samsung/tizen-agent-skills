@@ -1,0 +1,16 @@
+# Verify check-disk-space returns success with disk info.
+# Source: command-specs/check.ts — --path optional, --required-gb default 15
+id: tizen-sdk.check-disk-space.happy
+plugin: tizen-sdk
+command: check-disk-space
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "check-disk-space returns success with disk_free info"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "check-disk-space"]
+    timeout_sec: 30
+    expect:
+      status: success

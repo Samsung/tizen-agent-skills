@@ -1,0 +1,15 @@
+# TC-CLI-084: Force reinstall netcoredbg
+id: tizen-sdk.dotnet-debug.force-install
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug --app-id --force-install returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp", "--force-install"]
+    timeout_sec: 300
+    expect:
+      status: success

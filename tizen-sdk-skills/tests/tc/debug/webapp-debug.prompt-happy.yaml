@@ -1,0 +1,19 @@
+# TC-P-064: Prompt 1 — Debug my Tizen web app
+id: tizen-sdk.webapp-debug.prompt-happy
+plugin: tizen-sdk
+command: webapp-debug
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Debug my Tizen web app abcDEF1234.MyWebApp' to webapp-debug"
+
+lanes:
+  prompt:
+    text: "Debug my Tizen web app abcDEF1234.MyWebApp"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk webapp-debug"
+      envelope_status: success
+    pass_rate: "2/3"

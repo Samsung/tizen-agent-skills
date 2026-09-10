@@ -1,0 +1,17 @@
+# TC-CLI-047: Custom timeout
+id: tizen-sdk.device-manager.timeout
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "device-manager --timeout 120 returns success with devices array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "device-manager", "--timeout", "120"]
+    timeout_sec: 150
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.devices", min_length: 0 }

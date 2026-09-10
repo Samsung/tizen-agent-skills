@@ -1,0 +1,19 @@
+# TC-P-023: Prompt — Build project in Release mode
+id: tizen-sdk.build-project.prompt-release
+plugin: tizen-sdk
+command: build-project
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to build-project command"
+
+lanes:
+  prompt:
+    text: "Build my Tizen project in Release mode with signing."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk build-project"
+      envelope_status: success
+    pass_rate: "2/3"

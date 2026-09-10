@@ -1,0 +1,15 @@
+# TC-CLI-035: List profiles
+id: tizen-sdk.certificate-manager.list-profiles
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action list-profiles returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "list-profiles"]
+    timeout_sec: 30
+    expect:
+      status: success

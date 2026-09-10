@@ -1,0 +1,28 @@
+# TC-CLI-040: Samsung online-CA: login
+id: tizen-sdk.certificate-manager.samsung-login
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action samsung-login returns success"
+
+# NOTE (2026-09-01): found and fixed a real bug while investigating this
+# TC — getSamsungAccessToken was exported raw (unwrapped) in
+# common/lib/core/sdk-commands.js, so a failure came back as
+# status: failure with an EMPTY errors array (no message at all). The
+# correct wrapper existed in the same file, already written, just
+# commented out — restored it. See common/lib/core/sdk-commands.js and the
+# session report for detail.
+#
+# Not executed here beyond that fix verification: this action performs a
+# real interactive OAuth login (opens a local callback server and waits up
+# to 5 minutes for a browser redirect) or reuses a cached token tied to the
+# operator's real Samsung account — neither is something this suite
+# should automate or assert on. Left as draft.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "samsung-login", "--profile-name", "myProfile"]
+    timeout_sec: 120
+    expect:
+      status: success

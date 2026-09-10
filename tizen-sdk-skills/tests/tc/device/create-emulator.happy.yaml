@@ -1,0 +1,18 @@
+# TC-CLI-051: Create VM (1080)
+id: tizen-sdk.create-emulator.happy
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "create-emulator --action create --vm-name --size 1080 returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "test-vm", "--size", "1080"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.emulator_name", min_length: 1 }
+        - { path: "$.result.status", matches: "created" }

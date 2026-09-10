@@ -1,0 +1,17 @@
+# TC-CLI-048: List VMs
+id: tizen-sdk.emulator-manager.list-vm
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action list-vm returns success with emulators array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "list-vm"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.emulators", min_length: 0 }

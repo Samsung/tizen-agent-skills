@@ -1,0 +1,18 @@
+# TC-CLI-002: Init with default path (~/tizen-sdk)
+id: tizen-sdk.sdk-init.happy
+plugin: tizen-sdk
+command: sdk-init
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-init with default path returns success with sdk_path and config_file"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-init"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.sdk_path", min_length: 1 }
+        - { path: "$.result.config_file", min_length: 1 }

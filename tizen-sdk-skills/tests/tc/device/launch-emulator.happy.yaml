@@ -1,0 +1,19 @@
+# TC-CLI-055: Launch VM
+id: tizen-sdk.launch-emulator.happy
+plugin: tizen-sdk
+command: launch-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "launch-emulator --vm-name --timeout 300 returns success; --timeout is the sdb-connect wait cap (issue #98) — the result reports it and the emulator keeps running"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "launch-emulator", "--vm-name", "test-vm", "--timeout", "300"]
+    timeout_sec: 360
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.timeout_sec", matches: "^300$" }
+        - { path: "$.result.waited_ms", matches: "^\\d+$" }
+        - { path: "$.result.emulator_keeps_running", matches: "^true$" }

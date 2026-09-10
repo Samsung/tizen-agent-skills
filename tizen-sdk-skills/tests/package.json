@@ -1,0 +1,22 @@
+{
+  "name": "tizen-sdk-skills-test-suite",
+  "version": "1.2.0",
+  "description": "Self-contained test suite for tizen-sdk plugin commands",
+  "type": "module",
+  "private": true,
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node runner.mjs",
+    "lint": "node runner.mjs --dry-run && node scripts/verify-doc-stats.mjs && node scripts/runner-helpers.test.mjs",
+    "test:safe": "node runner.mjs --tier=safe",
+    "test:mutating": "node runner.mjs --tier=mutating",
+    "test:device": "node runner.mjs --tier=device"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "yaml": "^2.5.0"
+  }
+}

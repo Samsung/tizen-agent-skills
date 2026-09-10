@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest a new skill, command or improvement
+title: "[tizen-sdk-skills] "
+labels: ["enhancement", "tizen-sdk-skills"]
+body:
+  - type: dropdown
+    id: project
+    attributes:
+      label: Project
+      options:
+        - tizen-sdk-skills
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What are you trying to do that is hard or impossible today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Which skill/agent/command should change, and how?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered

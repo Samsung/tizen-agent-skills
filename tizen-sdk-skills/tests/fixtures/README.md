@@ -1,0 +1,9 @@
+# Test fixtures
+
+Files the mutating-tier TCs point at instead of a nonexistent `/tmp/...` path.
+
+- `fixtures.env` — values for `${NAME}` placeholders in TC argv (loaded by `runner.mjs`). Keys ending in `_B64` are base64-decoded and exposed without the suffix (`FIXTURE_CERT_UNLOCK_B64` → `${FIXTURE_CERT_UNLOCK}`), so credential-shaped literals never appear anywhere in the repo. Holds the unlock value for the fixture cert below.
+  **Also consumed outside this suite:** `common/lib/tests/fixture-helpers.js` reads `FIXTURE_CERT_UNLOCK_B64` from this file for the `certificate.test.js` / `samsung-cert.test.js` unit tests. If you rename the key or move this file, update that helper too.
+- `certs/test-fixture-author.p12` — throwaway self-signed author certificate (password: see `fixtures.env`), generated via `certificate-manager --action generate-author` for this suite. Not a real signing identity; safe to commit.
+- `profiles/with-profile.xml` — a `profiles.xml` with one profile (`myProfile`, pointing at `certs/test-fixture-author.p12`) for `set-active-profile.happy` via `--profiles-xml`. `set-active-profile` only flips which profile is active, so this file stays valid across repeated runs.
+- `profiles/with-profile-for-removal.xml` — the same, but dedicated to `remove-profile.happy`. `remove-profile` deletes the `<profile>` entry it acts on, so **this file is consumed by a single run**: after `remove-profile.happy` passes once, regenerate it with `certificate-manager --action create-profile --profile-name myProfile --author-cert certs/test-fixture-author.p12 --author-password "$FIXTURE_CERT_UNLOCK" --distributor-type public --distributor-version new --profiles-xml fixtures/profiles/with-profile-for-removal.xml` (with `FIXTURE_CERT_UNLOCK` decoded from the `_B64` entry in `fixtures.env`), or `git checkout` it, before running that TC again.

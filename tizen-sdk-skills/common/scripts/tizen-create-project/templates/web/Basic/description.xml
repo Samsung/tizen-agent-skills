@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Overview version="0.17.1">
+  <SampleName>Basic UI</SampleName>
+  <SampleVersion>1.0</SampleVersion>
+  <PlatformList>
+    <Profile>
+      <ProfileName>Tizen</ProfileName>
+      <RequiredVersion>10.0</RequiredVersion>
+    </Profile>
+  </PlatformList>
+  <ProjectType>TIZEN</ProjectType>
+  <HasOption>False</HasOption>
+  <CategoryList>
+    <Category>Template</Category>
+  </CategoryList>
+  <PreviewList>
+    <Preview>snapshot.png</Preview>
+  </PreviewList>
+  <IconSet>
+    <IconSmall>ic_s_web_basic.png</IconSmall>
+    <IconMediumNormal>ic_m_web_basic_n.png</IconMediumNormal>
+    <IconMediumSelect>ic_m_web_basic_s.png</IconMediumSelect>
+    <IconLarge>ic_l_web_basic.png</IconLarge>
+  </IconSet>
+  <Description> Tizen 9.0 tizen basic web application. </Description>
+</Overview>

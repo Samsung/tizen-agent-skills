@@ -1,0 +1,33 @@
+# TC-P-109: Prompt — Show capabilities
+#
+# `--capabilities` is a top-level meta-flag of the tizen-sdk plugin's
+# own CLI entry point, not a registered command — there is no plugin+command
+# +args triple that reaches it through tizen_cli_run_commands (verified: the
+# plugin schema served to the MCP gateway only lists the 33 real commands,
+# "--capabilities" is not among them, so run_commands would reject it as
+# "Command not found", same as --schema and bare no-args).
+# The reachable equivalent for "what can this plugin do" is the discovery
+# tool tizen_cli_list_commands({ plugin: "tizen-sdk" }) (no `command`),
+# which returns every command with its description and arg_count — verified
+# live. Note this is the plugin's static command list, not the CLI's own
+# --capabilities (which additionally filters by SDK-install availability into
+# available/unavailable) — but it is the only MCP-reachable answer.
+id: tizen-sdk.meta.prompt-capabilities
+plugin: tizen-sdk
+command: --capabilities
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves a capabilities prompt to the list_commands discovery tool"
+
+lanes:
+  prompt:
+    text: "What capabilities does the Tizen SDK plugin have?"
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_list_commands
+      # list_commands has no CLI-invocation concept, so this records the
+      # `plugin` argument the call must carry (no `command`).
+      must_resolve_command: "tizen-sdk"
+    pass_rate: "2/3"

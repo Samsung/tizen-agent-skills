@@ -1,0 +1,15 @@
+# TC-CLI-054: Create and launch immediately
+id: tizen-sdk.create-emulator.launch
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "create-emulator --action create --vm-name --size --launch returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "test-vm", "--size", "1080", "--launch"]
+    timeout_sec: 300
+    expect:
+      status: success

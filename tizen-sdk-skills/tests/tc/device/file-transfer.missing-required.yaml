@@ -1,0 +1,19 @@
+# Required-omission: --direction and --remote are required.
+# Source: command-specs/device.ts — --direction required, --remote required
+id: tizen-sdk.file-transfer.missing-required
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "file-transfer fails with invalid_argument when --direction and --remote are missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

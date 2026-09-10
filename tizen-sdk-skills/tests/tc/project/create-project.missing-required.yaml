@@ -1,0 +1,19 @@
+# Required-omission: --type, --template, --parent-path, --name all required (collectAllMissing).
+# Source: command-specs/project.ts — collectAllMissing: true, 4 required options
+id: tizen-sdk.create-project.missing-required
+plugin: tizen-sdk
+command: create-project
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "create-project fails with invalid_argument when all required options are missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-project"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

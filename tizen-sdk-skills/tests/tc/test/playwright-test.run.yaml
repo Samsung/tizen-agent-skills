@@ -1,0 +1,18 @@
+# TC-CLI-128: Run tests
+id: tizen-sdk.playwright-test.run
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --app-id --test-file --project-dir returns success with passed and summary"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--project-dir", "/tmp/test-project"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.passed", matches: "^(true|false)$" }
+        - { path: "$.result.summary", min_length: 1 }

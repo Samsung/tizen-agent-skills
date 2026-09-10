@@ -1,0 +1,17 @@
+# TC-CLI-070: Install custom rootstrap from ZIP
+id: tizen-sdk.install-rootstrap.happy
+plugin: tizen-sdk
+command: install-rootstrap
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "install-rootstrap --zip-path returns success with rootstraps array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-rootstrap", "--zip-path", "/tmp/custom-rootstrap.zip"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.rootstraps", min_length: 1 }

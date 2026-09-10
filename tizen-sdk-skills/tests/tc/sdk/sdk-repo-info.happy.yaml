@@ -1,0 +1,16 @@
+# Verify sdk-repo-info returns success with repository info.
+# Source: command-specs/sdk.ts — no options, requiresSdk: false
+id: tizen-sdk.sdk-repo-info.happy
+plugin: tizen-sdk
+command: sdk-repo-info
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "sdk-repo-info returns success with repository URL info"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-repo-info"]
+    timeout_sec: 30
+    expect:
+      status: success

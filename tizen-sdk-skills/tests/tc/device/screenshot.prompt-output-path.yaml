@@ -1,0 +1,19 @@
+# TC-P-052: Prompt — Take a screenshot with custom path
+id: tizen-sdk.screenshot.prompt-output-path
+plugin: tizen-sdk
+command: screenshot
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to screenshot command"
+
+lanes:
+  prompt:
+    text: "Take a screenshot of the emulator and save it to /tmp/shot.png."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk screenshot"
+      envelope_status: success
+    pass_rate: "2/3"

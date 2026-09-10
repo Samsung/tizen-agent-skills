@@ -1,0 +1,22 @@
+# TC-CLI-061: Emulator manager missing required
+id: tizen-sdk.emulator-manager.missing-action
+plugin: tizen-sdk
+command: emulator-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager without --action defaults to create, which then fails on the missing vmName"
+
+lanes:
+  cli:
+    # --action has a Commander default of "create" (see command-specs/device.ts),
+    # so omitting it never hits a Commander-level "missing option" error — it
+    # falls through to createEmulator()'s runtime vmName-required check, which
+    # is a business-logic validation (invalid_parameters), not a CLI-syntax
+    # one (invalid_argument). Same root cause as emulator-manager.missing-required.
+    argv: ["tizen-sdk", "emulator-manager"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_parameters", has_suggested_fix: true }

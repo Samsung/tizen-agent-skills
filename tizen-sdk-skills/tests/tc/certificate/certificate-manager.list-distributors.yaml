@@ -1,0 +1,17 @@
+# TC-CLI-033: List distributor certificates
+id: tizen-sdk.certificate-manager.list-distributors
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action list-distributors returns success with distributors array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "list-distributors"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.distributors", min_length: 1 }

@@ -1,0 +1,17 @@
+# TC-CLI-085: Dotnet debug missing required
+id: tizen-sdk.dotnet-debug.missing-required-explicit
+plugin: tizen-sdk
+command: dotnet-debug
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug without --app-id returns failure with invalid_argument"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--mode", "attach"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

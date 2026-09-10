@@ -1,0 +1,19 @@
+# TC-P-002: Prompt — Check if Node.js is installed
+id: tizen-sdk.check-node.prompt-happy
+plugin: tizen-sdk
+command: check-node
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Check if Node.js is installed' to check-node command"
+
+lanes:
+  prompt:
+    text: "Node.js가 설치되어 있는지 확인해줘"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk check-node"
+      envelope_status: success
+    pass_rate: "2/3"

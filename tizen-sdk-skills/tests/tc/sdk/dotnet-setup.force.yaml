@@ -1,0 +1,20 @@
+# TC-CLI-013: Force reinstall workload
+id: tizen-sdk.dotnet-setup.force
+plugin: tizen-sdk
+command: dotnet-setup
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "dotnet-setup --force returns success with workload_installed boolean"
+
+# NOTE (2026-09-01): the actual field is workload_status, a string enum
+# ('installed' | 'already_installed') — see parseWorkloadStatus() in
+# common/lib/core/dotnet.js — not a workload_installed boolean.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-setup", "--force"]
+    timeout_sec: 300
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.workload_status", matches: "^(installed|already_installed)$" }

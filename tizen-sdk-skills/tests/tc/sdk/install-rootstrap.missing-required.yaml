@@ -1,0 +1,19 @@
+# Required-omission: --zip-path is required (collectAllMissing).
+# Source: command-specs/sdk.ts — collectAllMissing: true, --zip-path required
+id: tizen-sdk.install-rootstrap.missing-required
+plugin: tizen-sdk
+command: install-rootstrap
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "install-rootstrap fails with invalid_argument when --zip-path is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-rootstrap"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

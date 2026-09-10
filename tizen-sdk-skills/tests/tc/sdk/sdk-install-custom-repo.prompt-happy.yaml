@@ -1,0 +1,19 @@
+# TC-P-005: Prompt — Install SDK from custom repository
+id: tizen-sdk.sdk-install-custom-repo.prompt-happy
+plugin: tizen-sdk
+command: sdk-install-custom-repo
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Install the Tizen SDK from a custom repository' to sdk-install-custom-repo"
+
+lanes:
+  prompt:
+    text: "Install the Tizen SDK from my custom repository at http://example.com/repo"
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdk-install-custom-repo"
+      envelope_status: success
+    pass_rate: "2/3"

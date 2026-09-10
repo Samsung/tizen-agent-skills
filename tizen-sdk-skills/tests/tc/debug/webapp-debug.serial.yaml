@@ -1,0 +1,17 @@
+# TC-CLI-088: On specific device
+id: tizen-sdk.webapp-debug.serial
+plugin: tizen-sdk
+command: webapp-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "webapp-debug --app-id --serial returns success with cdp_endpoint"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "webapp-debug", "--app-id", "abcDEF1234.MyWebApp", "--serial", "emulator-26101"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.cdp_endpoint", min_length: 1 }

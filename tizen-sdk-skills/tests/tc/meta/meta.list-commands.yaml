@@ -1,0 +1,17 @@
+# TC-CLI-137: List available commands
+id: tizen-sdk.meta.list-commands
+plugin: tizen-sdk
+command: "no-args"
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "No args lists commands and meta-commands"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.commands", min_length: 1 }

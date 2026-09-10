@@ -1,0 +1,18 @@
+# TC-CLI-067: Install platform package
+id: tizen-sdk.platform-install.happy
+plugin: tizen-sdk
+command: platform-install
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "platform-install --platform-version returns success with packages array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "platform-install", "--platform-version", "10.0"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

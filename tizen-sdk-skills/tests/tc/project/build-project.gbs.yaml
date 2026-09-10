@@ -1,0 +1,26 @@
+# TC-CLI-028: Build with GBS (platform build)
+id: tizen-sdk.build-project.gbs
+plugin: tizen-sdk
+command: build-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "build-project against a platform-type project auto-detects GBS and returns .rpm artifacts"
+
+# NOTE (2026-09-01): build-project has no --gbs flag at all (see
+# command-specs/project.ts — only --project/--build-type/--sign-profile/
+# --arch/--clean exist); passing it fails with commander.unknownOption
+# before the build even starts. GBS builds are auto-detected from the
+# project's own type instead (buildProject() in common/lib/core/project.js
+# checks for a `platform`-type project and switches to gbs build + reads
+# ~/GBS-ROOT for artifacts). Repointed at a real `platform` project
+# (create-project --type platform --template dali-demo) — verified this
+# produces GBS-ROOT/.../x86_64/RPMS/*.rpm.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyPlatformApp01"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.artifacts", min_length: 1 }

@@ -1,0 +1,15 @@
+# TC-CLI-107: On specific device
+id: tizen-sdk.file-transfer.serial
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "file-transfer --direction push --serial returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer", "--direction", "push", "--local", "/tmp/config.xml", "--remote", "/opt/usr/apps/", "--serial", "emulator-26101"]
+    timeout_sec: 60
+    expect:
+      status: success

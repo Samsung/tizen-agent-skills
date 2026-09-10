@@ -1,0 +1,15 @@
+# TC-CLI-056: Launch first available VM
+id: tizen-sdk.launch-emulator.first-available
+plugin: tizen-sdk
+command: launch-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "launch-emulator with no --vm-name launches first available VM"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "launch-emulator"]
+    timeout_sec: 360
+    expect:
+      status: success

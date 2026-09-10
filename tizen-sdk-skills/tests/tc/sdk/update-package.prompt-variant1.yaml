@@ -1,0 +1,19 @@
+# TC-P-098: Prompt — Update SDK packages
+id: tizen-sdk.update-package.prompt-variant1
+plugin: tizen-sdk
+command: update-package
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to update-package command"
+
+lanes:
+  prompt:
+    text: "Update my Tizen SDK packages to the latest version."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk update-package"
+      envelope_status: success
+    pass_rate: "2/3"

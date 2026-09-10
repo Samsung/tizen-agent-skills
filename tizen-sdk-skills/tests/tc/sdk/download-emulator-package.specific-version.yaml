@@ -1,0 +1,18 @@
+# TC-CLI-065: Specific version
+id: tizen-sdk.download-emulator-package.specific-version
+plugin: tizen-sdk
+command: download-emulator-package
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "download-emulator-package --platform-version returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "download-emulator-package", "--platform-version", "10.0"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

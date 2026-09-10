@@ -1,0 +1,17 @@
+# TC-CLI-101: Forward port
+id: tizen-sdk.sdb-helper.forward
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "sdb-helper --request 'forward port 8080' returns success with command"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdb-helper", "--request", "forward port 8080"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.command", min_length: 1 }

@@ -1,0 +1,22 @@
+# TC-CLI-037: Remove profile
+id: tizen-sdk.certificate-manager.remove-profile
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action remove-profile --profile-name returns success"
+
+# NOTE (2026-09-01): originally targeted the SDK's default profiles.xml with
+# no profile named "myProfile" ever created there — always failed with
+# "profile not found". --profiles-xml points this at a dedicated committed
+# fixture instead (see tests/fixtures/README.md). Unlike set-active-profile's
+# fixture, this one is CONSUMED by a passing run (the profile entry is
+# deleted) — regenerate it before running this TC again; see the fixtures
+# README for the exact command.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "remove-profile", "--profile-name", "myProfile", "--profiles-xml", "fixtures/profiles/with-profile-for-removal.xml"]
+    timeout_sec: 30
+    expect:
+      status: success

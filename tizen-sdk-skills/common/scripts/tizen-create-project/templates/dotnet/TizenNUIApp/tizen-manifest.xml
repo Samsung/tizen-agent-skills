@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns="http://tizen.org/ns/packages" api-version="{{manifest_api_version}}" package="org.tizen.example.{{project_name}}" version="1.0.0">
+  <profile name="common" />
+  <ui-application appid="org.tizen.example.{{project_name}}"
+					exec="{{project_name}}.dll"
+					type="{{project_type}}"
+					multiple="false"
+					taskmanage="true"
+					nodisplay="false"
+					launch_mode="single"
+                    {{manifest_api_version2}}>
+    <label>{{project_name}}</label>
+    <icon>{{project_name}}.png</icon>
+    <metadata key="http://tizen.org/metadata/prefer_dotnet_aot" value="true" />
+  </ui-application>
+</manifest>

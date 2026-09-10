@@ -1,0 +1,23 @@
+# TC-CLI-011: Disk space on specific path with custom requirement
+id: tizen-sdk.check-disk-space.specific-path
+plugin: tizen-sdk
+command: check-disk-space
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "check-disk-space with --path and --required-gb returns success"
+
+lanes:
+  cli:
+    # A Windows drive letter ("D:\") isn't a path on Linux/macOS — the check
+    # silently resolved it as a relative segment under the CWD instead of a
+    # real drive, so free_bytes came back 0 and the TC failed on every non-
+    # Windows runner. /tmp exists on Linux/macOS runners (this suite has only
+    # been run on Linux so far); a Windows CI run would need its own path.
+    argv: ["tizen-sdk", "check-disk-space", "--path", "/tmp", "--required-gb", "20"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.free_bytes", matches: "^\\d+" }
+        - { path: "$.result.sufficient", matches: "^(true|false)$" }

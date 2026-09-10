@@ -1,0 +1,19 @@
+# TC-P-086: Prompt 1 — Push file to device
+id: tizen-sdk.file-transfer.prompt-happy
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Push config.xml to /opt/usr/apps/ on the device' to file-transfer"
+
+lanes:
+  prompt:
+    text: "Push C:\\files\\config.xml to /opt/usr/apps/ on the device"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk file-transfer"
+      envelope_status: success
+    pass_rate: "2/3"

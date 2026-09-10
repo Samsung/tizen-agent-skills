@@ -1,0 +1,19 @@
+# TC-P-105: Prompt — Run Playwright with custom port and timeout
+id: tizen-sdk.playwright-test.prompt-custom-port
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to playwright-test command"
+
+lanes:
+  prompt:
+    text: "Run Playwright tests on port 9223 with 60s timeout."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk playwright-test"
+      envelope_status: success
+    pass_rate: "2/3"

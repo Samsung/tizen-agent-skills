@@ -1,0 +1,19 @@
+# TC-P-014: Prompt — List available Tizen project templates
+id: tizen-sdk.list-templates.prompt-happy
+plugin: tizen-sdk
+command: list-templates
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Show me available Tizen project templates' to list-templates"
+
+lanes:
+  prompt:
+    text: "Show me the available Tizen project templates"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk list-templates"
+      envelope_status: success
+    pass_rate: "2/3"

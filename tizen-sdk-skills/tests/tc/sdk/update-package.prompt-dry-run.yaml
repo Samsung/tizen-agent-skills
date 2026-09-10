@@ -1,0 +1,27 @@
+# TC-P-099: Prompt — Dry-run SDK package update
+#
+# This TC caught a real bug (fixed 2026-08-31). Command resolution was always
+# correct, but the run failed with TIZEN_SDK_EXEC_E001 — not a network fault
+# as first assumed (the log shows the pkg_list download succeeding), but
+# `unbound variable` in tizen-update-package.sh: the OUTDATED_* arrays were
+# declared without `=()`, so under `set -u` the `${#OUTDATED_NAMES[@]}` count
+# blew up whenever nothing was outdated — i.e. on every fully-up-to-date SDK.
+# After the fix, 6/6 runs succeed (3 direct CLI + 3 blind agent trials).
+id: tizen-sdk.update-package.prompt-dry-run
+plugin: tizen-sdk
+command: update-package
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to update-package command"
+
+lanes:
+  prompt:
+    text: "Check for outdated Tizen SDK packages without updating."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk update-package"
+      envelope_status: success
+    pass_rate: "2/3"

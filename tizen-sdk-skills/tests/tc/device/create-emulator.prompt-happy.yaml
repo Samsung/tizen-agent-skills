@@ -1,0 +1,19 @@
+# TC-P-036: Prompt 1 — Create a Tizen emulator with 1080 resolution
+id: tizen-sdk.create-emulator.prompt-happy
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Create a Tizen emulator with 1080 resolution named my-vm' to create-emulator"
+
+lanes:
+  prompt:
+    text: "Create a Tizen emulator with 1080 resolution named my-vm"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk create-emulator"
+      envelope_status: success
+    pass_rate: "2/3"

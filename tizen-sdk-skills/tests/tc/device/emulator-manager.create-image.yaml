@@ -1,0 +1,15 @@
+# TC-CLI-060: Create image
+id: tizen-sdk.emulator-manager.create-image
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action create-image --vm-name --output-dir --compress returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "create-image", "--vm-name", "test-vm", "--output-dir", "/tmp/emulator-images", "--compress"]
+    timeout_sec: 120
+    expect:
+      status: success

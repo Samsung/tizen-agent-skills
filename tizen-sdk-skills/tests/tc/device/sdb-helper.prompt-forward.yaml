@@ -1,0 +1,19 @@
+# TC-P-073: Prompt — Forward port on device
+id: tizen-sdk.sdb-helper.prompt-forward
+plugin: tizen-sdk
+command: sdb-helper
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to sdb-helper command"
+
+lanes:
+  prompt:
+    text: "Set up port forwarding from host port 8080 to device port 80."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdb-helper"
+      envelope_status: success
+    pass_rate: "2/3"

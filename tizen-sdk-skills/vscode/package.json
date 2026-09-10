@@ -1,0 +1,133 @@
+{
+  "name": "tizen-ai-extension",
+  "displayName": "Tizen AI Extension",
+  "description": "Install and sync Tizen SDK Skills (skills, agents, hooks) for Claude Code and Cline from a single VS Code extension.",
+  "version": "1.2.0",
+  "publisher": "tizen-sdk-team",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Samsung/tizen-agent-skills",
+    "directory": "tizen-sdk-skills/vscode"
+  },
+  "bugs": {
+    "url": "https://github.com/Samsung/tizen-agent-skills/issues"
+  },
+  "homepage": "https://github.com/Samsung/tizen-agent-skills/tree/main/tizen-sdk-skills",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "icon": "images/tizen-ai-icon.png",
+  "galleryBanner": {
+    "color": "#2489CE",
+    "theme": "dark"
+  },
+  "categories": [
+    "Other",
+    "Extension Packs"
+  ],
+  "keywords": [
+    "tizen",
+    "sdk",
+    "agents",
+    "claude",
+    "cline",
+    "ai"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true,
+      "description": "Only files bundled in the extension are installed into ~/.claude and ~/.cline; nothing is read from or executed out of the workspace."
+    },
+    "virtualWorkspaces": {
+      "supported": true,
+      "description": "Installs into the local home directory and does not read the workspace."
+    }
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "tizen-ai",
+          "title": "Tizen AI",
+          "icon": "images/tizen-ai-icon.png"
+        }
+      ]
+    },
+    "views": {
+      "tizen-ai": [
+        {
+          "id": "tizenAiExtension.main",
+          "name": "Tizen AI",
+          "type": "tree"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "tizenAiExtension.install",
+        "title": "Tizen AI: Install / Re-sync"
+      },
+      {
+        "command": "tizenAiExtension.showStatus",
+        "title": "Tizen AI: Show Install Status"
+      },
+      {
+        "command": "tizenAiExtension.remove",
+        "title": "Tizen AI: Remove Installed Files"
+      },
+      {
+        "command": "tizenAiExtension.showLog",
+        "title": "Tizen AI: Show Log"
+      }
+    ],
+    "configuration": {
+      "title": "Tizen AI Extension",
+      "properties": {
+        "tizenAiExtension.targets": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "claude",
+            "cline",
+            "both"
+          ],
+          "default": "auto",
+          "description": "Which AI host(s) to install for. 'auto' detects based on ~/.claude and ~/.cline existence and installed VS Code extensions. Use 'both' to force-install to both hosts regardless of detection."
+        },
+        "tizenAiExtension.installHooks": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to install Claude Code hooks (settings.json merge) and Cline hooks/rules."
+        },
+        "tizenAiExtension.autoSyncOnUpdate": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically re-install when the extension is updated to a new version."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "icon": "node scripts/generate-icon.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node esbuild.config.js && node dist/tests.js && node dist/hooks.test.js && node dist/install.test.js",
+    "vscode:prepublish": "tsc --noEmit && node esbuild.config.js",
+    "vscode:uninstall": "node ./dist/uninstall.js",
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.30.0",
+    "esbuild": "^0.25.6",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,22 @@
+# TC-CLI-074: Install app invalid package path
+id: tizen-sdk.install-app.bad-package
+plugin: tizen-sdk
+command: install-app
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "install-app with non-existent package path returns failure"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-app", "--package", "/tmp/nonexistent.tpk"]
+    timeout_sec: 60
+    expect:
+      status: failure
+      # "not_found" isn't a category this codebase defines — every missing-
+      # file/path check across the plugin (device.js, emulator.js, sdb.js,
+      # sdb-helper.js, preflight.js) consistently uses "io_error" for exactly
+      # this case (see common/lib/core/project.js), so the TC is corrected to
+      # match the established convention instead of the product.
+      errors:
+        - { error_category: "io_error" }

@@ -1,0 +1,36 @@
+{
+  "name": "tizen-cli-plugin-tizen-sdk",
+  "version": "1.2.0",
+  "description": "tizen-cli plugin (tizen-sdk) wrapping the tizen-sdk-skills workflows — SDK install, project create/build, device, app install, remote debug",
+  "main": "dist/tizen-sdk.js",
+  "scripts": {
+    "build": "node esbuild.config.js",
+    "test": "node ../common/lib/tests/run-all.js"
+  },
+  "keywords": [
+    "tizen",
+    "cli",
+    "plugin",
+    "sdk",
+    "agents",
+    "samsung"
+  ],
+  "author": "Samsung Electronics",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Samsung/tizen-agent-skills.git",
+    "directory": "tizen-sdk-skills/tizen-cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Samsung/tizen-agent-skills/issues"
+  },
+  "dependencies": {
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.10",
+    "esbuild": "^0.25.6",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,25 @@
+# TC-CLI-122: Install from custom repo
+id: tizen-sdk.sdk-install-custom-repo.happy
+plugin: tizen-sdk
+command: sdk-install-custom-repo
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "sdk-install-custom-repo --repo-url returns success with packages and repository_url"
+
+# NOTE: the repository URL is a ${TC_CUSTOM_REPO_URL} placeholder that
+# runner.mjs resolves from fixtures/fixtures.env (default: the public Tizen
+# Studio repository), the environment, or this TC's `env:` block. A literal
+# example.com URL never serves pkg_list_{OS}, so validation would fail before
+# the install path is exercised. Point the variable at your own mirror to test
+# a private repository.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install-custom-repo", "--repo-url", "${TC_CUSTOM_REPO_URL}"]
+    timeout_sec: 900
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }
+        - { path: "$.result.repository_url", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

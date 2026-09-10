@@ -1,0 +1,19 @@
+# TC-P-015: Prompt — Show Tizen SDK repository information
+id: tizen-sdk.sdk-repo-info.prompt-happy
+plugin: tizen-sdk
+command: sdk-repo-info
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Show me the Tizen SDK repository information' to sdk-repo-info"
+
+lanes:
+  prompt:
+    text: "Show me the Tizen SDK repository information"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk sdk-repo-info"
+      envelope_status: success
+    pass_rate: "2/3"

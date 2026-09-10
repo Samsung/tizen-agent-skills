@@ -1,0 +1,17 @@
+# TC-CLI-094: TV SDK Install
+id: tizen-sdk.tv-sdk-install.happy
+plugin: tizen-sdk
+command: tv-sdk-install
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "tv-sdk-install returns success with packages array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "tv-sdk-install"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }

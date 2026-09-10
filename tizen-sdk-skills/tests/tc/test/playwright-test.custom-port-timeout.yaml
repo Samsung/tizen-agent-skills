@@ -1,0 +1,15 @@
+# TC-CLI-130: Run with custom port + timeout
+id: tizen-sdk.playwright-test.custom-port-timeout
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --app-id --test-file --port 9223 --timeout 60 returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--port", "9223", "--timeout", "60"]
+    timeout_sec: 120
+    expect:
+      status: success

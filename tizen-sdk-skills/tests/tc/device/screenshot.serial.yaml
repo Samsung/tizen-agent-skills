@@ -1,0 +1,17 @@
+# TC-CLI-093: Screenshot on specific device
+id: tizen-sdk.screenshot.serial
+plugin: tizen-sdk
+command: screenshot
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "screenshot --serial returns success on specific device"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "screenshot", "--serial", "emulator-26101"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.screenshot_path", min_length: 1 }

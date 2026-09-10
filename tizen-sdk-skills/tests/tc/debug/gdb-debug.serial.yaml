@@ -1,0 +1,17 @@
+# TC-CLI-078: On specific device
+id: tizen-sdk.gdb-debug.serial
+plugin: tizen-sdk
+command: gdb-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "gdb-debug --app-id --binary --serial returns success with gdb_command"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "gdb-debug", "--app-id", "org.tizen.myapp", "--binary", "/tmp/MyApp/bin/MyApp", "--serial", "emulator-26101"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.gdb_command", min_length: 1 }

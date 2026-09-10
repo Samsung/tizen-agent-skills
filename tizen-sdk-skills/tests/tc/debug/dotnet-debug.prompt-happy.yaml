@@ -1,0 +1,19 @@
+# TC-P-059: Prompt — Debug my Tizen .NET app
+id: tizen-sdk.dotnet-debug.prompt-happy
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Debug my Tizen .NET app org.tizen.example.MyApp' to dotnet-debug. Issue #97: with no mode in the prompt the runner must take LAUNCH mode (attach cannot succeed on Tizen), and the final answer must say the app stays suspended/without a window until VS Code connects."
+
+lanes:
+  prompt:
+    text: "Debug my Tizen .NET app org.tizen.example.MyApp"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk dotnet-debug"
+      envelope_status: success
+    pass_rate: "2/3"

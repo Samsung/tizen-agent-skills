@@ -1,0 +1,19 @@
+# TC-CLI-071: Install only
+id: tizen-sdk.install-app.happy
+plugin: tizen-sdk
+command: install-app
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "install-app --package returns success with device_id and app_id"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.device_id", min_length: 1 }
+        - { path: "$.result.app_id", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

@@ -1,0 +1,17 @@
+# Verify certificate-manager list-profiles returns success (read-only action).
+# Source: command-specs/certificate.ts — action list-profiles, no side effects
+id: tizen-sdk.certificate-manager.list-profiles.happy
+plugin: tizen-sdk
+command: certificate-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager list-profiles returns success with profile list"
+
+lanes:
+  cli:
+    argv:
+      ["tizen-sdk", "certificate-manager", "--action", "list-profiles"]
+    timeout_sec: 30
+    expect:
+      status: success

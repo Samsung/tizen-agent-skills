@@ -1,0 +1,15 @@
+# TC-CLI-046: Look for TV emulator
+id: tizen-sdk.device-manager.tv
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "device-manager --profile tv returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "device-manager", "--profile", "tv"]
+    timeout_sec: 30
+    expect:
+      status: success

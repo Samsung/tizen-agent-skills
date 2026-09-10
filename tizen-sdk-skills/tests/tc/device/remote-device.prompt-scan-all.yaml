@@ -1,0 +1,19 @@
+# TC-P-087: Prompt — Scan all subnets for devices
+id: tizen-sdk.remote-device.prompt-scan-all
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to remote-device command"
+
+lanes:
+  prompt:
+    text: "Scan all local subnets for Tizen devices."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk remote-device"
+      envelope_status: success
+    pass_rate: "2/3"

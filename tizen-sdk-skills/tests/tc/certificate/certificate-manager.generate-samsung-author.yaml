@@ -1,0 +1,22 @@
+# TC-CLI-041: Samsung: generate author cert
+id: tizen-sdk.certificate-manager.generate-samsung-author
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action generate-samsung-author returns success"
+
+# NOTE (2026-09-01): flags/values checked against
+# generateSamsungAuthorCertificate() in common/lib/core/samsung-cert.js —
+# all correct as originally written. Not executed: this action calls the
+# real Samsung online-CA backend against the operator's real Samsung
+# account (issuing a real author certificate), which is a live-service
+# side effect this suite should not trigger without explicit sign-off.
+# Left as draft.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "generate-samsung-author", "--identity", "jane@dev.com", "--password", "${FIXTURE_CERT_UNLOCK}", "--profile-name", "myProfile"]
+    timeout_sec: 120
+    expect:
+      status: success

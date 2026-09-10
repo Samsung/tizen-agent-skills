@@ -1,0 +1,18 @@
+# TC-CLI-006: Force reinstall
+id: tizen-sdk.sdk-install.force
+plugin: tizen-sdk
+command: sdk-install
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "sdk-install --force returns success with packages array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "sdk-install", "--force"]
+    timeout_sec: 900
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

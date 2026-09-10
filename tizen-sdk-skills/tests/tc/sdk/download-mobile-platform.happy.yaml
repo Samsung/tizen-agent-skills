@@ -1,0 +1,21 @@
+# TC-CLI-068: Install mobile platform
+id: tizen-sdk.download-mobile-platform.happy
+plugin: tizen-sdk
+command: download-mobile-platform
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "download-mobile-platform --platform-version returns success"
+
+# NOTE (2026-09-01): MOBILE-10.0 doesn't exist in this repo mirror (max is
+# MOBILE-7.5 — see the installer's own error listing available versions).
+# Swapped to a real version.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "download-mobile-platform", "--platform-version", "7.5"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }
+        - { path: "$.result.installation_status", matches: "completed" }

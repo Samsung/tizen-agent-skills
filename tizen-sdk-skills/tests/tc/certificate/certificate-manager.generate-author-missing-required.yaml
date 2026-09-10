@@ -1,0 +1,21 @@
+# TC-CLI-032: Generate author missing required fields
+id: tizen-sdk.certificate-manager.generate-author-missing-required
+plugin: tizen-sdk
+command: certificate-manager
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager generate-author fails when --name and --password are missing"
+
+lanes:
+  cli:
+    # --name/--password are validated at runtime by generateAuthorCertificate()
+    # (common/lib/core/certificate.js), not by Commander's option parser, so
+    # this is a business-logic invalid_parameters, not a CLI-syntax
+    # invalid_argument. Same underlying failure as certificate-manager.missing-required.
+    argv: ["tizen-sdk", "certificate-manager", "--action", "generate-author"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_parameters" }

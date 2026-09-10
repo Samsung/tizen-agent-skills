@@ -1,0 +1,17 @@
+# TC-CLI-090: Webapp debug missing required
+id: tizen-sdk.webapp-debug.missing-required-explicit
+plugin: tizen-sdk
+command: webapp-debug
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "webapp-debug without --app-id returns failure with invalid_argument"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "webapp-debug", "--port", "9222"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

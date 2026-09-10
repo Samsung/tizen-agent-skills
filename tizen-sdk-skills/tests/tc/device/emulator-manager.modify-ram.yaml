@@ -1,0 +1,15 @@
+# TC-CLI-057: Modify RAM
+id: tizen-sdk.emulator-manager.modify-ram
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager --action modify --vm-name --ram-size returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "modify", "--vm-name", "test-vm", "--ram-size", "1024"]
+    timeout_sec: 60
+    expect:
+      status: success

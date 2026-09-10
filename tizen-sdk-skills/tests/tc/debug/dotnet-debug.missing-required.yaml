@@ -1,0 +1,19 @@
+# Required-omission: --app-id is required.
+# Source: command-specs/debug.ts — --app-id required
+id: tizen-sdk.dotnet-debug.missing-required
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug fails with invalid_argument when --app-id is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

@@ -1,0 +1,20 @@
+# TC-CLI-080: Launch mode (default)
+id: tizen-sdk.dotnet-debug.happy
+plugin: tizen-sdk
+command: dotnet-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "dotnet-debug --app-id with no --mode runs LAUNCH mode (the default since issue #97 — attach cannot work on Tizen) and returns launch_config with the app suspended under netcoredbg"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.mode", matches: "^launch$" }
+        - { path: "$.result.app_state", matches: "^suspended_under_debugger$" }
+        - { path: "$.result.launch_config.debug_server_port", matches: "^4711$" }
+        - { path: "$.result.note", matches: "SUSPENDED before Main" }

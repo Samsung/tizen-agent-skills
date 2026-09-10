@@ -1,0 +1,19 @@
+# TC-CLI-134: Show plugin schema
+id: tizen-sdk.meta.schema
+plugin: tizen-sdk
+command: "--schema"
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "--schema returns plugin, version, and commands object"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "--schema"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.plugin", min_length: 1 }
+        - { path: "$.result.version", matches: "^\\d+\\.\\d+\\.\\d+" }
+        - { path: "$.result.commands", min_length: 1 }

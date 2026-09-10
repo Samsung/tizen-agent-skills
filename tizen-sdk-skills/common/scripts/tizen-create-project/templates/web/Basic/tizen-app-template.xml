@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<tizen-app-template  xmlns="http://www.tizen.org/tizen-app-template" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.tizen.org/tizen-app-template tizen-app-template.xsd "
+sdk-version="1.0 beta" template-version="0.2" 
+icon64="tizen_blank_64.png" icon32="tizen_blank_32.png">
+    <template-id>TizenBasic</template-id>
+    <template-name>Basic Application</template-name>
+    <widget-type>TIZEN</widget-type>
+    <description-file-name>description.xml</description-file-name>
+</tizen-app-template>

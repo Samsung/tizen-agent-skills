@@ -1,0 +1,19 @@
+# TC-P-008: Prompt — Download emulator package
+id: tizen-sdk.download-emulator-package.prompt-happy
+plugin: tizen-sdk
+command: download-emulator-package
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Download the Tizen emulator package' to download-emulator-package"
+
+lanes:
+  prompt:
+    text: "Download the Tizen emulator package"
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk download-emulator-package"
+      envelope_status: success
+    pass_rate: "2/3"

@@ -1,0 +1,18 @@
+# Missing required: --vm-name required for create action without --size.
+# Source: command-specs/device.ts — emulator-manager, --action create needs --size
+id: tizen-sdk.emulator-manager.missing-required
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "emulator-manager create fails with user_input_required when --size is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "create"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

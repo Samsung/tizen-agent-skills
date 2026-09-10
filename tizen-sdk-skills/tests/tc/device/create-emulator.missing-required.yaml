@@ -1,0 +1,26 @@
+# Missing required user input: --size is required for create action (user_input_required gate).
+# Source: command-specs/device.ts — --size has no default on purpose (user_input_required)
+id: tizen-sdk.create-emulator.missing-required
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "create-emulator fails with user_input_required when --size is missing for create action"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "create-emulator",
+        "--action",
+        "create",
+        "--vm-name",
+        "test-vm",
+      ]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

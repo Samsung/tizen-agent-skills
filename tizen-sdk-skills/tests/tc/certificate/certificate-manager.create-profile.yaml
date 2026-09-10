@@ -1,0 +1,17 @@
+# TC-CLI-034: Create signing profile
+id: tizen-sdk.certificate-manager.create-profile
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action create-profile returns success"
+
+# NOTE (2026-09-01): --author-cert pointed at a nonexistent /tmp/author.p12.
+# Swapped for a real, committed fixture cert (tests/fixtures/certs/).
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "create-profile", "--profile-name", "myProfile", "--author-cert", "fixtures/certs/test-fixture-author.p12", "--author-password", "${FIXTURE_CERT_UNLOCK}", "--distributor-type", "public", "--distributor-version", "new", "--active"]
+    timeout_sec: 30
+    expect:
+      status: success

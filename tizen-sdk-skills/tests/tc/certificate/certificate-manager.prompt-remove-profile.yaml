@@ -1,0 +1,19 @@
+# TC-P-032: Prompt — Remove a signing profile
+id: tizen-sdk.certificate-manager.prompt-remove-profile
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to certificate-manager command"
+
+lanes:
+  prompt:
+    text: "Remove my old signing profile."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk certificate-manager"
+      envelope_status: success
+    pass_rate: "2/3"

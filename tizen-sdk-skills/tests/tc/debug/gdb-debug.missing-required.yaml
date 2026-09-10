@@ -1,0 +1,19 @@
+# Required-omission: --app-id and --binary are required.
+# Source: command-specs/debug.ts — --app-id required, --binary required
+id: tizen-sdk.gdb-debug.missing-required
+plugin: tizen-sdk
+command: gdb-debug
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "gdb-debug fails with invalid_argument when --app-id and --binary are missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "gdb-debug"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

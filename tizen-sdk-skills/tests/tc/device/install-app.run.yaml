@@ -1,0 +1,17 @@
+# TC-CLI-072: Install and run
+id: tizen-sdk.install-app.run
+plugin: tizen-sdk
+command: install-app
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "install-app --package --run returns success with process_id"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk", "--run"]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.process_id", matches: "^\\d+" }

@@ -1,0 +1,20 @@
+# TC-CLI-132: Playwright test missing required
+id: tizen-sdk.playwright-test.missing-required-explicit
+plugin: tizen-sdk
+command: playwright-test
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "playwright-test without --app-id returns failure with invalid_parameters"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        # --app-id is validated by the shared core function (only required for
+        # a run, not --scaffold), not by Commander's option parser, so it
+        # surfaces as a business-logic invalid_parameters, not invalid_argument.
+        - { error_category: "invalid_parameters" }

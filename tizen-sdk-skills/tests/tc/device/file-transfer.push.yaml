@@ -1,0 +1,18 @@
+# TC-CLI-105: Push
+id: tizen-sdk.file-transfer.push
+plugin: tizen-sdk
+command: file-transfer
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "file-transfer --direction push returns success with bytes_transferred"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer", "--direction", "push", "--local", "/tmp/config.xml", "--remote", "/opt/usr/apps/"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.direction", matches: "push" }
+        - { path: "$.result.bytes_transferred", matches: "^\\d+" }

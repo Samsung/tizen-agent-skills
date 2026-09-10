@@ -1,0 +1,21 @@
+# TC-CLI-036: Set active profile
+id: tizen-sdk.certificate-manager.set-active-profile
+plugin: tizen-sdk
+command: certificate-manager
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "certificate-manager --action set-active-profile --profile-name returns success"
+
+# NOTE (2026-09-01): originally targeted the SDK's default profiles.xml with
+# no profile named "myProfile" ever created there — always failed with
+# "profile not found". --profiles-xml points this at a committed fixture
+# that already has that profile (see tests/fixtures/README.md), so this TC
+# is self-contained and order-independent instead of depending on
+# create-profile.happy having run first in the same profiles.xml.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "certificate-manager", "--action", "set-active-profile", "--profile-name", "myProfile", "--profiles-xml", "fixtures/profiles/with-profile.xml"]
+    timeout_sec: 30
+    expect:
+      status: success

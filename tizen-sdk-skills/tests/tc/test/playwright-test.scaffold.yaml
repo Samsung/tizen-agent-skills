@@ -1,0 +1,17 @@
+# TC-CLI-126: Scaffold test file + package.json
+id: tizen-sdk.playwright-test.scaffold
+plugin: tizen-sdk
+command: playwright-test
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "playwright-test --scaffold --project-dir --app-id returns success with created[]"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "playwright-test", "--scaffold", "--project-dir", "/tmp/test-project", "--app-id", "abcDEF1234.MyWebApp"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.created", min_length: 1 }

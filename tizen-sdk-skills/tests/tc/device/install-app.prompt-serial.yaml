@@ -1,0 +1,19 @@
+# TC-P-051: Prompt — Install app on specific device
+id: tizen-sdk.install-app.prompt-serial
+plugin: tizen-sdk
+command: install-app
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to install-app command"
+
+lanes:
+  prompt:
+    text: "Install my app on the emulator with serial emulator-26101."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk install-app"
+      envelope_status: success
+    pass_rate: "2/3"

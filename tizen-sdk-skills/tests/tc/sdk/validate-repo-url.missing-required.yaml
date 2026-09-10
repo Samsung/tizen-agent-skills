@@ -1,0 +1,18 @@
+# Required-omission: --repo-url is required (collectAllMissing).
+id: tizen-sdk.validate-repo-url.missing-required
+plugin: tizen-sdk
+command: validate-repo-url
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "validate-repo-url fails with invalid_argument when --repo-url is missing"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "validate-repo-url"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "invalid_argument"
+          has_suggested_fix: true

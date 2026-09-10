@@ -1,0 +1,15 @@
+# TC-CLI-115: Add bookmark
+id: tizen-sdk.remote-device.add-bookmark
+plugin: tizen-sdk
+command: remote-device
+tier: device
+status: draft
+since_cli: 1.0.0
+description: "remote-device --action add --name --ip returns success"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "remote-device", "--action", "add", "--name", "Living Room TV", "--ip", "192.168.1.50"]
+    timeout_sec: 30
+    expect:
+      status: success

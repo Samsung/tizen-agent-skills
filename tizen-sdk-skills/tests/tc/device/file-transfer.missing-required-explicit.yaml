@@ -1,0 +1,17 @@
+# TC-CLI-109: File transfer missing required
+id: tizen-sdk.file-transfer.missing-required-explicit
+plugin: tizen-sdk
+command: file-transfer
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "file-transfer without --direction returns failure with invalid_argument"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "file-transfer", "--remote", "/tmp/file.txt"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

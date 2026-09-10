@@ -1,0 +1,19 @@
+# TC-P-101: Prompt — Start dlog monitoring for crash detection
+id: tizen-sdk.dlog-analyzer.prompt-happy
+plugin: tizen-sdk
+command: dlog-analyzer
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves 'Monitor device logs for crashes and exceptions' to dlog-analyzer"
+
+lanes:
+  prompt:
+    text: "Monitor device logs for crashes and exceptions"
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk dlog-analyzer"
+      envelope_status: success
+    pass_rate: "2/3"

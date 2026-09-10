@@ -1,0 +1,19 @@
+# TC-P-068: Prompt — Install platform package
+id: tizen-sdk.platform-install.prompt-variant1
+plugin: tizen-sdk
+command: platform-install
+tier: mutating
+status: approved
+since_cli: 1.0.0
+description: "LLM resolves prompt to platform-install command"
+
+lanes:
+  prompt:
+    text: "Install the Tizen platform package."
+    timeout_sec: 300
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk platform-install"
+      envelope_status: success
+    pass_rate: "2/3"

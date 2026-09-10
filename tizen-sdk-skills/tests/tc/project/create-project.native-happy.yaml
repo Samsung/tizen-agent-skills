@@ -1,0 +1,21 @@
+# TC-CLI-018: Create native
+id: tizen-sdk.create-project.native-happy
+plugin: tizen-sdk
+command: create-project
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "create-project --type native returns success with project_path"
+
+# NOTE (2026-09-01): the original template name doesn't exist for this
+# type — swapped for a real one (list-templates --type <type> to discover).
+# Also fixed the result field: it is project_type, not app_type.
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-project", "--type", "native", "--template", "BasicUI", "--parent-path", "/tmp/tizen-apps", "--name", "MyNativeApp"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.project_path", min_length: 1 }
+        - { path: "$.result.project_type", matches: "native" }

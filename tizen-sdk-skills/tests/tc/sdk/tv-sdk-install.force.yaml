@@ -1,0 +1,17 @@
+# TC-CLI-095: Force reinstall
+id: tizen-sdk.tv-sdk-install.force
+plugin: tizen-sdk
+command: tv-sdk-install
+tier: mutating
+status: draft
+since_cli: 1.0.0
+description: "tv-sdk-install --force returns success with packages array"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "tv-sdk-install", "--force"]
+    timeout_sec: 600
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.packages", min_length: 1 }

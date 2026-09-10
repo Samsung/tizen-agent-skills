@@ -1,0 +1,159 @@
+name: CI (tizen-sdk-skills)
+
+# This workflow lives at the ROOT of the tizen-agent-skills repository and
+# targets the tizen-sdk-skills/ project directory. Every path below is
+# therefore prefixed with tizen-sdk-skills/.
+#
+# No `paths:` filter on purpose: the three jobs are required status checks
+# on main, and a filtered workflow never reports them for a PR that only
+# touches repository-root files (README, SECURITY, CODEOWNERS, ...), which
+# would leave such a PR unmergeable.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One run per ref; a newer push to the same PR supersedes the older run.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Node version comes from tizen-sdk-skills/.nvmrc; the pnpm major is pinned here
+# so the root pnpm-lock.yaml (lockfileVersion 9.0) stays valid.
+env:
+  PNPM_VERSION: "10"
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tizen-sdk-skills/.nvmrc
+
+      - name: Install pnpm
+        run: npm install -g pnpm@${PNPM_VERSION}
+
+      - name: Verify toolchain
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Install lint tooling
+        working-directory: tizen-sdk-skills
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (ESLint)
+        working-directory: tizen-sdk-skills
+        run: pnpm run lint
+
+      - name: Format check (Prettier)
+        working-directory: tizen-sdk-skills
+        run: pnpm run format:check
+
+      # Every source file must carry the Apache-2.0 SPDX header
+      # (GOVERNANCE.md, "Licensing").
+      - name: SPDX header check
+        working-directory: tizen-sdk-skills
+        run: node scripts/add-spdx-headers.js --check
+
+      # The runner-lookup snippet in every SKILL.md is generated; a hand edit
+      # that drifts from the template fails here.
+      - name: Runner snippet check
+        working-directory: tizen-sdk-skills
+        run: node scripts/rewrite-runner-snippets.js --check
+
+      # tizen-cli and the VS Code extension are pnpm-managed (pnpm-lock.yaml).
+      - name: Install dependencies (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm exec tsc --noEmit
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tizen-sdk-skills/.nvmrc
+
+      - name: Install pnpm
+        run: npm install -g pnpm@${PNPM_VERSION}
+
+      - name: Install dependencies (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (tizen-cli)
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: pnpm run build
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tizen-sdk-dist
+          path: tizen-sdk-skills/tizen-cli/dist/
+          retention-days: 7
+
+      # The VS Code extension is pnpm-managed (vscode/README.md). Building it
+      # here means a broken extension is caught on the PR, not at release time.
+      - name: Install dependencies (vscode extension)
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check (vscode extension)
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm run typecheck
+
+      - name: Build (vscode extension)
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm run build
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tizen-sdk-skills/.nvmrc
+
+      # Runs every common/lib/tests/*.test.js via the shared runner (same entry
+      # point as `npm test` in tizen-cli), so new test files are picked up
+      # automatically and CI never drifts from the local test list.
+      - name: Run common/lib unit tests
+        working-directory: tizen-sdk-skills/common/lib/tests
+        run: node run-all.js
+
+      - name: Run hook tests
+        working-directory: tizen-sdk-skills
+        run: bash common/hooks/hooks.test.sh
+
+      # Same three commands as `npm run lint` in tests/: TC schema dry-run,
+      # README statistics against the TC tree, runner helper unit tests.
+      - name: Lint test-suite TCs (schema dry-run, doc stats, helpers)
+        working-directory: tizen-sdk-skills/tests
+        run: |
+          npm ci
+          node runner.mjs --dry-run
+          node scripts/verify-doc-stats.mjs
+          node scripts/runner-helpers.test.mjs
