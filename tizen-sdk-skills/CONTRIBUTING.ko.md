@@ -110,7 +110,7 @@ TC 추가: [tests/README.md → Adding a New TC](tests/README.md#adding-a-new-tc
   - `tizen-cli/README.md` + `tizen-cli/README.ko.md`
 - 명령·스킬 개수("34 commands", "29 skills")를 `README*.md`,
   `docs/SKILLS_REFERENCE*.md`, `tests/README.md`, 그리고 `README*.md`의
-  "프로젝트 수치" 표 전체에서 일치시킵니다.
+  "프로젝트 현황" 표 전체에서 일치시킵니다.
 - 새 Markdown은 저장소 Prettier 설정(80열, LF 줄바꿈. `.gitattributes`가
   `*.md`에 LF를 강제)을 따릅니다. CI는 Markdown을 검사하지 않으므로
   `npx prettier --check <file>`을 직접 실행하세요.
