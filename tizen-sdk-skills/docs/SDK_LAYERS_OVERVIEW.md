@@ -1,5 +1,7 @@
 # 중간 계층 소개
 
+[English](SDK_LAYERS_OVERVIEW.en.md) | 한국어
+
 > 호출 흐름에는 여러 중간 계층(CLI 러너 → sdk-commands.js → plugin-cache.js → .ps1)이 있습니다. 아래는 각 계층의 소개와 존재 이유입니다.
 
 ---

@@ -1,5 +1,7 @@
 # tizen-sdk Command Test Results
 
+English | [한국어](COMMAND_TEST_RESULTS.md)
+
 - **Test Date**: 2026-07-16
 - **Execution Method**: From repository root: `node dist/cli.js tizen-sdk <command> ...`
 - **Environment**: Windows 11, Node.js v24.15.0, Tizen SDK at `C:\Users\<username>\tizen-sdk`, .NET SDK 10.0.300

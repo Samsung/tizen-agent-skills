@@ -1,5 +1,7 @@
 # 훅 git-route 거부 문제 수정
 
+[English](hook-git-route-fix.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-02  

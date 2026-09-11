@@ -1,5 +1,7 @@
 # Platform App GBS Build Guide
 
+English | [한국어](platform-gbs-build.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-07-22  

@@ -1,5 +1,7 @@
 # Tizen SDK Command Layer — Architecture & Call Flow
 
+English | [한국어](SDK_COMMANDS_ARCHITECTURE.md)
+
 > **Scope**: `common/lib/` — CLI runners (`*-cli.js`) → `sdk-commands.js` (entry point) → domain modules → `plugin-cache.js` → PowerShell/Bash scripts
 > **Entry-point file**: `lib/core/sdk-commands.js` — the **single entry point (aggregator)** that re-exports the domain modules' public functions. The actual logic lives in the `lib/core/` domain modules.
 

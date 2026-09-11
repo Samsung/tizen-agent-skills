@@ -1,5 +1,7 @@
 # Tizen 인증서 관리자 가이드
 
+[English](certificate-manager-guide.en.md) | 한국어
+
 이 문서는 `tizen-sdk-skills` 플러그인의 전체 인증서 관리 기능을 설명합니다.
 **로컬 Tizen (자체 서명)** 인증서와 **Samsung 온라인 CA** 인증서를 모두 다룹니다.
 CLI 러너 (스킬/에이전트 경로)와 `tizen-cli` 명령 인터페이스의 사용 예를 포함합니다.

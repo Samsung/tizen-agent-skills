@@ -1,8 +1,10 @@
 # Contributing to tizen-sdk-skills
 
+English | [한국어](CONTRIBUTING.ko.md)
+
 Thanks for helping improve the plugin. This guide covers the mechanics of a
 contribution; roles, approval rules and decision-making are in
-[GOVERNANCE.md](GOVERNANCE.md). [한국어](CONTRIBUTING.ko.md)
+[GOVERNANCE.md](GOVERNANCE.md).
 
 ## 1. Before you start
 
@@ -113,6 +115,9 @@ TCs start with `status: draft`.
   - repository root: `X.md` (English) + `X.ko.md` (Korean);
   - `docs/`: `X.md` (Korean) + `X.en.md` (English);
   - `tizen-cli/README.md` + `tizen-cli/README.ko.md`.
+- Every paired file carries a language switch line directly under its H1 —
+  `English | [한국어](X.ko.md)` in the English file and
+  `[English](X.en.md) | 한국어` in the Korean file, linking to its counterpart.
 - Keep the command and skill counts ("34 commands", "29 skills") consistent
   across `README*.md`, `docs/SKILLS_REFERENCE*.md`, `tests/README.md` and the
   "Project at a Glance" table in `README*.md`.

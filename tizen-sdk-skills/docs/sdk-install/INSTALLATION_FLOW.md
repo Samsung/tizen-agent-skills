@@ -1,5 +1,7 @@
 # 자연어로 SDK 설치하고 JSON 응답 받기
 
+[English](INSTALLATION_FLOW.en.md) | 한국어
+
 ## 📋 전체 시나리오
 
 사용자가 자연어로 SDK 설치를 요청하고, 최종적으로 **Standard JSON Envelope 형식**의 응답을 받는 **완전한 흐름**입니다.

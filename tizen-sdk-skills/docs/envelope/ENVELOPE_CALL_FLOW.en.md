@@ -1,5 +1,7 @@
 # formatSdkInit Call Flow and Scenarios
 
+English | [한국어](ENVELOPE_CALL_FLOW.md)
+
 ## Overview
 
 The `formatSdkInit` function generates a response in **Standard JSON Envelope format** after executing the SDK initialization command.

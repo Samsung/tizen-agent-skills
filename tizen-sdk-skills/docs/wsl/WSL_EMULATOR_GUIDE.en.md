@@ -1,5 +1,7 @@
 # Tizen Emulator in WSL (Windows Subsystem for Linux)
 
+English | [한국어](WSL_EMULATOR_GUIDE.md)
+
 ## Overview
 
 Running Tizen emulator in Windows Subsystem for Linux (WSL2) requires specific configuration due to nested virtualization constraints. This guide covers setup, troubleshooting, and recommended profiles for different WSL environments.

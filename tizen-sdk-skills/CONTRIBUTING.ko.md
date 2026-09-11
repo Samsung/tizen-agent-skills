@@ -1,8 +1,9 @@
 # tizen-sdk-skills 기여 가이드
 
+[English](CONTRIBUTING.md) | 한국어
+
 플러그인 개선에 참여해 주셔서 감사합니다. 이 문서는 기여의 실무 절차를 다루며,
 역할·승인 규칙·의사결정은 [GOVERNANCE.ko.md](GOVERNANCE.ko.md)에 있습니다.
-[English](CONTRIBUTING.md)
 
 ## 1. 시작하기 전에
 
@@ -108,6 +109,9 @@ TC 추가: [tests/README.md → Adding a New TC](tests/README.md#adding-a-new-tc
   - 저장소 루트: `X.md`(영어) + `X.ko.md`(한국어)
   - `docs/`: `X.md`(한국어) + `X.en.md`(영어)
   - `tizen-cli/README.md` + `tizen-cli/README.ko.md`
+- 쌍을 이루는 모든 파일은 H1 바로 아래에 상대 문서로 가는 언어 전환 줄을 둡니다 —
+  영문 파일은 `English | [한국어](X.ko.md)`, 한국어 파일은
+  `[English](X.en.md) | 한국어`.
 - 명령·스킬 개수("34 commands", "29 skills")를 `README*.md`,
   `docs/SKILLS_REFERENCE*.md`, `tests/README.md`, 그리고 `README*.md`의
   "프로젝트 현황" 표 전체에서 일치시킵니다.

@@ -1,5 +1,7 @@
 # Tizen SDK Skills
 
+[English](README.en.md) | 한국어
+
 Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 자동화하는 **통합 Cline 스킬 모음**입니다.
 
 ## 📚 문서 안내

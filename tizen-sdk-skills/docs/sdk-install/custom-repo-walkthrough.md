@@ -1,5 +1,7 @@
 # 시나리오 가이드: 커스텀 저장소 URL 로 Tizen SDK 설치하기
 
+[English](custom-repo-walkthrough.en.md) | 한국어
+
 이 문서는 기본 public CDN 미러 대신 **커스텀 저장소 URL**에서 Tizen SDK 를 설치하는 방법을 안내합니다. 사내 미러, 빌드 서버 산출물, 팀 미러, 또는 로컬 HTTP 서버에서 설치할 때 사용합니다.
 
 각 단계는 **자연어로 Claude 에게 말하기만 하면** 자동으로 실행됩니다 — 외울 명령어는 없습니다.

@@ -1,5 +1,7 @@
 # SDK Installation Status Check and Verification Guide
 
+English | [한국어](SDK_INSTALLATION_VERIFICATION.md)
+
 ## 📋 Overview
 
 The `readSdkPath()` function has been extended to **check SDK installation status** and **prevent reinstallation when already installed**, implementing a safe installation procedure.

@@ -1,5 +1,7 @@
 # WSL(Windows Subsystem for Linux)에서 Tizen 에뮬레이터 실행
 
+[English](WSL_EMULATOR_GUIDE.en.md) | 한국어
+
 ## 개요
 
 Windows Subsystem for Linux (WSL2)에서 Tizen 에뮬레이터를 실행하려면 중첩된 가상화 제약으로 인해 특정 설정이 필요합니다. 이 가이드는 다양한 WSL 환경에서의 설정, 문제 해결 및 권장 프로필을 다룹니다.

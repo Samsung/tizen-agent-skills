@@ -1,5 +1,7 @@
 # 시나리오 가이드: 웹앱 디버깅(RWI/CDP) 처음부터 끝까지 체험하기
 
+[English](scenario-webapp-debug-walkthrough.en.md) | 한국어
+
 이 문서는 `tizen-sdk-skills` 플러그인으로 **Tizen 웹앱(.wgt) 원격 디버깅을 한 번에 전체 흐름으로 시험**해볼 수 있도록, "SDK 설치 → 에뮬레이터 → 웹앱 생성 → 빌드 → 설치 → RWI/CDP 디버깅 → Chrome DevTools 연결"을 단계별로 안내합니다.
 
 각 단계는 **Claude에게 자연어로 말하면** 해당 에이전트가 자동으로 동작합니다. 별도로 명령어를 외울 필요는 없습니다.

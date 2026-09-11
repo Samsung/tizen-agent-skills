@@ -1,5 +1,7 @@
 # Tizen SDK Skills — Usage Scenarios & Walkthrough Guide
 
+English | [한국어](usage.md)
+
 > A unified document for **end-to-end scenario walkthroughs** and **real-world usage examples** using the `tizen-sdk-skills` plugin.
 > Each guide walks you through an entire workflow step by step, executable with natural language prompts alone.
 

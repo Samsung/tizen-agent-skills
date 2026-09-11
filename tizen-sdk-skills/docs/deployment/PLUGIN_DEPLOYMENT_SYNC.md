@@ -1,5 +1,7 @@
 # 플러그인 배포·동기화 가이드 (user-level 컴포넌트 배포)
 
+[English](PLUGIN_DEPLOYMENT_SYNC.en.md) | 한국어
+
 > 일부 환경에서는 조직 정책(`strictKnownMarketplaces: []`, `~/.claude/remote-settings.json`으로
 > 서버에서 내려옴)이 `tizen-platform` 마켓플레이스를 차단해 플러그인이
 > 어느 세션에서도 로드되지 않는다 (`claude plugin list` →

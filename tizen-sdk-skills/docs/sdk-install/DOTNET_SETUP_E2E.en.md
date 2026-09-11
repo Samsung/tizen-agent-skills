@@ -1,5 +1,7 @@
 # Tizen .NET Development Environment Setup (End-to-End Guide)
 
+English | [한국어](DOTNET_SETUP_E2E.md)
+
 This guide walks you through installing the .NET SDK and Tizen workload for developing .NET applications on the Tizen platform.
 
 ## Table of Contents

@@ -1,5 +1,7 @@
 # DALi C++17 빌드 실패 사전 차단
 
+[English](dali-cxx17-preflight.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-03  

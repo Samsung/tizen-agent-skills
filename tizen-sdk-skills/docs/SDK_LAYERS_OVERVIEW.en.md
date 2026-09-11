@@ -1,5 +1,7 @@
 # Intermediate Layer Introductions
 
+English | [한국어](SDK_LAYERS_OVERVIEW.md)
+
 > The call flow has multiple intermediate layers (CLI runner → sdk-commands.js → plugin-cache.js → .ps1). Below is an introduction to each layer and why it exists.
 
 ---

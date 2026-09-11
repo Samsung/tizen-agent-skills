@@ -1,5 +1,7 @@
 # Install SDK via Natural Language and Get JSON Response
 
+English | [한국어](INSTALLATION_FLOW.md)
+
 ## 📋 Full Scenario
 
 A **complete flow** where the user requests SDK installation via natural language and ultimately receives a response in **Standard JSON Envelope format**.

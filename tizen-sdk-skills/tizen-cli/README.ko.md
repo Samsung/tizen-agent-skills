@@ -1,5 +1,7 @@
 # tizen-cli 하네스 (tizen-sdk 플러그인)
 
+[English](README.md) | 한국어
+
 **tizen-sdk-skills**의 세 번째 하네스 (`claude/`, `cline/`과 병행):
 tizen-cli 플러그인으로,
 공유 워크플로우를 표준 CLI 명령어로 노출합니다.

@@ -1,5 +1,7 @@
 # Cline Setup & Plugin Sync Integration Guide
 
+English | [한국어](CLINE_SETUP_AND_SYNC.md)
+
 > **v0.1.0** — 2026-07-10
 > Plugin cache sync + personal copy management + Cline skill installation in **one script**.
 > The Cline skill/hook paths below (`~/.cline/skills/`, `~/Documents/Cline/Hooks/`) apply to

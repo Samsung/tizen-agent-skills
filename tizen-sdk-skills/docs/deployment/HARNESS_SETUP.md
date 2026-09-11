@@ -1,5 +1,7 @@
 # 하네스 설치 가이드 — Claude Code · Cline · Codex CLI · Gemini CLI
 
+[English](HARNESS_SETUP.en.md) | 한국어
+
 지원하는 모든 AI 하네스에 tizen-sdk-skills를 설치하는 구현은 하나입니다:
 
 ```

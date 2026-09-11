@@ -1,5 +1,7 @@
 # 빌드 실패 진단 정보 개선
 
+[English](build-failure-diagnostics.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-02  

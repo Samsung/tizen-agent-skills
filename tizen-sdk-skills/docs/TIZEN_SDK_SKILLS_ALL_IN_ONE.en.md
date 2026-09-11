@@ -1,5 +1,7 @@
 # Tizen SDK Skills — All-in-One Document
 
+English | [한국어](TIZEN_SDK_SKILLS_ALL_IN_ONE.md)
+
 > This document merges the three documents below into a single file. (Generated: 2026-09-10)
 >
 > 1. `docs/SKILLS_REFERENCE.en.md` — Skills Reference

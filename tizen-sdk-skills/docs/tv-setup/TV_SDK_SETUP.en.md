@@ -1,5 +1,7 @@
 # Tizen TV SDK Setup Guide
 
+English | [한국어](TV_SDK_SETUP.md)
+
 This document describes the step-by-step process of installing the Tizen SDK and Tizen TV SDK extension for Samsung TV app development.
 
 ## Overview

@@ -1,5 +1,7 @@
 # SDK Install from a Custom Repository URL
 
+English | [한국어](CUSTOM_REPOSITORY_INSTALL.md)
+
 Install the Tizen SDK from a **user-supplied package repository URL** instead of the
 timezone-selected public CDN mirror — an internal Samsung mirror, a build-server output, a
 team mirror, or a local HTTP server.

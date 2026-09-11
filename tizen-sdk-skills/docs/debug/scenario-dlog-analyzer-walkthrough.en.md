@@ -1,5 +1,7 @@
 # Scenario Guide: Tizen DLog Analyzer End to End
 
+English | [한국어](scenario-dlog-analyzer-walkthrough.md)
+
 This document walks you through the **full Tizen dlog analysis flow** with the `tizen-sdk-skills` plugin: "emulator launch → start background log monitoring → install & launch app → user reports issue → check analyzed logs → apply fix → rebuild → reinstall → verify → stop monitoring".
 
 Each step shows both the **natural language** command (what you tell the agent) and the **tizen-cli** command (what runs under the hood).

@@ -1,5 +1,7 @@
 # Scenario Guide: Native App End-to-End Walkthrough
 
+English | [한국어](scenario-native-app-walkthrough.md)
+
 This document guides **first-time users** of the `tizen-sdk-skills` plugin through the complete flow: "SDK Install → Emulator → Native Template App Creation → Build → Install → Debugging", step by step.
 
 Each step is triggered by **speaking natural language to Claude** — the corresponding agent handles the rest automatically. No need to memorize commands.

@@ -1,5 +1,7 @@
 # DALi Template Build End-to-End Guide
 
+English | [한국어](dali-template-build-e2e.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-25  

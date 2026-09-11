@@ -1,5 +1,7 @@
 # Tizen .NET 개발 환경 설정 (End-to-End 가이드)
 
+[English](DOTNET_SETUP_E2E.en.md) | 한국어
+
 이 문서는 Tizen 플랫폼에서 .NET 애플리케이션을 개발하기 위한 .NET SDK와 Tizen 워크로드 설치를 단계별로 안내합니다.
 
 ## 목차

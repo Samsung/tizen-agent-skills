@@ -1,5 +1,7 @@
 # Tizen SDK 커맨드 계층 — 아키텍처 및 호출 흐름
 
+[English](SDK_COMMANDS_ARCHITECTURE.en.md) | 한국어
+
 > **범위**: `common/lib/` — CLI 러너(`*-cli.js`) → `sdk-commands.js`(진입점) → 도메인 모듈 → `plugin-cache.js` → PowerShell/Bash 스크립트
 > **진입점 파일**: `lib/core/sdk-commands.js` — 도메인 모듈의 공개 함수를 재수출(re-export)하는 **단일 진입점(aggregator)**. 실제 로직은 `lib/core/`의 도메인 모듈에 있습니다.
 

@@ -1,5 +1,7 @@
 # tizen-sdk 플러그인 구현 요약
 
+[English](IMPLEMENTATION_SUMMARY.en.md) | 한국어
+
 > 작성일: 2026-07-16
 > 대상 저장소: `tizen-cli` (직접 수정)
 > 로직 소스: `tizen-sdk-skills` 저장소 루트 (참조만, 수정 없음)

@@ -1,8 +1,9 @@
 # tizen-sdk-skills 거버넌스
 
+[English](GOVERNANCE.md) | 한국어
+
 `tizen-sdk-skills` 프로젝트가 어떻게 조직되고, 누가 무엇을 결정하며, 변경이
 어떻게 리뷰되는지를 정의합니다. 최종 개정: 2026-09-09.
-[English](GOVERNANCE.md)
 
 ## 1. 프로젝트
 

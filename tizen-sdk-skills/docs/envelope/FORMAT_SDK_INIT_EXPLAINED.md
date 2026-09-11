@@ -1,5 +1,7 @@
 # formatSdkInit 완벽 가이드 - 누가, 언제, 왜, 어떻게
 
+[English](FORMAT_SDK_INIT_EXPLAINED.en.md) | 한국어
+
 이 문서는 `formatSdkInit(sdkPath, configFile)` 함수의 **전체 호출 시나리오**를 설명합니다.
 
 ---
