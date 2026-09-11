@@ -1,5 +1,7 @@
 # Screenshot: enlightenment_info Fallback and Image in the Response
 
+English | [한국어](screenshot-enlightenment-capture.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-02  

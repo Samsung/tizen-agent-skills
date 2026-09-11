@@ -1,5 +1,7 @@
 # 시나리오 가이드: Tizen DLog Analyzer 엔드투엔드
 
+[English](scenario-dlog-analyzer-walkthrough.en.md) | 한국어
+
 이 문서는 `tizen-sdk-skills` 플러그인을 사용한 **전체 Tizen dlog 분석 흐름**을 안내합니다: "에뮬레이터 실행 → 백그라운드 로그 모니터링 시작 → 앱 설치 및 실행 → 사용자 이슈 보고 → 분석된 로그 확인 → 수정 적용 → 재빌드 → 재설치 → 검증 → 모니터링 중지".
 
 각 단계에서 **자연어 명령**(에이전트에게 전달하는 내용)과 **tizen-cli** 명령(내부적으로 실행되는 명령)을 함께 보여줍니다.

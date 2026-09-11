@@ -1,5 +1,7 @@
 # 시나리오 가이드: Tizen 및 Samsung 인증서 관리 엔드투엔드
 
+[English](certificate-manager-walkthrough.en.md) | 한국어
+
 이 문서는 `tizen-sdk-skills` 플러그인을 사용한 **Tizen 인증서 및 Samsung 온라인 CA 인증서의 전체 워크플로우**를 안내합니다: "SDK 설치 → 로컬 Tizen 인증서 → Samsung 인증서 → 서명 프로필 → 빌드에 사용".
 
 각 단계는 **Claude에게 자연어로 말하면** 자동으로 실행됩니다. 별도로 명령어를 외울 필요는 없습니다.

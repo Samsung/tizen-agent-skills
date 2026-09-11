@@ -1,5 +1,7 @@
 # 사용자 지정 저장소 URL로 SDK 설치
 
+[English](CUSTOM_REPOSITORY_INSTALL.en.md) | 한국어
+
 타임존으로 자동 선택되는 공개 CDN 미러 대신 **사용자가 지정한 패키지 저장소 URL**에서 Tizen
 SDK를 설치합니다 — 사내 미러, 빌드 서버 산출물, 팀 미러, 로컬 HTTP 서버 등.
 

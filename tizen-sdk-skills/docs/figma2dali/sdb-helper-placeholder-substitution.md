@@ -1,5 +1,7 @@
 # sdb-helper 플레이스홀더 치환 버그 수정
 
+[English](sdb-helper-placeholder-substitution.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-02  

@@ -1,5 +1,7 @@
 # Plugin Deployment & Sync Guide (User-level Component Deployment)
 
+English | [한국어](PLUGIN_DEPLOYMENT_SYNC.md)
+
 > In some environments an organization policy (`strictKnownMarketplaces: []`, pushed via
 > `~/.claude/remote-settings.json`) blocks the `tizen-platform` marketplace, preventing
 > the plugin from loading in any session (`claude plugin list` →

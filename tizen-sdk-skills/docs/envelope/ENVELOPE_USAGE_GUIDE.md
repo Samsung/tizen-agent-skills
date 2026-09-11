@@ -1,5 +1,7 @@
 # Standard JSON Envelope 사용 가이드
 
+[English](ENVELOPE_USAGE_GUIDE.en.md) | 한국어
+
 ## 개요
 
 Standard JSON Envelope는 모든 `tizen-sdk` 명령어의 응답을 **결정적이고 구조화된 JSON 형식**으로 표준화합니다.

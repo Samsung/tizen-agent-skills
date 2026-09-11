@@ -1,5 +1,7 @@
 # Scenario Guide: Tizen Emulator Manager End to End
 
+English | [한국어](emulator-manager-walkthrough.ko.md)
+
 This document walks you through the **complete Tizen emulator VM workflow** with the `tizen-sdk-skills` plugin: "SDK install → emulator package download → list templates/platforms → create emulator VM → launch → use for app testing".
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

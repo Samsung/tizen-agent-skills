@@ -1,5 +1,7 @@
 # tizen-sdk-install Agent and installSdk() Integration Guide
 
+English | [한국어](AGENT_TO_INSTALLSDK_INTEGRATION.md)
+
 ## 📋 Overview
 
 This document explains how the `tizen-sdk-install` agent **calls the `installSdk()` function** in `lib/core/sdk-commands.js` and returns a response in Standard JSON Envelope format.

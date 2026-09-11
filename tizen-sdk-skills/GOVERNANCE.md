@@ -1,7 +1,9 @@
 # tizen-sdk-skills Governance
 
+English | [한국어](GOVERNANCE.ko.md)
+
 How the `tizen-sdk-skills` project is organised, who decides what, and how
-changes are reviewed. Last amended: 2026-09-09. [한국어](GOVERNANCE.ko.md)
+changes are reviewed. Last amended: 2026-09-09.
 
 ## 1. Project
 

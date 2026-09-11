@@ -1,5 +1,7 @@
 # tizen-sdk-install 에이전트와 installSdk() 통합 가이드
 
+[English](AGENT_TO_INSTALLSDK_INTEGRATION.en.md) | 한국어
+
 ## 📋 개요
 
 `tizen-sdk-install` 에이전트가 **`lib/core/sdk-commands.js`의 `installSdk()` 함수를 호출**하여 Standard JSON Envelope 형식의 응답을 반환하는 방식을 설명합니다.

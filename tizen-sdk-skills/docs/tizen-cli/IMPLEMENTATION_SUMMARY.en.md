@@ -1,5 +1,7 @@
 ﻿# tizen-sdk Plugin Implementation Summary
 
+English | [한국어](IMPLEMENTATION_SUMMARY.md)
+
 > Written: 2026-07-16
 > Target Repository: `tizen-cli` (direct modifications)
 > Logic Source: `tizen-sdk-skills` repository root (reference only, no changes)

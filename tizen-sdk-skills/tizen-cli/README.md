@@ -1,5 +1,7 @@
 # tizen-cli harness (tizen-sdk plugin)
 
+English | [한국어](README.ko.md)
+
 The third harness of **tizen-sdk-skills** (alongside `claude/` and `cline/`):
 a tizen-cli plugin
 exposing the shared workflows as standard CLI commands.

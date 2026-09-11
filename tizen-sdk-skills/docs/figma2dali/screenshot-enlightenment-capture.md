@@ -1,5 +1,7 @@
 # 스크린샷 enlightenment_info 폴백 추가 및 응답 이미지 포함
 
+[English](screenshot-enlightenment-capture.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-02  

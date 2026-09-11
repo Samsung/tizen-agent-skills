@@ -1,5 +1,7 @@
 # Scenario Guide: Native App Debugging (GDB) End to End
 
+English | [한국어](scenario-native-debug-walkthrough.md)
+
 This document walks you through the **full Tizen native app (.tpk, C/C++) remote-debugging flow** with the `tizen-sdk-skills` plugin: "SDK install → emulator → native app creation → Debug build → install → gdbserver setup → host GDB connection".
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

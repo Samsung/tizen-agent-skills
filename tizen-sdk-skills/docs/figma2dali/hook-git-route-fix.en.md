@@ -1,5 +1,7 @@
 # Hook git-route Rejection Fix
 
+English | [한국어](hook-git-route-fix.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-02  

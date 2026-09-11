@@ -1,5 +1,7 @@
 # Harness Setup Guide — Claude Code · Cline · Codex CLI · Gemini CLI
 
+English | [한국어](HARNESS_SETUP.md)
+
 One implementation installs tizen-sdk-skills into every supported AI harness:
 
 ```

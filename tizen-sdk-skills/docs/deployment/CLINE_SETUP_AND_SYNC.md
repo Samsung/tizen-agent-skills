@@ -1,5 +1,7 @@
 # Cline 설치 및 플러그인 동기화 통합 가이드
 
+[English](CLINE_SETUP_AND_SYNC.en.md) | 한국어
+
 > **v0.1.0** — 2026-07-10
 > 플러그인 캐시 동기화 + 개인 복사본 관리 + Cline 스킬 설치를 **한 스크립트**로 처리합니다.
 > 아래의 Cline 스킬/훅 경로(`~/.cline/skills/`, `~/Documents/Cline/Hooks/`)는 스킬·훅을

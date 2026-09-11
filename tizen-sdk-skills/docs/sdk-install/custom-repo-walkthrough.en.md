@@ -1,5 +1,7 @@
 # Scenario Guide: Install Tizen SDK from a Custom Repository URL
 
+English | [한국어](custom-repo-walkthrough.md)
+
 This document walks you through installing the Tizen SDK from a **custom repository URL** instead of the default public CDN mirror. Use this when you need to install from an internal Samsung mirror, a build-server output, a team mirror, or a local HTTP server.
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

@@ -1,5 +1,7 @@
 # Scenario Guide: .NET App Debugging (netcoredbg) End to End
 
+English | [한국어](scenario-dotnet-debug-walkthrough.md)
+
 This document walks you through the **full Tizen .NET app (C#/NUI) remote-debugging flow** with the `tizen-sdk-skills` plugin: "SDK install → .NET environment setup → emulator → .NET app creation → Debug build → install → netcoredbg setup → VS Code connection".
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

@@ -1,5 +1,7 @@
 # Tizen SDK Skills
 
+English | [한국어](README.md)
+
 An **integrated Cline skill collection** that automates Tizen development environment setup, project creation, building, deployment, and debugging.
 
 ## 📚 Documentation Guide

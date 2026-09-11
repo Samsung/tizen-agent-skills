@@ -1,5 +1,7 @@
 # sdb-helper Placeholder Substitution Fix
 
+English | [한국어](sdb-helper-placeholder-substitution.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-02  

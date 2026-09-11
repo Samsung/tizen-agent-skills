@@ -1,8 +1,8 @@
 # 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 29개인데 커맨드는 34개인가
 
+[English](SKILLS_COMMANDS_MAPPING.en.md) | 한국어
+
 > **범위**: `common/skills/`(스킬)과 `tizen-cli/src/command-specs/`(커맨드)의 대응 관계
->
-> **English version**: [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md)
 
 ---
 

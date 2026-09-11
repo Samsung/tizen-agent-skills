@@ -1,5 +1,7 @@
 # Scenario Guide: Tizen & Samsung Certificate Management End to End
 
+English | [한국어](certificate-manager-walkthrough.md)
+
 This document walks you through the **complete Tizen certificate and Samsung online-CA certificate workflow** with the `tizen-sdk-skills` plugin: "SDK install → local Tizen certificate → Samsung certificates → signing profiles → use for builds".
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

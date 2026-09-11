@@ -1,5 +1,7 @@
 # 시나리오 가이드: Tizen 에뮬레이터 관리자 End to End
 
+[English](emulator-manager-walkthrough.en.md) | 한국어
+
 이 문서는 `tizen-sdk-skills` 플러그인을 사용한 **완전한 Tizen 에뮬레이터 VM 워크플로우**를 안내합니다: "SDK 설치 → 에뮬레이터 패키지 다운로드 → 템플릿/플랫폼 목록 → 에뮬레이터 VM 생성 → 부팅 → 앱 테스트".
 
 각 단계는 **자연어로 말하기만 하면** 자동으로 실행됩니다 — 외울 명령어가 없습니다.

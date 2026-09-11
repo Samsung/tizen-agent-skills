@@ -1,5 +1,7 @@
 # formatSdkInit 호출 흐름 및 시나리오
 
+[English](ENVELOPE_CALL_FLOW.en.md) | 한국어
+
 ## 개요
 
 `formatSdkInit` 함수는 **SDK 초기화 명령 실행 후** Standard JSON Envelope 형식으로 응답을 생성합니다.

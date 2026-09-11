@@ -1,5 +1,7 @@
 # DALi 템플릿 빌드 엔드투엔드 가이드
 
+[English](dali-template-build-e2e.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-08-25  

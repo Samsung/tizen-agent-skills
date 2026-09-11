@@ -1,5 +1,7 @@
 # Scenario Guide: Automated Web App Testing with Playwright, End to End
 
+English | [한국어](scenario-playwright-test-walkthrough.md)
+
 This document walks you through **testing a Tizen Web app (.wgt) with Playwright in one complete flow** using the `tizen-sdk-skills` plugin: "SDK install → emulator → web app creation → build → install → test scaffolding → Playwright install → test run".
 
 At each step, **just tell Claude in natural language** and the corresponding agent runs automatically. There is no need to memorize commands.

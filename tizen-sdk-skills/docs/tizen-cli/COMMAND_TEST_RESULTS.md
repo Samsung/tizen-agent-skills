@@ -1,5 +1,7 @@
 # tizen-sdk 전체 명령 실행 결과
 
+[English](COMMAND_TEST_RESULTS.en.md) | 한국어
+
 - **실행일**: 2026-07-16
 - **실행 방법**: 저장소 루트에서 `node dist/cli.js tizen-sdk <command> ...`
 - **환경**: Windows 11, Node.js v24.15.0, Tizen SDK `C:\Users\<username>\tizen-sdk`, .NET SDK 10.0.300

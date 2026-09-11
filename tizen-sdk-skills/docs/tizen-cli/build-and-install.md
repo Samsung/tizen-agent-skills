@@ -1,5 +1,7 @@
 # tizen-sdk 플러그인 빌드 및 설치 가이드
 
+[English](build-and-install.en.md) | 한국어
+
 이 문서는 tizen-cli용 tizen-sdk 플러그인을 소스에서 빌드하고 tizen-cli에 설치하는 방법을 설명합니다.
 
 ## 사전 요구사항

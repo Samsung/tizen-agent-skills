@@ -1,5 +1,7 @@
 # formatSdkInit Complete Guide — Who, When, Why, How
 
+English | [한국어](FORMAT_SDK_INIT_EXPLAINED.md)
+
 This document explains the **complete call scenario** of the `formatSdkInit(sdkPath, configFile)` function.
 
 ---

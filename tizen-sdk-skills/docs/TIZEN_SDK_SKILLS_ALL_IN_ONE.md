@@ -1,5 +1,7 @@
 # Tizen SDK Skills — 통합 문서
 
+[English](TIZEN_SDK_SKILLS_ALL_IN_ONE.en.md) | 한국어
+
 > 이 문서는 아래 3개 문서를 하나로 병합한 통합본입니다. (생성일: 2026-09-10)
 >
 > 1. `docs/SKILLS_REFERENCE.md` — 스킬 레퍼런스

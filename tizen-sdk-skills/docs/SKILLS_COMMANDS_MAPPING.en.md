@@ -1,8 +1,8 @@
 # Skill ↔ Command Mapping — Why 29 Skills but 34 Commands
 
+English | [한국어](SKILLS_COMMANDS_MAPPING.md)
+
 > **Scope**: the correspondence between `common/skills/` (skills) and `tizen-cli/src/command-specs/` (commands)
->
-> **한국어 버전**: [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md)
 
 ---
 

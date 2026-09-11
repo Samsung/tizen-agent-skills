@@ -1,5 +1,7 @@
 # Tizen Certificate Manager Guide
 
+English | [한국어](certificate-manager-guide.md)
+
 This document describes the complete certificate management capabilities of the
 `tizen-sdk-skills` plugin, covering both **local Tizen (self-signed)** certificates and
 **Samsung online-CA** certificates. It includes usage examples for the CLI runner

@@ -1,5 +1,7 @@
 # Scenario Guide: Install Custom Rootstrap Packages
 
+English | [한국어](install-rootstrap-walkthrough.md)
+
 This document walks you through installing custom rootstrap packages from ZIP files into the Tizen SDK. Custom rootstraps allow you to add support for new device profiles, architectures, or platform versions that are not included in the standard SDK distribution.
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

@@ -1,5 +1,7 @@
 # Blocking DALi C++17 Build Failures Before They Happen
 
+English | [한국어](dali-cxx17-preflight.md)
+
 **Version:** 0.1.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-03  

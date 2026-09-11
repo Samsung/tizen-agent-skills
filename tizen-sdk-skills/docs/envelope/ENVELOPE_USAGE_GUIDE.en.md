@@ -1,5 +1,7 @@
 # Standard JSON Envelope Usage Guide
 
+English | [한국어](ENVELOPE_USAGE_GUIDE.md)
+
 ## Overview
 
 The Standard JSON Envelope standardizes all `tizen-sdk` command responses into a **deterministic, structured JSON format**, enabling AI agents and automation tools to reliably parse responses.

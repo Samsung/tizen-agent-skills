@@ -1,5 +1,7 @@
 # Standard JSON Envelope 구현 완료 - 최종 요약
 
+[English](ENVELOPE_IMPLEMENTATION_SUMMARY.en.md) | 한국어
+
 ## 📦 구현 현황
 
 ### 완료된 파일

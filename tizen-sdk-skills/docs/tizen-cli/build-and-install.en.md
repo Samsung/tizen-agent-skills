@@ -1,5 +1,7 @@
 # tizen-sdk Plugin Build & Install Guide
 
+English | [한국어](build-and-install.md)
+
 This document describes how to build the tizen-sdk plugin (tizen-cli harness) from source and install it into tizen-cli.
 
 ## Prerequisites

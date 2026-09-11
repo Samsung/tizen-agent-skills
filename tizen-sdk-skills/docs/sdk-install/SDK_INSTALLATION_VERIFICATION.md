@@ -1,5 +1,7 @@
 # SDK 설치 상태 확인 및 검증 가이드
 
+[English](SDK_INSTALLATION_VERIFICATION.en.md) | 한국어
+
 ## 📋 개요
 
 `readSdkPath()` 함수를 확장하여 **SDK 설치 상태를 확인**하고, **이미 설치된 경우 재설치를 방지**하는 안전한 설치 절차를 구현했습니다.

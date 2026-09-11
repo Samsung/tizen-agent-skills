@@ -1,5 +1,7 @@
 # Scenario Guide: Web App Debugging (RWI/CDP) End to End
 
+English | [한국어](scenario-webapp-debug-walkthrough.md)
+
 This document walks you through the **full Tizen web app (.wgt) remote-debugging flow** with the `tizen-sdk-skills` plugin: "SDK install → emulator → web app creation → build → install → RWI/CDP debugging → Chrome DevTools connection".
 
 Each step runs automatically when you **tell Claude in natural language** — no commands to memorize.

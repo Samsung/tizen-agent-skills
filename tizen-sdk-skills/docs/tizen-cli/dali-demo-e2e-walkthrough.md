@@ -1,5 +1,7 @@
 # DALi Demo 엔드투엔드 가이드
 
+[English](dali-demo-e2e-walkthrough.en.md) | 한국어
+
 **버전:** 0.1.0  
 **작성자:** Samsung Electronics  
 **게시일:** 2026-07-27  

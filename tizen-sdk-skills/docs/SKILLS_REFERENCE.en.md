@@ -1,5 +1,7 @@
 # Tizen SDK Skills — Skills Reference
 
+English | [한국어](SKILLS_REFERENCE.md)
+
 **Version:** 1.0.0  
 **Author:** Samsung Electronics  
 **Published:** 2026-08-26  
