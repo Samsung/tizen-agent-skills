@@ -113,16 +113,53 @@ try {
     true,
   );
 
+  // When no profile is specified and no active profile exists, the preflight
+  // now returns valid=true with usingDefaultCertificates=true — `tz` uses its
+  // built-in default developer certificates (tempMobile.p12), mirroring the
+  // VS Code extension's behavior of not passing signing args to `tz`.
   const noActiveXml = writeProfile("configured", "", author, distributor);
   const noActive = preflightSigningProfile({ profilesXml: noActiveXml });
   check(
-    "no active profile is rejected when none is specified",
+    "no active profile falls back to default certificates",
     noActive.valid,
+    true,
+  );
+  check(
+    "usingDefaultCertificates flag is set",
+    noActive.usingDefaultCertificates,
+    true,
+  );
+
+  // Standalone RPK projects are packaged by the legacy `tizen` CLI, which has
+  // no default-certificate fallback — buildProject disables the fallback for
+  // them and the old actionable rejection must come back.
+  const noActiveRpk = preflightSigningProfile({
+    profilesXml: noActiveXml,
+    allowDefaultCertificates: false,
+  });
+  check(
+    "no active profile is rejected when default certificates are disallowed",
+    noActiveRpk.valid,
     false,
   );
   check(
-    "no active profile guidance is returned",
-    /no active signing profile/i.test(noActive.error),
+    "default-certificates-disallowed error names the RPK/legacy CLI cause",
+    /no active signing profile/i.test(noActiveRpk.error) &&
+      /RPK/.test(noActiveRpk.error),
+    true,
+  );
+  check(
+    "default-certificates-disallowed result carries no usingDefaultCertificates flag",
+    noActiveRpk.usingDefaultCertificates,
+    undefined,
+  );
+  check(
+    "explicit profile still wins when default certificates are disallowed",
+    preflightSigningProfile({
+      profilesXml: noActiveXml,
+      profileName: "configured",
+      allowDefaultCertificates: false,
+    }).valid,
     true,
   );
 } finally {

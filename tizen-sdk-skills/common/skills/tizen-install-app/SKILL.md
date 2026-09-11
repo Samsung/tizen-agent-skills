@@ -150,7 +150,7 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - SDK not installed → `tizen-sdk-install`
 - Device creation failed → `tizen-device-manager`
 - **`app_running: false` in a success envelope** → the app launched but exited right after start. For `.tpk`/`.wgt` the most common cause is a full `/opt` partition (crash dumps; `/opt` is separate from `/`): use the `tizen-sdb-helper` skill's storage-triage commands (`df -h /opt`) and `clean-crash-dumps` recipe — the cleanup requires `sdb root on` first. For `.rpm` the envelope `warnings` carry the device-side `app-log:` lines from `/tmp/<name>.log` plus a hint (display-server/`owner` problem, or missing `dali`/`dali-toolkit` runtime RPMs) — report those, not the `/opt` advice.
-- **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → `tizen-certificate-manager` to generate author cert + create signing profile, then rebuild with `tizen-build-project` passing the profile name, then retry install. **NEVER attempt `sdb root on` or manual cert installation.**
+- **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → the device does not trust the signing certificate. A build with **no signing profile** is signed with the SDK default developer certificates, which only the **emulator** accepts — on a real device this error is expected until a proper profile is used. Hand off to `tizen-certificate-manager` to create a signing profile for the target device (Samsung-certificate flow for Samsung hardware), rebuild with `tizen-build-project` passing the profile name, then retry install. **NEVER attempt `sdb root on` or manual cert installation.**
 
 **Suggested next steps (only when user asks):**
 
