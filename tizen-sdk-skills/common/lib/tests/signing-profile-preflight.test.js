@@ -113,21 +113,26 @@ try {
     true,
   );
 
+  // When no profile is specified and no active profile exists, the preflight
+  // now returns valid=true with usingDefaultCertificates=true — `tz` uses its
+  // built-in default developer certificates (tempMobile.p12), mirroring the
+  // VS Code extension's behavior of not passing signing args to `tz`.
   const noActiveXml = writeProfile("configured", "", author, distributor);
   const noActive = preflightSigningProfile({ profilesXml: noActiveXml });
   check(
-    "no active profile is rejected when none is specified",
+    "no active profile falls back to default certificates",
     noActive.valid,
-    false,
+    true,
   );
   check(
-    "no active profile guidance is returned",
-    /no active signing profile/i.test(noActive.error),
+    "usingDefaultCertificates flag is set",
+    noActive.usingDefaultCertificates,
     true,
   );
 } finally {
   fs.rmSync(sandbox, { recursive: true, force: true });
 }
+
 
 console.log(
   failures === 0 ? "=== ALL PASS ===" : `=== ${failures} FAILURE(S) ===`,

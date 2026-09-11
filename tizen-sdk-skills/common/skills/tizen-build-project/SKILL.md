@@ -127,20 +127,23 @@ Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error
 - 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`의 진단 줄을 다시
   타이핑하지 말고 JSON 안의 것을 그대로 보이게 한다.
 
-> **⚠️ Signing profile:** If an **active signing profile** is registered in Tizen Studio
-> (e.g. via Certificate Manager), `tz build` automatically signs the package — no extra
-> argument needed. A `.wgt`/`.tpk` built **without any signing profile** (no active profile
-> and no explicit `signProfile` argument) **cannot be installed** on any device or emulator
-> — installation fails with "Invalid certificate chain with certificate in signature." If no
-> active profile exists, use `tizen-certificate-manager` first (generate-author →
-> create-profile), then pass the profile name:
+> **ℹ️ Signing profile (default certificates):** When no signing profile is specified and no
+> active profile exists, the build proceeds using `tz`'s built-in default developer
+> certificates (`tempMobile.p12` + `tizen-distributor-signer.p12`) — the same behavior as the
+> VS Code extension. The build envelope includes a warning: "Using Tizen default developer
+> certificates (tempMobile.p12)." This is sufficient for development and testing.
+>
+> **For distribution or app store submission**, create a custom signing profile with
+> `tizen-certificate-manager` (generate-author → create-profile), then pass the profile name:
 > `node "$CLI" build --project "<project>" --build-type Debug --sign-profile MyProfile`.
-> The runner preflights the selected (or active) profile before it starts `tz build`: both
-> author and distributor certificate files must still be present and readable. On
-> `signing_profile_invalid` (`TIZEN_SDK_CERT_E021`), repair or recreate the profile before
+>
+> If an **active signing profile** is registered but its certificate files are missing or
+> unreadable, the runner rejects the build with `signing_profile_invalid`
+> (`TIZEN_SDK_CERT_E021`) before `tz` is invoked. Recreate or repair the profile before
 > retrying; do not run the build unchanged.
 >
 > **NEVER run `tz build` or `tz pack` directly** — the CLI runner handles both internally.
+
 
 > **RPK:** A standalone resource project is marked by `tizen_resource_project.yaml` and
 > is packaged internally with `tizen package -t rpk -- <project>`, not `tz build`.

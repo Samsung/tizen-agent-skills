@@ -647,15 +647,20 @@ function preflightSigningProfile(input = {}) {
   const parsed = readSigningProfiles(profilesXml);
   const profileName = requestedName || parsed.active_profile;
   if (!profileName) {
+    // No explicit --sign-profile and no active profile in profiles.xml.
+    // Mirror the VS Code extension: let `tz` use its built-in default
+    // developer certificates (tempMobile.p12 + tizen-distributor-signer.p12)
+    // instead of blocking the build. The user only needs a custom profile
+    // for distribution to real devices or app store submission.
     return {
-      valid: false,
+      valid: true,
       profilesXml,
-      error:
-        "No signing profile was specified and no active signing profile is configured. Create and activate one with tizen-certificate-manager, or pass --sign-profile <name>.",
+      usingDefaultCertificates: true,
     };
   }
 
   const profile = parsed.profiles.find((entry) => entry.name === profileName);
+
   if (!profile) {
     return {
       valid: false,

@@ -849,6 +849,11 @@ async function buildProject(
     // before either SDK command when the selected (or active) profile cannot be
     // used because its author/distributor certificate files are unavailable.
     // Platform projects use GBS and produce RPMs, so they never reach tz pack.
+    //
+    // When no profile is specified and no active profile exists, the preflight
+    // returns usingDefaultCertificates=true — `tz` then uses its built-in default
+    // developer certificates (tempMobile.p12), mirroring the VS Code extension.
+    let usingDefaultCertificates = false;
     if (!isPlatformProject(normalizedProjectPath)) {
       const signingPreflight = preflightSigningProfile({
         profileName: signProfile,
@@ -862,9 +867,13 @@ async function buildProject(
           startTime,
         );
       }
+      usingDefaultCertificates = Boolean(
+        signingPreflight.usingDefaultCertificates,
+      );
     }
 
     // signProfile/arch are interpolated into a shell command line below
+
     if (signProfile && !/^[A-Za-z0-9._-]+$/.test(signProfile)) {
       return formatError(
         command,
@@ -967,10 +976,16 @@ async function buildProject(
 
     const warnings = summarizeBuildOutput(output);
     if (sdkInfoNote) warnings.push(sdkInfoNote);
+    if (usingDefaultCertificates) {
+      warnings.push(
+        "Using Tizen default developer certificates (tempMobile.p12). For distribution or app store submission, create a custom signing profile with tizen-certificate-manager.",
+      );
+    }
     return formatProjectBuild(artifacts, warnings, startTime);
   } catch (error) {
     return formatError(
       command,
+
       "io_error",
       `Failed to build project: ${error.message}`,
       null,

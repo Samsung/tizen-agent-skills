@@ -168,23 +168,27 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    `~/GBS-ROOT/local/repos/<arch>/RPMS/`. Failure: the JSON already carries
    `errors[0].message` (exit code, key error lines, full-log path) — keep it intact.
 
-> **⚠️ Signing profile:** If an **active signing profile** is registered in Tizen Studio
-> (e.g. via Certificate Manager), `tz build` automatically signs the package — no extra
-> argument needed. A `.wgt`/`.tpk` built **without any signing profile** (no active profile
-> and no explicit `signProfile` argument) **cannot be installed** on any device or emulator
-> — installation fails with "Invalid certificate chain with certificate in signature." If no
-> active profile exists, use `tizen-certificate-manager` first (generate-author →
-> create-profile), then pass the profile name:
+> **ℹ️ Signing profile (default certificates):** When no signing profile is specified and no
+> active profile exists, the build proceeds using `tz`'s built-in default developer
+> certificates (`tempMobile.p12` + `tizen-distributor-signer.p12`) — the same behavior as the
+> VS Code extension. The build envelope includes a warning: "Using Tizen default developer
+> certificates (tempMobile.p12)." This is sufficient for development and testing.
+>
+> **For distribution or app store submission**, create a custom signing profile with
+> `tizen-certificate-manager` (generate-author → create-profile), then pass the profile name:
 > `node "$CLI" build --project "<project>" --build-type Debug --sign-profile MyProfile`.
-> Before it invokes `tz build`, the runner rejects a missing or stale selected/active profile
-> with `signing_profile_invalid` (`TIZEN_SDK_CERT_E021`). Both author and distributor
-> certificate files must exist and be readable; recreate or repair the profile before retrying.
+>
+> If an **active signing profile** is registered but its certificate files are missing or
+> unreadable, the runner rejects the build with `signing_profile_invalid`
+> (`TIZEN_SDK_CERT_E021`) before `tz` is invoked. Recreate or repair the profile before
+> retrying.
 >
 > **NEVER run `tz build` or `tz pack` directly** — the CLI runner handles both internally.
 > Running `tz build -s <profile>` alone does NOT produce a `.wgt` (it only compiles); the
 > runner calls both `tz build` and `tz pack` in sequence to produce the final signed package.
 
 5. **On build failure**, route by cause (visible in the envelope message):
+
    - **`exit 3` / "tizen-dotnet-setup" / `dotnet` not found** — do NOT fix PATH
      yourself: hand off to **`tizen-dotnet-setup`**, then re-run this build.
    - **`exit 5` / "Clean failed"** — `--clean` could not fully remove the old
