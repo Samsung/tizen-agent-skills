@@ -56,6 +56,14 @@ be readable. `signing_profile_invalid` (`TIZEN_SDK_CERT_E021`) means the build d
 repair/create the profile with `tizen-certificate-manager` and retry. Platform/GBS builds are
 not subject to this check because they produce RPMs without `tz pack`.
 
+When **no profile is requested and none is active**, Native/DotNET/WebApp builds still succeed:
+`tz` signs with the SDK's default developer certificates and the envelope carries a warning
+starting "Signed with Tizen default developer certificates". Such a package installs on the
+**emulator only** — real Samsung devices reject it with "Invalid certificate chain", so create a
+profile and rebuild with `--sign-profile` before installing on hardware. Standalone RPK projects
+get no such fallback (they are packaged by the legacy `tizen package -t rpk`) and are rejected
+with `signing_profile_invalid` until a profile is created and activated.
+
 ### Clean (full) rebuilds
 
 Builds are incremental by default: unchanged sources are not recompiled, so

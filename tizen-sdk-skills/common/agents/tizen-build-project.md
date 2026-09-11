@@ -169,16 +169,23 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    `errors[0].message` (exit code, key error lines, full-log path) — keep it intact.
 
 > **ℹ️ Signing profile (default certificates):** When no signing profile is specified and no
-> active profile exists, the build proceeds using `tz`'s built-in default developer
-> certificates (`tempMobile.p12` + `tizen-distributor-signer.p12`) — the same behavior as the
-> VS Code extension. The build envelope includes a warning: "Using Tizen default developer
-> certificates (tempMobile.p12)." This is sufficient for development and testing.
+> active profile exists, Native/DotNET/WebApp builds proceed using `tz`'s built-in default
+> developer certificates (`tempMobile.p12` + the SDK public distributor certificate) — the
+> same behavior as the VS Code extension. The build envelope carries a warning starting
+> "Signed with Tizen default developer certificates"; surface it. **The default-signed
+> package installs on the emulator only.** Real Samsung devices (TV, phone, watch) reject it
+> with "Invalid certificate chain", and stores never accept it.
 >
-> **For distribution or app store submission**, create a custom signing profile with
-> `tizen-certificate-manager` (generate-author → create-profile), then pass the profile name:
+> **For a real device or store submission**, create a signing profile with
+> `tizen-certificate-manager` (generate-author → create-profile; Samsung devices need the
+> Samsung-certificate flow), then pass the profile name:
 > `node "$CLI" build --project "<project>" --build-type Debug --sign-profile MyProfile`.
 >
-> If an **active signing profile** is registered but its certificate files are missing or
+> **Standalone RPK projects have no default-certificate fallback.** They are packaged by the
+> legacy `tizen package -t rpk`, so a missing profile is still rejected with
+> `signing_profile_invalid` before packaging — create and activate a profile first.
+>
+> If a selected or **active signing profile** exists but its certificate files are missing or
 > unreadable, the runner rejects the build with `signing_profile_invalid`
 > (`TIZEN_SDK_CERT_E021`) before `tz` is invoked. Recreate or repair the profile before
 > retrying.
@@ -188,7 +195,6 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 > runner calls both `tz build` and `tz pack` in sequence to produce the final signed package.
 
 5. **On build failure**, route by cause (visible in the envelope message):
-
    - **`exit 3` / "tizen-dotnet-setup" / `dotnet` not found** — do NOT fix PATH
      yourself: hand off to **`tizen-dotnet-setup`**, then re-run this build.
    - **`exit 5` / "Clean failed"** — `--clean` could not fully remove the old

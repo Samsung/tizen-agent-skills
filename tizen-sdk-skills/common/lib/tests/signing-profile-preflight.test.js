@@ -129,10 +129,42 @@ try {
     noActive.usingDefaultCertificates,
     true,
   );
+
+  // Standalone RPK projects are packaged by the legacy `tizen` CLI, which has
+  // no default-certificate fallback — buildProject disables the fallback for
+  // them and the old actionable rejection must come back.
+  const noActiveRpk = preflightSigningProfile({
+    profilesXml: noActiveXml,
+    allowDefaultCertificates: false,
+  });
+  check(
+    "no active profile is rejected when default certificates are disallowed",
+    noActiveRpk.valid,
+    false,
+  );
+  check(
+    "default-certificates-disallowed error names the RPK/legacy CLI cause",
+    /no active signing profile/i.test(noActiveRpk.error) &&
+      /RPK/.test(noActiveRpk.error),
+    true,
+  );
+  check(
+    "default-certificates-disallowed result carries no usingDefaultCertificates flag",
+    noActiveRpk.usingDefaultCertificates,
+    undefined,
+  );
+  check(
+    "explicit profile still wins when default certificates are disallowed",
+    preflightSigningProfile({
+      profilesXml: noActiveXml,
+      profileName: "configured",
+      allowDefaultCertificates: false,
+    }).valid,
+    true,
+  );
 } finally {
   fs.rmSync(sandbox, { recursive: true, force: true });
 }
-
 
 console.log(
   failures === 0 ? "=== ALL PASS ===" : `=== ${failures} FAILURE(S) ===`,

@@ -630,9 +630,15 @@ function readSigningProfiles(profilesXml) {
  * @param {object} [input]
  * @param {string} [input.profileName] Explicit profile; otherwise use active
  * @param {string} [input.profilesXml] Test/advanced override for profiles.xml
- * @returns {{valid: boolean, profileName?: string, profilesXml?: string, error?: string}}
+ * @param {boolean} [input.allowDefaultCertificates=true] When no profile is
+ *   selected or active, accept the build and let `tz` sign with its built-in
+ *   default developer certificates. Pass false for packaging paths that go
+ *   through the legacy `tizen` CLI (standalone RPK), which has no such
+ *   fallback and needs an active profile.
+ * @returns {{valid: boolean, profileName?: string, profilesXml?: string, error?: string, usingDefaultCertificates?: boolean}}
  */
 function preflightSigningProfile(input = {}) {
+  const allowDefaultCertificates = input.allowDefaultCertificates !== false;
   let profilesXml = input.profilesXml
     ? path.resolve(String(input.profilesXml))
     : "";
@@ -647,11 +653,20 @@ function preflightSigningProfile(input = {}) {
   const parsed = readSigningProfiles(profilesXml);
   const profileName = requestedName || parsed.active_profile;
   if (!profileName) {
+    if (!allowDefaultCertificates) {
+      return {
+        valid: false,
+        profilesXml,
+        error:
+          "No signing profile was specified and no active signing profile is configured. Standalone RPK packages are signed by the legacy `tizen` CLI, which has no default-certificate fallback: create and activate a profile with tizen-certificate-manager, then retry.",
+      };
+    }
     // No explicit --sign-profile and no active profile in profiles.xml.
     // Mirror the VS Code extension: let `tz` use its built-in default
     // developer certificates (tempMobile.p12 + tizen-distributor-signer.p12)
-    // instead of blocking the build. The user only needs a custom profile
-    // for distribution to real devices or app store submission.
+    // instead of blocking the build. Those certificates are accepted by the
+    // emulator; real Samsung devices and store submission need a custom
+    // (Samsung-issued) profile.
     return {
       valid: true,
       profilesXml,
@@ -660,7 +675,6 @@ function preflightSigningProfile(input = {}) {
   }
 
   const profile = parsed.profiles.find((entry) => entry.name === profileName);
-
   if (!profile) {
     return {
       valid: false,

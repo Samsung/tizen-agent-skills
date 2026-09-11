@@ -44,6 +44,15 @@ function isPlatformProject(projectPath) {
 }
 
 /**
+ * Standalone RPK resource projects are packaged by the legacy `tizen` CLI
+ * (`tizen package -t rpk`), not by `tz build`/`tz pack`. Mirrors the marker
+ * the build scripts use to pick that path.
+ */
+function isRpkProject(projectPath) {
+  return fs.existsSync(path.join(projectPath, "tizen_resource_project.yaml"));
+}
+
+/**
  * Tizen package IDs must be exactly 10 alphanumeric characters.
  * If the app name produces a package ID shorter than 10 characters,
  * `tz install` will fail with "Load archive info fail" / "Operation not allowed [-4]".
@@ -853,10 +862,14 @@ async function buildProject(
     // When no profile is specified and no active profile exists, the preflight
     // returns usingDefaultCertificates=true — `tz` then uses its built-in default
     // developer certificates (tempMobile.p12), mirroring the VS Code extension.
+    // Standalone RPK projects are the exception: the scripts package them with
+    // the legacy `tizen package -t rpk`, which has no default-certificate
+    // fallback, so a missing profile is still rejected up front for them.
     let usingDefaultCertificates = false;
     if (!isPlatformProject(normalizedProjectPath)) {
       const signingPreflight = preflightSigningProfile({
         profileName: signProfile,
+        allowDefaultCertificates: !isRpkProject(normalizedProjectPath),
       });
       if (!signingPreflight.valid) {
         return formatError(
@@ -873,7 +886,6 @@ async function buildProject(
     }
 
     // signProfile/arch are interpolated into a shell command line below
-
     if (signProfile && !/^[A-Za-z0-9._-]+$/.test(signProfile)) {
       return formatError(
         command,
@@ -978,14 +990,13 @@ async function buildProject(
     if (sdkInfoNote) warnings.push(sdkInfoNote);
     if (usingDefaultCertificates) {
       warnings.push(
-        "Using Tizen default developer certificates (tempMobile.p12). For distribution or app store submission, create a custom signing profile with tizen-certificate-manager.",
+        "Signed with Tizen default developer certificates (tempMobile.p12) because no signing profile is set or active. The package installs on the emulator; real Samsung devices and store submission need a custom signing profile — create one with tizen-certificate-manager and rebuild with --sign-profile.",
       );
     }
     return formatProjectBuild(artifacts, warnings, startTime);
   } catch (error) {
     return formatError(
       command,
-
       "io_error",
       `Failed to build project: ${error.message}`,
       null,
@@ -1285,7 +1296,11 @@ async function installApp(
           startTime,
         );
       }
-      // Certificate/signing errors — the package was built without a valid signing profile
+      // Certificate/signing errors — the device does not trust the certificate
+      // the package was signed with. Since builds without a profile are signed
+      // with the SDK's default developer certificates (emulator-only), this is
+      // most often a default-signed package pushed to a real device, or a
+      // profile whose distributor certificate does not match the device.
       if (
         /Invalid certificate chain|Check certificate error|certificate.*signature/i.test(
           combined,
@@ -1295,7 +1310,7 @@ async function installApp(
         return formatError(
           command,
           "certificate_error",
-          `App installation failed due to a certificate/signing error${detail ? ` — ${detail}` : ""}. The package was likely built without a signing profile. Use tizen-certificate-manager to generate an author cert and create a signing profile, then rebuild with tizen-build-project passing the profile name, and retry install.`,
+          `App installation failed due to a certificate/signing error${detail ? ` — ${detail}` : ""}. The device does not trust the package's signing certificate — typically the package was signed with the SDK default developer certificates (no signing profile), which only the emulator accepts, or the profile's distributor certificate does not cover this device. Use tizen-certificate-manager to create a signing profile for this device (Samsung certificate for Samsung devices), then rebuild with tizen-build-project passing the profile name, and retry install.`,
           null,
           startTime,
         );
