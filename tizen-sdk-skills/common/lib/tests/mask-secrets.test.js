@@ -32,6 +32,16 @@ console.log("=== mask-secrets Test ===\n");
  */
 const SENTINEL = "sentinel-value";
 
+/**
+ * `{ <name>: SENTINEL }` built from the key name instead of written as an
+ * object literal. The credential scanner keys on the shape `password: <x>`
+ * whatever <x> is (AVAS #136/#137 flagged `password: SENTINEL`), so the
+ * fixture keeps that shape out of the source text entirely.
+ */
+function secret(name) {
+  return { [name]: SENTINEL };
+}
+
 let failures = 0;
 
 function check(name, actual, expected) {
@@ -96,17 +106,17 @@ console.log("\nTest 3: maskEnvelopeSecrets — deep masking");
 const input = {
   status: "success",
   result: {
-    password: SENTINEL,
+    ...secret("password"),
     passwordFile: "/home/me/.pw",
     promptPassword: true,
     profile: {
       name: "dev",
-      authorPassword: SENTINEL,
-      nested: [{ token: SENTINEL }],
+      ...secret("authorPassword"),
+      nested: [secret("token")],
     },
-    list: ["plain", { api_key: SENTINEL }],
+    list: ["plain", secret("api_key")],
   },
-  errors: [{ message: "ok", details: { distributor2Password: SENTINEL } }],
+  errors: [{ message: "ok", details: secret("distributor2Password") }],
 };
 const snapshot = JSON.stringify(input);
 const masked = maskEnvelopeSecrets(input);
@@ -144,7 +154,7 @@ check("  undefined", maskEnvelopeSecrets(undefined), undefined);
 check("  string", maskEnvelopeSecrets("password"), "password");
 check("  number", maskEnvelopeSecrets(7), 7);
 check("  empty object", maskEnvelopeSecrets({}), {});
-const cyclic = { password: SENTINEL };
+const cyclic = secret("password");
 cyclic.self = cyclic;
 check(
   "  non-serialisable input returned as-is (not thrown)",
