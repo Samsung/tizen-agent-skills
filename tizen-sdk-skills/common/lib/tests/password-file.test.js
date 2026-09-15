@@ -44,6 +44,13 @@ function throwsMatching(fn, pattern) {
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-password-file-"));
 const VAR = "TIZEN_CERTIFICATE_PASSWORD";
 
+/**
+ * Stand-in for the password value (same convention as user-command.test.js):
+ * a realistic-looking literal after `TIZEN_CERTIFICATE_PASSWORD=` reads as a
+ * leaked credential to secret scanners.
+ */
+const SENTINEL = "sentinel-value";
+
 function write(name, content) {
   const file = path.join(dir, name);
   fs.writeFileSync(file, content, { mode: 0o600 });
@@ -55,8 +62,8 @@ try {
   console.log("Test 1: well-formed files");
   check(
     "  plain",
-    readPasswordFile(write("a", `${VAR}=Passw0rd!`), VAR),
-    "Passw0rd!",
+    readPasswordFile(write("a", `${VAR}=${SENTINEL}`), VAR),
+    SENTINEL,
   );
   check(
     "  trailing newline",

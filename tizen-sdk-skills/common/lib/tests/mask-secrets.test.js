@@ -22,6 +22,16 @@ const {
 
 console.log("=== mask-secrets Test ===\n");
 
+/**
+ * Stand-in for a secret value (same convention as user-command.test.js).
+ *
+ * Held in a named constant rather than written inline next to a `password`
+ * key: a realistic-looking literal in that position reads as a leaked
+ * credential to secret scanners (it tripped one — AVAS #134/#135), and the
+ * sentinel makes the "value is replaced" assertions say what they mean.
+ */
+const SENTINEL = "sentinel-value";
+
 let failures = 0;
 
 function check(name, actual, expected) {
@@ -87,17 +97,17 @@ console.log("\nTest 3: maskEnvelopeSecrets — deep masking");
 const input = {
   status: "success",
   result: {
-    password: "hunter2",
+    password: SENTINEL,
     passwordFile: "/home/me/.pw",
     promptPassword: true,
     profile: {
       name: "dev",
-      authorPassword: "s3cret",
-      nested: [{ token: "t0k" }],
+      authorPassword: SENTINEL,
+      nested: [{ token: SENTINEL }],
     },
-    list: ["plain", { api_key: "k" }],
+    list: ["plain", { api_key: SENTINEL }],
   },
-  errors: [{ message: "ok", details: { distributor2Password: "d2" } }],
+  errors: [{ message: "ok", details: { distributor2Password: SENTINEL } }],
 };
 const snapshot = JSON.stringify(input);
 const masked = maskEnvelopeSecrets(input);
@@ -123,6 +133,11 @@ check(
 );
 check("  non-secret fields intact", masked.result.profile.name, "dev");
 check("  input not mutated", JSON.stringify(input), snapshot);
+check(
+  "  sentinel never reaches the masked output",
+  JSON.stringify(masked).includes(SENTINEL),
+  false,
+);
 
 console.log("\nTest 4: maskEnvelopeSecrets — pass-through cases");
 check("  null", maskEnvelopeSecrets(null), null);
@@ -130,7 +145,7 @@ check("  undefined", maskEnvelopeSecrets(undefined), undefined);
 check("  string", maskEnvelopeSecrets("password"), "password");
 check("  number", maskEnvelopeSecrets(7), 7);
 check("  empty object", maskEnvelopeSecrets({}), {});
-const cyclic = { password: "x" };
+const cyclic = { password: SENTINEL };
 cyclic.self = cyclic;
 check(
   "  non-serialisable input returned as-is (not thrown)",
