@@ -17,6 +17,7 @@ const {
 } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { resolveScript, execPluginScript } = require("./plugin-cache");
+const { checkShellSafe } = require("./shell-safety");
 const { rawOutputTail } = require("./emulator");
 const {
   summarizeOutput,
@@ -452,6 +453,15 @@ async function createProject(
         startTime,
       );
     }
+    // The parent path is spliced into the same command line — path.resolve()
+    // above does nothing about shell metacharacters.
+    const unsafeParent = checkShellSafe(
+      normalizedParentPath,
+      "parent path",
+      command,
+      startTime,
+    );
+    if (unsafeParent) return unsafeParent;
 
     const resolved = resolveScript("tizen-create-project");
     if (resolved.error) {
@@ -905,6 +915,15 @@ async function buildProject(
       );
     }
 
+    // So is the project path itself (-w "<path>").
+    const unsafeProject = checkShellSafe(
+      normalizedProjectPath,
+      "project path",
+      command,
+      startTime,
+    );
+    if (unsafeProject) return unsafeProject;
+
     const resolved = resolveScript("tizen-build-project");
     if (resolved.error) {
       return formatError(command, "io_error", resolved.error, null, startTime);
@@ -1256,6 +1275,10 @@ async function installApp(
         `Invalid device serial: ${deviceSerial}`,
       );
     }
+
+    // The package path is spliced into -PackagePath "<path>" / -p "<path>".
+    const unsafePackage = checkShellSafe(resolvedPath, "package path", command);
+    if (unsafePackage) return unsafePackage;
 
     const resolved = resolveScript("tizen-install-app");
     if (resolved.error) {

@@ -91,6 +91,36 @@ function resolveTzBinary() {
  * @param {string[]} args
  * @returns {{stdout: string, stderr: string, status: number}}
  */
+/**
+ * Replace every occurrence of the given secret values in free text.
+ *
+ * tz output is copied into envelope messages, and the argv of the failing
+ * `tz cert` / `tz security-profiles add` carries the passwords in clear
+ * (-p / -P / -w). tz echoes its usage — and execFileSync's error.message is
+ * the whole command line — so the text can contain them verbatim. Field-name
+ * masking (envelope/mask-secrets.js) cannot see inside a string; this is the
+ * value-based complement for the strings we build from tool output.
+ *
+ * @param {unknown} text
+ * @param {Array<unknown>} secrets - values to mask; empty/non-string entries are skipped
+ * @returns {string}
+ */
+function redactSecrets(text, secrets) {
+  let out = text === undefined || text === null ? "" : String(text);
+  for (const secret of secrets || []) {
+    if (typeof secret !== "string" || secret.length === 0) continue;
+    out = out.split(secret).join("***");
+  }
+  return out;
+}
+
+/** The "stdout: … stderr: …" tail used by every tz failure message, redacted. */
+function describeTzOutput(stdout, stderr, secrets) {
+  const out = redactSecrets(stdout, secrets).trim() || "(empty)";
+  const err = redactSecrets(stderr, secrets).trim() || "(empty)";
+  return `stdout: ${out} stderr: ${err}`;
+}
+
 function runTz(tzPath, args) {
   try {
     const stdout = execFileSync(tzPath, args, {
@@ -319,7 +349,7 @@ async function generateAuthorCertificate(
       return formatError(
         command,
         "cert_generation_failed",
-        `tz cert did not produce a certificate at "${certPath}". stdout: ${stdout.trim() || "(empty)"} stderr: ${stderr.trim() || "(empty)"}`,
+        `tz cert did not produce a certificate at "${certPath}". ${describeTzOutput(stdout, stderr, [password])}`,
         null,
         startTime,
       );
@@ -905,7 +935,7 @@ async function createSigningProfile(
       return profileWriteError(
         command,
         "profile_creation_failed",
-        `Failed to create signing profile "${profileName}". stdout: ${stdout.trim() || "(empty)"} stderr: ${stderr.trim() || "(empty)"}`,
+        `Failed to create signing profile "${profileName}". ${describeTzOutput(stdout, stderr, [authorPassword, input.distributorPassword, input.distributor2Password])}`,
         profilesXml,
         [stdout, stderr],
         startTime,
@@ -1303,7 +1333,7 @@ async function setSigningProfileDistributor2(
       return profileWriteError(
         command,
         "distributor2_update_failed",
-        `Failed to add distributor 2 to profile "${profileName}". stdout: ${addResult.stdout.trim() || "(empty)"} stderr: ${addResult.stderr.trim() || "(empty)"}`,
+        `Failed to add distributor 2 to profile "${profileName}". ${describeTzOutput(addResult.stdout, addResult.stderr, [authorPassword, input.distributorPassword, input.distributor2Password])}`,
         profilesXml,
         [addResult.stdout, addResult.stderr],
         startTime,

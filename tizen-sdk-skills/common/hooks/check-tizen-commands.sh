@@ -42,20 +42,62 @@ tool="$(printf '%s' "$input" | sed -nE 's/.*"tool_name"[[:space:]]*:[[:space:]]*
 # denied routine forms outright — most visibly during GBS work, where the
 # build needs a git repo in the project directory, so `cd <project> && git
 # init && git commit -m "..."` is the natural shape and any message
-# mentioning a tizen command tripped a rule. Strip leading `cd <path> &&`
-# and VAR=value prefixes first, then test.
+# mentioning a tizen command tripped a rule.
+#
+# But the exemption must cover ONLY git: the earlier form stripped the `cd`
+# prefix and then exempted the whole line if the next token was git/gh, so
+# `git --version && <anything>` skipped every rule below. Now the command is
+# split into simple commands on unquoted `&&`, `||`, `;`, `|` and newlines,
+# and it is exempt only when every one of them is a git/gh invocation, a `cd`,
+# or a bare VAR=value (the shapes that merely set one up). Quotes are honoured
+# — the command arrives JSON-escaped, so a double quote is the pair \" — which
+# keeps `git commit -m "a; b && tz build -p"` a single git segment. `2>&1` /
+# `>&2` / `&>` are redirections, not separators. A non-exempt line is not
+# denied here; it simply goes through the rules like any other command.
+# (Kept in sync with the same helper in check-project-writes.sh.)
 is_git_command() {
-  route="$1"
-  # Bounded: each pass removes one prefix, and real commands stack very few.
-  for _ in 1 2 3 4; do
-    before="$route"
-    # VAR=value prefix, e.g. GIT_EDITOR=true git commit
-    route="$(printf '%s' "$route" | sed -E 's/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//')"
-    # cd <path> && | ;  — the path may be JSON-escaped-quoted (\"...\")
-    route="$(printf '%s' "$route" | sed -E 's/^[[:space:]]*cd[[:space:]]+(\\+"[^"\\]*\\+"|[^[:space:]&;|]+)[[:space:]]*(&&|;)[[:space:]]*//')"
-    [ "$route" = "$before" ] && break
-  done
-  printf '%s' "$route" | grep -Eq '^[[:space:]]*(git|gh)([[:space:]]|$)'
+  printf '%s' "$1" | awk '
+    function segment_ok(seg,    k) {
+      gsub(/^[[:space:](]+/, "", seg)
+      gsub(/[[:space:])]+$/, "", seg)
+      if (seg == "") return 1
+      # VAR=value prefixes, e.g. GIT_EDITOR=true git commit (bounded: real
+      # commands stack very few)
+      for (k = 0; k < 4; k++) {
+        if (!sub(/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/, "", seg)) break
+      }
+      if (seg ~ /^(git|gh)([[:space:]]|$)/) return 1
+      if (seg ~ /^cd([[:space:]]|$)/) return 1
+      if (seg ~ /^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*$/) return 1
+      return 0
+    }
+    function flush() { if (!segment_ok(buf)) bad = 1; buf = "" }
+    BEGIN { buf = ""; bad = 0; sq = 0; dq = 0 }
+    {
+      line = $0; n = length(line); i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (c == "\\" && i < n) {
+          d = substr(line, i + 1, 1)
+          # \" is the JSON-escaped double quote; \n an escaped newline
+          if (d == "\"" && !sq) { dq = !dq; buf = buf c d; i += 2; continue }
+          if (d == "n" && !sq && !dq) { flush(); i += 2; continue }
+          buf = buf c d; i += 2; continue
+        }
+        if (c == "\047" && !dq) { sq = !sq; buf = buf c; i++; continue }
+        if (c == "\"" && !sq) { dq = !dq; buf = buf c; i++; continue }
+        if (!sq && !dq && (c == ";" || c == "|" || c == "&")) {
+          prev = (i > 1) ? substr(line, i - 1, 1) : ""
+          nxt = (i < n) ? substr(line, i + 1, 1) : ""
+          if (c == "&" && (prev == ">" || nxt == ">")) { buf = buf c; i++; continue }
+          flush(); i++; continue
+        }
+        buf = buf c; i++
+      }
+      flush()
+    }
+    END { exit bad ? 1 : 0 }
+  '
 }
 
 if is_git_command "$cmd"; then

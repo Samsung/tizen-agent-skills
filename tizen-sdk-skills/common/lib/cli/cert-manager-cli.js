@@ -190,6 +190,17 @@ if (
   );
 }
 
+// samsung-reveal-password prints the password in clear (maskSecrets: false).
+// A detached job writes its stdout to a file in the shared temp directory that
+// stays there until the next `job list` prunes it — so the one command whose
+// output must not persist is the one that must not run in the background.
+if (backgroundRequested() && action === "samsung-reveal-password") {
+  usageError(
+    "samsung-reveal-password returns the password in clear and cannot run with --background " +
+      "(the detached job's stdout is kept on disk). Run it in the foreground.",
+  );
+}
+
 function applyPasswordSources(target) {
   const sources = [
     [

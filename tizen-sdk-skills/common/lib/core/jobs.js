@@ -240,8 +240,12 @@ function spawnDetached(
   }
   const extra = typeof extraMeta === "function" ? extraMeta(paths) : extraMeta;
 
-  const outFd = fs.openSync(paths.stdout, "w");
-  const errFd = fs.openSync(paths.stderr, "w");
+  // 0600: the job files live in the shared temp directory for days (pruned on
+  // the next `job list`) and carry whatever the runner printed — for a
+  // command that runs with maskSecrets:false that is a plaintext password.
+  // POSIX honours the mode; Windows ignores it (ACLs inherit from %TEMP%).
+  const outFd = fs.openSync(paths.stdout, "w", 0o600);
+  const errFd = fs.openSync(paths.stderr, "w", 0o600);
   let child;
   try {
     child = spawn(process.execPath, [scriptPath, ...argv], {

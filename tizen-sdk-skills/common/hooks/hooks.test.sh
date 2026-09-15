@@ -64,6 +64,22 @@ check $H deny 'cd /w/app && gdbserver :1234 ./app'
 check $H deny 'tools/sdb/sdb devices'
 # "git-foo" is not git — the route must require a whole word
 check $H deny 'git-foo tz build -p x'
+# A git prefix must not exempt what FOLLOWS it. Regression: the route exempted
+# the whole line once the first token was git/gh, so `git … && <anything>`
+# skipped every rule (review finding D1).
+check $H deny 'git --version && tools/sdb/sdb devices'
+check $H deny 'git log -1 && which sdb'
+check $H deny 'git status; tz build -p /w/app'
+check $H deny 'git rev-parse HEAD | xargs echo && gdbserver :1234 ./app'
+check $H deny 'cd /w/app && git init && tz build -p /w/app'
+# …while separators INSIDE a quoted argument stay part of the git segment,
+# and redirections are not separators.
+check $H allow 'git commit -m \"deny which sdb; also tz build -p && more\"'
+check $H allow 'git commit -m '"'"'tz build -p; which sdb'"'"''
+check $H allow 'git push origin main 2>&1'
+check $H allow 'git fetch --all >&2 && git status'
+check $H allow 'git diff --quiet || git commit -am \"tz build -p notes\"'
+check $H allow '(cd /w/app && git commit -m \"tz build -p\")'
 
 echo
 echo "--- check-tizen-commands: sdb port forwarding (issue #84) ---"
@@ -119,6 +135,19 @@ echo "--- check-project-writes: real writes still denied ---"
 check $W deny 'echo x > /w/app/config.xml'
 check $W deny 'cd /w/app && touch config.xml'
 check $W deny 'cat > tizen-manifest.xml <<EOF'
+# A git prefix must not exempt a write that follows it (review finding D1).
+check $W deny 'git log -1 && echo x > /w/app/config.xml'
+check $W deny 'git status; Set-Content -Path config.xml -Value \"<widget/>\"'
+check $W deny 'echo \"<widget/>\" | tee /w/app/config.xml'
+
+echo
+echo "--- check-project-writes: writers aimed at OTHER files stay allowed ---"
+# Regression (review finding D4): the writer word merely co-occurring with the
+# file name was denied, so reading a manifest and touching a marker file in
+# the same line was blocked.
+check $W allow 'cat /w/app/config.xml && touch /w/app/notes.txt'
+check $W allow 'grep foo /w/app/config.xml && New-Item -ItemType Directory /w/other'
+check $W allow 'cat tizen-manifest.xml; touch .built'
 
 echo
 echo "--- show-envelope is PostToolUse: never denies ---"

@@ -19,6 +19,42 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   `tizen-sdk` binary on PATH. The envelope's `user_command` (and the no-argument `usage`
   line) now use the prefix the user typed — `tizen-sdk` standalone, `tizen-cli tizen-sdk`
   in the host — overridable via `TIZEN_SDK_USER_COMMAND_PREFIX`.
+- `common/lib/core/shell-safety.js`: one shared screen for values spliced into a shell
+  command line (rejects `"`, `` ` ``, `$`, `;`, `|`, `&`, `<`, `>`, line breaks and a trailing
+  backslash; leaves spaces, parentheses, apostrophes and non-ASCII alone), plus unit tests for
+  it, `envelope/mask-secrets.js` and `cli/password-file.js`, which had none.
+
+### Security
+
+- **Shell injection through model-chosen values.** An explicit `--serial` (every sdb command
+  line), the project / parent / package paths of `create`, `build` and `install`, the
+  `--zip-path` of `install-rootstrap` and `tv-sdk-install-from-zip` (also handed back as
+  `suggested_fix.command`), and the GDB `--binary` path reached `execSync` inside nothing but
+  a pair of double quotes. They are now screened with `shell-safety.js` and rejected as
+  `invalid_parameters`; `resolveSerial()` checks the serial once for all callers.
+- `sdb-helper` `shell-command` on Windows refuses a device command containing `"` or `%`:
+  cmd.exe toggles quoting on every quote and expands `%VAR%` inside quotes, so the old
+  unescaped interpolation let a quote in the request run the rest of the line on the host.
+- **Certificate passwords in error text.** `tz cert` / `tz security-profiles add` failures
+  copied tz's stdout/stderr — and execFileSync's `error.message`, which is the full argv with
+  `-p <password>` — into the envelope. The password values are now masked in those messages
+  (field-name masking cannot see inside a string).
+- `mask-secrets.js` also recognises camelCase secret suffixes (`clientSecret`, `sessionToken`,
+  `userPass`); before, a camelCase field was masked only if it had been added to the exact-name
+  list by hand.
+- Detached (`--background`) job stdout/stderr files are created 0600, and
+  `samsung-reveal-password`, whose output is the password in clear, refuses `--background`.
+- **PreToolUse guard hooks: git-prefix bypass.** `is_git_command` exempted the whole command
+  line once its first token (after a `cd`/`VAR=` prefix) was `git`/`gh`, so
+  `git --version && <anything>` skipped every rule. Both hooks now split on unquoted
+  `&&`/`||`/`;`/`|`/newlines (quotes honoured, redirections excluded) and exempt only when every
+  simple command is git/gh, `cd` or a bare assignment. Negative cases added to `hooks.test.sh`.
+
+### Fixed
+
+- `check-project-writes.sh` denied any `touch`/`New-Item`/`tee`/`Set-Content` that merely
+  co-occurred with `config.xml` in the same line (e.g. reading the manifest and touching a
+  marker file); the writer now has to name the project file itself.
 
 ## [1.2.0] — 2026-09-10
 
