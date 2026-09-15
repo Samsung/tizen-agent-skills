@@ -27,7 +27,7 @@ console.log("=== mask-secrets Test ===\n");
  *
  * Held in a named constant rather than written inline next to a `password`
  * key: a realistic-looking literal in that position reads as a leaked
- * credential to secret scanners (it tripped one — AVAS #134/#135), and the
+ * credential to secret scanners (it has tripped one), and the
  * sentinel makes the "value is replaced" assertions say what they mean.
  */
 const SENTINEL = "sentinel-value";
@@ -35,8 +35,8 @@ const SENTINEL = "sentinel-value";
 /**
  * `{ <name>: SENTINEL }` built from the key name instead of written as an
  * object literal. The credential scanner matches a secret-named key followed
- * by a colon and any value — it flagged the SENTINEL form too (AVAS
- * #136/#137) — so the fixture keeps that shape out of the source entirely.
+ * by a colon and any value — it flagged the SENTINEL form too — so the
+ * fixture keeps that shape out of the source entirely.
  */
 function secret(name) {
   return { [name]: SENTINEL };
