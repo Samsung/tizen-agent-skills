@@ -445,8 +445,23 @@ function buildCommand(intentId, serial, request) {
       // Append exit-code marker so the caller can detect non-zero remote exits.
       // On unix hosts the whole string goes through /bin/sh, which would expand
       // $? (and any $/`/"/\ in cmd) BEFORE sdb runs — escape so the device shell
-      // is the one that expands them. cmd.exe leaves these characters alone.
+      // is the one that expands them.
       if (process.platform === "win32") {
+        // On Windows the line goes through cmd.exe, which does NOT leave these
+        // characters alone: every `"` toggles its quoting state, so a quote
+        // inside cmd ends the argument and exposes the rest of the line (`&`,
+        // `|`) to cmd itself, and `%` expands environment variables even
+        // inside quotes. cmd.exe has no escape for either inside a quoted
+        // argument, so refuse rather than guess.
+        if (/["%]/.test(cmd)) {
+          return {
+            command: "",
+            note:
+              "The shell command contains a double quote or a percent sign, which cannot be passed " +
+              "safely through cmd.exe on Windows. Use single quotes for the device-side quoting, or " +
+              "run the command in an interactive `sdb shell`.",
+          };
+        }
         return { command: `${s} shell "${cmd}; echo __SDB_EXIT:$?"` };
       }
       const hostSafeCmd = cmd.replace(/[\\"`$]/g, (ch) => `\\${ch}`);

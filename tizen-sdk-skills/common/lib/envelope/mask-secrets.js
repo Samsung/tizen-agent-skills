@@ -63,6 +63,17 @@ const SENSITIVE_SUFFIX =
   /(^|[-_])(password|passwd|pass|token|secret|api[_-]?key)$/i;
 
 /**
+ * camelCase counterpart of SENSITIVE_SUFFIX: the boundary is the case change
+ * (clientSecret, sessionToken, userPass), so it is case-SENSITIVE — an
+ * all-lowercase "bypass" or "compass" has no capital and is not matched.
+ * Before this, a camelCase secret was masked only if someone had added it to
+ * SENSITIVE_FIELDS by hand, which is the drift the list's own comment warns
+ * about (author-/distributor-password leaked until noticed).
+ */
+const SENSITIVE_CAMEL_SUFFIX =
+  /[a-z0-9](Password|Passwd|Pass|Token|Secret|ApiKey)$/;
+
+/**
  * True if a field name is sensitive and should be masked.
  * Does NOT mask:
  *   - Falsy field names
@@ -73,7 +84,11 @@ function isSensitiveField(fieldName) {
   if (typeof fieldName !== "string" || !fieldName) return false;
   if (fieldName.startsWith("prompt") || fieldName.endsWith("File"))
     return false;
-  return SENSITIVE_FIELDS.has(fieldName) || SENSITIVE_SUFFIX.test(fieldName);
+  return (
+    SENSITIVE_FIELDS.has(fieldName) ||
+    SENSITIVE_SUFFIX.test(fieldName) ||
+    SENSITIVE_CAMEL_SUFFIX.test(fieldName)
+  );
 }
 
 const REDACTED = "***";
@@ -136,5 +151,6 @@ module.exports = {
   isSensitiveField,
   SENSITIVE_FIELDS,
   SENSITIVE_SUFFIX,
+  SENSITIVE_CAMEL_SUFFIX,
   REDACTED,
 };

@@ -60,18 +60,51 @@ cmd="$(printf '%s' "$input" | sed -nE 's/.*"command"[[:space:]]*:[[:space:]]*"((
 # check below. Skip them.
 #
 # The git invocation is not always the first token — `cd <project> && git
-# commit -m "..."` and `GIT_EDITOR=true git ...` are routine — so strip
-# leading `cd <path> &&` and VAR=value prefixes before testing.
+# commit -m "..."` and `GIT_EDITOR=true git ...` are routine. The exemption
+# must still cover ONLY git: split on unquoted && || ; | and newlines and
+# exempt only when every simple command is git/gh, a cd, or a bare VAR=value
+# (a `git … && echo x > config.xml` used to skip the rules entirely).
 # (Kept in sync with the same helper in check-tizen-commands.sh.)
 is_git_command() {
-  route="$1"
-  for _ in 1 2 3 4; do
-    before="$route"
-    route="$(printf '%s' "$route" | sed -E 's/^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+//')"
-    route="$(printf '%s' "$route" | sed -E 's/^[[:space:]]*cd[[:space:]]+(\\+"[^"\\]*\\+"|[^[:space:]&;|]+)[[:space:]]*(&&|;)[[:space:]]*//')"
-    [ "$route" = "$before" ] && break
-  done
-  printf '%s' "$route" | grep -Eq '^[[:space:]]*(git|gh)([[:space:]]|$)'
+  printf '%s' "$1" | awk '
+    function segment_ok(seg,    k) {
+      gsub(/^[[:space:](]+/, "", seg)
+      gsub(/[[:space:])]+$/, "", seg)
+      if (seg == "") return 1
+      for (k = 0; k < 4; k++) {
+        if (!sub(/^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+/, "", seg)) break
+      }
+      if (seg ~ /^(git|gh)([[:space:]]|$)/) return 1
+      if (seg ~ /^cd([[:space:]]|$)/) return 1
+      if (seg ~ /^[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*$/) return 1
+      return 0
+    }
+    function flush() { if (!segment_ok(buf)) bad = 1; buf = "" }
+    BEGIN { buf = ""; bad = 0; sq = 0; dq = 0 }
+    {
+      line = $0; n = length(line); i = 1
+      while (i <= n) {
+        c = substr(line, i, 1)
+        if (c == "\\" && i < n) {
+          d = substr(line, i + 1, 1)
+          if (d == "\"" && !sq) { dq = !dq; buf = buf c d; i += 2; continue }
+          if (d == "n" && !sq && !dq) { flush(); i += 2; continue }
+          buf = buf c d; i += 2; continue
+        }
+        if (c == "\047" && !dq) { sq = !sq; buf = buf c; i++; continue }
+        if (c == "\"" && !sq) { dq = !dq; buf = buf c; i++; continue }
+        if (!sq && !dq && (c == ";" || c == "|" || c == "&")) {
+          prev = (i > 1) ? substr(line, i - 1, 1) : ""
+          nxt = (i < n) ? substr(line, i + 1, 1) : ""
+          if (c == "&" && (prev == ">" || nxt == ">")) { buf = buf c; i++; continue }
+          flush(); i++; continue
+        }
+        buf = buf c; i++
+      }
+      flush()
+    }
+    END { exit bad ? 1 : 0 }
+  '
 }
 
 is_git_command "$cmd" && exit 0
@@ -81,11 +114,14 @@ printf '%s' "$cmd" | grep -Eqi 'config\.xml|tizen-manifest\.xml' || exit 0
 
 # Deny only when the command also WRITES: a redirect whose target is the
 # project file (>, >> — heredocs use `cat > file <<EOF` so they match too),
-# or a file-writing command/cmdlet anywhere alongside the file name.
-# Reading (cat/Get-Content/grep) stays allowed. In the raw JSON-escaped
+# or a file-writing command/cmdlet whose argument list (up to the next
+# separator) names the project file. Reading (cat/Get-Content/grep) stays
+# allowed, and so does a writer aimed at some OTHER file in the same line —
+# `cat config.xml && touch notes.txt` used to be denied because the writer
+# word merely co-occurred with the file name. In the raw JSON-escaped
 # command a quoted target appears as >\"config.xml\" — (\\+")? tolerates it.
 if printf '%s' "$cmd" | grep -Eqi -e '>+[[:space:]]*(\\+")?[^[:space:]"]*(config\.xml|tizen-manifest\.xml)' \
-                                  -e '(^|[^[:alnum:]-])(Set-Content|Out-File|Add-Content|New-Item|tee|touch)([^[:alnum:]-]|$)'; then
+                                  -e '(^|[^[:alnum:]-])(Set-Content|Out-File|Add-Content|New-Item|tee|touch)[^;&|]*(config\.xml|tizen-manifest\.xml)'; then
   deny "Do NOT create or write Tizen project files (config.xml / tizen-manifest.xml) with shell commands. A hand-written scaffold bypasses the real tz new templates and will not build/package correctly. Use the tizen-create-project skill instead: it lists real SDK templates via lib/cli/project-manager-cli.js, the USER picks one, then lib/cli/project-manager-cli.js creates the project and prints a JSON envelope. To modify an EXISTING project's config, use the Read and Edit tools, not shell redirection."
 fi
 

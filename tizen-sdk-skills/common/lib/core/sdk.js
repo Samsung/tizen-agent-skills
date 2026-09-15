@@ -29,6 +29,7 @@ const {
 } = require("../envelope/response-formatter");
 
 const { resolveScript, execPluginScript } = require("./plugin-cache");
+const { checkShellSafe } = require("./shell-safety");
 const { checkNode, checkDiskSpace } = require("./preflight");
 
 const CONFIG_FILE = path.join(os.homedir(), ".tizen.sdk.path.config");
@@ -2687,6 +2688,13 @@ async function installRootstrap(
       );
     }
 
+    // The ZIP path is spliced into a shell command line below (and, in the
+    // non-pkg harnesses, handed back as suggested_fix.command for the agent to
+    // run) — the \" replacement alone is not an escape cmd.exe honours and
+    // bash gets no escaping at all, so screen the value instead.
+    const unsafeZip = checkShellSafe(zipPath, "--zip-path", command, startTime);
+    if (unsafeZip) return unsafeZip;
+
     // Build installer command
     const winFlags = [`-ZipPath "${zipPath.replace(/"/g, '\\"')}"`];
     const unixFlags = [`--zip-path "${zipPath}"`];
@@ -2908,6 +2916,13 @@ async function installTvSdkFromZip(
     // In Claude Code / Cline (non-pkg), return the installer command as
     // suggested_fix so the agent can run it in background (Phase 2).
     const isPkg = !!process.pkg;
+
+    // Both paths are spliced into a shell command line below (see the
+    // rootstrap installer for why the \" replacement is not enough).
+    const unsafeZip = checkShellSafe(zipPath, "--zip-path", command, startTime);
+    if (unsafeZip) return unsafeZip;
+    const unsafeSdk = checkShellSafe(sdkPath, "SDK path", command, startTime);
+    if (unsafeSdk) return unsafeSdk;
 
     // Build arguments
     const winFlags = [

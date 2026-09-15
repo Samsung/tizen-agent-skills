@@ -14,6 +14,7 @@ const path = require("path");
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { findLatestVersionDir, execPluginScript } = require("./plugin-cache");
+const { checkShellSafe } = require("./shell-safety");
 const { summarizeOutput } = require("./output-summary");
 
 /**
@@ -78,13 +79,10 @@ async function setupGdbDebug(
         `Invalid app id: ${appId}`,
       );
     }
-    if (/["'`;|&<>$]/.test(binaryPath)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid binary path: ${binaryPath}`,
-      );
-    }
+    // Same screen the other execPluginScript callers use (adds line breaks
+    // and the trailing-backslash case to the old inline character list).
+    const unsafeBinary = checkShellSafe(binaryPath, "binary path", command);
+    if (unsafeBinary) return unsafeBinary;
     const breakpoints = opts.breakpoints || "";
     if (breakpoints && !/^[A-Za-z0-9_:,. ]+$/.test(breakpoints)) {
       return formatError(

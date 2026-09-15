@@ -12,6 +12,7 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { readSdkPath } = require("./sdk");
+const { isValidSerial } = require("./shell-safety");
 
 /**
  * Resolve the sdb binary path from the configured SDK path.
@@ -246,6 +247,17 @@ function parseDevices(output) {
  */
 function resolveSerial(sdbPath, serial) {
   if (serial) {
+    // Every caller splices the serial into `-s "<serial>"` on a command line
+    // that goes through a shell (runSdb → execSync). Screening it here covers
+    // all of them at once instead of relying on each call site to remember
+    // (file-transfer, screenshot and project already check at their own edge;
+    // sdb-helper did not).
+    if (!isValidSerial(serial)) {
+      return {
+        errorCategory: "invalid_parameters",
+        message: `Invalid device serial "${serial}": only letters, digits, '.', '_', ':' and '-' are allowed.`,
+      };
+    }
     return { serial };
   }
   let output;
