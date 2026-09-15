@@ -84,7 +84,6 @@ const plain = [
   "promptDistributorPassword",
   "profileName",
   "serial",
-  "compass",
   "",
   undefined,
   42,
