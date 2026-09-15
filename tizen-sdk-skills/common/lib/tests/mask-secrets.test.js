@@ -34,9 +34,9 @@ const SENTINEL = "sentinel-value";
 
 /**
  * `{ <name>: SENTINEL }` built from the key name instead of written as an
- * object literal. The credential scanner keys on the shape `password: <x>`
- * whatever <x> is (AVAS #136/#137 flagged `password: SENTINEL`), so the
- * fixture keeps that shape out of the source text entirely.
+ * object literal. The credential scanner matches a secret-named key followed
+ * by a colon and any value — it flagged the SENTINEL form too (AVAS
+ * #136/#137) — so the fixture keeps that shape out of the source entirely.
  */
 function secret(name) {
   return { [name]: SENTINEL };
