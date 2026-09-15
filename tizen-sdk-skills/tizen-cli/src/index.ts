@@ -29,6 +29,7 @@ import {
   setUserCommand,
   clearUserCommand,
   withUserCommand,
+  USER_COMMAND_PREFIX,
 } from "./envelope-adapter";
 import { handleDoctor, handleCapabilities } from "./doctor";
 import pkg = require("../package.json");
@@ -88,7 +89,7 @@ async function run(args: string[]): Promise<{ status: "success" | "failure" }> {
               version: PLUGIN_VERSION,
               commands: COMMANDS,
               meta_commands: ["--schema", "--doctor", "--capabilities"],
-              usage: `tizen-cli ${PLUGIN_NAME} <command> [--options...]`,
+              usage: `${USER_COMMAND_PREFIX} <command> [--options...]`,
             },
             warnings: [],
             errors: [],

@@ -30,6 +30,17 @@ const { buildUserCommand } = require("../../common/lib/envelope/user-command");
 const PLUGIN_NAME = "tizen-sdk";
 
 /**
+ * How the user invokes this program — the head of every `user_command`.
+ *
+ * Inside the tizen-cli host it is "tizen-cli tizen-sdk". The standalone
+ * launcher (bin/tizen-sdk.js) runs the same bundle as plain `tizen-sdk` and
+ * sets TIZEN_SDK_USER_COMMAND_PREFIX so the rendered line matches what was
+ * typed; the host sets nothing, so its behaviour is unchanged.
+ */
+export const USER_COMMAND_PREFIX: string =
+  process.env.TIZEN_SDK_USER_COMMAND_PREFIX || `tizen-cli ${PLUGIN_NAME}`;
+
+/**
  * The command line the user issued, captured once per dispatch by run().
  *
  * The inner envelope's `command` is the core's internal label ("tizen-sdk
@@ -53,7 +64,7 @@ let userCommand = "";
  * code paths that might read or output userCommand.
  */
 export function setUserCommand(args: string[]): void {
-  userCommand = buildUserCommand(args, `tizen-cli ${PLUGIN_NAME}`);
+  userCommand = buildUserCommand(args, USER_COMMAND_PREFIX);
 }
 
 /**

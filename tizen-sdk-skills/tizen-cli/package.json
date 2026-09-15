@@ -3,8 +3,12 @@
   "version": "1.2.0",
   "description": "tizen-cli plugin (tizen-sdk) wrapping the tizen-sdk-skills workflows — SDK install, project create/build, device, app install, remote debug",
   "main": "dist/tizen-sdk.js",
+  "bin": {
+    "tizen-sdk": "bin/tizen-sdk.js"
+  },
   "scripts": {
     "build": "node esbuild.config.js",
+    "start": "node bin/tizen-sdk.js",
     "test": "node ../common/lib/tests/run-all.js"
   },
   "keywords": [

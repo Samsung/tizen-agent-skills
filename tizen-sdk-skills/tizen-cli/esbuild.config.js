@@ -152,6 +152,22 @@ esbuild
       console.log("✅ Copied ../common/tools/ to dist/tools/");
     }
 
+    // Standalone launcher: dist/bin/tizen-sdk.js finds the bundle one level
+    // up, so a release ZIP (= dist/) runs without the tizen-cli host via
+    // `node dist/bin/tizen-sdk.js <command>`. Restore the exec bit — Windows
+    // checkouts drop it and the copy would otherwise land as 0644.
+    const binSrc = path.join(__dirname, "bin");
+    if (fs.existsSync(binSrc)) {
+      const binDest = path.join(outDir, "bin");
+      copyDirRecursive(binSrc, binDest);
+      if (process.platform !== "win32") {
+        for (const entry of fs.readdirSync(binDest)) {
+          fs.chmodSync(path.join(binDest, entry), 0o755);
+        }
+      }
+      console.log("✅ Copied bin/ to dist/bin/ (standalone launcher)");
+    }
+
     // ─── License texts ───────────────────────────────────────────────────
     // dist/ is what the release ZIP and `tizen-cli plugin install` ship, and
     // it redistributes third-party material (bundled `commander`, the TV CA

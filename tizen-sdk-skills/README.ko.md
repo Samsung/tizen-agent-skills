@@ -78,9 +78,10 @@ code --install-extension tizen-ai-extension-vX.Y.Z.vsix
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
 tizen-cli plugin install dist/
 tizen-cli tizen-sdk --doctor
+node bin/tizen-sdk.js --doctor   # tizen-cli 호스트가 없으면 같은 번들을 독립 실행
 ```
 
 [tizen-cli/README.ko.md](tizen-cli/README.ko.md), [docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.

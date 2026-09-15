@@ -8,7 +8,7 @@ This document describes how to build the tizen-sdk plugin (tizen-cli harness) fr
 
 - **Node.js 18+** — Download from [https://nodejs.org](https://nodejs.org)
 - **pnpm** — If not installed: `npm install -g pnpm`
-- **tizen-cli** — the separately distributed tizen-cli host CLI (see its own installation guide)
+- **tizen-cli** (optional) — the separately distributed tizen-cli host CLI (see its own installation guide). Without it, run the plugin through the standalone launcher described in step 5.
 
 ## 1. Clone the Repository
 
@@ -31,6 +31,7 @@ After the build completes, the following files are generated in the `dist/` dire
 - `dist/plugin.json` — Plugin metadata (commands array auto-generated)
 - `dist/scripts/` — Platform scripts (.ps1 / .sh)
 - `dist/skills/` — SKILL.md files
+- `dist/bin/tizen-sdk.js` — Standalone launcher (runs the bundle without the tizen-cli host)
 
 ## 3. Install the Plugin
 
@@ -104,11 +105,33 @@ If installed successfully, the list of available commands is displayed:
 > are listed under the `unavailable` array instead — only commands that work
 > without the SDK (`sdk-init`, `check-node`, ...) appear in `available`.
 
+## 5. Run Without the tizen-cli Host (Standalone)
+
+If tizen-cli is not installed, the launcher in `bin/` runs the same bundle
+directly. It calls the plugin's `run(args)` and exits `0` on success, `1` on
+failure; the output is the same JSON envelope.
+
+```bash
+cd tizen-cli
+node bin/tizen-sdk.js --capabilities        # same output as step 4
+node bin/tizen-sdk.js check-node
+
+pnpm link --global                          # optional: `tizen-sdk` on PATH
+tizen-sdk --doctor
+
+node dist/bin/tizen-sdk.js --schema         # from a release ZIP (dist/ only)
+```
+
+Before `pnpm build` the launcher reports `PLUGIN_NOT_BUILT` with the build
+command in `suggested_fix.command`. See
+[tizen-cli/README.md](../../tizen-cli/README.md#standalone-use-without-the-tizen-cli-host).
+
 ## Troubleshooting
 
 | Issue | Solution |
 |---|---|
 | `ERR_PNPM_IGNORED_BUILDS` | Ensure `pnpm-workspace.yaml` exists (allows esbuild postinstall) |
 | `pnpm: command not found` | Install with `npm install -g pnpm` |
-| `tizen-cli: command not found` | Ensure tizen-cli is on PATH |
+| `tizen-cli: command not found` | Ensure tizen-cli is on PATH, or use the standalone launcher (`node bin/tizen-sdk.js …`) |
+| `PLUGIN_NOT_BUILT` from the launcher | Run `pnpm build` in `tizen-cli/` first |
 | Changes not reflected after rebuild | Run `tizen-cli plugin uninstall tizen-sdk` then reinstall |

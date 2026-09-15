@@ -8,7 +8,7 @@
 
 - **Node.js 18 이상** — [https://nodejs.org](https://nodejs.org)에서 다운로드
 - **pnpm** — 설치되어 있지 않은 경우: `npm install -g pnpm`
-- **tizen-cli** — 별도 배포되는 tizen-cli 호스트 CLI (설치 방법은 tizen-cli 배포 안내 참조)
+- **tizen-cli** (선택) — 별도 배포되는 tizen-cli 호스트 CLI (설치 방법은 tizen-cli 배포 안내 참조). 없는 경우 5단계의 독립 런처로 플러그인을 실행할 수 있습니다.
 
 ## 1. 저장소 클론
 
@@ -31,6 +31,7 @@ pnpm build
 - `dist/plugin.json` — 플러그인 메타데이터 (commands 배열 자동 생성)
 - `dist/scripts/` — 플랫폼 스크립트 (.ps1 / .sh)
 - `dist/skills/` — SKILL.md 파일들
+- `dist/bin/tizen-sdk.js` — 독립 런처 (tizen-cli 호스트 없이 번들 실행)
 
 ## 3. 플러그인 설치
 
@@ -104,11 +105,33 @@ tizen-cli tizen-sdk --capabilities
 > `unavailable` 배열로 분류됩니다. `sdk-init`, `check-node` 등 SDK 없이
 > 동작하는 커맨드만 `available`에 나타납니다.
 
+## 5. tizen-cli 호스트 없이 실행 (독립 실행)
+
+tizen-cli가 설치되어 있지 않다면 `bin/`의 런처가 같은 번들을 직접 실행합니다.
+플러그인의 `run(args)`를 호출하고 성공 시 `0`, 실패 시 `1`로 종료하며,
+출력은 동일한 JSON 엔벨로프입니다.
+
+```bash
+cd tizen-cli
+node bin/tizen-sdk.js --capabilities        # 4단계와 같은 출력
+node bin/tizen-sdk.js check-node
+
+pnpm link --global                          # 선택: PATH에 `tizen-sdk` 등록
+tizen-sdk --doctor
+
+node dist/bin/tizen-sdk.js --schema         # 릴리스 ZIP(dist/만 있는 경우)
+```
+
+`pnpm build` 전에는 런처가 `PLUGIN_NOT_BUILT`를 출력하며
+`suggested_fix.command`에 빌드 명령이 담깁니다. 자세한 내용은
+[tizen-cli/README.ko.md](../../tizen-cli/README.ko.md#독립-실행-tizen-cli-호스트-없이)를 참고하세요.
+
 ## 문제 해결
 
 | 문제 | 해결 방법 |
 |---|---|
 | `ERR_PNPM_IGNORED_BUILDS` | `pnpm-workspace.yaml`이 있는지 확인 (esbuild postinstall 허용) |
 | `pnpm: command not found` | `npm install -g pnpm`으로 설치 |
-| `tizen-cli: command not found` | tizen-cli가 PATH에 있는지 확인 |
+| `tizen-cli: command not found` | tizen-cli가 PATH에 있는지 확인, 또는 독립 런처(`node bin/tizen-sdk.js …`) 사용 |
+| 런처가 `PLUGIN_NOT_BUILT` 출력 | `tizen-cli/`에서 `pnpm build`를 먼저 실행 |
 | 빌드 후에도 변경사항 반영 안 됨 | `tizen-cli plugin uninstall tizen-sdk` 후 재설치 |

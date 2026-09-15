@@ -7,7 +7,8 @@ a tizen-cli plugin
 exposing the shared workflows as standard CLI commands.
 
 ```
-tizen-cli tizen-sdk <command> [--options...]
+tizen-cli tizen-sdk <command> [--options...]   # inside the tizen-cli host
+tizen-sdk <command> [--options...]             # standalone launcher (bin/tizen-sdk.js)
 ```
 
 ## Commands (flat, 34)
@@ -146,6 +147,8 @@ src/               TypeScript plugin shell (command engine + declarative specs i
 ../common/lib/     Shared CommonJS domain logic (single source of truth)
 ../common/scripts/ Platform .ps1/.sh feature scripts → copied to dist/scripts
 skills/            31 SKILL.md files for agents driving tizen-cli (29 + umbrella router + tizen-list-templates) → dist/skills
+bin/               Standalone launcher (tizen-sdk.js): loads the bundle and calls
+                   run() without the tizen-cli host → copied to dist/bin
 ```
 
 - `common/lib/core/plugin-cache.js` resolves `scripts/` for every harness
@@ -163,8 +166,8 @@ skills/            31 SKILL.md files for agents driving tizen-cli (29 + umbrella
 cd tizen-cli
 pnpm install         # or npm install
 pnpm build            # bundles src → dist/tizen-sdk.js, copies
-                      # plugin.json + ../common/scripts + skills/, auto-updates
-                      # plugin.json "commands" via --schema
+                      # plugin.json + ../common/scripts + skills/ + bin/,
+                      # auto-updates plugin.json "commands" via --schema
 ```
 
 `pnpm build` empties `dist/` first, so files from an earlier build (a renamed
@@ -188,6 +191,38 @@ pnpm build
 tizen-cli plugin uninstall tizen-sdk
 tizen-cli plugin install <repo>/tizen-cli/dist
 ```
+
+## Standalone use (without the tizen-cli host)
+
+`bin/tizen-sdk.js` is a thin launcher that `require()`s the built bundle and
+calls its `run(args)` — the same entry point the host uses — so every command
+above works on a machine that does not have `tizen-cli` installed. Nothing is
+reimplemented: the launcher only locates `dist/tizen-sdk.js`, forwards argv,
+and maps `run()`'s result to the exit code (`0` success, `1` failure).
+
+```bash
+cd tizen-cli && pnpm install && pnpm build   # the launcher needs dist/tizen-sdk.js
+
+node bin/tizen-sdk.js --capabilities         # from the checkout
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm link --global                           # optional: put `tizen-sdk` on PATH
+tizen-sdk --doctor                           # (also what tests/runner.mjs falls back to)
+
+node dist/bin/tizen-sdk.js --schema          # release ZIP / dist-only layout
+```
+
+- Output is the same single Standard JSON Envelope on stdout; diagnostics stay
+  on stderr.
+- Without a build, the launcher prints a `PLUGIN_NOT_BUILT` failure envelope
+  whose `suggested_fix.command` is the build command, and exits `1`.
+- `user_command` in the envelope is rendered with the prefix the user typed:
+  `tizen-sdk …` standalone, `tizen-cli tizen-sdk …` inside the host. Set
+  `TIZEN_SDK_USER_COMMAND_PREFIX` to override it (for example from an alias or
+  wrapper script).
+- On Windows run it as `node bin\tizen-sdk.js …`, or use the `tizen-sdk.cmd`
+  shim that `pnpm link --global` creates.
 
 ## Not included (future work)
 

@@ -83,9 +83,10 @@ commands and building from source.
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
 tizen-cli plugin install dist/
 tizen-cli tizen-sdk --doctor
+node bin/tizen-sdk.js --doctor   # no tizen-cli host? run the same bundle standalone
 ```
 
 See [tizen-cli/README.md](tizen-cli/README.md) and [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).

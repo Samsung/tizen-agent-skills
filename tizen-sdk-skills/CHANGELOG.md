@@ -9,6 +9,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- Standalone launcher `tizen-cli/bin/tizen-sdk.js` (`tizen-sdk <command>`): runs the built
+  plugin bundle without the tizen-cli host by calling its `run(args)` and mapping the result
+  to the exit code (0 success, 1 failure). Registered as the package `bin`, copied to
+  `dist/bin/` on build so a release ZIP runs via `node dist/bin/tizen-sdk.js`, and reports
+  `PLUGIN_NOT_BUILT` when `dist/` is missing. `tests/runner.mjs` already falls back to a
+  `tizen-sdk` binary on PATH. The envelope's `user_command` (and the no-argument `usage`
+  line) now use the prefix the user typed — `tizen-sdk` standalone, `tizen-cli tizen-sdk`
+  in the host — overridable via `TIZEN_SDK_USER_COMMAND_PREFIX`.
+
 ## [1.2.0] — 2026-09-10
 
 Hooks auto-merge on install, `launch`-based .NET debugging, RPM parity for the PowerShell

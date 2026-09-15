@@ -7,7 +7,8 @@ tizen-cli 플러그인으로,
 공유 워크플로우를 표준 CLI 명령어로 노출합니다.
 
 ```
-tizen-cli tizen-sdk <command> [--options...]
+tizen-cli tizen-sdk <command> [--options...]   # tizen-cli 호스트 안에서
+tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js)
 ```
 
 ## 명령어 (flat, 34개)
@@ -145,6 +146,8 @@ src/               TypeScript 플러그인 셸 (커맨드 엔진 + command-specs
 ../common/lib/     공유 CommonJS 도메인 로직 (단일 소스)
 ../common/scripts/ 플랫폼 .ps1/.sh 기능 스크립트 → dist/scripts로 복사
 skills/            tizen-cli 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates) → dist/skills
+bin/               독립 런처 (tizen-sdk.js): tizen-cli 호스트 없이 번들을 로드해
+                   run()을 호출 → dist/bin으로 복사
 ```
 
 - `common/lib/core/plugin-cache.js`가 모든 하네스의 `scripts/` 경로를 해석합니다
@@ -161,7 +164,7 @@ skills/            tizen-cli 구동 에이전트용 SKILL.md 31개 (29개 + 우�
 cd tizen-cli
 pnpm install          # 또는 npm install
 pnpm build            # src → dist/tizen-sdk.js 번들링,
-                      # plugin.json + ../common/scripts + skills/ 복사,
+                      # plugin.json + ../common/scripts + skills/ + bin/ 복사,
                       # --schema로 plugin.json "commands" 자동 업데이트
 ```
 
@@ -186,6 +189,37 @@ pnpm build
 tizen-cli plugin uninstall tizen-sdk
 tizen-cli plugin install <repo>/tizen-cli/dist
 ```
+
+## 독립 실행 (tizen-cli 호스트 없이)
+
+`bin/tizen-sdk.js`는 빌드된 번들을 `require()`하고 호스트가 쓰는 것과 같은 진입점
+`run(args)`를 호출하는 얇은 런처입니다. 따라서 `tizen-cli`가 설치되지 않은 머신에서도
+위의 모든 명령어를 그대로 실행할 수 있습니다. 로직을 재구현하지 않으며,
+`dist/tizen-sdk.js`를 찾아 argv를 전달하고 `run()`의 결과를 종료 코드(성공 `0`,
+실패 `1`)로 매핑하는 일만 합니다.
+
+```bash
+cd tizen-cli && pnpm install && pnpm build   # 런처는 dist/tizen-sdk.js가 필요
+
+node bin/tizen-sdk.js --capabilities         # 체크아웃에서 실행
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm link --global                           # 선택: PATH에 `tizen-sdk` 등록
+tizen-sdk --doctor                           # (tests/runner.mjs의 폴백 실행기이기도 함)
+
+node dist/bin/tizen-sdk.js --schema          # 릴리스 ZIP / dist만 있는 레이아웃
+```
+
+- 출력은 동일하게 stdout에 단일 Standard JSON Envelope이며, 진단 메시지는
+  stderr로만 나갑니다.
+- 빌드하지 않은 상태에서는 `PLUGIN_NOT_BUILT` 실패 엔벨로프를 출력하고
+  (`suggested_fix.command`에 빌드 명령 포함) `1`로 종료합니다.
+- 엔벨로프의 `user_command`는 사용자가 입력한 접두어로 렌더링됩니다:
+  독립 실행 시 `tizen-sdk …`, 호스트 안에서는 `tizen-cli tizen-sdk …`.
+  alias나 래퍼 스크립트에서 바꾸려면 `TIZEN_SDK_USER_COMMAND_PREFIX`를 설정하세요.
+- Windows에서는 `node bin\tizen-sdk.js …`로 실행하거나, `pnpm link --global`이
+  만드는 `tizen-sdk.cmd` shim을 사용하세요.
 
 ## 미포함 (향후 작업)
 
