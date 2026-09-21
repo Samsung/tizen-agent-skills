@@ -4,7 +4,7 @@ id: tizen-sdk.sdk-repo-info.happy
 plugin: tizen-sdk
 command: sdk-repo-info
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-repo-info returns success with repository URL info"
 

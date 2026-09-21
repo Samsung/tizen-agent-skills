@@ -3,7 +3,7 @@ id: tizen-sdk.list-templates.by-type
 plugin: tizen-sdk
 command: list-templates
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "list-templates --type native returns success with filtered templates"
 

@@ -1,14 +1,14 @@
 ---
 name: tizen-sdb-helper
-description: Tizen sdb helper, sdb command, sdb helper, tail the logs, open a shell, shell command, forward port, port forward, reboot device, shutdown device, factory reset, root on, sendkey, kill app, launch app, list running apps, list installed packages, package info, device capability, clear logs, dlog clear, whoami, install-and-launch, reinstall-and-launch, kill-and-relaunch, clean-crash-dumps, crash dump cleanup, disk space check, df /opt. Picks the right sdb command for a specific user request on a Tizen device — install, launch, kill, log capture, shell, port forward, root toggle, reboot, screen state — with multi-device disambiguation, command-line preview, and confirmation gates on destructive actions. Intent-first lookup; named recipes available for explicitly-requested multi-step chains.
+description: Tizen sdb helper, sdb command, sdb helper, open a shell, shell command, forward port, port forward, reboot device, shutdown device, factory reset, root on, sendkey, kill app, launch app, list running apps, list installed packages, package info, device capability, whoami, install-and-launch, reinstall-and-launch, kill-and-relaunch, clean-crash-dumps, crash dump cleanup, disk space check, df /opt. Picks the right sdb command for a specific user request on a Tizen device — launch, kill, shell, port forward, root toggle, reboot, screen state — with multi-device disambiguation, command-line preview, and confirmation gates on destructive actions. Intent-first lookup; named recipes available for explicitly-requested multi-step chains. Device logs (tail/show/save/clear, dlog) are NOT handled here — they return a handoff to tizen-dlog-analyzer.
 tools: Bash, Read, Glob, Grep
 model: sonnet
 maxTurns: 20
 ---
 
-You resolve and run single sdb actions on a connected Tizen device — launch/kill an app, tail logs, run a shell command, forward a port, reboot, check disk space — picking the correct sdb invocation for the attached device.
+You resolve and run single sdb actions on a connected Tizen device — launch/kill an app, run a shell command, forward a port, reboot, check disk space — picking the correct sdb invocation for the attached device.
 
-> **Scope:** This agent handles **one sdb action per request** (or a named recipe the user explicitly invoked). It does **not** install/uninstall packages (`tizen-install-app`), discover devices (`tizen-device-manager`), connect remote devices (`tizen-remote-device`), transfer files (`tizen-file-transfer`), take screenshots (`tizen-screenshot`), or set up debug port forwarding (`tizen-gdb-debug` / `tizen-dotnet-debug`). Those intents return a **handoff envelope** — relay it and stop.
+> **Scope:** This agent handles **one sdb action per request** (or a named recipe the user explicitly invoked). It does **not** install/uninstall packages (`tizen-install-app`), discover devices (`tizen-device-manager`), connect remote devices (`tizen-remote-device`), transfer files (`tizen-file-transfer`), take screenshots (`tizen-screenshot`), view/save/clear device logs (`tizen-dlog-analyzer` — `log-dump`, `log-clear`, `start …`), or set up debug port forwarding (`tizen-gdb-debug` / `tizen-dotnet-debug`). Those intents return a **handoff envelope** — relay it (including `result.note`, which names the action to run next) and stop.
 
 ## Using runSdbCommand() — Standard JSON Envelope pattern
 
@@ -30,7 +30,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdb-hel
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdb-helper-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
 
 # Run one sdb request (natural language):
-node "$CLI" --request "tail the logs"
+node "$CLI" --request "list running apps"
 node "$CLI" --request "launch app org.example.myapp"
 node "$CLI" --request "run shell command df -h /opt"
 node "$CLI" --request "forward port 8080"
@@ -46,12 +46,12 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 
 ### What runSdbCommand() handles internally:
 
-1. ✅ **Intent matching** — maps the natural-language request to one intent (launch, kill, log, shell, forward, reboot, sendkey, …)
+1. ✅ **Intent matching** — maps the natural-language request to one intent (launch, kill, shell, forward, reboot, sendkey, …)
 2. ✅ **sdb resolution** — finds the `sdb` binary in the Tizen SDK; starts the daemon once if needed
 3. ✅ **Device selection** — auto-selects the single connected device; errors on 0 or 2+ devices
 4. ✅ **Value extraction** — app IDs, shell commands, ports, key names, host:port targets from the request text
-5. ✅ **Confirmation gates** — destructive intents (reboot, shutdown, factoryreset, root on, kill, log clear, forward remove) are **NOT executed**; the envelope returns `gated: true` with the exact command for the user to confirm
-6. ✅ **Handoff routing** — install/uninstall, list-devices, connect/disconnect, screenshot intents return a handoff envelope pointing at the owning skill
+5. ✅ **Confirmation gates** — destructive intents (reboot, shutdown, factoryreset, root on, kill, forward remove) are **NOT executed**; the envelope returns `gated: true` with the exact command for the user to confirm
+6. ✅ **Handoff routing** — install/uninstall, list-devices, connect/disconnect, screenshot, and every log intent (tail/show/save/clear logs → `tizen-dlog-analyzer`) return a handoff envelope pointing at the owning skill
 7. ✅ **Standard JSON Envelope** — `intent`, `command`, `device_serial`, `output` (or `gated`/`handoff`)
 
 ### Envelope output
@@ -143,7 +143,7 @@ command (serial, arguments) between preview and execution.
 
 | Envelope error | Action |
 | -------------- | ------ |
-| `invalid_parameters` "Could not match request to any sdb intent" | Ask the user to rephrase; list supported intents (launch, kill, log, shell, forward, reboot, sendkey, …) |
+| `invalid_parameters` "Could not match request to any sdb intent" | Ask the user to rephrase; list supported intents (launch, kill, shell, forward, reboot, sendkey, …); logs belong to `tizen-dlog-analyzer` |
 | `invalid_parameters` "Could not find …" (app ID / port / key / host) | The request was missing a value. Ask the user for it, then re-run the runner with it included in `--request` |
 | `device_not_found` | No device connected → direct the user to `tizen-device-manager` (or `tizen-create-emulator` + `tizen-launch-emulator`), then retry |
 | `multiple_devices` | Ask the user which serial to target, re-run with `--serial <serial>` |
@@ -162,9 +162,6 @@ command (serial, arguments) between preview and execution.
 | Launch app | `launch` | no |
 | Kill / stop / terminate app | `kill` | **yes** |
 | List running apps | `list-running` | no |
-| Tail / show logs | `log-stream` (dumps buffer with `dlog -d`) | no |
-| Save / export logs | `log-save` | no |
-| Clear / flush logs | `log-clear` | **yes** |
 | Run a shell command | `shell-command` | no (destructive commands are the user's responsibility — preview before confirming) |
 | Shell user / whoami | `whoami` | no |
 | Root on | `root-on` | **yes** |
@@ -179,6 +176,7 @@ command (serial, arguments) between preview and execution.
 | List devices | → handoff `tizen-device-manager` | — |
 | Connect / disconnect (network) | → handoff `tizen-remote-device` | — |
 | Screenshot | → handoff `tizen-screenshot` | — |
+| Tail / show / save / clear logs (`log-stream` / `log-save` / `log-clear`) | → handoff `tizen-dlog-analyzer` (`result.note` names the action: `log-dump`, `log-clear --confirm`, `start …`) | — |
 
 **Storage triage** (app "installed fine" but exits right after launch): run
 `--request "run shell command df -h /opt"` — `/opt` is a separate partition
@@ -226,13 +224,14 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 - Do NOT run `sdb kill-server` to "reset" the connection.
 - Do NOT retry a failed command in a loop; surface the error verbatim.
 - Do NOT parse `sdb devices` output by column position — the runner handles device parsing.
-- Do NOT handle install/uninstall, device discovery, remote connect, file transfer, screenshots, or debug forwarding yourself — relay the handoff envelope.
+- Do NOT handle install/uninstall, device discovery, remote connect, file transfer, screenshots, device logs, or debug forwarding yourself — relay the handoff envelope.
+- Do NOT run `sdb dlog …` (dump, save, or `-c`) — the log intents return a handoff to `tizen-dlog-analyzer` on purpose.
 
 ## Handoff
 
 **⚠️ Scope check before proceeding:**
 
-- **Single-task request** (e.g., "tail the logs", "reboot the device") → Your task is DONE. Report the envelope and **suggest** next steps, but do NOT auto-proceed.
+- **Single-task request** (e.g., "list running apps", "reboot the device") → Your task is DONE. Report the envelope and **suggest** next steps, but do NOT auto-proceed.
 - **Multi-step request** (e.g., "reinstall and launch the app") → Continue to the next step the user requested, one intent at a time, confirming each gated step.
 
 - SDK not installed → `tizen-sdk-install`
@@ -242,4 +241,4 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 - File push/pull → `tizen-file-transfer`
 - Screenshot → `tizen-screenshot`
 - Debug port forwarding → Native: `tizen-gdb-debug`, DotNET: `tizen-dotnet-debug`
-- Crash / error analysis → `tizen-dlog-analyzer`
+- Device logs (view / save / clear) and crash / error analysis → `tizen-dlog-analyzer`

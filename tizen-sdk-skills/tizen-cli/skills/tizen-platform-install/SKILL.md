@@ -27,8 +27,9 @@ tizen-cli tizen-sdk platform-install
 
 | Option | Required | Default | Description |
 |---|---|---|---|
-| `--platform-version <version>` | **yes** | — | Tizen platform version (e.g., `10.0`, `11.0`). The target package is `TIZEN-{version}`. |
+| `--platform-version <version>` | **yes** | — | Tizen platform version, `X.Y` (e.g., `10.0`, `11.0`). The target package is `TIZEN-{version}`. Any other shape (e.g. `99.99.99`) fails with `invalid_argument` before anything runs. |
 | `--force` | no | off | Force reinstall even if already installed |
+| `--download-jobs <count>` | no | `4` | Number of concurrent download jobs (1-8) |
 
 ## Two-phase flow (same pattern as sdk-install / tv-sdk-install)
 

@@ -87,7 +87,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/downloa
 node "$CLI"
 ```
 
-Optional: `node "$CLI" --platform-version 10.0` (specify platform version), `node "$CLI" --force` (force reinstall)
+Optional: `node "$CLI" --platform-version 10.0` (specify platform version), `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
 Exit code: `0` = success (emulator package already installed), `1` = failure (emulator package not installed — proceed to Phase 2, or Tizen SDK not installed).
 

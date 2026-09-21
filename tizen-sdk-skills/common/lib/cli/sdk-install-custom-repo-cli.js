@@ -30,26 +30,24 @@
  */
 
 const { installSdkFromRepo } = require("../core/sdk-commands");
-const { runCli } = require("./cli-runner");
+const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
 
+const COMMAND = "tizen-sdk sdk-install-custom-repo";
 const args = process.argv.slice(2);
 
-/** Read `--flag value` or `--flag=value`; returns '' when absent. */
-function readOption(name) {
-  const idx = args.indexOf(`--${name}`);
-  if (idx !== -1 && args[idx + 1] && !args[idx + 1].startsWith("-")) {
-    return args[idx + 1];
-  }
-  const inline = args.find((a) => a.startsWith(`--${name}=`));
-  return inline ? inline.slice(`--${name}=`.length) : "";
-}
-
 const force = args.includes("--force") || args.includes("-Force");
-const positional = args.filter((a) => !a.startsWith("-"));
+// Same validator as every other sdk CLI: a bad value becomes an
+// invalid_parameters envelope on stderr, not a stack trace.
+const downloadJobs = getDownloadJobsOrExit(COMMAND, args);
+// Drop flag VALUES from the positionals, otherwise they would be read as the
+// repo URL / platform version.
+const rawJobs = getFlagValue(args, "--download-jobs");
+const positional = args.filter((a) => !a.startsWith("-") && a !== rawJobs);
 
 // --repo-url / --platform-version take precedence; positionals are the short form.
-let repoUrl = readOption("repo-url");
-let platformVersion = readOption("platform-version") || readOption("platform");
+let repoUrl = getFlagValue(args, "--repo-url");
+let platformVersion =
+  getFlagValue(args, "--platform-version") || getFlagValue(args, "--platform");
 
 const consumed = [repoUrl, platformVersion].filter(Boolean);
 const free = positional.filter((p) => !consumed.includes(p));
@@ -57,6 +55,6 @@ if (!repoUrl) repoUrl = free[0] || "";
 if (!platformVersion)
   platformVersion = (repoUrl === free[0] ? free[1] : free[0]) || "";
 
-runCli("tizen-sdk sdk-install-custom-repo", () =>
-  installSdkFromRepo(repoUrl, platformVersion, force),
+runCli(COMMAND, () =>
+  installSdkFromRepo(repoUrl, platformVersion, force, downloadJobs),
 );

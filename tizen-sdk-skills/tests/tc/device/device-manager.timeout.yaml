@@ -3,9 +3,9 @@ id: tizen-sdk.device-manager.timeout
 plugin: tizen-sdk
 command: device-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "device-manager --timeout 120 returns success with devices array"
+description: "device-manager --timeout 120 returns success with the selected device_serial"
 
 lanes:
   cli:
@@ -14,4 +14,6 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.devices", min_length: 0 }
+        # Same single-device result shape as device-manager.happy (fixed 2026-09-17).
+        - { path: "$.result.device_serial", min_length: 1 }
+        - { path: "$.result.device_type", matches: "^(emulator|usb)$" }

@@ -62,8 +62,8 @@ bash cline/setup/setup.sh
 
 ### VS Code 확장
 
-**Tizen AI Extension**은 스크립트를 실행하지 않고 에디터 안에서 Claude Code / Cline용
-플러그인을 설치·동기화합니다.
+**Tizen AI Extension**은 스크립트를 실행하지 않고 에디터 안에서 Claude Code / Cline /
+Codex CLI용 플러그인을 설치·동기화합니다.
 [GitHub Releases](https://github.com/Samsung/tizen-agent-skills/releases)에서
 `tizen-ai-extension-vX.Y.Z.vsix`를 내려받아 설치하세요:
 
@@ -147,7 +147,7 @@ tizen-cli에서는 `tizen-cli tizen-sdk <명령어>`로 노출됩니다. 정확�
 | `gdb-debug` | Debug | Native 앱 원격 GDB 디버깅 설정 |
 | `dotnet-debug` | Debug | .NET 앱 원격 netcoredbg 디버깅 설정 |
 | `webapp-debug` | Debug | 웹 앱 원격 디버깅 설정 (RWI/CDP) |
-| `dlog-analyzer` | Debug | dlog 수집, 크래시/예외 감지, 근본 원인 제안 |
+| `dlog-analyzer` | Debug | 디바이스 로그 보기/저장/지우기 (`log-dump`, `log-clear`), dlog 수집, 크래시/예외 감지, 근본 원인 제안 |
 | `playwright-test` | Test | Tizen 웹 앱에 대한 Playwright 테스트 실행/스캐폴드 |
 | `certificate-manager` | Certificate | Tizen 인증서 및 서명 프로필 관리 |
 
@@ -191,7 +191,7 @@ tizen-sdk-skills/
 │   ├── esbuild.config.js   #   빌드 설정
 │   ├── plugin.json         #   tizen-cli 플러그인 매니페스트 (빌드 시 commands 자동 업데이트)
 │   └── package.json        #   npm/pnpm 패키지
-├── vscode/                 # VS Code 확장 — 에디터에서 Claude Code / Cline용 플러그인 설치·동기화
+├── vscode/                 # VS Code 확장 — 에디터에서 Claude Code / Cline / Codex CLI용 플러그인 설치·동기화
 ├── docs/                   # 문서 (아키텍처, 워크스루, 배포, envelope, ...)
 ├── usage/                  # 사용 시나리오 및 실제 사용 사례
 ├── tests/                  # 독립 테스트 스위트 (TC YAML, 러너, 픽스처)
@@ -253,7 +253,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 ### 프로젝트 현황
 
-2026-09-10, v1.2.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
+2026-09-18, v1.3.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
 있으며, 스킬·에이전트·커맨드·테스트 스위트가 추가될 때마다 이 표를 갱신합니다.
 
 | 항목 | 수치 | 재측정 방법 |
@@ -262,13 +262,13 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 스킬 (`common/skills/`) | 29개 (+tizen-cli 전용 2개 → `tizen-cli/skills/`는 31개) | `ls -d common/skills/*/ \| wc -l` |
 | 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
 | tizen-cli 커맨드 | 34개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
-| 에러 코드 | envelope 레지스트리 59개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
+| 에러 코드 | envelope 레지스트리 61개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 12개 | `common/hooks/` |
-| 단위 테스트 (`common/lib/tests/`) | 38 파일, 어설션 약 1,450개 | `node common/lib/tests/run-all.js` |
-| VS Code 확장 테스트 | 3 파일, 88 케이스 | `cd vscode && npm test` |
-| 훅 테스트 | 32 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 281 TC / 274 YAML — safe 63 / mutating 79 / device 139; approved 110 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| 문서 | Markdown 204개 (`docs/` 91개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
+| 단위 테스트 (`common/lib/tests/`) | 66 파일, 어설션 약 2,280개 | `node common/lib/tests/run-all.js` |
+| VS Code 확장 테스트 | 3 파일, 118 케이스 | `cd vscode && npm test` |
+| 훅 테스트 | 66 케이스 | `bash common/hooks/hooks.test.sh` |
+| 통합 TC (`tests/tc/`) | 286 TC / 279 YAML — safe 66 / mutating 79 / device 141; approved 199 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 문서 | Markdown 210개 (`docs/` 89개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
 

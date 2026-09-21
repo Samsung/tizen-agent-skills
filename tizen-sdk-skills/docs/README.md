@@ -16,6 +16,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | [debug/scenario-native-debug-walkthrough.md](debug/scenario-native-debug-walkthrough.md) | **네이티브 앱 디버깅 E2E 시나리오** — 네이티브 앱 생성 → Debug 빌드 → 설치 → gdbserver/포트 포워딩 셋업 → 호스트 GDB 연결 + 검증 체크리스트 |
 | [debug/scenario-dotnet-debug-walkthrough.md](debug/scenario-dotnet-debug-walkthrough.md) | **.NET 앱 디버깅 E2E 시나리오** — 닷넷 앱 생성 → Debug 빌드 → 설치 → netcoredbg DAP 서버 셋업 → VS Code(F5) 연결 + 검증 체크리스트 |
 | [wsl/WSL_EMULATOR_GUIDE.md](wsl/WSL_EMULATOR_GUIDE.md) | **WSL 환경 에뮬레이터 가이드** — WSL2에서 Tizen 에뮬레이터 실행 시 설정, 프로필 선택(표준 vs TV), Buxton 권한 문제 해결, 성능 최적화 |
+| [rds/RDS_FAST_DEPLOY_PLAN.md](rds/RDS_FAST_DEPLOY_PLAN.md) | **RDS / Fast Deploy 통합 계획** — `install-app`이 변경 파일만 push하는 delta 배포의 설계, 상태 파일 형식, vendoring 결정, `deploy_type`/`TIZEN_RDS_ENABLED`/`--reset-rds`, Tizen 11 에뮬레이터 실기기 검증 결과 |
 | [envelope/](envelope/) | **Standard JSON Envelope** — 응답 표준화 계층: [사용 가이드](envelope/ENVELOPE_USAGE_GUIDE.md), [호출 흐름](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit 해설](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [구현 요약](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK 설치 흐름** — [전체 흐름](sdk-install/INSTALLATION_FLOW.md), [에이전트-installSdk 통합](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [설치 검증](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [사용자 지정 저장소 설치](sdk-install/CUSTOM_REPOSITORY_INSTALL.md), [.NET 개발 환경 설정 E2E](sdk-install/DOTNET_SETUP_E2E.md) |
 | [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 29개 스킬이 34개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
@@ -52,7 +53,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-file-transfer** | sdb push/pull 파일 전송 | 호스트 ↔ 디바이스 파일/디렉토리 복사 |
 | **tizen-remote-device** | 네트워크 원격 디바이스 검색/연결 (SDB 포트 26101 스캔) | Wi-Fi로 디바이스 연결, 원격 디바이스 북마크 관리 |
 | **tizen-screenshot** | 디바이스/에뮬레이터 화면 캡처 (자동 폴백) | 디바이스·에뮬레이터·TV 스크린샷을 PNG로 저장 |
-| **tizen-sdb-helper** | 요청에 맞는 sdb 명령 선택 및 실행 | 로그 캡처, 셸, 포트 포워딩, 재부팅 등 단일 sdb 작업 |
+| **tizen-sdb-helper** | 요청에 맞는 sdb 명령 선택 및 실행 | 셸, 포트 포워딩, 재부팅, 앱 실행/종료 등 단일 sdb 작업 (디바이스 로그 → tizen-dlog-analyzer) |
 | **tizen-certificate-manager** | Tizen 인증서 및 서명 프로필 관리 | 로컬 자체 서명 + Samsung online-CA 인증서 생성/프로필 관리 |
 | **tizen-gdb-debug** | 자동화된 GDB 원격 디버깅 | Native 앱 디버깅 |
 | **tizen-dotnet-debug** | .NET 원격 디버깅 | C# 앱 디버깅 (netcoredbg) |
@@ -150,7 +151,8 @@ Cline에서는 자연어로 요청하면 스킬이 자동으로 로드됩니다.
 | "이 파일 디바이스에 복사해줘" / "디바이스에서 파일 가져와줘" | `tizen-file-transfer` |
 | "네트워크에서 TV 찾아줘" / "원격 디바이스 연결해줘" | `tizen-remote-device` |
 | "에뮬레이터 스크린샷 찍어줘" / "타이젠 화면 캡처해줘" | `tizen-screenshot` |
-| "로그 잡아줘" / "디바이스 셸 열어줘" / "포트 포워딩해줘" | `tizen-sdb-helper` |
+| "디바이스 셸 열어줘" / "포트 포워딩해줘" / "디바이스 재부팅해줘" | `tizen-sdb-helper` |
+| "로그 보여줘" / "로그 저장해줘" / "로그 지워줘" / "앱이 죽었어" | `tizen-dlog-analyzer` |
 | "인증서 만들어줘" / "서명 프로필 만들어줘" | `tizen-certificate-manager` |
 | "GDB 디버깅 시작해줘" | `tizen-gdb-debug` |
 | ".NET 앱 디버깅해줘" | `tizen-dotnet-debug` |
@@ -511,7 +513,7 @@ sdb를 통해 호스트와 디바이스/에뮬레이터 간 파일·디렉토리
 
 ### 16. sdb Helper (`tizen-sdb-helper`)
 
-자연어 요청 하나에 맞는 **정확한 sdb 명령**을 선택하여 실행합니다 — 로그 캡처, 셸, 포트 포워딩, root 전환, 재부팅, 화면 상태 등.
+자연어 요청 하나에 맞는 **정확한 sdb 명령**을 선택하여 실행합니다 — 셸, 포트 포워딩, root 전환, 재부팅, 화면 상태 등. 디바이스 로그 요청(보기/저장/지우기)은 로그 전담인 `tizen-dlog-analyzer`(`log-dump`, `log-clear`, 모니터링)로 핸드오프합니다.
 
 #### 주요 기능
 

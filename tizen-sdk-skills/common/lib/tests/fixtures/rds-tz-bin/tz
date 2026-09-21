@@ -1,0 +1,42 @@
+#!/bin/sh
+# Fake `tz` binary for rds-launch.test.js.
+#
+# No real device or Tizen SDK is involved — this script stands in for the tz
+# binary so common/lib/core/rds/launch.js's runNoChain() can be exercised
+# through a real execFile spawn (argv array, no shell) without a Tizen
+# emulator. The scenario is selected by the `--serial=<value>` argument.
+
+args="$*"
+
+serial=""
+for arg in "$@"; do
+  case "$arg" in
+    --serial=*)
+      serial="${arg#--serial=}"
+      ;;
+  esac
+done
+
+case "$serial" in
+  launch-ok)
+    echo "Application launched successfully."
+    exit 0
+    ;;
+
+  launch-fail)
+    echo "error: application not installed on device" >&2
+    exit 1
+    ;;
+
+  # ── Scenarios for rds-deploy-service.test.js (step 17) — paired with the
+  # matching serials in fixtures/rds-sdb-bin/sdb ──
+  rds-fast-ok | rds-delta-ok | rds-delta-delete-ok)
+    echo "Application launched successfully."
+    exit 0
+    ;;
+
+  *)
+    echo "fake-tz: unhandled serial '$serial' (args: $args)" >&2
+    exit 1
+    ;;
+esac

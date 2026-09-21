@@ -1444,7 +1444,7 @@ if [ "$ACTION" = "modify" ]; then
   MODIFY_OUT=$("$EMCLI" "${MODIFY_ARGS[@]}" </dev/null 2>&1 || true)
   if emcli_failed "$MODIFY_OUT"; then
     log_error "Failed to modify VM '$VM_NAME': $(echo "$MODIFY_OUT" | head -3 | tr '\n' ' ')"
-    log_error "The VM may be running — stop it via Tizen Studio Emulator Manager, then retry."
+    log_error "If the em-cli reason above does not explain it, the VM may be running — stop it via Tizen Studio Emulator Manager, then retry."
     exit 1
   fi
   echo "$MODIFY_OUT" >&2
@@ -1468,7 +1468,7 @@ if [ "$ACTION" = "reset" ]; then
   RESET_OUT=$("$EMCLI" reset -n "$VM_NAME" </dev/null 2>&1 || true)
   if emcli_failed "$RESET_OUT"; then
     log_error "Failed to reset VM '$VM_NAME': $(echo "$RESET_OUT" | head -3 | tr '\n' ' ')"
-    log_error "The VM may be running — stop it via Tizen Studio Emulator Manager, then retry."
+    log_error "If the em-cli reason above does not explain it, the VM may be running — stop it via Tizen Studio Emulator Manager, then retry."
     exit 1
   fi
   echo "$RESET_OUT" >&2

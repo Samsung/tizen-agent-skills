@@ -3,7 +3,7 @@ id: tizen-sdk.launch-emulator.first-available
 plugin: tizen-sdk
 command: launch-emulator
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "launch-emulator with no --vm-name launches first available VM"
 

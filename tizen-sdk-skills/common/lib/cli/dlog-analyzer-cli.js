@@ -3,8 +3,9 @@
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
 /**
- * CLI runner for tizen-dlog-analyzer — manages background log monitoring
- * and app-specific log collection / error analysis.
+ * CLI runner for tizen-dlog-analyzer — manages background log monitoring,
+ * app-specific log collection / error analysis, and the one-shot device-log
+ * actions (dump / clear) that every "show me the logs" request ends up in.
  *
  * The tizen-dlog-analyzer binary's dlog-collect and start-monitoring
  * subcommands are long-running (non-terminating); exception-detect runs
@@ -22,6 +23,8 @@
  *   dlog-collect    — Start background log collection for a specific app (filtered by PID)
  *   stop-collect    — Stop the background app log collection process
  *   error-analyze   — Analyze collected app logs for E/F priority errors
+ *   log-dump        — One-shot dlog buffer dump (sdb dlog -d), tail in the envelope, full dump in a file
+ *   log-clear       — Clear the device dlog buffer (sdb dlog -c); requires --confirm
  *
  * Usage:
  *   node dlog-analyzer-cli.js start   <subcommand> [serial] [output_dir]
@@ -33,6 +36,8 @@
  *   node dlog-analyzer-cli.js dlog-collect <app-id> [serial]
  *   node dlog-analyzer-cli.js stop-collect
  *   node dlog-analyzer-cli.js error-analyze <app-id> [format]
+ *   node dlog-analyzer-cli.js log-dump [serial] [--filter "<spec> ..."] [--lines <n>] [--output <file>]
+ *   node dlog-analyzer-cli.js log-clear [serial] [--confirm]
  *
  * Examples:
  *   node .../dlog-analyzer-cli.js start start-monitoring emulator-26101
@@ -43,12 +48,17 @@
  *   node .../dlog-analyzer-cli.js dlog-collect org.example.myapp
  *   node .../dlog-analyzer-cli.js stop-collect
  *   node .../dlog-analyzer-cli.js error-analyze org.example.myapp summary
+ *   node .../dlog-analyzer-cli.js log-dump
+ *   node .../dlog-analyzer-cli.js log-dump emulator-26101 --filter "*:E" --lines 100
+ *   node .../dlog-analyzer-cli.js log-dump --output ./device.log --lines 0
+ *   node .../dlog-analyzer-cli.js log-clear                     # refused: user_input_required
+ *   node .../dlog-analyzer-cli.js log-clear emulator-26101 --confirm
  *
  * Exit code: success=0, failure/error=1
  */
 
 const { formatError } = require("../envelope/response-formatter");
-const { runCli } = require("./cli-runner");
+const { runCli, parseArgsOrExit } = require("./cli-runner");
 const {
   startDlogAnalyzer,
   stopDlogAnalyzer,
@@ -59,10 +69,36 @@ const {
   collectAppLogs,
   stopCollectAppLogs,
   analyzeErrors,
+  dumpDeviceLogs,
+  clearDeviceLogs,
 } = require("../core/sdk-commands");
 
+const COMMAND = "tizen-sdk dlog-analyzer";
+
+const USAGE =
+  "Usage: node dlog-analyzer-cli.js <action> [params...] " +
+  '[--filter "<spec> ..."] [--lines <n>] [--output <file>] [--confirm]';
+
+// Flags are only meaningful for log-dump / log-clear; every other action is
+// positional. `--background` was already removed from argv by cli-runner.
+const OPTION_FLAGS = {
+  "--filter": "filter",
+  "--lines": "lines",
+  "--output": "output",
+};
+const BOOLEAN_FLAGS = {
+  "--confirm": "confirm",
+};
+
 // --- Main entry point ---
-const [, , action, param1, param2, param3] = process.argv;
+const { options, positional } = parseArgsOrExit(
+  COMMAND,
+  USAGE,
+  process.argv.slice(2),
+  OPTION_FLAGS,
+  BOOLEAN_FLAGS,
+);
+const [action, param1, param2, param3] = positional;
 
 const VALID_ACTIONS = [
   "start",
@@ -74,6 +110,8 @@ const VALID_ACTIONS = [
   "dlog-collect",
   "stop-collect",
   "error-analyze",
+  "log-dump",
+  "log-clear",
 ];
 const VALID_SUBCOMMANDS = [
   "dlog-collect",
@@ -81,10 +119,10 @@ const VALID_SUBCOMMANDS = [
   "start-monitoring",
 ];
 
-runCli("tizen-sdk dlog-analyzer", async () => {
+runCli(COMMAND, async () => {
   if (!action || !VALID_ACTIONS.includes(action)) {
     return formatError(
-      "tizen-sdk dlog-analyzer",
+      COMMAND,
       "invalid_parameters",
       `Invalid action: '${action}'. Must be one of: ${VALID_ACTIONS.join(", ")}`,
       "node dlog-analyzer-cli.js start start-monitoring [serial] [output_dir]",
@@ -98,7 +136,7 @@ runCli("tizen-sdk dlog-analyzer", async () => {
       const outputDir = param3;
       if (!subcommand || !VALID_SUBCOMMANDS.includes(subcommand)) {
         return formatError(
-          "tizen-sdk dlog-analyzer",
+          COMMAND,
           "invalid_parameters",
           `Invalid subcommand: '${subcommand}'. Must be one of: ${VALID_SUBCOMMANDS.join(", ")}`,
           "node dlog-analyzer-cli.js start start-monitoring [serial] [output_dir]",
@@ -123,9 +161,19 @@ runCli("tizen-sdk dlog-analyzer", async () => {
     case "error-analyze":
       // error-analyze reads the locally collected log file — no serial needed
       return analyzeErrors(param1, param2);
+    case "log-dump":
+      // log-dump [serial] — filter / lines / output come from the flags
+      return dumpDeviceLogs(param1, {
+        filter: options.filter,
+        lines: options.lines,
+        output: options.output,
+      });
+    case "log-clear":
+      // log-clear [serial] [--confirm] — refused without --confirm
+      return clearDeviceLogs(param1, options.confirm === true);
     default:
       return formatError(
-        "tizen-sdk dlog-analyzer",
+        COMMAND,
         "invalid_parameters",
         `Unknown action: ${action}`,
       );

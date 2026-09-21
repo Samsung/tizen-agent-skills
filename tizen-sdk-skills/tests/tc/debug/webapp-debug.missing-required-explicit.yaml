@@ -3,7 +3,7 @@ id: tizen-sdk.webapp-debug.missing-required-explicit
 plugin: tizen-sdk
 command: webapp-debug
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "webapp-debug without --app-id returns failure with invalid_argument"
 

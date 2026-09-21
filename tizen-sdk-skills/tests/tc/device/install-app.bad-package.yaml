@@ -3,7 +3,7 @@ id: tizen-sdk.install-app.bad-package
 plugin: tizen-sdk
 command: install-app
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "install-app with non-existent package path returns failure"
 

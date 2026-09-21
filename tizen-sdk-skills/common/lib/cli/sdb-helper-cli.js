@@ -9,13 +9,14 @@
  *   node <plugin>/lib/cli/sdb-helper-cli.js --request "<request>" [--serial <serial>]
  *
  * Examples (directly executed):
- *   node .../sdb-helper-cli.js --request "tail the logs"
+ *   node .../sdb-helper-cli.js --request "run shell command ls -la"
  *   node .../sdb-helper-cli.js --request "open a shell" --serial emulator-26101
  *   node .../sdb-helper-cli.js --request="reboot the device" --serial=emulator-26101
  *
  * Note: Some requests (list-devices, connect/disconnect, install/uninstall,
- * screenshot) are handled by dedicated skills and will return a handoff
- * directive instead of executing locally.
+ * screenshot, and every device-log request — tail/show/save/clear logs) are
+ * handled by dedicated skills (tizen-dlog-analyzer for logs) and will return
+ * a handoff directive instead of executing locally.
  *
  * Options:
  *   --request <text>   Natural-language sdb request (required)
@@ -31,7 +32,7 @@ const COMMAND = "tizen-sdk sdb-helper";
 
 const USAGE =
   "Usage: node sdb-helper-cli.js --request <text> [--serial <serial>]. " +
-  'Examples: --request "tail the logs" or --request="open a shell" --serial=emulator-26101';
+  'Examples: --request "run shell command ls -la" or --request="open a shell" --serial=emulator-26101';
 
 const OPTION_FLAGS = {
   "--request": "request",

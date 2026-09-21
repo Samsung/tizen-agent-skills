@@ -3,7 +3,7 @@ id: tizen-sdk.meta.capabilities
 plugin: tizen-sdk
 command: "--capabilities"
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "--capabilities returns plugin capabilities listing"
 

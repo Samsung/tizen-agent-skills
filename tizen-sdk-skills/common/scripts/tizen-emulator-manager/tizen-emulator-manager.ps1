@@ -365,6 +365,18 @@ function Test-EmCliFailed {
     return [bool](@($Output | Where-Object { $_ -is [string] -and $_ -match '^Error:' }).Count)
 }
 
+# em-cli puts the headline on the "Error:" line and the actual reason on the
+# line(s) after it ("Error: Failed to modify VM." / "Value of new property is
+# the same value of saved property." — or "2048 dose not match any RAM size. /
+# Available ram size are 512, 768, 1024."). Reporting only the headline hid the
+# reason and sent callers chasing a "VM may be running" hint that did not apply.
+# Return the first few non-empty lines joined, the way the .sh twin does (head -3).
+function Get-EmCliReason {
+    param([object]$Output, [int]$Lines = 3)
+    $text = @($Output | Where-Object { $_ -is [string] -and $_.Trim() -ne '' } | Select-Object -First $Lines)
+    return ($text -join ' | ')
+}
+
 function ConvertTo-VmNames {
     param($Raw)
     $lines = $Raw | Where-Object {
@@ -767,8 +779,8 @@ if ($Action -eq "modify") {
     Write-Info "Modifying VM '$VmName'..."
     $modifyOut = Invoke-EmCli $modifyArgs 2>&1
     if (Test-EmCliFailed $modifyOut) {
-        Write-Err "Failed to modify VM '$VmName': $(@($modifyOut | Where-Object { $_ -match '^Error:' } | Select-Object -First 1))"
-        Write-Err "The VM may be running - stop it via Tizen Studio Emulator Manager, then retry."
+        Write-Err "Failed to modify VM '$VmName': $(Get-EmCliReason $modifyOut)"
+        Write-Err "If the em-cli reason above does not explain it, the VM may be running - stop it via Tizen Studio Emulator Manager, then retry."
         exit 1
     }
     Write-Success "VM '$VmName' modified."
@@ -790,8 +802,8 @@ if ($Action -eq "reset") {
     Write-Warn "Resetting VM '$VmName' - its disk image will be formatted and all installed apps deleted."
     $resetOut = Invoke-EmCli "reset", "-n", $VmName 2>&1
     if (Test-EmCliFailed $resetOut) {
-        Write-Err "Failed to reset VM '$VmName': $(@($resetOut | Where-Object { $_ -match '^Error:' } | Select-Object -First 1))"
-        Write-Err "The VM may be running - stop it via Tizen Studio Emulator Manager, then retry."
+        Write-Err "Failed to reset VM '$VmName': $(Get-EmCliReason $resetOut)"
+        Write-Err "If the em-cli reason above does not explain it, the VM may be running - stop it via Tizen Studio Emulator Manager, then retry."
         exit 1
     }
     Write-Success "VM '$VmName' reset."
@@ -813,7 +825,7 @@ if ($Action -eq "create-image") {
     Write-Info "Creating a platform image from VM '$VmName'..."
     $imageOut = Invoke-EmCli $imageArgs 2>&1
     if (Test-EmCliFailed $imageOut) {
-        Write-Err "Failed to create an image from VM '$VmName': $(@($imageOut | Where-Object { $_ -match '^Error:' } | Select-Object -First 1))"
+        Write-Err "Failed to create an image from VM '$VmName': $(Get-EmCliReason $imageOut)"
         Write-Err "em-cli requires the output directory to already exist - create it first."
         exit 1
     }

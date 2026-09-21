@@ -3,9 +3,9 @@ id: tizen-sdk.screenshot.happy
 plugin: tizen-sdk
 command: screenshot
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "screenshot returns success with screenshot_path"
+description: "screenshot returns success with output_path"
 
 lanes:
   cli:
@@ -14,4 +14,8 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.screenshot_path", min_length: 1 }
+        # Result key is `output_path` (+ image.path) per tizen-screenshot SKILL.md,
+        # not `screenshot_path` — fixed 2026-09-17 after a real run. Writes
+        # ./emulator_screenshot.png into the cwd: run from a scratch directory.
+        - { path: "$.result.output_path", min_length: 1 }
+        - { path: "$.result.device_serial", min_length: 1 }

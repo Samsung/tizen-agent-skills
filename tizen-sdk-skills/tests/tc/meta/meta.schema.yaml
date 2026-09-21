@@ -3,7 +3,7 @@ id: tizen-sdk.meta.schema
 plugin: tizen-sdk
 command: "--schema"
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "--schema returns plugin, version, and commands object"
 

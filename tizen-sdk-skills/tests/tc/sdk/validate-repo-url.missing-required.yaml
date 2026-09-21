@@ -3,7 +3,7 @@ id: tizen-sdk.validate-repo-url.missing-required
 plugin: tizen-sdk
 command: validate-repo-url
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "validate-repo-url fails with invalid_argument when --repo-url is missing"
 

@@ -1,9 +1,9 @@
 ---
 name: tizen-sdb-helper
-description: Tizen sdb helper, sdb command, sdb helper, sdb shell, run shell command on the device, run a command on the device, 쉘 명령 실행, 디바이스에서 명령 실행, tail the logs, show logs, dlog, 로그 보기, open a shell, shell command, whoami, forward port, port forward, port forwarding, 포트 포워딩, forward port 8080, reboot device, reboot the device, 디바이스 재부팅, 재부팅, shutdown device, 디바이스 종료, factory reset, root on, sendkey, kill app, 앱 종료, launch app, 앱 실행, list running apps, list installed packages, package info, device capability, clear logs, dlog clear, disk space check, df /opt, clean-crash-dumps, crash dump cleanup, install-and-launch, reinstall-and-launch, kill-and-relaunch. Runs ONE sdb action on a connected Tizen device through the shipped CLI runner (sdb-helper-cli.js) — shell command, port forward, reboot/shutdown, logs, launch/kill, root toggle, sendkey, disk triage — with device auto-selection, command preview, and confirmation gates on destructive actions. For ANY request that would be answered with an sdb command, ROUTE HERE FIRST and run the runner — do NOT locate the sdb binary, parse `sdb devices`, or type `sdb ...` yourself; the runner does all of that and returns a JSON Envelope. Connect to an IP → tizen-remote-device; install/uninstall → tizen-install-app; push/pull → tizen-file-transfer; screenshot → tizen-screenshot; list devices → tizen-device-manager.
+description: Tizen sdb helper, sdb command, sdb helper, sdb shell, run shell command on the device, run a command on the device, 쉘 명령 실행, 디바이스에서 명령 실행, open a shell, shell command, whoami, forward port, port forward, port forwarding, 포트 포워딩, forward port 8080, reboot device, reboot the device, 디바이스 재부팅, 재부팅, shutdown device, 디바이스 종료, factory reset, root on, sendkey, kill app, 앱 종료, launch app, 앱 실행, list running apps, list installed packages, package info, device capability, disk space check, df /opt, clean-crash-dumps, crash dump cleanup, install-and-launch, reinstall-and-launch, kill-and-relaunch. Runs ONE sdb action on a connected Tizen device through the shipped CLI runner (sdb-helper-cli.js) — shell command, port forward, reboot/shutdown, launch/kill, root toggle, sendkey, disk triage — with device auto-selection, command preview, and confirmation gates on destructive actions. For ANY request that would be answered with an sdb command, ROUTE HERE FIRST and run the runner — do NOT locate the sdb binary, parse `sdb devices`, or type `sdb ...` yourself; the runner does all of that and returns a JSON Envelope. Connect to an IP → tizen-remote-device; install/uninstall → tizen-install-app; push/pull → tizen-file-transfer; screenshot → tizen-screenshot; list devices → tizen-device-manager; device/emulator logs of ANY kind (tail/show/save/clear logs, dlog, 로그 보기, 로그 지우기) → tizen-dlog-analyzer — this skill never runs `sdb dlog`.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
     - sdb
     - sdb command
@@ -11,8 +11,6 @@ metadata:
     - shell command
     - port forward
     - reboot device
-    - tail logs
-    - dlog
     - sdb root
     - 쉘 명령
     - 포트 포워딩
@@ -36,7 +34,7 @@ confirmed**, copied verbatim from `result.command` (see "Gated commands" below).
 
 ## Scope
 
-In scope: one sdb action per request — run a shell command, tail/save/clear logs, whoami,
+In scope: one sdb action per request — run a shell command, whoami,
 forward/list/remove a port, launch/kill an app, list running apps or installed packages,
 package info, device capability, root on, reboot/shutdown/factory reset, sendkey, disk triage
 (`df -h /opt`).
@@ -51,7 +49,11 @@ Out of scope (the runner returns a **handoff** envelope; relay it and use that s
 | Push / pull files | `tizen-file-transfer` |
 | Screenshot | `tizen-screenshot` |
 | Debugger port forwarding (gdb / netcoredbg) | `tizen-gdb-debug`, `tizen-dotnet-debug` |
-| Crash / error analysis | `tizen-dlog-analyzer` |
+| **Device logs — tail / show / save / clear (`dlog`, 로그)** — and crash / error analysis | `tizen-dlog-analyzer` (`log-dump`, `log-clear`, `start start-monitoring`, …) |
+
+The handoff envelope for a log intent carries a `result.note` naming the dlog-analyzer action to
+run (`log-dump` for a one-shot view/save, `log-clear --confirm` for clearing, `start …` for
+continuous monitoring). Relay it; never fall back to `sdb dlog`.
 
 ### Claude Code (서브에이전트 위임)
 
@@ -94,7 +96,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdb-hel
 node "$CLI" --request "run shell command ls -la"
 node "$CLI" --request "forward port 8080"
 node "$CLI" --request "reboot the device"
-node "$CLI" --request "tail the logs"
+node "$CLI" --request "list running apps"
 node "$CLI" --request "launch app org.example.myapp" --serial emulator-26101
 ```
 
@@ -128,13 +130,10 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 | --- | --- | --- | --- |
 | Run a shell command (`run shell command ls -la`, `shell df -h /opt`) | `shell-command` | `sdb -s <S> shell "<cmd>"` | no — destructive text (`rm `, `dd `, `mkfs`, `reboot`, …) is previewed; confirm before re-running |
 | Shell user / whoami / "open a shell" | `whoami` / `shell-interactive` | `sdb -s <S> shell whoami` (agents have no TTY — a bare `sdb shell` would hang) | no |
-| Tail / show logs | `log-stream` | `sdb -s <S> dlog -d -v threadtime` (buffer dump) | no |
-| Save / export logs | `log-save` | dlog dump redirected to a host file | no |
-| Clear / flush logs | `log-clear` | `sdb -s <S> dlog -c` | **yes** |
 | Forward port (`forward port 8080`) | `forward-add` | `sdb -s <S> forward tcp:<host> tcp:<device>` | no |
 | List forwards | `forward-list` | `sdb -s <S> forward --list` | no |
 | Remove forward | `forward-remove` | `sdb -s <S> forward --remove tcp:<host>` | **yes** |
-| Launch app | `launch` | `sdb -s <S> shell app_launcher -s <appid>` (legacy TV fallback `0 was_execute`) | no |
+| Launch app | `launch` | `sdb -s <S> shell app_launcher -s <appid>`; when that prints no `successfully launched` (Samsung TV images are silent for a non-root shell) the runner retries with the TV launcher `sdb -s <S> shell 0 was_execute <appid>` and accepts `app_id[<appid>] launched` / `resumed` | no |
 | Kill / stop app | `kill` | `sdb -s <S> shell app_launcher -k <appid>` | **yes** |
 | List running apps | `list-running` | `sdb -s <S> shell app_launcher -S` | no |
 | List installed packages | `list-packages` | `sdb -s <S> shell pkgcmd -l` | no |
@@ -149,6 +148,7 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 | Install / uninstall | → handoff | — | use `tizen-install-app` |
 | List devices | → handoff | — | use `tizen-device-manager` |
 | Screenshot | → handoff | — | use `tizen-screenshot` |
+| Logs — tail / show / save / clear (`dlog`) | `log-stream` / `log-save` / `log-clear` → handoff | — | use `tizen-dlog-analyzer` (`result.note` names the action: `log-dump`, `log-clear --confirm`, `start …`) |
 
 **Debug port forwarding** (a debugger is involved — gdb, netcoredbg) is NOT this skill: `tizen-gdb-debug` / `tizen-dotnet-debug` forward their own ports.
 
@@ -188,6 +188,7 @@ Handoff:
 | `error_category` | Meaning | Action |
 | --- | --- | --- |
 | `invalid_parameters` "Could not match request to any sdb intent" | Not an sdb intent | Ask the user to rephrase; list the intents above. Do not improvise an sdb command. |
+| `result.handoff: tizen-dlog-analyzer` on a request that was not about logs (the log catch-all also matches the words `log`/`tail` in e.g. "forward port 8080 for the log server") | Mis-classified | Re-run with an explicit intent word first ("forward port 8080"), do not follow the handoff. |
 | `invalid_parameters` "Could not find …" (app id / port / key / command) | Missing value | Ask the user for it, re-run the runner with it in `--request`. |
 | `device_not_found` | No device | `tizen-device-manager` (or `tizen-create-emulator` + `tizen-launch-emulator`), then retry once. |
 | `multiple_devices` | 2+ devices | Ask which serial, re-run with `--serial`. |
@@ -221,6 +222,7 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - Do NOT run `sdb devices` and parse it — the runner selects the device; for a device list use `tizen-device-manager`.
 - Do NOT type `sdb -s <serial> shell …`, `sdb forward …`, `sdb shell reboot` from memory. Run the runner; only a **confirmed gated** `result.command` may be executed verbatim.
 - Do NOT run `sdb connect <ip>` — hand off to `tizen-remote-device`.
+- Do NOT run `sdb dlog …` (dump, save, or `-c`) — every device-log request belongs to `tizen-dlog-analyzer`; relay the handoff envelope and its `result.note`.
 - Do NOT chain intents the user did not ask for ("usually go together"). One request, one intent; a named recipe (`install-and-launch`, `reinstall-and-launch`, `kill-and-relaunch`, `clean-crash-dumps`) is run one intent at a time through the runner, confirming each gated step.
 - Do NOT run bare `sdb shell` (no command) — no TTY, hangs forever.
 - Do NOT run `sdb kill-server` to "reset" the connection.
@@ -231,4 +233,4 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 
 - **Single-task** (e.g. "reboot the device") → DONE after the envelope. Suggest next steps; do not auto-proceed.
 - **Multi-step** (e.g. "reinstall and launch the app") → continue one intent at a time, confirming each gated step.
-- Connect over network → `tizen-remote-device` · Install/uninstall → `tizen-install-app` · Push/pull → `tizen-file-transfer` · Screenshot → `tizen-screenshot` · Device list / emulator → `tizen-device-manager` · Debugger forwarding → `tizen-gdb-debug` / `tizen-dotnet-debug` · Crash analysis → `tizen-dlog-analyzer` · SDK not installed → `tizen-sdk-install` · SDK path → `tizen-sdk-init`
+- Connect over network → `tizen-remote-device` · Install/uninstall → `tizen-install-app` · Push/pull → `tizen-file-transfer` · Screenshot → `tizen-screenshot` · Device list / emulator → `tizen-device-manager` · Debugger forwarding → `tizen-gdb-debug` / `tizen-dotnet-debug` · Logs (view/save/clear) & crash analysis → `tizen-dlog-analyzer` · SDK not installed → `tizen-sdk-install` · SDK path → `tizen-sdk-init`

@@ -3,9 +3,9 @@ id: tizen-sdk.sdb-helper.serial
 plugin: tizen-sdk
 command: sdb-helper
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "sdb-helper --request 'tail the logs' --serial returns success with command"
+description: "sdb-helper --request 'tail the logs' --serial returns a handoff to tizen-dlog-analyzer (logs are never run by sdb-helper)"
 
 lanes:
   cli:
@@ -14,4 +14,6 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.command", min_length: 1 }
+        - { path: "$.result.handoff", equals: "tizen-dlog-analyzer" }
+        - { path: "$.result.suggested_skill", equals: "tizen-dlog-analyzer" }
+        - { path: "$.result.note", min_length: 1 }

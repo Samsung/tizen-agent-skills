@@ -219,7 +219,7 @@ fi
 # sdb-helper-cli.js and sdbd out of the match.
 if has_i '(^|[^[:alnum:]_./-])(which|whereis|where(\.exe)?|type|command[[:space:]]+-v|Get-Command)[[:space:]]+(-[[:alnum:]]+[[:space:]]+)*["'"'"'\\]*sdb(\.exe)?["'"'"'\\]*([[:space:]]|$|;|&|\|)' \
    || has_i 'find[[:space:]].*-i?name[[:space:]]+["'"'"'\\]*sdb(\.exe)?["'"'"'\\]*([[:space:]]|$|;|&|\|)'; then
-  deny "Do not search for the sdb binary yourself. Every sdb action goes through a skill runner that locates sdb (<sdk>/tools/sdb) on its own: device shell/forward/reboot/logs/launch/kill -> tizen-sdb-helper (node <plugin>/lib/cli/sdb-helper-cli.js --request '<the user ask>'); connect to an IP -> tizen-remote-device (remote-device-cli.js connect <ip>); list devices -> tizen-device-manager; push/pull -> tizen-file-transfer. Run the runner and report its JSON envelope."
+  deny "Do not search for the sdb binary yourself. Every sdb action goes through a skill runner that locates sdb (<sdk>/tools/sdb) on its own: device shell/forward/reboot/launch/kill -> tizen-sdb-helper (node <plugin>/lib/cli/sdb-helper-cli.js --request '<the user ask>'); device logs (view/save/clear, dlog) -> tizen-dlog-analyzer (node <plugin>/lib/cli/dlog-analyzer-cli.js log-dump | log-clear --confirm | start start-monitoring); connect to an IP -> tizen-remote-device (remote-device-cli.js connect <ip>); list devices -> tizen-device-manager; push/pull -> tizen-file-transfer. Run the runner and report its JSON envelope."
 fi
 
 # Rule 10 — powershell -File given an MSYS path (/c/...). PowerShell needs a Windows

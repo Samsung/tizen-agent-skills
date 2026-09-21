@@ -4,7 +4,7 @@ description: Tizen install app, 타이젠 앱 설치, tpk 설치, wgt 설치, rp
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
     - Tizen install app
     - tpk install
@@ -44,7 +44,31 @@ tizen-cli tizen-sdk install-app --package <path> --run
 | `--package <path>` | **yes**  | —       | Absolute path to the `.tpk`/`.wgt`/`.rpk`/`.rpm` |
 
 | `--serial <serial>` | no | auto | Target device serial (omit to auto-select the single connected device) |
-| `--run` | no | off | Launch the app after installation. Valid for `.tpk`/`.wgt`/`.rpm`; **invalid for `.rpk`.** **Omit entirely for install-only** — do NOT pass `--run false` or `--run no`. |
+| `--run` | no | off | Launch the app after installation. Valid for `.tpk`/`.wgt`/`.rpm`; **invalid for `.rpk`.** **Omit entirely for install-only** — do NOT pass `--run false` or `--run no`. The app id is read from the package manifest (`.wgt` `config.xml`, `.tpk` `tizen-manifest.xml`); on Samsung TV images, where `app_launcher` prints nothing for a non-root shell, the launch is retried with the TV launcher `0 was_execute <app-id>` (accepted on `launched` / `resumed`) — `app_launched: true` with `app_running: null` is the normal TV outcome. |
+| `--reset-rds` | no | off | Clear host-side `.tizen-rds/` state for the package's project and return without installing. Cannot be combined with `--run`. |
+
+## RDS fast-deploy recovery
+
+RDS is enabled by default. Set `TIZEN_RDS_ENABLED=0` for one command to skip
+RDS manifest scanning and delta deployment while keeping the normal full
+installation behavior:
+
+```bash
+TIZEN_RDS_ENABLED=0 tizen-cli tizen-sdk install-app --package <path>
+```
+
+To recover from stale or corrupt host-side RDS state, reset it without touching
+the device or installing the package:
+
+```bash
+tizen-cli tizen-sdk install-app --package <path> --reset-rds
+```
+
+The package path is used to locate its Tizen project; the package file may be
+missing, but the path must end in `.tpk`, `.wgt`, `.rpk`, or `.rpm`. The command
+removes the whole host-side `.tizen-rds/` directory and returns
+`result.rds_state: "reset"` (or an `io_error` if it could not be removed). Run the install command again afterward; it will
+perform a full install and recreate the baseline.
 
 ## RPK packages
 
@@ -57,6 +81,16 @@ If installation reports `Invalid certificate chain` or a device package-manager 
 was **not installed**. Do not enable root, copy CA/signer files into the emulator, or use `pkgcmd`
 as a fallback. Hand off to `certificate-manager` to repair or select the signing profile, rebuild,
 and retry this command once.
+
+## `deploy_type` in the envelope
+
+`result.deploy_type` is `"full"` (regular `tz install`), `"rds"` (only the changed
+Debug build-output files were pushed into the installed app and it was relaunched —
+requires a previous full install of the same project's Debug output on that device), or
+`"fast-deploy"` (nothing changed, relaunch only). `.rpk`/`.rpm`, packages outside the
+project's `Debug/` tree, and changes to `tizen-manifest.xml`/`config.xml` always take the
+full path; `TIZEN_RDS_ENABLED=0` forces `"full"`. On the `rds`/`fast-deploy` path
+`app_running` is `null`.
 
 ## RPM (Platform) packages
 

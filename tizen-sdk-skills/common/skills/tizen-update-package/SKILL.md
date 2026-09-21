@@ -109,7 +109,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/update-
 node "$CLI"
 ```
 
-Optional: `node "$CLI" --dry-run` (list outdated packages without updating), `node "$CLI" --force` (force update all installed packages regardless of version)
+Optional: `node "$CLI" --dry-run` (list outdated packages without updating), `node "$CLI" --force` (force update all installed packages regardless of version), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
 Exit code: `0` = success envelope — a Phase 2 run finished within the last 30 minutes and `.package-update-result` records `failed 0` (all packages up-to-date or updated). `1` = failure envelope — either SDK not installed, or no fresh matching marker (launcher envelope with `suggested_fix` → proceed to Phase 2), or a fresh marker that records failures (report it; do not relaunch blindly).
 

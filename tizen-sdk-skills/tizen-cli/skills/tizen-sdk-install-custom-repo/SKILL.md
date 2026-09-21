@@ -68,6 +68,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
 | `--repo-url <url>`             | **yes**  | —                   | Repository base URL serving `pkg_list_{OS}-{64,32}`                          |
 | `--platform-version <version>` | no       | highest in pkg_list | Tizen platform version (e.g. `10.0`, `11.0`)                                 |
 | `--force`                      | no       | off                 | Reinstall even if installed — **required to switch an existing install's repo** |
+| `--download-jobs <count>`      | no       | `4`                 | Number of concurrent download jobs (1-8) |
 
 `sdk-install --repo-url <url>` is accepted as an equivalent shorthand and delegates here.
 

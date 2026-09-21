@@ -13,6 +13,11 @@
  *   node .../sdk-install-cli.js 10.0 tizen --force
  *   node .../sdk-install-cli.js --repo-url http://my-mirror/tizenstudio
  *
+ * [version] is the Tizen platform version (X.Y, e.g. 10.0). Omit it to install
+ * the newest version the repository offers. A malformed version fails with
+ * invalid_argument; a valid one that is not installed / not offered fails
+ * instead of being reported as "already installed".
+ *
  * --repo-url installs from a custom package repository instead of the
  * timezone-selected CDN mirror; installSdk() then delegates to
  * installSdkFromRepo(), which validates that the URL serves
@@ -26,20 +31,27 @@
  */
 
 const { installSdk } = require("../core/sdk-commands");
-const { runCli, getFlagValue } = require("./cli-runner");
+const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
 
+const COMMAND = "tizen-sdk sdk-install";
 const args = process.argv.slice(2);
 const force = args.includes("--force") || args.includes("-Force");
 
 // --repo-url <url> or --repo-url=<url>
 const repoUrl = getFlagValue(args, "--repo-url");
+// Validated here (envelope on error); the raw value is kept only to drop it
+// from the positionals below.
+const downloadJobs = getDownloadJobsOrExit(COMMAND, args);
+const jobsValue = getFlagValue(args, "--download-jobs");
 
-// Drop the --repo-url VALUE from the positionals, otherwise it would be read as
-// the version argument.
-const positional = args.filter((a) => !a.startsWith("-") && a !== repoUrl);
-const version = positional[0] || "10.0";
+// Drop flag VALUES from the positionals, otherwise they would be read as the
+// version argument.
+const positional = args.filter(
+  (a) => !a.startsWith("-") && a !== repoUrl && a !== jobsValue,
+);
+const version = positional[0] || "";
 const label = positional[1] || "tizen";
 
-runCli("tizen-sdk sdk-install", () =>
-  installSdk(version, label, force, repoUrl, "tizen-sdk sdk-install"),
+runCli(COMMAND, () =>
+  installSdk(version, label, force, repoUrl, COMMAND, downloadJobs),
 );

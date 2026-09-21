@@ -9,6 +9,8 @@ description: "webapp-debug --app-id --port 9223 returns success with cdp_endpoin
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the web app abcDEF1234.MyWebApp installed on the device.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "webapp-debug", "--app-id", "abcDEF1234.MyWebApp", "--port", "9223"]
     timeout_sec: 120
     expect:

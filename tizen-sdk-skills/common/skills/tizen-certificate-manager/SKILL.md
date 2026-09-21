@@ -3,8 +3,10 @@ name: tizen-certificate-manager
 description: Manage Tizen certificates (local self-signed and Samsung online-CA) and signing profiles, including generation, Samsung Account login, distributor selection, profile lifecycle, import, and inspection.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-08-04"
+  last-updated: "2026-09-18"
   keywords:
+    - Samsung TV emulator
+    - TV 에뮬레이터 인증서
     - Tizen certificate
     - author certificate
     - tz cert
@@ -39,7 +41,7 @@ Never ask a user to type, select, paste, or confirm a certificate password in Cl
 
 **Claude Code:** its Bash tool and sub-agents have no interactive TTY. After collecting all non-secret inputs, offer exactly these two choices before running a password-protected action:
 
-1. **Run a command personally.** Give the user one complete copy-paste-ready command with the actual resolved CLI path and every known non-secret value already filled in. Use the matching `--prompt-...` flag. Do **not** give the user `<name>`, `<path>`, `<file>`, or any other placeholder to fill in. Tell them to prefix that exact command with `!` in Claude Code, or run it in another terminal; they press Enter, type the hidden password, and the command completes.
+1. **Run a command personally.** Give the user one complete copy-paste-ready command with the actual resolved CLI path and every known non-secret value already filled in. Use the matching `--prompt-...` flag. Do **not** give the user `<name>`, `<path>`, `<file>`, or any other placeholder to fill in. Tell them to prefix that exact command with `!` in Claude Code, or run it in another terminal; they press Enter, type the hidden password, and the command completes. **Windows path rule:** on Windows the Bash locate block returns an MSYS path (`/c/Users/...`) that only Git Bash understands; pasted into cmd.exe or PowerShell, Node resolves it as `C:\c\Users\...` and fails with `MODULE_NOT_FOUND`. Before placing the path in the user-facing command, convert it with `cygpath -w "$CLI"` and hand over the result in double quotes, i.e. `node "C:\Users\...\cert-manager-cli.js" ...`; that form works in cmd.exe, PowerShell, and Git Bash (`!` mode) alike. Never hand over the `/c/Users/...` form.
 2. **Use a protected environment file.** Ask: **“Would you like me to create an empty protected password-file template? If yes, what absolute file location do you prefer?”** If the user agrees, create and lock down the file at that exact location with the required variable name followed by `=` and **no password**. Tell the user to open it locally, enter the password after `=`, save it, and reply only that it is ready. **Once the user says it is ready, do not read, open, inspect, edit, overwrite, or otherwise modify that file for any reason.** The agent must never read, print, or ask for the file contents. It may receive and use only the file path with the matching `--...-password-file` option.
 
 For a normal certificate password, the agent-created template is `TIZEN_CERTIFICATE_PASSWORD=` and the final file format is `TIZEN_CERTIFICATE_PASSWORD=<password>`. On Linux/macOS, create it with `umask 077` and apply `chmod 600 <file>`; on Windows, restrict the file ACL to the current user. The matching formats are:
@@ -61,7 +63,36 @@ Hidden-terminal flags:
 - `--prompt-distributor-password` for a distributor certificate
 - `--prompt-distributor2-password` for distributor key 2
 
-For a local author certificate, ask for the author name only. In Cline, run `generate-author --name <name> --prompt-password`. In Claude Code, offer the two choices above. For option 1, supply the resolved CLI path and actual author name in the command (for example, `! node "/home/alex/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/1.0.0/lib/cli/cert-manager-cli.js" generate-author --name "Eden" --prompt-password`), never placeholders. For option 2, offer to create the empty template, ask for the preferred absolute location, then run `generate-author --name <name> --password-file <path>` only after the user says the locally completed file is ready. The terminal input and password-file contents must never be written to chat, command arguments, or an agent response.
+For a local author certificate, ask for the author name only. In Cline, run `generate-author --name <name> --prompt-password`. In Claude Code, offer the two choices above. For option 1, supply the resolved CLI path and actual author name in the command (for example, on Linux/macOS `! node "/home/alex/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/1.0.0/lib/cli/cert-manager-cli.js" generate-author --name "Eden" --prompt-password`; on Windows, where `cygpath -w` turns `/c/Users/alex/.claude/.../cert-manager-cli.js` into `C:\Users\alex\.claude\...\cert-manager-cli.js`, `! node "C:\Users\alex\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\1.0.0\lib\cli\cert-manager-cli.js" generate-author --name "Eden" --prompt-password` — the same command without the `!` prefix runs in cmd.exe or PowerShell), never placeholders. For option 2, offer to create the empty template, ask for the preferred absolute location, then run `generate-author --name <name> --password-file <path>` only after the user says the locally completed file is ready. The terminal input and password-file contents must never be written to chat, command arguments, or an agent response.
+
+## Samsung certificates — TV targets only (mandatory)
+
+A Samsung online-CA certificate (`generate-samsung-author`, `generate-samsung-distributor`,
+`import-samsung-certificate`) and the signing profile built from it (`create-samsung-profile`) are
+valid **only for Samsung TV targets**: the **TV emulator** (created with
+`tizen-create-emulator --profile tv`, which needs the TV SDK from `tizen-tv-sdk-install`) and a real
+Samsung TV whose DUID is in the distributor certificate. A standard Tizen emulator
+(`--profile tizen` — mobile / wearable / IoT platform images) accepts only the SDK-bundled
+distributor certificate; a package signed with a Samsung profile is rejected there with a
+certificate error.
+
+1. **Check the target before any Samsung action.** Run the Samsung flow only when the target is
+   the TV emulator or a Samsung TV. If the target is a standard Tizen emulator, do not run
+   `generate-samsung-*` / `create-samsung-profile`: say in one sentence that Samsung certificates
+   are for the TV emulator and Samsung TVs, then use `generate-author` → `create-profile`. If the
+   user asked for a Samsung certificate but named no target, ask which target they are signing for
+   (TV emulator / Samsung TV, or a standard emulator) before choosing — do not silently substitute
+   the local flow. This is the only case in which a Samsung request ends in `generate-author`.
+2. **DUIDs come from the TV target.** Run `acquire-duid` / `acquire-duids-all` against the TV
+   emulator or TV (`--serial <tv-emulator-serial>`). A DUID taken from a standard emulator yields a
+   distributor certificate that cannot be used anywhere.
+3. **No TV emulator yet?** Hand off: `tizen-tv-sdk-install` → `tizen-create-emulator --profile tv`
+   → `tizen-launch-emulator`, then return to the Samsung flow.
+4. **Build and install follow the same split.** A build signed with a Samsung profile
+   (`--sign-profile <samsung-profile>`) is installed only on the TV emulator or a registered TV. A
+   certificate error when installing it on a standard emulator is the rule working, not a bug: do
+   not retry with `sdb root on` and do not import the certificate by hand — rebuild with a local
+   profile for that emulator, or switch to the TV emulator.
 
 ### CLI Runner (Cline / Claude Code)
 
@@ -118,8 +149,10 @@ browser login works under Codex** — as a detached, escalated job (issue #76):
    same way; a valid cached token is reused without another login.
 
 `--prompt-*` flags read the terminal and are refused together with `--background` — use
-`--password-file` / `--*-password-file`. Never fall back to a local certificate, and do not
-send the user to Tizen Studio or another harness: the flow above is the supported path.
+`--password-file` / `--*-password-file`. Never fall back to a local certificate because of the
+sandbox or the browser wait (the only reason to use a local profile instead is a standard-emulator
+target — see "Samsung certificates — TV targets only"), and do not send the user to Tizen Studio
+or another harness: the flow above is the supported path.
 
 **Codex sandbox (guard rule 12).** Run this runner — and its `--background` form — **with escalated
 permissions**: it writes `profiles.xml` and keystore `.pwd` files under `<sdk>-data`, and the Samsung CA / OAuth callback need TCP sockets (the browser login is `samsung-login --background`, escalated), and Codex's default `workspace-write` sandbox blocks TCP sockets, writes
@@ -264,9 +297,12 @@ by Samsung's online CA, requires a Samsung Account, and lands under
 
 **Do not substitute `generate-author` when the user asks for a Samsung certificate.** A local
 self-signed Tizen certificate cannot sign an app for Samsung distribution: it is issued by
-`Tizen Developers CA`, not `Samsung VD Author CA`. If the user asks for a Samsung certificate, run
-`generate-samsung-author`. Confirm the result by checking that `result.cert_path` is under
-`keystore/samsung/` and that the envelope contains `user_id` / `auth_source`.
+`Tizen Developers CA`, not `Samsung VD Author CA`. If the user asks for a Samsung certificate for
+the TV emulator or a Samsung TV, run `generate-samsung-author`. The one exception is the target
+rule above: when the target is a standard Tizen emulator, a Samsung certificate cannot be used at
+all, so say so and use the local flow; when no target was named, ask first. Confirm the result by
+checking that `result.cert_path` is under `keystore/samsung/` and that the envelope contains
+`user_id` / `auth_source`.
 
 **Browser login is expected.** `generate-samsung-author`, `generate-samsung-distributor`, and
 `samsung-login` open the system browser and block until the user completes Samsung Account login, up
@@ -333,8 +369,12 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - **Single-task** (e.g., "타이젠 인증서 만들어줘") → DONE. Report envelope, mention `result.cert_path`.
 - **Single-task** (e.g., "배포자 인증서 목록 보여줘") → DONE. Report `result.distributors`
   (and `result.unavailable` if relevant).
-- **Single-task** (e.g., "삼성 인증서 만들어줘", "create a Samsung certificate") → `generate-samsung-author`.
-  Report `result.cert_path` (under `keystore/samsung/`) and `result.user_email`.
+- **Single-task** (e.g., "삼성 인증서 만들어줘", "create a Samsung certificate") → first confirm the
+  target is the TV emulator or a Samsung TV (see "Samsung certificates — TV targets only"), then
+  `generate-samsung-author`. Report `result.cert_path` (under `keystore/samsung/`) and
+  `result.user_email`. Standard-emulator target → `generate-author` → `create-profile` instead.
+- Samsung flow requested but no TV emulator exists → `tizen-tv-sdk-install` →
+  `tizen-create-emulator --profile tv` → `tizen-launch-emulator`
 - SDK not installed → `tizen-sdk-install`, then `tizen-sdk-init`
 
 ## The `.pwd` password sidecar (`generate-author`)

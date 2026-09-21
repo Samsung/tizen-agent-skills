@@ -47,7 +47,9 @@ This document describes the complete certificate management capabilities of the
 
 - **Tizen SDK** installed and initialized (`tizen-sdk-install` → `tizen-sdk-init`)
 - **Node.js 18+** (for the CLI runner)
-- For Samsung certificates: a **Samsung Account** and a connected Tizen device (for DUIDs)
+- For Samsung certificates: a **Samsung Account** and a connected **TV emulator or Samsung TV**
+  (for DUIDs) — Samsung certificates are for TV targets only (see
+  [Samsung Online-CA Certificates](#samsung-online-ca-certificates))
 - For local certificates: no network or Samsung account needed
 - For Samsung certificates behind a proxy: set `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY`
   environment variables — the Samsung API client respects standard proxy conventions
@@ -466,6 +468,27 @@ a Samsung Account login (browser-based OAuth) and are stored under
 
 > **Do not substitute `generate-author` for Samsung certificates.** A local self-signed
 > Tizen certificate cannot sign an app for Samsung distribution.
+
+> **Samsung certificates are for TV targets only.** A Samsung online-CA certificate and the
+> signing profile created with `create-samsung-profile` can be used only with the **TV
+> emulator** (`tizen-create-emulator --profile tv`; install the TV SDK first with
+> `tizen-tv-sdk-install`) and a real **Samsung TV** whose DUID is in the distributor
+> certificate. A standard Tizen emulator (`--profile tizen` — mobile / wearable / IoT platform
+> images) accepts only the SDK-bundled distributor certificate, so a package signed with a
+> Samsung profile is rejected there with a certificate error.
+>
+> - Before any Samsung action (`generate-samsung-*`, `create-samsung-profile`,
+>   `import-samsung-certificate`), confirm the target is the TV emulator or a Samsung TV. For a
+>   standard emulator do not create a Samsung certificate — use `generate-author` →
+>   `create-profile`. When no target was named, the agent asks which target you are signing for
+>   instead of silently choosing the local flow.
+> - Take DUIDs from the TV emulator or TV (`acquire-duid --serial <tv-emulator-serial>`). A
+>   distributor certificate built from a standard emulator's DUID cannot be used anywhere.
+> - No TV emulator yet? Prepare it first: `tizen-tv-sdk-install` →
+>   `tizen-create-emulator --profile tv` → `tizen-launch-emulator`.
+> - Install a package built with a Samsung profile only on the TV emulator or a registered TV. A
+>   certificate error on a standard emulator is the rule working; do not work around it with
+>   `sdb root on` or a manual certificate install.
 
 ### Generate a Samsung Author Certificate
 

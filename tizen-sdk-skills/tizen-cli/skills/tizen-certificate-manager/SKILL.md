@@ -3,8 +3,10 @@ name: tizen-certificate-manager
 description: Manage Tizen certificates (local self-signed and Samsung online-CA) and signing profiles, including generation, Samsung Account login, distributor selection, profile lifecycle, import, and inspection.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
+    - Samsung TV emulator
+    - TV 에뮬레이터 인증서
     - Tizen certificate
     - author certificate
     - tz cert
@@ -38,8 +40,23 @@ Two distinct kinds of author certificate are supported, and they are not interch
   Account browser login. Issued by `Samsung VD Author CA`. Written to
   `<tizen-sdk-data>/keystore/samsung/<profileName>/`.
 
-When the user asks for a **Samsung** certificate, use `generate-samsung-author`. Do not substitute
-the local action: a local self-signed certificate cannot sign an app for Samsung distribution.
+When the user asks for a **Samsung** certificate for the TV emulator or a Samsung TV, use
+`generate-samsung-author`. Do not substitute the local action: a local self-signed certificate
+cannot sign an app for Samsung distribution. The only exception is the TV-target rule below.
+
+**Samsung certificates are for Samsung TV targets only (mandatory).** A Samsung online-CA
+certificate and the profile from `create-samsung-profile` are valid only for the **TV emulator**
+(`tizen-cli tizen-sdk create-emulator --profile tv`, which needs `tv-sdk-install`) and a real
+Samsung TV whose DUID is in the distributor certificate. A standard Tizen emulator
+(`--profile tizen` — mobile / wearable / IoT images) accepts only the SDK-bundled distributor
+certificate and rejects a Samsung-signed package with a certificate error. Before any
+`generate-samsung-*` / `create-samsung-profile` / `import-samsung-certificate` action, confirm the
+target is the TV emulator or a Samsung TV. For a standard emulator, say so in one sentence and use
+`generate-author` → `create-profile` instead; when no target was named, ask which target the user
+is signing for before choosing — do not silently substitute the local flow. Take DUIDs from the
+TV emulator/TV (`acquire-duid --serial <tv-emulator-serial>`). A build signed with a Samsung
+profile is installed only on the TV emulator or a registered TV; a certificate error on a standard
+emulator is the rule working, not a bug.
 
 ## Prerequisites
 - Needs the Tizen SDK — run `tizen-cli tizen-sdk sdk-init` first if the SDK path is not
@@ -118,6 +135,9 @@ tizen-cli tizen-sdk certificate-manager --action acquire-duids-all
 
 ### Samsung online-CA notes
 
+- **TV targets only.** Run these actions only when the target is the TV emulator
+  (`create-emulator --profile tv`) or a Samsung TV; see "When to use". No TV emulator yet →
+  `tv-sdk-install` → `create-emulator --profile tv` → `launch-emulator` first.
 - `--identity` is required and becomes the certificate `CN`. `--name`/`--file` are for
   `generate-author` and are ignored here.
 - **Browser login is expected.** The command opens the system browser and blocks until login
@@ -250,7 +270,11 @@ tizen-cli tizen-sdk certificate-manager --action create-profile --profile-name M
 
 ## Follow-ups
 - SDK not installed → `tizen-cli tizen-sdk sdk-install`, then `sdk-init`
-- Samsung certificate requested → `--action generate-samsung-author` (see Samsung notes above)
+- Samsung certificate requested → confirm the target is the TV emulator or a Samsung TV, then
+  `--action generate-samsung-author` (see Samsung notes above); standard-emulator target →
+  `generate-author` → `create-profile` instead
+- Samsung flow requested but no TV emulator exists → `tizen-cli tizen-sdk tv-sdk-install` →
+  `create-emulator --profile tv` → `launch-emulator`
 - Samsung distributor certificate requested → `--action generate-samsung-distributor` (requires
   DUIDs — use `acquire-duid` or `acquire-duids-all` to get them from connected devices)
 - Complete Samsung profile needed → run `generate-samsung-author` → `generate-samsung-distributor` →

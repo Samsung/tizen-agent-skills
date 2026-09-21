@@ -9,6 +9,11 @@ description: "remote-device --action connect --ip returns success"
 
 lanes:
   cli:
+    # NOTE (2026-09-17): executed on Windows — environment failure (device_not_found):
+    # nothing answers at 192.168.1.50 on this network ("failed to connect to remote
+    # target" after 2 attempts). Kept draft; needs a reachable Tizen device
+    # fixture. Side observation: the failure's suggested_fix points at
+    # launch-emulator, which is unrelated to a network connect.
     argv: ["tizen-sdk", "remote-device", "--action", "connect", "--ip", "192.168.1.50"]
     timeout_sec: 30
     expect:

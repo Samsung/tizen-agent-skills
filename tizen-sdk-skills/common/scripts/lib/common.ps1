@@ -37,6 +37,20 @@ function Write-Section {
     Write-Host "=== $Message ===" -ForegroundColor Cyan
 }
 
+# Formats a TimeSpan as "1h 2m 3s" / "2m 3s" / "3.4s", picking the coarsest
+# units that apply so a phase timing line stays short at any duration.
+function Format-Duration {
+    param([Parameter(Mandatory=$true)][TimeSpan]$Elapsed)
+    # [math]::Floor, not an [int] cast: PowerShell's [int] rounds to nearest,
+    # so 2m40s would print as "3m 40s".
+    if ($Elapsed.TotalHours -ge 1) {
+        return "{0}h {1}m {2}s" -f [math]::Floor($Elapsed.TotalHours), $Elapsed.Minutes, $Elapsed.Seconds
+    } elseif ($Elapsed.TotalMinutes -ge 1) {
+        return "{0}m {1}s" -f [math]::Floor($Elapsed.TotalMinutes), $Elapsed.Seconds
+    }
+    return "{0:N1}s" -f $Elapsed.TotalSeconds
+}
+
 # ----------------------------------------------------------------------------
 # SDK path resolution
 #   ~\.tizen.sdk.path.config -> TIZEN_SDK_PATH -> %USERPROFILE%\tizen-sdk -> C:\tizen-sdk
@@ -426,4 +440,433 @@ function Find-EmCli {
         if (Test-Path $c) { return $c }
     }
     return $null
+}
+
+# Prefetch phase: download every item (Id/Url/Destination) with up to $Jobs
+# concurrent Start-Job workers. Returns a hashtable Id -> @{ Id; Status; Error }.
+# A failed/timed-out item is simply absent from disk afterwards; the install
+# worker (Get-PackageInstallWorker) re-downloads such items itself, with retry
+# and ZIP validation, so callers may ignore the return value.
+function Invoke-ParallelDownloads {
+    param(
+        [Parameter(Mandatory=$true)][AllowEmptyCollection()][object[]]$Items,
+        [ValidateRange(1,8)][int]$Jobs = 4,
+        [int]$TimeoutSec = 1800  # per-download cap, mirrors curl --max-time in common.sh's download_queue_parallel
+    )
+    $results = @{}
+    $total = $Items.Count
+    # Nothing to fetch (e.g. update-package with every package already current,
+    # or a resolved set made only of meta packages): return before touching jobs.
+    if ($total -eq 0) { return $results }
+    $pending = [System.Collections.Queue]::new()
+    foreach ($item in $Items) { $pending.Enqueue($item) }
+    # Keyed by Job.Id -> @{ Job; Item; Start } so a stalled download can be
+    # matched back to its package name and destination file when it times out.
+    $running = @{}
+    $completed = 0
+
+    while ($pending.Count -gt 0 -or $running.Count -gt 0) {
+        while ($pending.Count -gt 0 -and $running.Count -lt $Jobs) {
+            $item = $pending.Dequeue()
+            $job = Start-Job -ScriptBlock {
+                param($Id, $Url, $Destination)
+                # A Start-Job worker is a fresh powershell.exe: it does not inherit
+                # the TLS 1.2 forcing the parent script applied to ServicePointManager.
+                try {
+                    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+                } catch { }
+                # Download to a .tmp sibling and rename on success so a killed
+                # (timed-out) job never leaves a truncated file at Destination.
+                $tmp = "$Destination.tmp"
+                try {
+                    $wc = New-Object System.Net.WebClient
+                    $wc.DownloadFile($Url, $tmp)
+                    $wc.Dispose()
+                    Move-Item -Force $tmp $Destination
+                    [pscustomobject]@{ Id=$Id; Status="OK" }
+                } catch {
+                    Remove-Item -Force $tmp -ErrorAction SilentlyContinue
+                    # WebClient wraps the real cause (timeout/proxy/TLS/DNS) one level
+                    # down in InnerException; its own Message is a generic
+                    # "An exception occurred during a WebClient request." otherwise.
+                    $msg = $_.Exception.Message
+                    if ($_.Exception.InnerException) { $msg = $_.Exception.InnerException.Message }
+                    [pscustomobject]@{ Id=$Id; Status="FAIL"; Error=$msg }
+                }
+            } -ArgumentList $item.Id, $item.Url, $item.Destination
+            $running[$job.Id] = [pscustomobject]@{ Job = $job; Item = $item; Start = Get-Date }
+        }
+
+        if ($running.Count -eq 0) { break }
+
+        # Short poll so we can check per-job elapsed time even when nothing
+        # has finished yet (a stalled WebClient.DownloadFile never throws on
+        # its own - there's no built-in timeout - so this loop is what notices).
+        $done = Wait-Job -Job @($running.Values.Job) -Any -Timeout 5
+        if ($done) {
+            $entry = $running[$done.Id]
+            $result = Receive-Job $done -ErrorAction SilentlyContinue
+            if (-not $result) { $result = [pscustomobject]@{ Id = $entry.Item.Id; Status = "FAIL"; Error = "No result returned" } }
+            $results["$($result.Id)"] = $result
+            Remove-Job $done -Force -ErrorAction SilentlyContinue
+            $running.Remove($done.Id)
+            $completed++
+            if ($result.Status -eq "OK") {
+                Write-Info ("[{0}/{1}] {2} downloaded" -f $completed, $total, $result.Id)
+            } else {
+                Write-Warn ("[{0}/{1}] {2} failed: {3}" -f $completed, $total, $result.Id, $result.Error)
+            }
+        }
+
+        $now = Get-Date
+        foreach ($jobId in @($running.Keys)) {
+            $entry = $running[$jobId]
+            if (($now - $entry.Start).TotalSeconds -le $TimeoutSec) { continue }
+            Stop-Job -Job $entry.Job -ErrorAction SilentlyContinue
+            Remove-Job -Job $entry.Job -Force -ErrorAction SilentlyContinue
+            Remove-Item -Force "$($entry.Item.Destination).tmp" -ErrorAction SilentlyContinue
+            $running.Remove($jobId)
+            $completed++
+            $results[$entry.Item.Id] = [pscustomobject]@{ Id = $entry.Item.Id; Status = "FAIL"; Error = "Timed out after ${TimeoutSec}s" }
+            Write-Warn ("[{0}/{1}] {2} timed out after {3}s, dropped" -f $completed, $total, $entry.Item.Id, $TimeoutSec)
+        }
+    }
+    return $results
+}
+
+# ----------------------------------------------------------------------------
+# Parallel package install: download-if-missing + extract + merge + manifest
+#
+# Shared by tizen-sdk-install, tizen-platform-install, tizen-tv-sdk-install,
+# tizen-download-emulator-package, tizen-download-mobile-platform (MOBILE and
+# IOT-Headed flows) and tizen-update-package. Each caller builds "work items"
+# after its own skip logic (resume / same-version / meta package), turns them
+# into download items for Invoke-ParallelDownloads, then hands the same items
+# to Invoke-ParallelPackageInstall.
+#
+# Work item (pscustomobject) fields:
+#   Pkg      package name (manifest is written as <Pkg>.manifest)
+#   Idx      1-based position in the caller's resolved list (progress label)
+#   Url      download URL
+#   Zip      local zip path under the caller's workdir
+#   Stage    per-package extraction dir under the caller's workdir
+#   Version  optional; when set and the zip carries no pkginfo.manifest, a
+#            minimal manifest with this version is written (update-package)
+#   Label    optional; replaces the default "installed" in the OK log line
+# ----------------------------------------------------------------------------
+
+function ConvertTo-DownloadItems {
+    param([Parameter(Mandatory=$true)][AllowEmptyCollection()][object[]]$WorkItems)
+    return @($WorkItems | ForEach-Object {
+        [pscustomobject]@{ Id = $_.Pkg; Url = $_.Url; Destination = $_.Zip }
+    })
+}
+
+# The Start-Job worker for ONE package. It runs in a separate powershell.exe
+# with none of this file's functions or the parent's variables, so everything
+# it needs (zip extractor, 404 fallback) is defined inline and every input is a
+# flat scalar/array argument (nested objects would be flattened by the job
+# argument serializer).
+#
+# Returns one [pscustomobject]@{ Pkg; Idx; Status = OK|SKIP|FAIL; Reason }.
+function Get-PackageInstallWorker {
+    return {
+        param($Pkg, $Idx, $Url, $Zip, $Stage, $Version, $PkgInfoDir, $DestPath, $PkgOs, $MergeMutexName, $PkgRepo, $BinListCache, $OptionalPattern)
+
+        # Fresh process: neither System.IO.Compression.ZipFile nor the parent's
+        # TLS 1.2 ServicePointManager setting is present by default.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        try {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+        } catch { }
+
+        function New-Result {
+            param([string]$Status, [string]$Reason)
+            return [pscustomobject]@{ Pkg = $Pkg; Idx = $Idx; Status = $Status; Reason = $Reason }
+        }
+
+        # Entry-by-entry with overwrite: Tizen rootstrap (RS) ZIPs contain
+        # case-only-distinct paths (ipt_ttl.h AND ipt_TTL.h) that make the
+        # whole-archive extractor abort on case-insensitive NTFS; letting the last
+        # of a colliding pair win keeps the package installable. Wrapped in a
+        # function so its local $destPath cannot clobber the $DestPath parameter
+        # (PowerShell variable names are case-insensitive).
+        function Expand-ZipEntryByEntryLocal {
+            param([string]$ZipPath, [string]$Destination)
+            $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+            try {
+                foreach ($entry in $archive.Entries) {
+                    if ([string]::IsNullOrEmpty($entry.Name)) { continue }
+                    $destPath = Join-Path $Destination $entry.FullName
+                    $destDir  = Split-Path -Parent $destPath
+                    if ($destDir -and -not (Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                    }
+                    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
+                }
+            } finally {
+                $archive.Dispose()
+            }
+        }
+
+        # Newest published <pkg>_<ver>_<os>.zip from the repo's binary/ listing,
+        # for the pkg_list-ahead-of-binary (404) fallback. Only used when the
+        # caller passed $PkgRepo (tizen-sdk-install).
+        function Get-PublishedBinaryLocal {
+            param([string]$PkgName, [string]$Os, [string[]]$Cache)
+            if (-not $Cache) { return $null }
+            $esc = [regex]::Escape($PkgName)
+            $osc = [regex]::Escape($Os)
+            $pattern = "^${esc}_[^_/]+_${osc}\.zip$"
+            $cands = @($Cache | Where-Object { $_ -match $pattern })
+            if ($cands.Count -eq 0) { return $null }
+            return ($cands | Sort-Object {
+                $v = ($_ -replace "^${esc}_", '') -replace "_${osc}\.zip$", ''
+                try { [version]$v } catch { [version]'0.0.0' }
+            } | Select-Object -Last 1)
+        }
+
+        $isOptional = ($OptionalPattern -and $Pkg -imatch $OptionalPattern)
+
+        # --- Download if the prefetch phase did not leave a zip behind -----------
+        # .tmp+rename keeps a killed download from leaving a truncated $Zip that a
+        # later run would trust; the ZIP validation catches CDN/proxy responses
+        # that are 200 but not an archive. Every failure path inside the loop
+        # either retries or returns, so the loop only exits via the final break.
+        if (-not (Test-Path $Zip)) {
+            $maxRetries = 3
+            $tmpZip = "$Zip.tmp"
+            for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+                $downloadUrl = $Url
+                try {
+                    $wc = New-Object System.Net.WebClient
+                    $wc.DownloadFile($downloadUrl, $tmpZip)
+                    $wc.Dispose()
+                } catch {
+                    Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+                    $alt = $null
+                    $listingOk = $false
+                    if ($PkgRepo) {
+                        $listingOk = ($null -ne $BinListCache -and @($BinListCache).Count -gt 0)
+                        $alt = Get-PublishedBinaryLocal -PkgName $Pkg -Os $PkgOs -Cache $BinListCache
+                    }
+                    if ($alt -and $alt -ne [System.IO.Path]::GetFileName($Zip)) {
+                        # pkg_list version ran ahead of the published binaries:
+                        # fall back to the newest build that actually exists.
+                        $downloadUrl = "$PkgRepo/binary/$alt"
+                        try {
+                            $wc = New-Object System.Net.WebClient
+                            $wc.DownloadFile($downloadUrl, $tmpZip)
+                            $wc.Dispose()
+                        } catch {
+                            Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+                            if ($attempt -lt $maxRetries) { Start-Sleep -Seconds (2 * $attempt); continue }
+                            return New-Result "FAIL" "Download failed (after $maxRetries attempts): $downloadUrl - $_"
+                        }
+                    } elseif ($listingOk -and -not $alt) {
+                        # No build of this package is published at all - retrying
+                        # cannot help (upstream gap). Skip instead of failing the run.
+                        return New-Result "SKIP" "not published in the repo (upstream gap), skipped"
+                    } else {
+                        if ($attempt -lt $maxRetries) { Start-Sleep -Seconds (2 * $attempt); continue }
+                        return New-Result "FAIL" "Download failed (after $maxRetries attempts): $Url - $_"
+                    }
+                }
+                try {
+                    $validateArchive = [System.IO.Compression.ZipFile]::OpenRead($tmpZip)
+                    $validateArchive.Dispose()
+                } catch {
+                    Remove-Item -Force $tmpZip -ErrorAction SilentlyContinue
+                    if ($attempt -lt $maxRetries) { Start-Sleep -Seconds (2 * $attempt); continue }
+                    return New-Result "FAIL" "Downloaded file is not a valid ZIP (after $maxRetries attempts): $downloadUrl - $_"
+                }
+                Move-Item -Force $tmpZip $Zip
+                break
+            }
+        }
+
+        # --- Extract ------------------------------------------------------------
+        if (Test-Path $Stage) {
+            Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 500
+        }
+        New-Item -ItemType Directory -Path $Stage -Force | Out-Null
+
+        try {
+            Expand-ZipEntryByEntryLocal -ZipPath $Zip -Destination $Stage
+        } catch {
+            Remove-Item -Force $Zip -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
+            if ($isOptional) {
+                return New-Result "SKIP" "optional rootstrap (RS), extraction failed: $_"
+            }
+            return New-Result "FAIL" "Extraction failed: $_"
+        }
+
+        # --- Merge data\ into the SDK root ----------------------------------------
+        # Serialized across workers via a named mutex: several robocopy processes
+        # writing into the SAME destination tree at once transiently fail on
+        # shared parent directories (exit 8/11/16). Download and extraction stay
+        # parallel; only this copy is one-at-a-time.
+        $reason = $null
+        $dataDir = Join-Path $Stage "data"
+        if (Test-Path $dataDir) {
+            $dataItems = Get-ChildItem -Path $dataDir -Force -ErrorAction SilentlyContinue
+            if (@($dataItems).Count -gt 0) {
+                # windows-64 AND windows-32 (a custom -RepoUrl may only serve the
+                # 32-bit pkg_list): robocopy is the long-path-safe fast path on
+                # Windows; PowerShell Core on Linux/macOS falls back to Copy-Item.
+                if ($PkgOs -like "windows-*") {
+                    $mergeMutex = New-Object System.Threading.Mutex($false, $MergeMutexName)
+                    $robocopyExit = 0
+                    $mergeLogFile = Join-Path $Stage "robocopy_merge.log"
+                    try {
+                        try {
+                            $mergeMutex.WaitOne() | Out-Null
+                        } catch [System.Threading.AbandonedMutexException] {
+                            # A previous holder was killed (per-package timeout in the
+                            # driver) while merging. The mutex IS acquired by us at this
+                            # point; the destination tree is still consistent enough for
+                            # robocopy's idempotent /XO merge, so carry on.
+                        }
+                        # /R:5 /W:2 retries transient file locks (antivirus, I/O
+                        # contention); the outer loop retries whole-run failures.
+                        # /XO skips older files (idempotent re-merge), /FFT uses 2s
+                        # FAT timestamp granularity to avoid spurious mismatches.
+                        for ($mergeAttempt = 1; $mergeAttempt -le 3; $mergeAttempt++) {
+                            robocopy $dataDir $DestPath /E /NFL /NDL /NJH /NJS /NP /R:5 /W:2 /XO /FFT /LOG:$mergeLogFile | Out-Null
+                            $robocopyExit = $LASTEXITCODE
+                            if ($robocopyExit -lt 8) { break }
+                            if ($mergeAttempt -lt 3) { Start-Sleep -Seconds (3 * $mergeAttempt) }
+                        }
+                    } finally {
+                        try { $mergeMutex.ReleaseMutex() } catch { }
+                        $mergeMutex.Dispose()
+                    }
+                    if ($robocopyExit -ge 8) {
+                        $mergeDetail = ""
+                        if (Test-Path $mergeLogFile) {
+                            $mergeDetail = (@(Get-Content $mergeLogFile -ErrorAction SilentlyContinue | Select-Object -Last 5) -join " | ")
+                        }
+                        Remove-Item -Force $Zip -ErrorAction SilentlyContinue
+                        Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
+                        return New-Result "FAIL" "Merge failed (robocopy $robocopyExit after 3 attempts): $mergeDetail"
+                    }
+                } else {
+                    Copy-Item -Path "$dataDir/*" -Destination $DestPath -Recurse -Force
+                }
+            } else {
+                $reason = "data\ is empty, skip merge"
+            }
+        }
+
+        # --- Manifest record ------------------------------------------------------
+        $manifest = Join-Path $Stage "pkginfo.manifest"
+        $manifestDest = Join-Path $PkgInfoDir "$Pkg.manifest"
+        if (Test-Path $manifest) {
+            Copy-Item -Path $manifest -Destination $manifestDest -Force
+        } elseif ($Version) {
+            # No pkginfo.manifest in the zip: record the pkg_list version so the
+            # next update-package run can compare against it.
+            Set-Content -Path $manifestDest -Value "Package : $Pkg`nVersion : $Version`nOS : $PkgOs`n" -Encoding UTF8
+        }
+
+        Remove-Item -Force $Zip -ErrorAction SilentlyContinue
+        Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
+        return New-Result "OK" $reason
+    }
+}
+
+# Runs Get-PackageInstallWorker for every work item with a bounded number of
+# concurrent Start-Job workers, logs each outcome as it arrives and returns
+#   [pscustomobject]@{ Ok; Skip; Fail; Skipped = @("<pkg> - <reason>", ...) }
+#
+# Extraction is disk-I/O bound while downloads are latency bound, so -Jobs
+# defaults to 3 independently of -DownloadJobs (the value every installer used
+# before this driver was shared; it is not exposed through the CLIs).
+function Invoke-ParallelPackageInstall {
+    param(
+        [Parameter(Mandatory=$true)][AllowEmptyCollection()][object[]]$Items,
+        [ValidateRange(1,8)][int]$Jobs = 3,
+        [Parameter(Mandatory=$true)][string]$PkgInfoDir,
+        [Parameter(Mandatory=$true)][string]$DestPath,
+        [Parameter(Mandatory=$true)][string]$PkgOs,
+        [int]$Total = 0,                 # denominator for "[i/N]" labels; defaults to Items.Count
+        [string]$LabelPrefix = "",       # e.g. "IOT " -> "[IOT 3/12]"
+        [string]$PkgRepo = "",           # enables the binary/ 404 fallback (tizen-sdk-install)
+        [string[]]$BinListCache = @(),   # pre-fetched binary/ listing for that fallback
+        [string]$OptionalPattern = "",   # packages matching this are SKIP (not FAIL) on extraction error
+        [int]$TimeoutSec = 1800          # per-package cap on download+extract+merge combined
+    )
+    $summary = [pscustomobject]@{ Ok = 0; Skip = 0; Fail = 0; Skipped = @() }
+    if ($Items.Count -eq 0) { return $summary }
+    if ($Total -le 0) { $Total = $Items.Count }
+
+    $jobs = $Jobs
+    Write-Info "Extracting $($Items.Count) packages ($jobs parallel)..."
+
+    $worker = Get-PackageInstallWorker
+    # One mutex name per call, shared by every worker job to serialize the
+    # robocopy merge (see the worker).
+    $mergeMutexName = "TizenSdkMerge_" + [guid]::NewGuid().ToString("N")
+
+    $pending = [System.Collections.Queue]::new()
+    foreach ($item in $Items) { $pending.Enqueue($item) }
+    $running = @{}
+
+    while ($pending.Count -gt 0 -or $running.Count -gt 0) {
+        while ($pending.Count -gt 0 -and $running.Count -lt $jobs) {
+            $item = $pending.Dequeue()
+            $version = if ($item.PSObject.Properties['Version']) { $item.Version } else { $null }
+            $job = Start-Job -ScriptBlock $worker -ArgumentList `
+                $item.Pkg, $item.Idx, $item.Url, $item.Zip, $item.Stage, $version, $PkgInfoDir, $DestPath, $PkgOs, $mergeMutexName, $PkgRepo, $BinListCache, $OptionalPattern
+            $running[$job.Id] = [pscustomobject]@{ Job = $job; Item = $item; Start = Get-Date }
+        }
+
+        if ($running.Count -eq 0) { break }
+
+        # Short poll so per-job elapsed time is checked even while nothing finishes.
+        $done = Wait-Job -Job @($running.Values.Job) -Any -Timeout 5
+        if ($done) {
+            $entry = $running[$done.Id]
+            $item = $entry.Item
+            $result = Receive-Job $done -ErrorAction SilentlyContinue
+            if (-not $result) { $result = [pscustomobject]@{ Pkg = $item.Pkg; Idx = $item.Idx; Status = "FAIL"; Reason = "Extraction worker produced no result" } }
+            Remove-Job $done -Force -ErrorAction SilentlyContinue
+            $running.Remove($done.Id)
+
+            $tag = "[{0}{1}/{2}]" -f $LabelPrefix, $result.Idx, $Total
+            switch ($result.Status) {
+                "OK" {
+                    $summary.Ok++
+                    if ($result.Reason) { Write-Info "$tag $($result.Pkg): $($result.Reason)" }
+                    $label = if ($item.PSObject.Properties['Label'] -and $item.Label) { $item.Label } else { "installed" }
+                    Write-Success "$tag $($result.Pkg) $label"
+                }
+                "SKIP" {
+                    $summary.Skip++
+                    $summary.Skipped += "$($result.Pkg) - $($result.Reason)"
+                    Write-Warn "$tag $($result.Pkg): $($result.Reason)"
+                }
+                default {
+                    $summary.Fail++
+                    Write-Err "$tag $($result.Pkg): $($result.Reason)"
+                }
+            }
+        }
+
+        $now = Get-Date
+        foreach ($jobId in @($running.Keys)) {
+            $entry = $running[$jobId]
+            if (($now - $entry.Start).TotalSeconds -le $TimeoutSec) { continue }
+            Stop-Job -Job $entry.Job -ErrorAction SilentlyContinue
+            Remove-Job -Job $entry.Job -Force -ErrorAction SilentlyContinue
+            Remove-Item -Force $entry.Item.Zip -ErrorAction SilentlyContinue
+            Remove-Item -Recurse -Force $entry.Item.Stage -ErrorAction SilentlyContinue
+            $running.Remove($jobId)
+            $summary.Fail++
+            Write-Warn ("[{0}{1}/{2}] {3} timed out during extraction/merge after {4}s, dropped" -f $LabelPrefix, $entry.Item.Idx, $Total, $entry.Item.Pkg, $TimeoutSec)
+        }
+    }
+    return $summary
 }

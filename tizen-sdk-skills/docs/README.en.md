@@ -16,6 +16,7 @@ This document (README) is the **overall overview and user manual** for the plugi
 | [debug/scenario-native-debug-walkthrough.en.md](debug/scenario-native-debug-walkthrough.en.md) | **Native app debugging E2E scenario** — native app creation → Debug build → install → gdbserver/port-forward setup → host GDB connection + verification checklist |
 | [debug/scenario-dotnet-debug-walkthrough.en.md](debug/scenario-dotnet-debug-walkthrough.en.md) | **.NET app debugging E2E scenario** — .NET app creation → Debug build → install → netcoredbg DAP server setup → VS Code (F5) connection + verification checklist |
 | [wsl/WSL_EMULATOR_GUIDE.en.md](wsl/WSL_EMULATOR_GUIDE.en.md) | **WSL emulator guide** — configuration for running the Tizen emulator on WSL2, profile selection (standard vs TV), Buxton permission troubleshooting, performance tuning |
+| [rds/RDS_FAST_DEPLOY_PLAN.en.md](rds/RDS_FAST_DEPLOY_PLAN.en.md) | **RDS / Fast Deploy integration plan** — design of the delta deploy behind `install-app` (only changed files are pushed), state file formats, vendoring decisions, `deploy_type` / `TIZEN_RDS_ENABLED` / `--reset-rds`, real-device verification on a Tizen 11 emulator |
 | [envelope/](envelope/) | **Standard JSON Envelope** — response standardization layer: [Usage Guide](envelope/ENVELOPE_USAGE_GUIDE.md), [Call Flow](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit Explained](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [Implementation Summary](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK Installation Flow** — [Full Flow](sdk-install/INSTALLATION_FLOW.md), [Agent-installSdk Integration](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [Installation Verification](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [Custom Repository Install](sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md), [.NET Environment Setup E2E](sdk-install/DOTNET_SETUP_E2E.en.md) |
 | [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 29 skills map onto the 34 tizen-cli commands, and why the counts differ |
@@ -51,7 +52,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 | **tizen-file-transfer** | File transfer via sdb push/pull | Copy files/directories between host and device |
 | **tizen-remote-device** | Network remote device search/connect (scan of SDB port 26101) | Connect devices over Wi-Fi, manage remote device bookmarks |
 | **tizen-screenshot** | Device/emulator screen capture (automatic fallback) | Save device, emulator, or TV screenshots as PNG |
-| **tizen-sdb-helper** | Pick and run the right sdb command for a request | Single sdb actions: log capture, shell, port forward, reboot, etc. |
+| **tizen-sdb-helper** | Pick and run the right sdb command for a request | Single sdb actions: shell, port forward, reboot, launch/kill, etc. (device logs → tizen-dlog-analyzer) |
 | **tizen-certificate-manager** | Manage Tizen certificates and signing profiles | Local self-signed + Samsung online-CA certificate generation/profile management |
 | **tizen-gdb-debug** | Automated GDB remote debugging | Debug Native apps |
 | **tizen-dotnet-debug** | .NET remote debugging | Debug C# apps (netcoredbg) |
@@ -150,7 +151,8 @@ In Cline, skills are automatically loaded when you make natural language request
 | "Copy this file to the device" / "Pull a file from the device" | `tizen-file-transfer` |
 | "Find the TV on the network" / "Connect the remote device" | `tizen-remote-device` |
 | "Take an emulator screenshot" / "Capture the Tizen screen" | `tizen-screenshot` |
-| "Tail the logs" / "Open a device shell" / "Forward a port" | `tizen-sdb-helper` |
+| "Open a device shell" / "Forward a port" / "Reboot the device" | `tizen-sdb-helper` |
+| "Tail the logs" / "Save the device logs" / "Clear the logs" / "My app crashed" | `tizen-dlog-analyzer` |
 | "Create a certificate" / "Create a signing profile" | `tizen-certificate-manager` |
 | "Start GDB debugging" | `tizen-gdb-debug` |
 | "Debug the .NET app" | `tizen-dotnet-debug` |
@@ -521,7 +523,7 @@ Captures the screen of a connected Tizen device/emulator/TV and saves it as a PN
 
 ### 16. sdb Helper (`tizen-sdb-helper`)
 
-Picks and runs the **exact sdb command** matching a single natural-language request — log capture, shell, port forwarding, root toggle, reboot, screen state, and more.
+Picks and runs the **exact sdb command** matching a single natural-language request — shell, port forwarding, root toggle, reboot, screen state, and more. Device-log requests (tail/show/save/clear logs) are handed off to `tizen-dlog-analyzer`, which owns every log operation (`log-dump`, `log-clear`, monitoring).
 
 #### Key Features
 

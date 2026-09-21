@@ -302,13 +302,73 @@ function Cleanup-PushedFile {
     }
 }
 
+# Tizen app ids are alphanumeric with `.`/`_`/`-` (same alphabet as
+# lib/core/rds/device-shell.js SAFE_PACKAGE_ID). Every id - from the manifest
+# or from `app_launcher -l` - passes this before it is spliced into a device
+# shell command line.
+function Test-SafeAppId {
+    param([string]$AppId)
+    return [bool]($AppId -cmatch '^[A-Za-z0-9._-]+$')
+}
+
+# Launchable app id straight from the package manifest (.wgt: config.xml
+# <tizen:application id=...>, .tpk: tizen-manifest.xml appid=...). Samsung TV
+# images print nothing for `app_launcher -l` in a non-root shell, so the id
+# must not depend on the device's installed-app list.
+function Get-ManifestAppId {
+    param([string]$AppPackagePath)
+
+    $ext = [System.IO.Path]::GetExtension($AppPackagePath).ToLower()
+    if ($ext -eq '.wgt') {
+        $entryName = 'config.xml'
+        $pattern = '<tizen:application[^>]*\sid=["'']([^"'']+)["'']'
+    }
+    elseif ($ext -eq '.tpk') {
+        $entryName = 'tizen-manifest.xml'
+        $pattern = '<(?:ui|service|widget|watch)-application[^>]*\sappid=["'']([^"'']+)["'']'
+    }
+    else {
+        return $null
+    }
+
+    try {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        $archive = [System.IO.Compression.ZipFile]::OpenRead($AppPackagePath)
+        try {
+            $entry = $archive.Entries | Where-Object { $_.FullName -eq $entryName } | Select-Object -First 1
+            if (-not $entry) { return $null }
+            $reader = New-Object System.IO.StreamReader($entry.Open())
+            try { $content = $reader.ReadToEnd() } finally { $reader.Dispose() }
+        }
+        finally {
+            $archive.Dispose()
+        }
+        $m = [regex]::Match($content, $pattern)
+        if ($m.Success -and (Test-SafeAppId $m.Groups[1].Value)) {
+            return $m.Groups[1].Value
+        }
+        return $null
+    }
+    catch {
+        return $null
+    }
+}
+
 function Find-AppId {
     param(
         [string]$SdbPath,
         [string]$DeviceSerial,
-        [string]$AppPackageName
+        [string]$AppPackageName,
+        [string]$AppPackagePath
     )
 
+    $manifestAppId = Get-ManifestAppId $AppPackagePath
+    if ($manifestAppId) {
+        Write-Host "Found app ID: $manifestAppId" -ForegroundColor Yellow
+        return $manifestAppId
+    }
+
+    # Fallback: find the app ID from the installed app list
     try {
         $listOutput = (& $SdbPath -s $DeviceSerial shell app_launcher -l 2>&1) -join "`n"
         $esc = [regex]::Escape($AppPackageName)
@@ -317,7 +377,7 @@ function Find-AppId {
         $appId = $tokens | Where-Object { $_ -match '\.' } | Select-Object -First 1
         if (-not $appId) { $appId = $tokens | Select-Object -First 1 }
 
-        if ($appId) {
+        if ($appId -and (Test-SafeAppId $appId)) {
             Write-Host "Found app ID: $appId" -ForegroundColor Yellow
             return $appId
         }
@@ -351,75 +411,68 @@ function Run-App {
     param(
         [string]$SdbPath,
         [string]$DeviceSerial,
-        [string]$AppPackageName
+        [string]$AppId
     )
 
     Write-Section "Running app"
 
+    if (-not $AppId) {
+        # Installation succeeded - only the app ID lookup failed.
+        # This is NOT an installation error; the app IS installed.
+        Write-Warn "Could not find app ID (package manifest unreadable and app not in app_launcher list) - installation succeeded, launch skipped"
+        return $false
+    }
+
     try {
-        # app_launcher -l prints entries as 'Name'  'AppID'. Collect every quoted
-        # token containing the package name, then PREFER one with a dot: the real
-        # app id is dotted (web: <pkgid>.<name> e.g. xA4DHr9cFv.MyTizenWebApp,
-        # native: org.example.<name>) while the bare display-name token is not.
-        # Matching only "starts with the name" grabbed the NAME for web apps and
-        # launched a nonexistent id.
-        $listOutput = (& $SdbPath -s $DeviceSerial shell app_launcher -l 2>&1) -join "`n"
-        $esc = [regex]::Escape($AppPackageName)
-        $tokens = [regex]::Matches($listOutput, "'([^']*$esc[^']*)'") |
-            ForEach-Object { $_.Groups[1].Value }
-        $appId = $tokens | Where-Object { $_ -match '\.' } | Select-Object -First 1
-        if (-not $appId) { $appId = $tokens | Select-Object -First 1 }
-
-        if ($appId) {
-            Write-Host "Found app ID: $appId" -ForegroundColor Yellow
-
-            # sdb shell does NOT propagate the remote exit code (it is always 0),
-            # so success must be read from app_launcher's own output.
-            $launchOutput = (& $SdbPath -s $DeviceSerial shell app_launcher -s $appId 2>&1) -join "`n"
+        # sdb shell does NOT propagate the remote exit code (it is always 0),
+        # so success must be read from the launcher's own output.
+        $launchOutput = (& $SdbPath -s $DeviceSerial shell app_launcher -s $AppId 2>&1) -join "`n"
+        Write-Host $launchOutput
+        if ($launchOutput -notmatch 'successfully launched') {
+            # Samsung TV images print nothing for app_launcher in a non-root
+            # shell (exit 0, empty output); their own launcher answers
+            # "app_id[<id>] launched" ("resumed" when the app was already running).
+            # Match on this app's id so a "launch failed" / foreign-app line
+            # never counts as success.
+            $launchOutput = (& $SdbPath -s $DeviceSerial shell 0 was_execute $AppId 2>&1) -join "`n"
             Write-Host $launchOutput
-            if ($launchOutput -match 'successfully launched') {
-                Write-Success "App launched successfully"
-
-                # 'successfully launched pid = N' only proves launchpad forked
-                # the process; an app that crashes on startup (classic cause:
-                # the /opt partition full of crash dumps) still prints it.
-                # Verify with the running list, best-effort: -S output varies
-                # per profile, so only a CLEAR yes/no is trusted.
-                $running = "unknown"
-                for ($attempt = 1; $attempt -le 3; $attempt++) {
-                    Start-Sleep -Seconds 1
-                    $statusOut = (& $SdbPath -s $DeviceSerial shell app_launcher -S 2>$null) -join "`n"
-                    if (-not $statusOut -or $statusOut -match 'unknown option|not supported|usage:') {
-                        $running = "unknown"
-                        break
-                    }
-                    if ($statusOut -match [regex]::Escape($appId)) {
-                        $running = "yes"
-                        break
-                    }
-                    $running = "no"
-                }
-                Write-Host "APP_RUNNING=$running"
-                if ($running -eq "no") {
-                    Write-Warn "App '$appId' launched but is no longer running - it likely exited right after start."
-                    Write-Warn "Common cause: the /opt partition is full (crash dumps). Check: sdb -s $DeviceSerial shell df -h /opt"
-                    Write-Warn "Crash dumps live at /opt/usr/share/crash/dump - cleanup needs 'sdb root on' first (see the tizen-sdb-helper skill's clean-crash-dumps recipe)."
-                }
-                elseif ($running -eq "yes") {
-                    Write-Success "App is running (verified via app_launcher -S)"
-                }
-                return $true
+            $tvLaunched = 'app_id\[' + [regex]::Escape($AppId) + '\] (launched|resumed)'
+            if ($launchOutput -notmatch $tvLaunched) {
+                Write-Err "App launch failed for id '$AppId'"
+                return $false
             }
-            Write-Err "App launch failed for id '$appId'"
-            return $false
         }
-        else {
-            # Installation succeeded - only the app_launcher lookup failed.
-            # This is NOT an installation error; the app IS installed.
-            Write-Warn "Could not find app in app_launcher list (installation succeeded, but app ID lookup failed for launch)"
-            return $false
+        Write-Success "App launched successfully"
 
+        # 'successfully launched pid = N' only proves launchpad forked
+        # the process; an app that crashes on startup (classic cause:
+        # the /opt partition full of crash dumps) still prints it.
+        # Verify with the running list, best-effort: -S output varies
+        # per profile, so only a CLEAR yes/no is trusted.
+        $running = "unknown"
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            Start-Sleep -Seconds 1
+            $statusOut = (& $SdbPath -s $DeviceSerial shell app_launcher -S 2>$null) -join "`n"
+            if (-not $statusOut -or $statusOut -match 'unknown option|not supported|usage:') {
+                $running = "unknown"
+                break
+            }
+            if ($statusOut -match [regex]::Escape($AppId)) {
+                $running = "yes"
+                break
+            }
+            $running = "no"
         }
+        Write-Host "APP_RUNNING=$running"
+        if ($running -eq "no") {
+            Write-Warn "App '$AppId' launched but is no longer running - it likely exited right after start."
+            Write-Warn "Common cause: the /opt partition is full (crash dumps). Check: sdb -s $DeviceSerial shell df -h /opt"
+            Write-Warn "Crash dumps live at /opt/usr/share/crash/dump - cleanup needs 'sdb root on' first (see the tizen-sdb-helper skill's clean-crash-dumps recipe)."
+        }
+        elseif ($running -eq "yes") {
+            Write-Success "App is running (verified via app_launcher -S)"
+        }
+        return $true
     }
     catch {
         Write-Err "Error running app: $_"
@@ -520,11 +573,11 @@ try {
         $appName = [System.IO.Path]::GetFileNameWithoutExtension($appPackage) -replace '-(x86_64|armv7l|aarch64|i386)$','' -replace '-[0-9][0-9.]*$',''
 
         # Always try to find the app ID (not just when -RunAfterInstall is used)
-        $null = Find-AppId $sdbPath $selectedDevice $appName
+        $foundAppId = Find-AppId $sdbPath $selectedDevice $appName $appPackage
 
         # Run app if requested
         if ($RunAfterInstall) {
-            $null = Run-App $sdbPath $selectedDevice $appName
+            $null = Run-App $sdbPath $selectedDevice $foundAppId
         }
     }
 

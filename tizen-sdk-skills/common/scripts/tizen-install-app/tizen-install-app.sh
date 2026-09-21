@@ -420,12 +420,54 @@ RERUN_EOF
 }
 
 
+# Tizen app ids are alphanumeric with `.`/`_`/`-` (same alphabet as
+# lib/core/rds/device-shell.js SAFE_PACKAGE_ID). Every id — from the manifest
+# or from `app_launcher -l` — passes this before it is spliced into a device
+# shell command line.
+is_safe_app_id() {
+    [[ "$1" =~ ^[A-Za-z0-9._-]+$ ]]
+}
+
+# Launchable app id straight from the package manifest (.wgt: config.xml
+# <tizen:application id=...>, .tpk: tizen-manifest.xml appid=...). Samsung TV
+# images print nothing for `app_launcher -l` in a non-root shell, so the id
+# must not depend on the device's installed-app list.
+manifest_app_id() {
+    local package_path="$1"
+    command -v unzip >/dev/null 2>&1 || return 1
+
+    local extension="${package_path##*.}" manifest app_id=""
+    case "$extension" in
+        wgt)
+            manifest=$(unzip -p "$package_path" config.xml 2>/dev/null | tr -d '\r\n' || true)
+            app_id=$(printf '%s' "$manifest" | grep -o '<tizen:application[^>]*' | head -n1 \
+                | sed -nE "s/.*[[:space:]]id=[\"']([^\"']+)[\"'].*/\1/p" || true)
+            ;;
+        tpk)
+            manifest=$(unzip -p "$package_path" tizen-manifest.xml 2>/dev/null | tr -d '\r\n' || true)
+            app_id=$(printf '%s' "$manifest" | grep -oE '<(ui|service|widget|watch)-application[^>]*' | head -n1 \
+                | sed -nE "s/.*[[:space:]]appid=[\"']([^\"']+)[\"'].*/\1/p" || true)
+            ;;
+    esac
+
+    is_safe_app_id "$app_id" || return 1
+    echo "$app_id"
+}
+
 find_app_id() {
     local sdb_path="$1"
     local device_serial="$2"
     local app_package_name="$3"
+    local app_package_path="$4"
 
-    # Try to find the app ID from the installed app list
+    local app_id
+    if app_id=$(manifest_app_id "$app_package_path"); then
+        echo "Found app ID: $app_id" >&2
+        echo "$app_id"
+        return 0
+    fi
+
+    # Fallback: find the app ID from the installed app list
     local list_output
     list_output=$("$sdb_path" -s "$device_serial" shell app_launcher -l 2>&1)
     local candidates
@@ -434,7 +476,7 @@ find_app_id() {
     app_id=$(printf '%s\n' "$candidates" | grep '\.' | head -n1 || true)
     [[ -z "$app_id" ]] && app_id=$(printf '%s\n' "$candidates" | head -n1)
 
-    if [[ -n "$app_id" ]]; then
+    if [[ -n "$app_id" ]] && is_safe_app_id "$app_id"; then
         echo "Found app ID: $app_id" >&2
         echo "$app_id"
         return 0
@@ -462,72 +504,67 @@ verify_installation() {
 run_app() {
     local sdb_path="$1"
     local device_serial="$2"
-    local app_package_name="$3"
+    local app_id="$3"
 
     log_section "Running app"
 
-    # app_launcher -l prints entries as 'Name'  'AppID'. Collect every quoted
-    # token containing the package name, then PREFER one with a dot: the real
-    # app id is dotted (web: <pkgid>.<name> e.g. xA4DHr9cFv.MyTizenWebApp,
-    # native: org.example.<name>) while the bare display-name token is not.
-    # awk '{print $1}' used to grab the display NAME and launch a nonexistent id.
-    local list_output
-    list_output=$("$sdb_path" -s "$device_serial" shell app_launcher -l 2>&1)
-    local candidates
-    candidates=$(printf '%s\n' "$list_output" | grep -o "'[^']*${app_package_name}[^']*'" | tr -d "'" || true)
-    local app_id
-    app_id=$(printf '%s\n' "$candidates" | grep '\.' | head -n1 || true)
-    [[ -z "$app_id" ]] && app_id=$(printf '%s\n' "$candidates" | head -n1)
-
-    if [[ -n "$app_id" ]]; then
-        echo "Found app ID: $app_id" >&2
-
-        # sdb shell does NOT propagate the remote exit code (it is always 0),
-        # so success must be read from app_launcher's own output.
-        local launch_output
-        launch_output=$("$sdb_path" -s "$device_serial" shell app_launcher -s "$app_id" 2>&1)
-        printf '%s\n' "$launch_output" >&2
-        if printf '%s' "$launch_output" | grep -qi 'successfully launched'; then
-            log_ok "App launched successfully"
-
-            # 'successfully launched pid = N' only proves launchpad forked the
-            # process; an app that crashes on startup (classic cause: the /opt
-            # partition full of crash dumps) still prints it. Verify with the
-            # running list, best-effort: -S output varies per profile, so only
-            # a CLEAR yes/no is trusted — anything else keeps the old behavior.
-            # (Same poll-don't-trust pattern as run_rpm_app's pgrep loop.)
-            local attempt status_out running="unknown"
-            for attempt in 1 2 3; do
-                sleep 1
-                status_out=$("$sdb_path" -s "$device_serial" shell app_launcher -S 2>/dev/null | tr -d '\r' || true)
-                if [[ -z "$status_out" ]] || printf '%s' "$status_out" | grep -qiE 'unknown option|not supported|usage:'; then
-                    running="unknown"
-                    break
-                fi
-                if printf '%s' "$status_out" | grep -qF "$app_id"; then
-                    running="yes"
-                    break
-                fi
-                running="no"
-            done
-            echo "APP_RUNNING=$running"
-            if [[ "$running" == "no" ]]; then
-                log_warn "App '$app_id' launched but is no longer running — it likely exited right after start."
-                log_warn "Common cause: the /opt partition is full (crash dumps). Check: sdb -s $device_serial shell df -h /opt"
-                log_warn "Crash dumps live at /opt/usr/share/crash/dump — cleanup needs 'sdb root on' first (see the tizen-sdb-helper skill's clean-crash-dumps recipe)."
-            elif [[ "$running" == "yes" ]]; then
-                log_ok "App is running (verified via app_launcher -S)"
-            fi
-            return 0
-        fi
-        log_error "App launch failed for id '$app_id'"
-        return 1
-    else
-        # Installation succeeded — only the app_launcher lookup failed.
+    if [[ -z "$app_id" ]]; then
+        # Installation succeeded — only the app ID lookup failed.
         # This is NOT an installation error; the app IS installed.
-        log_warn "Could not find app in app_launcher list (installation succeeded, but app ID lookup failed for launch)"
+        log_warn "Could not find app ID (package manifest unreadable and app not in app_launcher list) — installation succeeded, launch skipped"
         return 1
     fi
+
+    # sdb shell does NOT propagate the remote exit code (it is always 0),
+    # so success must be read from the launcher's own output.
+    local launch_output
+    launch_output=$("$sdb_path" -s "$device_serial" shell app_launcher -s "$app_id" 2>&1)
+    printf '%s\n' "$launch_output" >&2
+    if ! printf '%s' "$launch_output" | grep -qi 'successfully launched'; then
+        # Samsung TV images print nothing for app_launcher in a non-root shell
+        # (exit 0, empty output); their own launcher answers
+        # "app_id[<id>] launched" ("resumed" when the app was already running).
+        # Match on this app's id so a "launch failed" / foreign-app line never
+        # counts as success.
+        launch_output=$("$sdb_path" -s "$device_serial" shell 0 was_execute "$app_id" 2>&1)
+        printf '%s\n' "$launch_output" >&2
+        if ! printf '%s' "$launch_output" | grep -qiF "app_id[$app_id] launched" \
+            && ! printf '%s' "$launch_output" | grep -qiF "app_id[$app_id] resumed"; then
+            log_error "App launch failed for id '$app_id'"
+            return 1
+        fi
+    fi
+    log_ok "App launched successfully"
+
+    # 'successfully launched pid = N' only proves launchpad forked the
+    # process; an app that crashes on startup (classic cause: the /opt
+    # partition full of crash dumps) still prints it. Verify with the
+    # running list, best-effort: -S output varies per profile, so only
+    # a CLEAR yes/no is trusted — anything else keeps the old behavior.
+    # (Same poll-don't-trust pattern as run_rpm_app's pgrep loop.)
+    local attempt status_out running="unknown"
+    for attempt in 1 2 3; do
+        sleep 1
+        status_out=$("$sdb_path" -s "$device_serial" shell app_launcher -S 2>/dev/null | tr -d '\r' || true)
+        if [[ -z "$status_out" ]] || printf '%s' "$status_out" | grep -qiE 'unknown option|not supported|usage:'; then
+            running="unknown"
+            break
+        fi
+        if printf '%s' "$status_out" | grep -qF "$app_id"; then
+            running="yes"
+            break
+        fi
+        running="no"
+    done
+    echo "APP_RUNNING=$running"
+    if [[ "$running" == "no" ]]; then
+        log_warn "App '$app_id' launched but is no longer running — it likely exited right after start."
+        log_warn "Common cause: the /opt partition is full (crash dumps). Check: sdb -s $device_serial shell df -h /opt"
+        log_warn "Crash dumps live at /opt/usr/share/crash/dump — cleanup needs 'sdb root on' first (see the tizen-sdb-helper skill's clean-crash-dumps recipe)."
+    elif [[ "$running" == "yes" ]]; then
+        log_ok "App is running (verified via app_launcher -S)"
+    fi
+    return 0
 }
 
 
@@ -617,7 +654,7 @@ fi
 # For RPM packages, skip app_launcher lookup (platform apps are not registered)
 if [[ "$APP_EXTENSION" != "rpm" ]]; then
     # Always try to find the app ID (not just when --run is used)
-    FOUND_APP_ID=$(find_app_id "$SDB_TOOL" "$DEVICE_SERIAL" "$APP_NAME" || true)
+    FOUND_APP_ID=$(find_app_id "$SDB_TOOL" "$DEVICE_SERIAL" "$APP_NAME" "$APP_PACKAGE" || true)
 fi
 
 # For RPM platform apps, generate a host-side rerun script so the user can
@@ -634,8 +671,8 @@ if [[ "$RUN_AFTER_INSTALL" == "true" ]]; then
         # RPM platform apps — run binary directly
         run_rpm_app "$SDB_TOOL" "$DEVICE_SERIAL" "$APP_NAME" || true
     else
-        # TPK/WGT apps — run via app_launcher
-        run_app "$SDB_TOOL" "$DEVICE_SERIAL" "$APP_NAME" || true
+        # TPK/WGT apps — run via app_launcher (Samsung TV: 0 was_execute)
+        run_app "$SDB_TOOL" "$DEVICE_SERIAL" "${FOUND_APP_ID:-}" || true
     fi
 fi
 

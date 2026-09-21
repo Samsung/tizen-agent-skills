@@ -4,7 +4,7 @@ id: tizen-sdk.playwright-test.missing-required
 plugin: tizen-sdk
 command: playwright-test
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "playwright-test fails with invalid_parameters when --app-id is missing for a run"
 

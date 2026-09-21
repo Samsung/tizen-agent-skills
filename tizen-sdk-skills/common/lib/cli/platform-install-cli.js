@@ -12,7 +12,7 @@
  */
 
 const { installPlatform } = require("../core/sdk-commands");
-const { runCli, getFlagValue } = require("./cli-runner");
+const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
 
 const args = process.argv.slice(2);
 
@@ -34,7 +34,13 @@ if (!platformVersion) {
 }
 
 const force = args.includes("--force") || args.includes("-Force");
+const downloadJobs = getDownloadJobsOrExit("tizen-sdk platform-install", args);
 
 runCli("tizen-sdk platform-install", () =>
-  installPlatform(platformVersion, force, "tizen-sdk platform-install"),
+  installPlatform(
+    platformVersion,
+    force,
+    "tizen-sdk platform-install",
+    downloadJobs,
+  ),
 );

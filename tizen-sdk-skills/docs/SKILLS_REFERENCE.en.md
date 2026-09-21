@@ -896,7 +896,7 @@ node <plugin>/lib/cli/update-package-cli.js [--force] [--dry-run]
 
 ### 20. tizen-sdb-helper
 
-**Description:** Pick the right sdb command for a specific user request on a Tizen device — log capture, shell, port forward, root toggle, reboot, screen state — with confirmation gates on destructive actions.
+**Description:** Pick the right sdb command for a specific user request on a Tizen device — shell, port forward, root toggle, reboot, screen state — with confirmation gates on destructive actions. Log requests (view/save/clear) hand off to `tizen-dlog-analyzer` (`log-dump`, `log-clear`).
 
 **Use Case:** Run ad-hoc sdb commands on a connected device (logs, shell, port forwarding, device power control). Some intents (screenshot, install/uninstall, list devices, connect/disconnect) are matched by sdb-helper but handed off to dedicated skills that provide richer pipelines. For file transfer, use `tizen-file-transfer` skill directly.
 
@@ -916,7 +916,7 @@ node <plugin>/lib/cli/sdb-helper-cli.js --request <text> [--serial <serial>]
 **CLI Examples:**
 
 ```bash
-node .../sdb-helper-cli.js --request "tail the logs"
+node .../sdb-helper-cli.js --request "run shell command ls -la"
 node .../sdb-helper-cli.js --request "open a shell" --serial emulator-26101
 node .../sdb-helper-cli.js --request="reboot the device" --serial=emulator-26101
 ```

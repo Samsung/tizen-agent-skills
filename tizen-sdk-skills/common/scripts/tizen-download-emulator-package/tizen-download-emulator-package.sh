@@ -38,6 +38,7 @@ esac
 SDK_PATH="$(get_sdk_path)"
 PLATFORM_VERSION=""
 FORCE=false
+DOWNLOAD_JOBS=4
 DRY_RUN=false
 
 # Parse arguments
@@ -48,6 +49,8 @@ while [[ $# -gt 0 ]]; do
         --platform-version=*)  PLATFORM_VERSION="${1#*=}"; shift ;;
         --platform-version)    PLATFORM_VERSION="$2"; shift 2 ;;
         --force)               FORCE=true; shift ;;
+        --download-jobs)       DOWNLOAD_JOBS="${2:-}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift 2 ;;
+        --download-jobs=*)     DOWNLOAD_JOBS="${1#*=}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift ;;
         --dry-run)             DRY_RUN=true; shift ;;
         --help|-h)
             cat <<EOF
@@ -77,6 +80,9 @@ EOF
         *) log_error "Unknown option: $1"; exit 1 ;;
     esac
 done
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+SCRIPT_START=$SECONDS
 
 log_info "Tizen emulator package downloader started"
 log_info "SDK path: $SDK_PATH"
@@ -343,13 +349,20 @@ if [[ "$DRY_RUN" == "true" ]]; then
         printf "  %3d. %-48s %s%s\n" "$n" "$pkg" "$p" "$tag"
     done
     rm -rf "$WORKDIR"
+    log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 0
 fi
 
 # -----------------------------------------------------------------------------
 # Download and merge each package
 # -----------------------------------------------------------------------------
+DOWNLOAD_QUEUE="$WORKDIR/download.queue"; DOWNLOAD_RESULTS="$WORKDIR/downloads"
+: > "$DOWNLOAD_QUEUE"
+
 IDX=0; OK=0; SKIP=0; FAIL=0
+# Pass 1: decide skips (shared-sync-only / same version / meta) BEFORE anything
+# is downloaded, so a re-run only fetches what it will actually install.
+WORK_ITEMS=()   # "<idx>\t<pkg>" per package that needs download + install
 for pkg in "${RESOLVED[@]}"; do
     IDX=$((IDX+1))
 
@@ -402,10 +415,25 @@ for pkg in "${RESOLVED[@]}"; do
         continue
     fi
 
+    printf '%s\t%s\t%s\n' "$pkg" "${PKG_REPO}${REL_PATH}" "$WORKDIR/$(basename "$REL_PATH")" >> "$DOWNLOAD_QUEUE"
+    WORK_ITEMS+=("$IDX"$'\t'"$pkg")
+done
+
+log_info "Downloading packages with $DOWNLOAD_JOBS parallel workers..."
+DOWNLOAD_START=$SECONDS
+download_queue_parallel "$DOWNLOAD_QUEUE" "$DOWNLOAD_JOBS" "$DOWNLOAD_RESULTS"
+log_info "Download phase took $(format_duration $((SECONDS - DOWNLOAD_START)))"
+EXTRACT_START=$SECONDS
+
+# Pass 2: extract + merge the packages queued above.
+for work_item in ${WORK_ITEMS[@]+"${WORK_ITEMS[@]}"}; do
+    IDX="${work_item%%$'\t'*}"
+    pkg="${work_item#*$'\t'}"
+    REL_PATH="${PKG_PATH[$pkg]}"
     URL="${PKG_REPO}${REL_PATH}"
     ZIP="${WORKDIR}/$(basename "$REL_PATH")"
-    log_info "[$IDX/$TOTAL] Downloading $pkg ..."
-    if ! curl -fsSL -o "$ZIP" "$URL"; then
+    log_info "[$IDX/$TOTAL] Processing downloaded $pkg ..."
+    if [[ "$(download_queue_status "$pkg" "$DOWNLOAD_RESULTS")" != "OK" ]]; then
         log_error "[$IDX/$TOTAL] Download failed: $URL"
         FAIL=$((FAIL+1))
         continue
@@ -451,11 +479,13 @@ for pkg in "${RESOLVED[@]}"; do
     log_ok "[$IDX/$TOTAL] $pkg installed"
 done
 
+log_info "Extraction phase took $(format_duration $((SECONDS - EXTRACT_START)))"
 log_ok "Emulator package result: OK $OK / skipped $SKIP / failed $FAIL (total $TOTAL)"
 
 if [[ $FAIL -gt 0 ]]; then
     log_error "Some packages failed to install. Not creating .emulator-package-installed marker."
     rm -rf "$WORKDIR"
+    log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 1
 fi
 
@@ -490,4 +520,5 @@ log_ok ".emulator-package-installed created/updated: $EMUL_PKG_MARKER (platform 
 
 rm -rf "$WORKDIR"
 log_ok "Tizen emulator package download completed!"
+log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 exit 0

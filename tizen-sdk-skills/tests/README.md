@@ -2,7 +2,7 @@
 
 Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 34 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
 
-**281 test cases** across 8 domains, covering 33 of the 34 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
+**286 test cases** across 8 domains, covering 33 of the 34 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
 
 
 ## Architecture Diagram
@@ -172,11 +172,11 @@ tests/
     fixtures.env          ← values for ${NAME} argv placeholders (keeps passwords off argv)
   scripts/
     verify-doc-stats.mjs  ← CI gate: doc statistics must match actual TC files
-  tc/                     ← 283 test cases in 276 YAML files
+  tc/                     ← 286 test cases in 279 YAML files
     device/               ← 103 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
-    sdk/                  ←  64 TCs (check-node, check-disk-space, sdk-init, sdk-install,
+    sdk/                  ←  66 TCs (check-node, check-disk-space, sdk-init, sdk-install,
                                      sdk-install-custom-repo, tv-sdk-install, sdk-repo-info,
                                      validate-repo-url, update-package, platform-install,
                                      download-emulator-package, download-mobile-platform,
@@ -188,7 +188,7 @@ tests/
     meta/                 ←  16 TCs (--capabilities, --doctor, --schema, list-commands,
                                      no-args, guard-rules)
     test/                 ←  15 TCs (playwright-test)
-    dlog-analyzer/        ←   2 TCs (dlog-analyzer)
+    dlog-analyzer/        ←   3 TCs (dlog-analyzer)
   skills/
     run-test-suite.md     ← Cline/Claude prompt-lane execution guide
 ```
@@ -225,9 +225,9 @@ node runner.mjs --status=approved  # only verified TCs (regression gate)
 
 | Status        | Count | Meaning                                                           |
 | ------------- | ----- | ----------------------------------------------------------------- |
-| `draft`       | 165   | Authored, never executed — assertions unproven                    |
+| `draft`       | 79    | Authored, never executed — assertions unproven                    |
 | `candidate`   | 8     | Executed and passing, but not every lane verified yet              |
-| `approved`    | 110   | Every lane executed and passing; a regression is a release blocker |
+| `approved`    | 199   | Every lane executed and passing; a regression is a release blocker |
 | `quarantined` | 0     | Known unstable or environment-broken; excluded by default          |
 
 Schema validation (`--dry-run`) never justifies a promotion — it only checks the YAML shape.
@@ -236,10 +236,10 @@ Schema validation (`--dry-run`) never justifies a promotion — it only checks t
 
 | Tier     | Commands | TCs | Description              | CI-safe?      |
 | -------- | -------- | --- | ------------------------ | ------------- |
-| safe     | 6        | 63  | No side effects          | ✅ Yes        |
+| safe     | 6        | 66  | No side effects          | ✅ Yes        |
 | mutating | 14       | 79  | Install/modify/delete    | ⚠️ With setup |
 | device   | 14       | 141 | Requires emulator/device | ❌ Manual     |
-| **Total**| **34**   | **281** |                      |               |
+| **Total**| **34**   | **286** |                      |               |
 
 See `policy/tiers.yaml` for the full classification.
 

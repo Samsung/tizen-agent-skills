@@ -3,12 +3,14 @@ id: tizen-sdk.remote-device.disconnect
 plugin: tizen-sdk
 command: remote-device
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "remote-device --action disconnect --ip returns success"
 
 lanes:
   cli:
+    # Verified 2026-09-17: sdb disconnect is idempotent — succeeds ("disconnected")
+    # even when 192.168.1.50 was never connected, so no device fixture is needed.
     argv: ["tizen-sdk", "remote-device", "--action", "disconnect", "--ip", "192.168.1.50"]
     timeout_sec: 30
     expect:

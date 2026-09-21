@@ -3,13 +3,19 @@ id: tizen-sdk.emulator-manager.modify-ram
 plugin: tizen-sdk
 command: emulator-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager --action modify --vm-name --ram-size returns success"
 
 lanes:
   cli:
-    argv: ["tizen-sdk", "emulator-manager", "--action", "modify", "--vm-name", "test-vm", "--ram-size", "1024"]
+    # The HD1080 template already defaults test-vm to 1024 MB, and em-cli rejects a
+    # no-op modify ("Value of new property is the same value of saved property").
+    # It also only accepts the template's RAM steps (512, 768, 1024 on Tizen 11
+    # HD1080; 2048 → "dose not match any RAM size"). The PowerShell wrapper hides
+    # both reasons behind a generic failure with a misleading "VM may be running"
+    # hint. Use 768: allowed, and different from the default (fixed 2026-09-17).
+    argv: ["tizen-sdk", "emulator-manager", "--action", "modify", "--vm-name", "test-vm", "--ram-size", "768"]
     timeout_sec: 60
     expect:
       status: success

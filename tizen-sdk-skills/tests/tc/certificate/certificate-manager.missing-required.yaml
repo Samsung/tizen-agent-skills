@@ -4,7 +4,7 @@ id: tizen-sdk.certificate-manager.missing-required
 plugin: tizen-sdk
 command: certificate-manager
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "certificate-manager generate-author fails when --name and --password are missing"
 

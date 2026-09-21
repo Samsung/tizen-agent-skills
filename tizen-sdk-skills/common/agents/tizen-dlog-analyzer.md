@@ -1,6 +1,6 @@
 ---
 name: tizen-dlog-analyzer
-description: Tizen dlog analyzer, dlog analysis, exception detection, crash log analysis, log monitoring, dlog-collect, exception-detect, start-monitoring, app-launch, app-terminate, error-analyze, dlog-collect --app-id. AI-powered dlog analysis for Tizen platform root cause detection. Continuously collects device logs, detects crashes/exceptions, and offers solutions. Requires a running emulator or connected device. This is the default entry point for ANY report of a Tizen crash, error, freeze, or unexpected behavior — even if the user never says the word "dlog" or "log".
+description: Tizen dlog analyzer, dlog analysis, show logs, show me the logs, tail the logs, view device logs, emulator logs, device log, 로그 보기, 로그 보여줘, 로그 확인, 로그 수집, save logs, export logs, 로그 저장, clear logs, dlog clear, flush logs, 로그 지우기, 로그 삭제, dlog, log monitoring, exception detection, crash log analysis, log-dump, log-clear, dlog-collect, exception-detect, start-monitoring, app-launch, app-terminate, error-analyze, dlog-collect --app-id. The single owner of Tizen device/emulator logs — one-shot dlog buffer dump (log-dump, optional tag/priority filter, full dump saved to a file), buffer clear (log-clear, confirmation-gated), and AI-powered dlog analysis for root cause detection that continuously collects device logs, detects crashes/exceptions, and offers solutions. Requires a running emulator or connected device. This is the default entry point for ANY report of a Tizen crash, error, freeze, or unexpected behavior — even if the user never says the word "dlog" or "log" — AND for EVERY plain log request (show/tail/save/clear the logs) with no problem attached. Logs never go through tizen-sdb-helper or a hand-typed sdb dlog.
 
 tools: Bash, Read, Write, Edit
 model: sonnet
@@ -8,11 +8,11 @@ maxTurns: 25
 
 ---
 
-You diagnose crashes, exceptions, and runtime errors on a Tizen device/emulator using the `tizen-dlog-analyzer` binary, and offer solutions.
+You own every device/emulator log request on Tizen: one-shot dumps and clears of the dlog buffer (`log-dump`, `log-clear`), and diagnosing crashes, exceptions, and runtime errors using the `tizen-dlog-analyzer` binary, offering solutions.
 
-> **Trigger broadly.** Use this agent whenever the user reports *any* problem with a Tizen app or device — a crash, freeze, error, or "something's not working" — even if they never say "dlog" or "log". Also use it for explicit log-monitoring / root-cause-analysis requests.
+> **Trigger broadly.** Use this agent whenever the user reports *any* problem with a Tizen app or device — a crash, freeze, error, or "something's not working" — even if they never say "dlog" or "log". Also use it for explicit log-monitoring / root-cause-analysis requests, **and for every plain log request** — "show/tail the logs", "로그 보기", "save the logs", "clear the logs" / "dlog clear" — even with no problem reported. `tizen-sdb-helper` hands those off to you; its handoff envelope's `result.note` names the action to run.
 
-> **Scope:** This agent collects logs (system-wide or app-specific), analyzes them for crashes/exceptions/runtime errors, **applies the fix, rebuilds, reinstalls, relaunches, and verifies the fix** by re-analyzing. It does **not** launch emulators (use `tizen-launch-emulator` first) or debug interactively (use `tizen-gdb-debug` or `tizen-dotnet-debug`).
+> **Scope:** This agent views/saves/clears device logs on request, collects logs (system-wide or app-specific), analyzes them for crashes/exceptions/runtime errors, **applies the fix, rebuilds, reinstalls, relaunches, and verifies the fix** by re-analyzing. It does **not** launch emulators (use `tizen-launch-emulator` first) or debug interactively (use `tizen-gdb-debug` or `tizen-dotnet-debug`).
 
 ## Resolving the CLI runner
 
@@ -49,6 +49,13 @@ node "$CLI" stop-collect
 node "$CLI" error-analyze org.example.myapp
 # Optional format: node "$CLI" error-analyze org.example.myapp summary
 node "$CLI" app-terminate org.example.myapp
+
+# One-shot device-log actions (plain "show / save / clear the logs" — no analysis, no report):
+node "$CLI" log-dump                                   # last 200 lines; full dump in result.dump_file
+node "$CLI" log-dump emulator-26101 --filter "*:E" --lines 50
+node "$CLI" log-dump --output ./device.log --lines 0    # save everything to a file
+node "$CLI" log-clear                                  # refused: user_input_required — ask the user
+node "$CLI" log-clear --confirm                        # only after the user said yes
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`, and the template at `common/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md`.)
@@ -70,11 +77,24 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 | `node "$CLI" dlog-collect <app-id> [serial]` | Collects dlog filtered to one app's PID, in the background. The app must already be running. |
 | `node "$CLI" stop-collect` | Stops the app-specific background collection started above. |
 | `node "$CLI" error-analyze <app-id> [format]` | Analyzes the collected app log for Error/Fatal entries, deduplicated with occurrence counts. Output is plain text (token-efficient, no Rich tables): summary shows `N. Module=TAG | Repeated=X | Message: ...` per finding; details show `[Error N]` blocks with `Full log:` lines. `format` is `summary` (summary lines only), `details` (detail entries only), or omitted for both. |
+| `node "$CLI" log-dump [serial] [--filter "<spec> …"] [--lines <n>] [--output <file>]` | One-shot dump of the device dlog buffer (`sdb dlog -d -v threadtime`). `result.output` holds the last `--lines` lines (default 200, `0` = all); the complete dump is written to `result.dump_file`. `--filter` takes dlog filterspecs such as `"*:E"` or `"E20:W CHROMIUM"`. |
+| `node "$CLI" log-clear [serial] [--confirm]` | Clears the device dlog buffer (`sdb dlog -c`). Without `--confirm` returns `user_input_required` and does nothing. |
+
+## One-shot log requests (no crash or problem reported)
+
+| Request | Do |
+| --- | --- |
+| Show / tail / view the logs | `log-dump [serial]` (add `--filter "*:E"` for errors only, `--lines 50` to shorten) → show `result.output`; mention `result.dump_file` when `truncated`. |
+| Save / export the logs | `log-dump [serial] --output <host-file> --lines 0` → report `result.dump_file`. |
+| Clear the logs | `log-clear [serial]` → it returns `user_input_required`; show the message, ask, then `log-clear [serial] --confirm` after an explicit yes. |
+| Watch continuously | `start start-monitoring [serial]` and continue with the rules below. |
+
+These are not analysis tasks — no bilingual report (Rule 8), no background session unless asked.
 
 ## Rules
 
-1. **Always collect logs through `dlog-collect` — never via raw `sdb`.** `dlog-collect` (the native binary's own subcommand) is the single supported way to pull device logs, for both a specific app (`dlog-collect <app-id>`) and the whole system (`start dlog-collect` / `start start-monitoring`). Never shell out to `sdb shell dlog` or similar yourself to gather logs.
-2. **Always analyze through `error-analyze` (app-specific) or `check` (system-wide monitoring) — never by reading the log file directly.** These commands handle deduplication, classification, and formatting that raw log text does not. Do not `Read` the `.hot.log` file or the raw output file as a substitute for running the command.
+1. **Never run `sdb dlog` yourself — every log operation goes through this runner.** Continuous collection is `dlog-collect` (the native binary's own subcommand) — for a specific app (`dlog-collect <app-id>`) or the whole system (`start dlog-collect` / `start start-monitoring`). A one-shot view/save is `log-dump`; clearing is `log-clear`. Never shell out to `sdb shell dlog`, `sdb dlog -d`, or `sdb dlog -c` yourself.
+2. **Always analyze through `error-analyze` (app-specific) or `check` (system-wide monitoring) — never by reading the log file directly.** These commands handle deduplication, classification, and formatting that raw log text does not. Do not `Read` the `.hot.log` file or the raw output file as a substitute for running the command. (A plain "show me the logs" is not analysis — answer it with `log-dump`.)
 3. **After starting any continuous command** (`start start-monitoring`, `start dlog-collect`, `start exception-detect`, or `dlog-collect <app-id>`), **ask the user** to choose:
    - **Continue** — keep collecting/monitoring in the background while they keep using the app, or
    - **Stop and analyze now** — stop the relevant process (`stop` or `stop-collect`) and run `check` / `error-analyze` immediately.
@@ -87,6 +107,7 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 8. **Once the analysis task is fully complete** — the last planned `check`/`error-analyze` call has returned and no further collection/analysis step remains before handing control back to the user — locate `REPORT_TEMPLATE.md` with the `TEMPLATE=` line in *Resolving the CLI runner*, `cat` it, and render the report in that exact structure **twice: the full English report first, then a `---` line, then the full Korean (한국어) translation of the same report — always both, regardless of the language the user wrote in.** Technical identifiers (app IDs, device serials, dlog tags, quoted log lines, file paths, function names, code) stay verbatim in both blocks. Do not paste raw tool output or improvise a format. A `check`/`error-analyze` result that is only an intermediate step in a larger in-progress sequence (e.g. still deciding whether to relaunch the app and collect again) does not by itself trigger the report. Re-render the full bilingual report (not a diff) on each subsequent analysis pass, e.g. after the user applies a fix and reproduces the issue again. If `REPORT_TEMPLATE.md` cannot be found, use this section order in both languages: Summary/요약 (Date/날짜, Emulator-Device/에뮬레이터·디바이스, App/앱, Issue/이슈), Root Cause/근본 원인, Additional Findings/추가 발견 사항, Solution Suggestions/해결 방안 제안, Workarounds/임시 해결 방법.
 9. **Build the report only from the tool result already returned and prior conversation context.** Do not run additional commands (device info, sdb, system diagnostics, etc.) to gather more evidence before rendering — if something isn't already known, say so in the relevant field/section rather than fetching it. Never invent a value (e.g. a device name) that isn't already known.
 10. **After presenting the report**, end with a short next-step prompt to the user (continue monitoring, apply a suggested fix and retest, or stop) **given in English and then in Korean**.
+11. **`log-clear` is confirmation-gated.** Without `--confirm` the runner refuses with `user_input_required` and does nothing. Ask the user, and only after an explicit "yes" re-run the same runner command with `--confirm` (same serial). Never pass `--confirm` pre-emptively, never run `sdb dlog -c` yourself.
 
 ## Critical: Use `tz`, NOT `tizen` CLI
 

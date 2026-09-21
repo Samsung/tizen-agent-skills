@@ -69,6 +69,7 @@ REPO_URL=""                # Custom package repository URL (--repo-url); empty =
 VALIDATE_ONLY=false        # If true, only validate --repo-url and exit
 DRY_RUN=false              # If true, only print resolved package list without download/install
 FORCE=false                # If true, force reinstall even if already installed
+DOWNLOAD_JOBS=4
 DETACH=false               # If true, re-launch self via nohup in background and exit immediately
 PROFILE_FILE=""            # Shell profile file to record environment variables
 DETACH_LOG="/tmp/tizen-sdk-install.log"  # Log file path when --detach is used
@@ -462,8 +463,14 @@ install_platform_packages() {
 
   # Download each package and merge data/ to SDK root
   mkdir -p "$INSTALL_PATH/.package"
+  local download_queue="$workdir/download.queue" download_results="$workdir/downloads"
+  : > "$download_queue"
   local idx=0 ok=0 skip=0 fail=0
   local skipped=""  # each line: "<pkg> — <reason>", surfaced in the final summary
+
+  # Pass 1: resume/meta skips BEFORE downloading, so a re-run after an
+  # interrupted install only fetches the packages it still has to install.
+  local work_items=()   # "<idx>\t<pkg>" per package that needs download + install
   for pkg in $resolved; do
     idx=$((idx+1))
 
@@ -487,10 +494,33 @@ install_platform_packages() {
       continue
     fi
 
+    printf '%s\t%s\t%s\n' "$pkg" "$PKG_REPO$path" "$workdir/$(basename "$path")" >> "$download_queue"
+    work_items+=("$idx"$'\t'"$pkg")
+  done
+
+  log_info "Downloading packages with $DOWNLOAD_JOBS parallel workers..."
+  local download_start=$SECONDS
+  download_queue_parallel "$download_queue" "$DOWNLOAD_JOBS" "$download_results"
+  log_info "Download phase took $(format_duration $((SECONDS - download_start)))"
+  local extract_start=$SECONDS
+
+  # Pass 2: extract + merge. The parallel batch above already fetched $zip for
+  # the common case, so this loop is really installing, not downloading — the
+  # curl below only runs for the rare package that batch could not fetch
+  # (upstream skew handled by the binary/ fallback).
+  local work_item
+  for work_item in ${work_items[@]+"${work_items[@]}"}; do
+    idx="${work_item%%$'\t'*}"
+    pkg="${work_item#*$'\t'}"
+    path="$(lookup_field "$pkgdb" "$pkg" 2)"
     local url="$PKG_REPO$path"
     local zip="$workdir/$(basename "$path")"
-    log_info "[$idx/$total] Downloading $pkg..."
-    if ! curl -fsSL --max-time 1800 -o "$zip" "$url"; then
+    if [ -f "$zip" ]; then
+      log_info "[$idx/$total] Installing $pkg..."
+    else
+      log_info "[$idx/$total] Downloading $pkg (missing from parallel batch, retrying)..."
+    fi
+    if [ ! -f "$zip" ] && ! curl -fsSL --max-time 1800 -o "$zip" "$url"; then
       # When pkg_list version is ahead of actual published binary (upstream skew),
       # Path returns 404. In this case, fall back to published latest from binary/ list.
       local alt="" listing_ok=1
@@ -562,6 +592,7 @@ install_platform_packages() {
     ok=$((ok+1))
   done
 
+  log_info "Extraction phase took $(format_duration $((SECONDS - extract_start)))"
   log_success "Platform package installation result: success $ok / skipped $skip / failed $fail (total $total)"
   if [ -n "$skipped" ]; then
     log_warning "Skipped packages ($skip) — names and reasons:$skipped"
@@ -750,6 +781,7 @@ Options:
                            (exit 0 = valid repository, 1 = invalid)
       --dry-run            Print resolved package list without installing
   -f, --force              Force reinstall even if already installed
+      --download-jobs <n>  Number of parallel downloads (1-8, default: 4)
   -c, --check              Only check installation
     -s, --status             Query result of last (or ongoing) install run
                            (STATUS=running | done EXIT=<code> | none)
@@ -859,6 +891,16 @@ while [ $# -gt 0 ]; do
       FORCE=true
       shift
       ;;
+    --download-jobs)
+      DOWNLOAD_JOBS="${2:-}"
+      validate_download_jobs "$DOWNLOAD_JOBS" || exit 2
+      shift 2
+      ;;
+    --download-jobs=*)
+      DOWNLOAD_JOBS="${1#*=}"
+      validate_download_jobs "$DOWNLOAD_JOBS" || exit 2
+      shift
+      ;;
     -s|--status)
       # Recover the outcome of a (possibly background) run from disk, regardless
       # of whether its completion notification was delivered. Runs before the
@@ -913,6 +955,9 @@ if [ "$VALIDATE_ONLY" = true ]; then
   exit 1
 fi
 
+# Wall-clock timer for the whole run, printed at every real exit point below.
+SCRIPT_START=$SECONDS
+
 # --detach: re-launch self in background via nohup and exit immediately.
 # This is for harnesses (e.g. Cline) that have a 10-minute background process
 # timeout but no task-notification mechanism. The caller polls --status to
@@ -927,6 +972,7 @@ if [ "$DETACH" = true ]; then
   detach_args=(--force --path "$INSTALL_PATH")
   [ -n "$PLATFORM_VERSION" ] && detach_args+=(--platform "$PLATFORM_VERSION")
   [ -n "$REPO_URL" ] && detach_args+=(--repo-url "$REPO_URL")
+  detach_args+=(--download-jobs "$DOWNLOAD_JOBS")
   nohup bash "$0" "${detach_args[@]}" > "$DETACH_LOG" 2>&1 & jobs -p
   echo "LOG=$DETACH_LOG"
   # --status exits as soon as it is parsed, so --path must come BEFORE it.
@@ -1018,6 +1064,7 @@ echo ""
 # Dry-run exits without verification/summary
 if [ "$DRY_RUN" = true ]; then
   log_success "[DRY-RUN] Completed"
+  log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
   exit 0
 fi
 
@@ -1030,6 +1077,7 @@ if [ "$INSTALL_FAILED" = true ]; then
   log_error "Tizen SDK installation not completed (some packages failed)."
   log_error "Not creating sdk.info. Check network and run again"
   log_error "(Already downloaded packages will be skipped and install continues)."
+  log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
   exit 1
 fi
 
@@ -1070,6 +1118,7 @@ verify_installation
 echo ""
 
 log_success "Tizen SDK platform package installation complete!"
+log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 log_info "Next steps:"
 log_info "1. Open new terminal or apply environment variables and verify with:"
 log_info "   source ${PROFILE_FILE:-~/.bashrc} && tz --version"

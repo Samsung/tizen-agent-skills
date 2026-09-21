@@ -9,6 +9,8 @@ description: "dotnet-debug --app-id --mode launch returns success"
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the .NET app org.tizen.example.MyApp installed on the device.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp", "--mode", "launch"]
     timeout_sec: 120
     expect:

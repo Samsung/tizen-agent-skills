@@ -18,6 +18,13 @@
  *   terminateApp       — Terminate a running Tizen app via sdb
  *   collectAppLogs     — Collect dlog filtered by app PID (app-specific logs)
  *   analyzeErrors      — Analyze collected app logs for non-fatal runtime errors (E/F priority)
+ *   dumpDeviceLogs     — One-shot dlog buffer dump via sdb (`dlog -d`), optional tag/priority filter
+ *   clearDeviceLogs    — Clear the device dlog buffer via sdb (`dlog -c`), confirmation-gated
+ *
+ * The last two are plain sdb actions (no native binary involved). They live
+ * here — not in sdb-helper — so that every device-log request has ONE owner:
+ * sdb-helper hands its log intents off to this skill, and this runner covers
+ * both the quick one-shot operations and the continuous collect/analyze flow.
  */
 
 const { spawn, execFileSync } = require("child_process");
@@ -52,6 +59,110 @@ const APP_ID_RE = /^[A-Za-z0-9._-]+$/;
 
 function isValidAppId(appId) {
   return typeof appId === "string" && APP_ID_RE.test(appId);
+}
+
+/**
+ * A dlog filterspec is `<tag>[:<priority>]` — e.g. `*:E`, `E20:W`, `CHROMIUM`.
+ * Priorities: V D I W E F S (S = silent). The specs are spliced into the
+ * `sdb dlog` command line (quoted), so anything outside this shape is
+ * rejected before it can reach the shell.
+ */
+const DLOG_FILTERSPEC_RE = /^[A-Za-z0-9_.*-]+(:[VDIWEFS])?$/;
+
+/**
+ * Normalize the `--filter` value of log-dump into a list of filterspecs.
+ * Accepts a string (space- or comma-separated) or an array of strings.
+ * @returns {{specs: string[]}|{error: string}}
+ */
+function parseFilterSpecs(filter) {
+  if (filter === undefined || filter === null || filter === "") {
+    return { specs: [] };
+  }
+  const tokens = (
+    Array.isArray(filter) ? filter : String(filter).split(/[\s,]+/)
+  )
+    .map((t) => String(t).trim())
+    .filter((t) => t.length > 0);
+  for (const token of tokens) {
+    if (!DLOG_FILTERSPEC_RE.test(token)) {
+      return {
+        error:
+          `Invalid dlog filterspec: ${JSON.stringify(token)}. ` +
+          'Use <tag>[:<V|D|I|W|E|F|S>] such as "*:E", "E20:W" or "CHROMIUM".',
+      };
+    }
+  }
+  return { specs: tokens };
+}
+
+/**
+ * Keep only the last `limit` lines of a dump (0 = unlimited).
+ * @returns {{text: string, total_lines: number, returned_lines: number, truncated: boolean}}
+ */
+function tailLines(text, limit) {
+  const body = typeof text === "string" ? text.replace(/\r\n/g, "\n") : "";
+  const lines = body.length === 0 ? [] : body.replace(/\n$/, "").split("\n");
+  const total = lines.length;
+  if (!limit || limit <= 0 || total <= limit) {
+    return {
+      text: lines.join("\n"),
+      total_lines: total,
+      returned_lines: total,
+      truncated: false,
+    };
+  }
+  const kept = lines.slice(total - limit);
+  return {
+    text: kept.join("\n"),
+    total_lines: total,
+    returned_lines: kept.length,
+    truncated: true,
+  };
+}
+
+/**
+ * Make a raw `sdb dlog` dump readable and greppable: dlog colours E/F lines
+ * with ANSI SGR escapes, and on Windows sdb emits CRLF on top of the device's
+ * own CR, so a line ends in `\r\r\n`. Strip the escapes and normalise every
+ * line break to `\n` before the text is tailed or written to the dump file.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_SGR_RE = /\x1b\[[0-9;]*[A-Za-z]/g;
+
+function sanitizeDlogOutput(text) {
+  if (typeof text !== "string") return "";
+  return text
+    .replace(ANSI_SGR_RE, "")
+    .replace(/\r+\n/g, "\n") // CRLF and CRCRLF → LF
+    .replace(/\r/g, "\n"); // a lone CR is still a line break
+}
+
+/**
+ * Confirmation gate for log-clear. Returns the failure envelope when
+ * `confirm` is not an explicit true, or null when the caller may proceed.
+ * Pure (no sdb) so the gate is unit-tested without a device — same contract
+ * as the emulator-manager `reset` gate (user_input_required + suggested_fix).
+ */
+function buildLogClearGate(command, serial, confirm) {
+  if (confirm === true || confirm === "true") return null;
+  const target = serial ? `device ${serial}` : "the connected device";
+  const serialFlag = serial ? ` --serial ${serial}` : "";
+  return {
+    command,
+    status: "failure",
+    errors: [
+      {
+        category: "user_input_required",
+        message:
+          `Clearing the dlog buffer on ${target} discards every log line currently held on the device (sdb dlog -c). ` +
+          "This cannot be undone. Ask the user to confirm, then re-run with --confirm.",
+        suggested_fix: {
+          command: `tizen-sdk dlog-analyzer --action log-clear${serialFlag} --confirm`,
+          auto_fixable: false,
+        },
+      },
+    ],
+  };
 }
 
 function invalidAppIdError(command, appId) {
@@ -1149,6 +1260,196 @@ async function analyzeErrors(appId, format, commandLabel) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// One-shot device-log actions (plain sdb, no native binary)
+// ---------------------------------------------------------------------------
+
+const DUMP_FILE = path.join(STATE_DIR, "dlog-dump.log");
+const DEFAULT_DUMP_LINES = 200;
+
+/**
+ * Dump the device's current dlog buffer once (`sdb dlog -d -v threadtime`)
+ * and return its tail. The complete dump is always written to a file so a
+ * "save/export the logs" request is served by the same call.
+ *
+ * `-d` matters: without it dlog streams forever and runSdb's timeout would
+ * kill it, so the action could never succeed (same reasoning as the former
+ * sdb-helper log-stream intent this replaces).
+ *
+ * @param {string} [serial] - Optional device serial
+ * @param {object} [opts]
+ * @param {string|string[]} [opts.filter] - dlog filterspecs, e.g. "*:E" or "E20:W CHROMIUM"
+ * @param {number|string} [opts.lines] - Tail length returned in the envelope (default 200, 0 = all)
+ * @param {string} [opts.output] - Host file for the full dump (default $TMPDIR/tizen-dlog-analyzer/dlog-dump.log)
+ * @param {string} [commandLabel] - Envelope command label
+ */
+async function dumpDeviceLogs(serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer log-dump";
+  const options = opts || {};
+
+  let limit = DEFAULT_DUMP_LINES;
+  if (options.lines !== undefined && options.lines !== null) {
+    limit = Number.parseInt(String(options.lines), 10);
+    if (!Number.isInteger(limit) || limit < 0) {
+      return {
+        command,
+        status: "failure",
+        errors: [
+          {
+            category: "invalid_parameters",
+            message: `--lines must be a non-negative integer (0 = unlimited), got ${JSON.stringify(options.lines)}.`,
+          },
+        ],
+      };
+    }
+  }
+
+  const parsed = parseFilterSpecs(options.filter);
+  if (parsed.error) {
+    return {
+      command,
+      status: "failure",
+      errors: [{ category: "invalid_parameters", message: parsed.error }],
+    };
+  }
+
+  const device = resolveDevice(serial);
+  if (device.error) {
+    return {
+      command,
+      status: "failure",
+      errors: [{ category: "device_not_found", message: device.error }],
+    };
+  }
+
+  // Each filterspec is quoted so a shell never globs `*:E`.
+  const specArgs = parsed.specs.map((s) => `"${s}"`).join(" ");
+  const sdbArgs =
+    `-s "${device.serial}" dlog -d -v threadtime` +
+    (specArgs ? ` ${specArgs}` : "");
+
+  let output;
+  try {
+    output = sanitizeDlogOutput(
+      runSdb(device.sdbPath, sdbArgs, { timeout: 60000 }),
+    );
+  } catch (error) {
+    const stderr = error.stderr ? error.stderr.toString().trim() : "";
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "log_dump_failed",
+          message: `Failed to dump the dlog buffer on device ${device.serial}: ${stderr || error.message}`,
+        },
+      ],
+    };
+  }
+
+  const dumpFile = options.output
+    ? path.resolve(String(options.output))
+    : DUMP_FILE;
+  try {
+    fs.mkdirSync(path.dirname(dumpFile), { recursive: true });
+    fs.writeFileSync(dumpFile, output);
+  } catch (error) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "io_error",
+          message: `Dumped the dlog buffer but could not write it to ${dumpFile}: ${error.message}`,
+        },
+      ],
+    };
+  }
+
+  const tail = tailLines(output, limit);
+  return {
+    command,
+    status: "success",
+    result: {
+      device_serial: device.serial,
+      sdb_command: `sdb ${sdbArgs}`,
+      filter: parsed.specs,
+      dump_file: dumpFile,
+      total_lines: tail.total_lines,
+      returned_lines: tail.returned_lines,
+      truncated: tail.truncated,
+      output: tail.text,
+      message: tail.truncated
+        ? `Dumped ${tail.total_lines} dlog lines from device ${device.serial}; showing the last ${tail.returned_lines}. Full dump: ${dumpFile}`
+        : `Dumped ${tail.total_lines} dlog lines from device ${device.serial}. Full dump: ${dumpFile}`,
+    },
+  };
+}
+
+/**
+ * Clear the device's dlog buffer (`sdb dlog -c`).
+ * Destructive: refuses without an explicit confirm (user_input_required),
+ * and the gate runs before device resolution so it is testable offline.
+ *
+ * @param {string} [serial] - Optional device serial
+ * @param {boolean|string} confirm - Must be true / "true" to execute
+ * @param {string} [commandLabel] - Envelope command label
+ */
+async function clearDeviceLogs(serial, confirm, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer log-clear";
+
+  const gate = buildLogClearGate(command, serial, confirm);
+  if (gate) return gate;
+
+  const device = resolveDevice(serial);
+  if (device.error) {
+    return {
+      command,
+      status: "failure",
+      errors: [{ category: "device_not_found", message: device.error }],
+    };
+  }
+
+  const sdbArgs = `-s "${device.serial}" dlog -c`;
+  try {
+    const output = runSdb(device.sdbPath, sdbArgs, { timeout: 15000 });
+    const warnings = [];
+    if (getRunningPid()) {
+      warnings.push(
+        "A system-wide dlog-analyzer session is running; lines it already collected are unaffected.",
+      );
+    }
+    if (getCollectPid()) {
+      warnings.push(
+        "An app-specific dlog-collect session is running; lines it already collected are unaffected.",
+      );
+    }
+    return {
+      command,
+      status: "success",
+      result: {
+        device_serial: device.serial,
+        sdb_command: `sdb ${sdbArgs}`,
+        output: output.trim(),
+        message: `dlog buffer cleared on device ${device.serial}.`,
+      },
+      ...(warnings.length ? { warnings } : {}),
+    };
+  } catch (error) {
+    const stderr = error.stderr ? error.stderr.toString().trim() : "";
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "log_clear_failed",
+          message: `Failed to clear the dlog buffer on device ${device.serial}: ${stderr || error.message}`,
+        },
+      ],
+    };
+  }
+}
+
 module.exports = {
   startDlogAnalyzer,
   stopDlogAnalyzer,
@@ -1159,9 +1460,15 @@ module.exports = {
   collectAppLogs,
   stopCollectAppLogs,
   analyzeErrors,
+  dumpDeviceLogs,
+  clearDeviceLogs,
   // Pure helpers (unit-tested without a device)
   isValidAppId,
   parseFirstPid,
   extractPidFromPsOutput,
   parseErrorCount,
+  parseFilterSpecs,
+  tailLines,
+  sanitizeDlogOutput,
+  buildLogClearGate,
 };

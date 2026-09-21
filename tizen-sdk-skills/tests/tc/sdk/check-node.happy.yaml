@@ -4,7 +4,7 @@ id: tizen-sdk.check-node.happy
 plugin: tizen-sdk
 command: check-node
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "check-node returns success with version matching v<digits>"
 

@@ -17,6 +17,7 @@ param(
     [switch]$ValidateRepoUrl,      # validate -RepoUrl only (no install) and exit
     [switch]$DryRun,               # resolve & list only, no download/install
     [switch]$Force,                # reinstall even if already installed
+    [ValidateRange(1,8)][int]$DownloadJobs = 4,
     [switch]$Check,
     [switch]$Status,               # query the outcome of the last (or in-progress) run
     [switch]$Wait,                 # sleep 60 seconds then print status (for Cline polling)
@@ -96,6 +97,7 @@ if ($Detach) {
     if ($Platform) { $procArgs += @('-Platform', $Platform) }
     if ($Path) { $procArgs += @('-Path', $Path) }
     if ($RepoUrl) { $procArgs += @('-RepoUrl', $RepoUrl) }
+    $procArgs += @('-DownloadJobs', $DownloadJobs)
     $proc = Start-Process -FilePath "powershell" -ArgumentList $procArgs -WindowStyle Hidden -PassThru -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
     Write-Host "PID=$($proc.Id)"
     Write-Host "LOG=$logFile"
@@ -112,6 +114,11 @@ if ($Detach) {
 # merge into the user profile, set User-scope env vars) needs no admin.
 
 . (Join-Path $PSScriptRoot "..\lib\common.ps1")
+
+# Wall-clock timer for the whole run, printed at every real exit point below
+# (-Help/-Status/-Wait/-ValidateRepoUrl/-Check already returned before this
+# point, so it only ever covers an actual install/dry-run).
+$scriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 # -ValidateRepoUrl: check the repository URL and exit. Nothing is downloaded or
 # installed. Exit 0 = valid (pkg_list_{OS}-{64,32} served), 1 = invalid.
@@ -201,30 +208,6 @@ if (-not $Help) {
 }
 
 
-# Upstream pkg_list versions sometimes run ahead of the actually-published
-# binaries, so a pkg_list Path can 404. Get-PublishedBinary lists binary/ once
-# (cached) and returns the newest published <pkg>_<ver>_<os>.zip, so the
-# download can fall back to a real file.
-$script:BinListCache = $null
-function Get-PublishedBinary {
-    param([string]$Pkg, [string]$Os)
-    if ($null -eq $script:BinListCache) {
-        try {
-            $html = (New-Object System.Net.WebClient).DownloadString("$PkgRepo/binary/")
-            $script:BinListCache = @([regex]::Matches($html, 'href="([^"?]+\.zip)"') | ForEach-Object { $_.Groups[1].Value })
-        } catch { $script:BinListCache = @() }
-    }
-    $esc = [regex]::Escape($Pkg)
-    $osc = [regex]::Escape($Os)
-    $pattern = "^${esc}_[^_/]+_${osc}\.zip$"
-    $cands = @($script:BinListCache | Where-Object { $_ -match $pattern })
-    if ($cands.Count -eq 0) { return $null }
-    return ($cands | Sort-Object {
-        $v = ($_ -replace "^${esc}_", '') -replace "_${osc}\.zip$", ''
-        try { [version]$v } catch { [version]'0.0.0' }
-    } | Select-Object -Last 1)
-}
-
 function Test-AdminPrivilege {
     $isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     return $isAdmin
@@ -288,41 +271,6 @@ function Update-CurrentSessionEnvironment {
     $currentPath = [Environment]::GetEnvironmentVariable("Path", "Process")
     if ($currentPath -notlike "*$sdkToolsPath*") {
         [Environment]::SetEnvironmentVariable("Path", "$sdkToolsPath;$currentPath", "Process")
-    }
-}
-
-# Extract a ZIP entry-by-entry with overwrite.
-#
-# Why not ZipFile.ExtractToDirectory: Tizen rootstrap (RS) packages are Linux
-# sysroots whose ZIPs contain case-only-distinct paths (e.g. netfilter's
-# ipt_ttl.h AND ipt_TTL.h). On case-insensitive NTFS these collide, so the
-# whole-archive extractor throws "file already exists" and aborts the package.
-# Extracting entry-by-entry with overwrite=$true lets the last of a colliding
-# pair win instead of failing the entire package. Fully headless (no Explorer),
-# synchronous, and long-path safe.
-function Expand-ZipEntryByEntry {
-    param(
-        [Parameter(Mandatory)] [string]$ZipPath,
-        [Parameter(Mandatory)] [string]$Destination
-    )
-
-    $archive = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
-    try {
-        foreach ($entry in $archive.Entries) {
-            # Directory entries have an empty Name (path ends with '/').
-            if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-
-            $destPath = Join-Path $Destination $entry.FullName
-            $destDir  = Split-Path -Parent $destPath
-            if ($destDir -and -not (Test-Path $destDir)) {
-                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-            }
-
-            # overwrite = $true: last writer wins on case-insensitive collisions.
-            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-        }
-    } finally {
-        $archive.Dispose()
     }
 }
 
@@ -701,11 +649,16 @@ function Install-PlatformPackages {
 
     $idx = 0; $ok = 0; $skip = 0; $fail = 0
     $skipped = @()  # each item: "<pkg> - <reason>", surfaced in the final summary
+
+    # Pre-filter (fast, synchronous): resolve resume-skips and meta packages up
+    # front so only packages that actually need download+extract+merge go into
+    # the parallel work queue below.
+    $workItems = @()
     foreach ($pkg in $resolved) {
         $idx++
 
         # Resume support: if this package's manifest already exists it was
-        # installed on a previous run, so skip the re-download. This lets an
+        # installed on a previous run, so skip it. This lets an
         # interrupted/timed-out install continue where it left off instead of
         # starting over - just re-run the script.
         if (Test-Path (Join-Path $pkgInfoDir "$pkg.manifest")) {
@@ -723,97 +676,47 @@ function Install-PlatformPackages {
             continue
         }
 
-        $url = "$PkgRepo$relPath"
-        $zip = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
-        Write-Info "[$idx/$total] Downloading $pkg ..."
-        try {
-            # WebClient is far faster than Invoke-WebRequest in Windows PowerShell 5.1.
-            $wc = New-Object System.Net.WebClient
-            $wc.DownloadFile($url, $zip)
-            $wc.Dispose()
-        } catch {
-            # pkg_list version may run ahead of published binaries (404) - fall
-            # back to the newest actually-published build of this package.
-            $alt = Get-PublishedBinary -Pkg $pkg -Os $PkgOs
-            $relName = [System.IO.Path]::GetFileName($relPath)
-            $listingOk = ($null -ne $script:BinListCache -and $script:BinListCache.Count -gt 0)
-            if ($alt -and $alt -ne $relName) {
-                try {
-                    $wc = New-Object System.Net.WebClient
-                    $wc.DownloadFile("$PkgRepo/binary/$alt", $zip)
-                    $wc.Dispose()
-                    Write-Warn "[$idx/$total] ${pkg}: pkg_list version unpublished (404) - using latest published: $alt"
-                } catch {
-                    Write-Err "[$idx/$total] Download failed: $url"
-                    $fail++
-                    continue
-                }
-            } elseif ($listingOk -and -not $alt) {
-                # No build of this package is published in the repo - retrying
-                # can't help (upstream gap, e.g. an unpublished -v2 emulator
-                # component). Skip with a warning instead of failing the whole
-                # SDK install; the core dev tools still install.
-                Write-Warn "[$idx/$total] ${pkg}: no binary published in the repo - skipping (upstream gap)"
-                $skip++
-                $skipped += "$pkg - not published in the repo (upstream gap), skipped"
-                continue
-            } else {
-                Write-Err "[$idx/$total] Download failed: $url"
-                $fail++
-                continue
-            }
+        $workItems += [pscustomobject]@{
+            Pkg   = $pkg
+            Idx   = $idx
+            Url   = "$PkgRepo$relPath"
+            Zip   = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
+            Stage = Join-Path $workdir ("stage_" + $idx)
         }
-
-        $stage = Join-Path $workdir ("stage_" + $idx)
-        if (Test-Path $stage) {
-            Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-            Start-Sleep -Milliseconds 500
-        }
-        New-Item -ItemType Directory -Path $stage -Force | Out-Null
-
-        $isOptional = $pkg -imatch "-rs-"  # RS packages are optional
-
-        try {
-            # Entry-by-entry with overwrite: handles case-only-distinct duplicate
-            # paths in Linux rootstrap ZIPs that whole-archive extractors choke on.
-            Expand-ZipEntryByEntry -ZipPath $zip -Destination $stage
-        } catch {
-            if ($isOptional) {
-                Write-Warn "[$idx/$total] Optional package extraction failed (RS), skipping: $_"
-                $skip++
-                $skipped += "$pkg - optional rootstrap (RS), extraction failed"
-            } else {
-                Write-Err "[$idx/$total] Extraction failed: $pkg - $_"
-                $fail++
-            }
-            Remove-Item -Force $zip -ErrorAction SilentlyContinue
-            Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-            continue
-        }
-
-        # Merge data\ contents into the SDK root (robocopy is far faster than
-        # Copy-Item -Recurse and is long-path safe; exit codes < 8 mean success).
-        $dataDir = Join-Path $stage "data"
-        if (Test-Path $dataDir) {
-            robocopy $dataDir $Path /E /NFL /NDL /NJH /NJS /NP /R:2 /W:1 | Out-Null
-            if ($LASTEXITCODE -ge 8) {
-                Write-Err "[$idx/$total] Merge failed: $pkg (robocopy $LASTEXITCODE)"
-                $fail++
-                Remove-Item -Force $zip -ErrorAction SilentlyContinue
-                Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-                continue
-            }
-        }
-        # Keep manifest record
-        $manifest = Join-Path $stage "pkginfo.manifest"
-        if (Test-Path $manifest) {
-            Copy-Item -Path $manifest -Destination (Join-Path $pkgInfoDir "$pkg.manifest") -Force
-        }
-
-        Remove-Item -Force $zip -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-        $ok++
     }
+
+    # Download phase: only the packages the pre-filter left in the work queue,
+    # so a resumed run does not re-fetch what it is about to skip.
+    $downloadTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $downloadResults = Invoke-ParallelDownloads -Items (ConvertTo-DownloadItems $workItems) -Jobs $DownloadJobs
+    $downloadTimer.Stop()
+    Write-Info "Download phase took $(Format-Duration $downloadTimer.Elapsed)"
+
+    # Upstream pkg_list versions sometimes run ahead of the published binaries,
+    # so a Path can 404. The install worker then falls back to the newest
+    # <pkg>_<ver>_<os>.zip in the repo's binary/ listing. Fetch that listing only
+    # when the prefetch actually left something behind (workers run in separate
+    # processes, so they get the array rather than a shared cache).
+    $binListCache = @()
+    $prefetchMisses = @($downloadResults.Values | Where-Object { $_.Status -ne "OK" })
+    if ($prefetchMisses.Count -gt 0) {
+        try {
+            $html = (New-Object System.Net.WebClient).DownloadString("$PkgRepo/binary/")
+            $binListCache = @([regex]::Matches($html, 'href="([^"?]+\.zip)"') | ForEach-Object { $_.Groups[1].Value })
+        } catch { }
+    }
+
+    # Extract + merge + manifest phase: shared worker/driver in lib/common.ps1.
+    # RS (rootstrap) packages are optional: an extraction failure skips them.
+    $extractTimer = [System.Diagnostics.Stopwatch]::StartNew()
+    $installed = Invoke-ParallelPackageInstall -Items $workItems `
+        -PkgInfoDir $pkgInfoDir -DestPath $Path -PkgOs $PkgOs -Total $total `
+        -PkgRepo $PkgRepo -BinListCache $binListCache -OptionalPattern "-rs-"
+    $ok += $installed.Ok; $skip += $installed.Skip; $fail += $installed.Fail
+    $skipped += $installed.Skipped
+
+    $extractTimer.Stop()
+    Write-Info "Extraction phase took $(Format-Duration $extractTimer.Elapsed)"
 
     Write-Success "Platform package result: OK $ok / skipped $skip / failed $fail (total $total)"
     if ($skipped.Count -gt 0) {
@@ -856,6 +759,7 @@ if (-not $pkgOk) {
 # Dry-run exits without env/verify
 if ($DryRun) {
     Write-Success "[DRY-RUN] done"
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 0
 }
 
@@ -870,6 +774,7 @@ if (-not $pkgOk) {
     Write-Err "Tizen SDK installation did not complete (some packages failed)."
     Write-Err "Not creating sdk.info. Check the network and run again"
     Write-Err "(already-downloaded packages are skipped and the install resumes)."
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 1
 }
 
@@ -997,6 +902,7 @@ Remove-Item $RunningMarker -Force -ErrorAction SilentlyContinue
 Set-Content -Path $ResultMarker -Value "EXIT=0" -ErrorAction SilentlyContinue
 
 Write-Success "Tizen SDK platform packages installation completed!"
+Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
 Write-Info "Next steps:"
 Write-Info "1. Verify: tz --version"
 Write-Info "2. Open a new PowerShell window later to keep it across sessions"

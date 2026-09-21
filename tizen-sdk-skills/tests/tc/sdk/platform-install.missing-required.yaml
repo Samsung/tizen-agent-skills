@@ -4,7 +4,7 @@ id: tizen-sdk.platform-install.missing-required
 plugin: tizen-sdk
 command: platform-install
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "platform-install fails with invalid_argument when --platform-version is missing"
 

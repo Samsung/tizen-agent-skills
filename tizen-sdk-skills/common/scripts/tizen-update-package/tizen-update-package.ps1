@@ -14,6 +14,7 @@
 param(
     [string]$SdkPath = "",
     [switch]$Force,
+    [ValidateRange(1,8)][int]$DownloadJobs = 4,
     [switch]$DryRun,
     [switch]$Help
 )
@@ -129,6 +130,9 @@ Examples:
 "@
     exit 0
 }
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+$scriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 # Set default SDK path if not provided
 # (Get-SdkPath: TIZEN_SDK_PATH -> ~\.tizen.sdk.path.config -> ~\tizen-sdk)
@@ -296,24 +300,19 @@ if ($DryRun) {
     Write-Success "Update result: $resultLine"
     Write-ResultMarker -ExitCode 0 -ResultLine $resultLine -OutdatedCount $outdated.Count
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 0
 }
 
 # -----------------------------------------------------------------------------
 # Download and install updates
 # -----------------------------------------------------------------------------
-Add-Type -AssemblyName System.IO.Compression.FileSystem
-
-# Remove the per-package zip and staging directory (after success or failure).
-function Remove-PkgStage {
-    param([string]$Zip, [string]$Stage)
-    Remove-Item -Force $Zip -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $Stage -ErrorAction SilentlyContinue
-}
-
 $idx = 0; $ok = 0; $skip = 0; $fail = 0
 $total = $outdated.Count
 
+# Pre-filter (fast, synchronous): meta packages have nothing to download, so
+# resolve them up front and only queue real work below.
+$workItems = @()
 foreach ($pkg in $outdated) {
     $idx++
 
@@ -324,82 +323,36 @@ foreach ($pkg in $outdated) {
         continue
     }
 
-    $url = "$PkgRepo$relPath"
-    $zip = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
-    Write-Info "[$idx/$total] Downloading $($pkg.Name) ($($pkg.InstalledVersion) -> $($pkg.AvailableVersion)) ..."
-    try {
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($url, $zip)
-        $wc.Dispose()
-    } catch {
-        Write-Err "[$idx/$total] Download failed: $url - $_"
-        $fail++
-        continue
+    $workItems += [pscustomobject]@{
+        Pkg     = $pkg.Name
+        Idx     = $idx
+        Url     = "$PkgRepo$relPath"
+        Zip     = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
+        Stage   = Join-Path $workdir ("stage_" + $idx)
+        # Written as the manifest when the zip carries no pkginfo.manifest, so
+        # the next run can compare versions.
+        Version = $pkg.AvailableVersion
+        Label   = "updated: $($pkg.InstalledVersion) -> $($pkg.AvailableVersion)"
     }
-
-    $stage = Join-Path $workdir ("stage_" + $idx)
-    if (Test-Path $stage) { Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $stage -Force | Out-Null
-
-    try {
-        # Entry-by-entry extraction with overwrite
-        $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
-        try {
-            foreach ($entry in $archive.Entries) {
-                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-                $destPath = Join-Path $stage $entry.FullName
-                $destDir = Split-Path -Parent $destPath
-                if ($destDir -and -not (Test-Path $destDir)) {
-                    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                }
-                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-            }
-        } finally {
-            $archive.Dispose()
-        }
-    } catch {
-        Write-Err "[$idx/$total] Extraction failed: $($pkg.Name) - $_"
-        $fail++
-        Remove-PkgStage -Zip $zip -Stage $stage
-        continue
-    }
-
-    # Merge data\ contents into the SDK root
-    $dataDir = Join-Path $stage "data"
-    if (Test-Path $dataDir) {
-        $dataItems = Get-ChildItem -Path $dataDir -Force -ErrorAction SilentlyContinue
-        if ($dataItems.Count -gt 0) {
-            if ($PkgOs -eq "windows-64") {
-                robocopy $dataDir $SdkPath /E /NFL /NDL /NJH /NJS /NP /R:2 /W:1 | Out-Null
-                if ($LASTEXITCODE -ge 8) {
-                    Write-Err "[$idx/$total] Merge failed: $($pkg.Name) (robocopy $LASTEXITCODE)"
-                    $fail++
-                    Remove-PkgStage -Zip $zip -Stage $stage
-                    continue
-                }
-            } else {
-                Copy-Item -Path "$dataDir/*" -Destination $SdkPath -Recurse -Force
-            }
-        } else {
-            Write-Info "[$idx/$total] $($pkg.Name): data\ is empty, skip merge"
-        }
-    }
-
-    # Update manifest record
-    $manifest = Join-Path $stage "pkginfo.manifest"
-    if (Test-Path $manifest) {
-        Copy-Item -Path $manifest -Destination (Join-Path $pkgInfoDir "$($pkg.Name).manifest") -Force
-    } else {
-        # If no pkginfo.manifest in the zip, create one from the pkg_list entry
-        $manifestContent = "Package : $($pkg.Name)`nVersion : $($pkg.AvailableVersion)`nOS : $PkgOs`n"
-        Set-Content -Path (Join-Path $pkgInfoDir "$($pkg.Name).manifest") -Value $manifestContent -Encoding UTF8
-    }
-
-    Remove-PkgStage -Zip $zip -Stage $stage
-    $ok++
-    Write-Success "[$idx/$total] $($pkg.Name) updated: $($pkg.InstalledVersion) -> $($pkg.AvailableVersion)"
 }
 
+# Download phase: only the packages the pre-filter left in the work queue,
+# so a resumed run does not re-fetch what it is about to skip.
+$downloadTimer = [System.Diagnostics.Stopwatch]::StartNew()
+Invoke-ParallelDownloads -Items (ConvertTo-DownloadItems $workItems) -Jobs $DownloadJobs | Out-Null
+$downloadTimer.Stop()
+Write-Info "Download phase took $(Format-Duration $downloadTimer.Elapsed)"
+
+# Extract + merge + manifest phase: shared worker/driver in lib/common.ps1.
+$extractTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$installed = Invoke-ParallelPackageInstall -Items $workItems `
+    -PkgInfoDir $pkgInfoDir -DestPath $SdkPath -PkgOs $PkgOs -Total $total
+$ok += $installed.Ok; $skip += $installed.Skip; $fail += $installed.Fail
+
+$extractTimer.Stop()
+Write-Info "Extraction phase took $(Format-Duration $extractTimer.Elapsed)"
+# $resultLine is also what Write-ResultMarker records; sdk.js parses it back
+# out of the marker, so it must carry the full "updated N / ..." summary.
 $resultLine = "updated $ok / skipped $skip / failed $fail / up-to-date $upToDate (total $($manifestFiles.Count))"
 Write-Success "Update result: $resultLine"
 
@@ -407,12 +360,14 @@ if ($fail -gt 0) {
     Write-Err "Some packages failed to update."
     Write-ResultMarker -ExitCode 1 -ResultLine $resultLine -OutdatedCount $outdated.Count
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 1
 }
 
 Write-ResultMarker -ExitCode 0 -ResultLine $resultLine -OutdatedCount $outdated.Count
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
 Write-Success "Tizen SDK package update completed!"
+Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
 exit 0
 
 

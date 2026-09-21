@@ -12,18 +12,23 @@
  */
 
 const { downloadEmulatorPackage } = require("../core/sdk-commands");
-const { runCli, getFlagValue } = require("./cli-runner");
+const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
 
 const args = process.argv.slice(2);
 
 const platformVersion = getFlagValue(args, "--platform-version");
 
 const force = args.includes("--force") || args.includes("-Force");
+const downloadJobs = getDownloadJobsOrExit(
+  "tizen-sdk download-emulator-package",
+  args,
+);
 
 runCli("tizen-sdk download-emulator-package", () =>
   downloadEmulatorPackage(
     platformVersion,
     force,
     "tizen-sdk download-emulator-package",
+    downloadJobs,
   ),
 );

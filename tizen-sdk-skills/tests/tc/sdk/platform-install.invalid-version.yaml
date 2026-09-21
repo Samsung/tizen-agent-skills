@@ -1,0 +1,21 @@
+# platform-install with a malformed --platform-version
+id: tizen-sdk.platform-install.invalid-version
+plugin: tizen-sdk
+command: platform-install
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "platform-install fails with invalid_argument when --platform-version is not X.Y"
+
+lanes:
+  cli:
+    # Tizen platform versions are X.Y (the TIZEN-X.Y package: 10.0, 11.0, ...).
+    # The value is spliced into the installer command line, so anything else is
+    # rejected by the pre-check before it looks at the host — this TC behaves
+    # the same whether or not an SDK is installed.
+    argv: ["tizen-sdk", "platform-install", "--platform-version", "99.99.99"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_argument" }

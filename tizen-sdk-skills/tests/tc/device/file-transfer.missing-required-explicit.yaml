@@ -3,7 +3,7 @@ id: tizen-sdk.file-transfer.missing-required-explicit
 plugin: tizen-sdk
 command: file-transfer
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "file-transfer without --direction returns failure with invalid_argument"
 

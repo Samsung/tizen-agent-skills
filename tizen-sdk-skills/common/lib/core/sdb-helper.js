@@ -9,18 +9,30 @@
  * and returns a Standard JSON Envelope.
  *
  * Design:
- *   - Read-only intents (devices, dlog, pkgcmd -l, forward --list, etc.) execute immediately.
+ *   - Read-only intents (pkgcmd -l, forward --list, shell commands, etc.) execute immediately.
  *   - Gated intents (install, uninstall, reboot, factoryreset, root on, etc.) return
  *     the command in suggested_fix for user confirmation, NOT executed.
+ *   - Device logs (view/tail/save/clear, dlog) → hand off to tizen-dlog-analyzer
+ *     (log-dump / log-clear / start …); sdb-helper never runs `sdb dlog`.
  *   - Package install/uninstall → hand off to tizen-install-app (not handled here).
  *   - Device discovery / emulator creation → hand off to tizen-device-manager.
  *   - File transfer (push/pull) → hand off to tizen-file-transfer.
  *   - Debug port forwarding → hand off to tizen-gdb-debug / tizen-dotnet-debug.
  */
 
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
-const { resolveSdb, runSdb, parseDevices, resolveSerial } = require("./sdb");
+const {
+  resolveSdb,
+  resolveSdbBinary,
+  runSdb,
+  parseDevices,
+  resolveSerial,
+} = require("./sdb");
+
+const execFileAsync = promisify(execFile);
 
 /**
  * Intent classification — maps natural-language keywords to intent IDs.
@@ -90,19 +102,6 @@ const INTENT_PATTERNS = [
     gated: false,
   },
 
-  // Logs
-  { id: "log-clear", regex: /\b(clear|flush).*(logs?|dlog)\b/i, gated: true },
-  {
-    id: "log-save",
-    regex: /\b(save|export|capture).*(logs?|dlog)\b/i,
-    gated: false,
-  },
-  {
-    id: "log-stream",
-    regex: /\b(logs?|dlog|tail)\b/i,
-    gated: false,
-  },
-
   // Screenshot — handoff to tizen-screenshot (dedicated skill with full pipeline)
   {
     id: "screenshot",
@@ -124,6 +123,37 @@ const INTENT_PATTERNS = [
     id: "root-on",
     regex: /\b(root\s+on|enable root|gain root)\b/i,
     gated: true,
+  },
+
+  // Logs — every device-log request (view/tail/save/clear) is owned by
+  // tizen-dlog-analyzer (log-dump / log-clear / start …). The intents stay so
+  // matchIntent still classifies them and the caller gets a handoff envelope
+  // instead of "Could not match request". Placed AFTER the shell block on
+  // purpose: the bare /\b(logs?|dlog|tail)\b/ catch-all must not steal an
+  // explicit shell request such as "run shell command tail -n 20 /var/log/x".
+  {
+    id: "log-clear",
+    regex: /\b(clear|flush).*(logs?|dlog)\b/i,
+    gated: true, // documentation only — the handoff short-circuits before the gate
+    handoff: "tizen-dlog-analyzer",
+    handoffHint:
+      "Run the dlog-analyzer runner: log-clear [serial] — it refuses without --confirm; ask the user, then re-run with --confirm.",
+  },
+  {
+    id: "log-save",
+    regex: /\b(save|export|capture).*(logs?|dlog)\b/i,
+    gated: false,
+    handoff: "tizen-dlog-analyzer",
+    handoffHint:
+      "Run the dlog-analyzer runner: log-dump [serial] --output <file> (one-shot buffer dump to a file), or start dlog-collect for continuous collection.",
+  },
+  {
+    id: "log-stream",
+    regex: /\b(logs?|dlog|tail)\b/i,
+    gated: false,
+    handoff: "tizen-dlog-analyzer",
+    handoffHint:
+      'Run the dlog-analyzer runner: log-dump [serial] [--filter "*:E"] for a one-shot view, or start start-monitoring for continuous monitoring with crash detection.',
   },
 
   // Port forward — list/remove before the catch-all forward-add, whose bare
@@ -154,12 +184,18 @@ const INTENT_PATTERNS = [
 /**
  * Match a natural-language request to an intent ID.
  * @param {string} request
- * @returns {{id: string, gated: boolean, handoff?: string}|null}
+ * @returns {{id: string, gated: boolean, handoff?: string, handoffHint?: string}|null}
  */
 function matchIntent(request) {
   for (const pattern of INTENT_PATTERNS) {
     if (pattern.regex.test(request)) {
-      return { id: pattern.id, gated: pattern.gated, handoff: pattern.handoff };
+      const intent = {
+        id: pattern.id,
+        gated: pattern.gated,
+        handoff: pattern.handoff,
+      };
+      if (pattern.handoffHint) intent.handoffHint = pattern.handoffHint;
+      return intent;
     }
   }
   return null;
@@ -337,9 +373,12 @@ function missingValue(what, example) {
  * @param {string} intentId
  * @param {string} serial
  * @param {string} request - original request (for extracting paths, ports, etc.)
- * @returns {{command: string, note?: string, fallbacks?: string[]}}
- *   `fallbacks` (screenshot intent only) lists alternative sdb commands the
- *   caller tries in order after `command` fails.
+ * @returns {{command: string, note?: string, fallbacks?: string[],
+ *            accept?: (output: string) => boolean}}
+ *   `fallbacks` (screenshot and launch intents) lists alternative sdb commands
+ *   the caller tries in order after `command` fails. `accept` (launch intent)
+ *   decides from the output whether an attempt succeeded — sdb exits 0 even
+ *   when the remote command printed nothing useful.
  */
 function buildCommand(intentId, serial, request) {
   const s = serial ? `-s "${serial}"` : "";
@@ -386,7 +425,20 @@ function buildCommand(intentId, serial, request) {
       if (!appId) {
         return missingValue("an app ID", "launch app org.tizen.dali-demo");
       }
-      return { command: `${s} shell app_launcher -s "${appId}"` };
+      // Samsung TV images print nothing for app_launcher in a non-root shell
+      // (exit 0, empty output); their own launcher answers "app_id[<id>] launched"
+      // ("resumed" when the app was already running). Match on this app's id
+      // so a "launch failed" / foreign-app line never counts as success.
+      const tvLaunched = new RegExp(
+        `app_id\\[${appId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\] (launched|resumed)`,
+        "i",
+      );
+      return {
+        command: `${s} shell app_launcher -s "${appId}"`,
+        fallbacks: [`${s} shell 0 was_execute "${appId}"`],
+        accept: (output) =>
+          /successfully launched/i.test(output) || tvLaunched.test(output),
+      };
     }
     case "kill": {
       const appId = extractAppId(request);
@@ -398,21 +450,9 @@ function buildCommand(intentId, serial, request) {
     case "list-running":
       return { command: `${s} shell app_launcher -S` };
 
-    // Logs — use `dlog -d` (dump current buffer and exit): without -d, dlog
-    // streams forever and the 30s execSync timeout in runSdb kills it, so the
-    // intent could never succeed.
-    case "log-stream":
-      return {
-        command: `${s} dlog -d -v threadtime`,
-        note: "Dumps the current log buffer and exits. For continuous streaming, run `sdb dlog -v threadtime` in a background terminal instead.",
-      };
-    case "log-clear":
-      return { command: `${s} dlog -c` };
-    case "log-save":
-      return {
-        command: `${s} dlog -d -v threadtime`,
-        note: "Dumps the current log buffer. Redirect to a file outside the project tree.",
-      };
+    // Logs (log-stream / log-save / log-clear) — no sdb builder on purpose:
+    // INTENT_PATTERNS hands them to tizen-dlog-analyzer (log-dump / log-clear)
+    // before buildCommand is ever reached.
 
     // Screenshot — returns a fallback chain; the caller tries each in order
     // Order: device-side tools first, then host-side xwd (most reliable for
@@ -521,14 +561,26 @@ function buildCommand(intentId, serial, request) {
  * @param {string} sdbPath
  * @param {string} primary - sdb argument string to try first
  * @param {string[]} [fallbacks] - alternative argument strings
+ * @param {(output: string) => boolean} [accept] - when given, an attempt whose
+ *   output it rejects counts as a failure (sdb exits 0 even when the remote
+ *   command printed nothing useful)
  * @returns {{succeeded: boolean, output: string|null, usedCommand: string|null,
  *            triedCommands: string[], lastError: Error|null}}
  */
-function runWithFallbacks(sdbPath, primary, fallbacks = []) {
+function runWithFallbacks(sdbPath, primary, fallbacks = [], accept = null) {
   const triedCommands = [`sdb ${primary}`];
   let lastError = null;
+  const attempt = (args) => {
+    const output = runSdb(sdbPath, args);
+    if (accept && !accept(output)) {
+      throw new Error(
+        `output did not confirm success: ${output.trim() || "(empty)"}`,
+      );
+    }
+    return output;
+  };
   try {
-    const output = runSdb(sdbPath, primary);
+    const output = attempt(primary);
     return {
       succeeded: true,
       output,
@@ -545,7 +597,7 @@ function runWithFallbacks(sdbPath, primary, fallbacks = []) {
     if (fallback.startsWith("__")) continue;
     triedCommands.push(`sdb ${fallback}`);
     try {
-      const output = runSdb(sdbPath, fallback);
+      const output = attempt(fallback);
       return {
         succeeded: true,
         output,
@@ -590,7 +642,7 @@ async function runSdbCommand(
         command,
         "invalid_parameters",
         "Missing required parameter: request (natural-language sdb request).",
-        'tizen-cli tizen-sdk sdb-helper --request "tail the logs"',
+        'tizen-cli tizen-sdk sdb-helper --request "run shell command ls -la"',
         startTime,
       );
     }
@@ -626,13 +678,14 @@ async function runSdbCommand(
       return formatError(
         command,
         "invalid_parameters",
-        `Could not match request to any sdb intent: "${request}". Supported: list devices, install, launch, kill, log, screenshot, shell, forward, reboot, etc.`,
+        `Could not match request to any sdb intent: "${request}". Supported: list devices, install, launch, kill, screenshot, shell, forward, reboot, etc. Device logs are handled by tizen-dlog-analyzer.`,
         null,
         startTime,
       );
     }
 
-    // 4. Handle handoff intents (install/uninstall → tizen-install-app)
+    // 4. Handle handoff intents (install/uninstall → tizen-install-app,
+    //    logs → tizen-dlog-analyzer, screenshot → tizen-screenshot, …)
     if (intent.handoff) {
       const envelope = new Envelope(command);
       envelope.startTime = startTime;
@@ -641,6 +694,7 @@ async function runSdbCommand(
         handoff: intent.handoff,
         message: `Intent "${intent.id}" is handled by the ${intent.handoff} skill. Use that skill instead.`,
         suggested_skill: intent.handoff,
+        ...(intent.handoffHint ? { note: intent.handoffHint } : {}),
       });
     }
 
@@ -782,7 +836,12 @@ async function runSdbCommand(
 
     // Other intents with fallbacks (non-screenshot)
     if (cmdInfo.fallbacks && cmdInfo.fallbacks.length > 0) {
-      const run = runWithFallbacks(sdbPath, cmdInfo.command, cmdInfo.fallbacks);
+      const run = runWithFallbacks(
+        sdbPath,
+        cmdInfo.command,
+        cmdInfo.fallbacks,
+        cmdInfo.accept,
+      );
 
       if (run.succeeded) {
         const envelope = new Envelope(command);
@@ -878,6 +937,234 @@ async function runSdbCommand(
   }
 }
 
+// ─── RDS: argv-based sdb primitives ──────────────────────────────────────
+//
+// Everything above builds shell-string commands for execSync (runSdb), which
+// is right for sdb-helper's own natural-language dispatch (it needs a real
+// shell for the "; echo __SDB_EXIT:$?" trick). RDS pushes/reads paths that
+// come from the filesystem, not from a fixed set of hand-quoted templates, so
+// these mirror the extension's SdbExecutor instead: argv arrays through
+// execFile (shell: false), never string-concatenated. See
+// docs/rds/RDS_FAST_DEPLOY_PLAN.en.md Part 5.
+
+const DEFAULT_SDB_TIMEOUT_MS = 30000;
+// Delta pushes can carry a full .NET publish output — the interactive-command
+// timeout above would be too tight for that.
+const PUSH_TIMEOUT_MS = 120000;
+
+const APP_INSTALL_PATH_PATTERN = /Tizen Application Installation Path:\s*(.*)/;
+const PUSH_DIR_RESULT_PATTERN =
+  /(\d+)\s+file\(s\)\s+pushed\.\s*(\d+)\s+file\(s\)\s+skipped\./;
+
+/**
+ * Parse `sdb push`'s directory-push summary line.
+ * @param {string} output
+ * @returns {{pushed: number, skipped: number}|null} null if the line wasn't found
+ */
+function parsePushDirectoryResult(output) {
+  const match = output.match(PUSH_DIR_RESULT_PATTERN);
+  if (!match) return null;
+  return { pushed: Number(match[1]), skipped: Number(match[2]) };
+}
+
+/**
+ * Extract the device path from a "Tizen Application Installation Path: <path>"
+ * response line (produced by both `0 getappinstallpath` and `pkgcmd -a`).
+ * @param {string} output
+ * @returns {string|null}
+ */
+function extractAppInstallPath(output) {
+  const match = output.match(APP_INSTALL_PATH_PATTERN);
+  const path = match && match[1] ? match[1].trim() : "";
+  return path || null;
+}
+
+/**
+ * Run `sdb -s <serial> <args...>` with no shell involved, and return stdout.
+ * @param {string} serial
+ * @param {string[]} args
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts] - `sdbPath` bypasses
+ *   resolveSdbBinary() (injectable for tests — see rds-sdb.test.js)
+ * @returns {Promise<string>}
+ * @throws {Error} if the sdb binary can't be resolved, or the command fails
+ */
+async function runSdbArgs(serial, args, opts = {}) {
+  let sdbPath = opts.sdbPath;
+  if (!sdbPath) {
+    const resolved = resolveSdbBinary();
+    if (resolved.error) throw new Error(resolved.error);
+    sdbPath = resolved.sdbPath;
+  }
+  try {
+    const { stdout } = await execFileAsync(sdbPath, ["-s", serial, ...args], {
+      encoding: "utf-8",
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: opts.timeoutMs || DEFAULT_SDB_TIMEOUT_MS,
+    });
+    return stdout;
+  } catch (error) {
+    const detail = (error.stderr || error.stdout || error.message || "")
+      .toString()
+      .trim();
+    throw new Error(`sdb -s ${serial} ${args.join(" ")} failed: ${detail}`);
+  }
+}
+
+/**
+ * Run a command in the device's shell: `sdb -s <serial> shell <args...>`.
+ * @param {string} serial
+ * @param {string[]} args
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts]
+ * @returns {Promise<string>} stdout
+ */
+async function execute(serial, args, opts = {}) {
+  return runSdbArgs(serial, ["shell", ...args], opts);
+}
+
+/**
+ * Push a local directory's *contents* (not the directory itself) into a
+ * remote directory in one sdb sync session — the batched delta push.
+ *
+ * `sdb` merges into `remoteDir`: it overwrites matching paths, creates
+ * missing subdirectories, and never deletes files already present there.
+ *
+ * @param {string} serial
+ * @param {string} localDir - contents are pushed, not the directory itself
+ * @param {string} remoteDir - destination directory on the device
+ * @param {number} expectedFileCount - validated against sdb's own count
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts]
+ * @returns {Promise<string>} stdout
+ * @throws {Error} if sdb's summary line is missing, reports any skipped
+ *   files, or the pushed count doesn't match `expectedFileCount`
+ */
+async function pushDirectory(
+  serial,
+  localDir,
+  remoteDir,
+  expectedFileCount,
+  opts = {},
+) {
+  // "localDir/." so sdb merges contents into remoteDir rather than creating
+  // a nested directory named after localDir.
+  const output = await runSdbArgs(
+    serial,
+    ["push", `${localDir}/.`, remoteDir],
+    {
+      timeoutMs: PUSH_TIMEOUT_MS,
+      ...opts,
+    },
+  );
+  const result = parsePushDirectoryResult(output);
+  if (!result) {
+    throw new Error(`unexpected sdb push output: ${output.trim()}`);
+  }
+  if (result.skipped > 0) {
+    throw new Error(
+      `${result.skipped} file(s) skipped during directory push to ${remoteDir}`,
+    );
+  }
+  if (result.pushed !== expectedFileCount) {
+    throw new Error(
+      `file count mismatch: expected ${expectedFileCount}, got ${result.pushed} pushed`,
+    );
+  }
+  return output;
+}
+
+/**
+ * Toggle root shell access: `sdb -s <serial> root on|off`.
+ *
+ * Needed around delta pushes/deletes into app-private device paths that a
+ * non-root sdb session can't reach.
+ *
+ * @param {string} serial
+ * @param {"on"|"off"} onOrOff
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts]
+ * @returns {Promise<string>} stdout
+ */
+async function root(serial, onOrOff, opts = {}) {
+  if (onOrOff !== "on" && onOrOff !== "off") {
+    throw new Error(
+      `root: onOrOff must be "on" or "off", got ${JSON.stringify(onOrOff)}`,
+    );
+  }
+  return runSdbArgs(serial, ["root", onOrOff], opts);
+}
+
+/** Marker echoed by the device when a `test -d` probe succeeds. */
+const DEVICE_DIR_OK_MARKER = "__RDS_DIR_OK__";
+
+/**
+ * Whether a directory exists on the device. The `&&`/`echo` are joined into
+ * one command line by `sdb shell` and interpreted by the device's `/bin/sh`;
+ * the host spawns sdb with an argv array, so no host shell is involved.
+ *
+ * @param {string} serial
+ * @param {string} devicePath - absolute device path; must be a literal
+ *   constant (this helper does not quote it)
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts]
+ * @returns {Promise<boolean>} false on any sdb failure as well
+ */
+async function deviceDirExists(serial, devicePath, opts = {}) {
+  try {
+    const output = await execute(
+      serial,
+      ["test", "-d", devicePath, "&&", "echo", DEVICE_DIR_OK_MARKER],
+      opts,
+    );
+    return output.includes(DEVICE_DIR_OK_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the application installation base path on the device.
+ *
+ * Multi-tier fallback, tried in order, matching the extension's SdbExecutor:
+ *   1. `0 getappinstallpath` (secure protocol command)
+ *   2. `/usr/bin/pkgcmd -a` (standard command)
+ *   3. `/home/owner/apps_rw` existence check (Tizen 3.0+)
+ *   4. `/opt/usr/apps` existence check (Tizen 2.x)
+ *
+ * @param {string} serial
+ * @param {{timeoutMs?: number, sdbPath?: string}} [opts]
+ * @returns {Promise<string>}
+ * @throws {Error} if none of the four tiers resolve a path
+ */
+async function getAppInstallPath(serial, opts = {}) {
+  try {
+    const output = await execute(serial, ["0", "getappinstallpath"], opts);
+    const path = extractAppInstallPath(output);
+    if (path) return path;
+  } catch {
+    // fall through to the next tier
+  }
+
+  try {
+    const output = await execute(serial, ["/usr/bin/pkgcmd", "-a"], opts);
+    const path = extractAppInstallPath(output);
+    if (path) return path;
+  } catch {
+    // fall through to the next tier
+  }
+
+  // Tiers 3/4: `sdb shell` exits 0 regardless of the remote command's status,
+  // so a bare `test -d` can never fail from the host's point of view. Chain an
+  // echo on the device instead and look for the marker in stdout (same trick
+  // as the `; echo __SDB_EXIT:$?` probe used by the shell intents above).
+  if (await deviceDirExists(serial, "/home/owner/apps_rw", opts)) {
+    return "/home/owner/apps_rw";
+  }
+  if (await deviceDirExists(serial, "/opt/usr/apps", opts)) {
+    return "/opt/usr/apps";
+  }
+
+  throw new Error(
+    "Cannot determine app install path: no device response and no known install directory found",
+  );
+}
+
 module.exports = {
   runSdbCommand,
   // Exported for testing (resolveSdb/parseDevices re-exported from ./sdb
@@ -887,4 +1174,13 @@ module.exports = {
   buildCommand,
   resolveSdb,
   runWithFallbacks,
+  // RDS argv-based sdb primitives (Part 5). There is deliberately no
+  // single-file push: RDS batches every delta into one pushDirectory() call.
+  execute,
+  pushDirectory,
+  root,
+  getAppInstallPath,
+  // Exported for testing
+  parsePushDirectoryResult,
+  extractAppInstallPath,
 };

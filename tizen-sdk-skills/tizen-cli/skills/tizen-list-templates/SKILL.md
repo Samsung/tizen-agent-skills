@@ -3,7 +3,7 @@ name: tizen-list-templates
 description: List Tizen templates, tizen list templates, 타이젠 템플릿 목록, 템플릿 확인, template list, available templates, 어떤 템플릿. Use this skill to list project templates available in the installed Tizen SDK, per project type (native, dotnet, webapp, rpk, tv, platform). Run before tizen-create-project so the user picks a real template name.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
     - Tizen templates
     - template list
@@ -32,7 +32,19 @@ tizen-cli tizen-sdk list-templates [--type <type>]
 ## Output
 
 - Success `result.templates`: map of type → template name array, e.g. `{ "webapp": ["Basic", "WebService"] }`.
-- Failure: SDK not installed → run `tizen-cli tizen-sdk sdk-install` first.
+  The untyped list always includes `platform` — the plugin's GBS-buildable sample apps
+  (e.g. `dali-demo`); show them as their own "Platform 앱" group, created with
+  `create-project --type platform`.
+- Success `result.profile`: the `tizen-X.Y` profile the templates were listed under.
+- Success `result.tv` — **only when the Samsung TV SDK extension is installed**, on typed
+  calls too: `{ "profile": "tv-samsung-10.0", "web": ["Basic_Empty", …], "dotnet": ["TizenNUIApp", …] }`.
+  This field is the only way to tell whether the TV SDK is installed. For a web-app request
+  show `result.tv.web` next to `result.templates.webapp` (heading "Samsung TV 웹앱 템플릿");
+  for a generic "어떤 템플릿 있어?" show the TV list next to the per-type lists. A TV
+  template is created with `create-project --type tv`.
+- Failure: SDK not installed → run `tizen-cli tizen-sdk sdk-install` first. `--type <type>`
+  with no templates is a `template_not_found` failure whose message names the fix (for `tv`:
+  install the TV SDK).
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
 

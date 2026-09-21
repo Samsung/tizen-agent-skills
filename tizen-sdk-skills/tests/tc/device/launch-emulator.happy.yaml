@@ -3,7 +3,7 @@ id: tizen-sdk.launch-emulator.happy
 plugin: tizen-sdk
 command: launch-emulator
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "launch-emulator --vm-name --timeout 300 returns success; --timeout is the sdb-connect wait cap (issue #98) — the result reports it and the emulator keeps running"
 

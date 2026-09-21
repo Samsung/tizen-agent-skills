@@ -45,6 +45,46 @@ function findBundle() {
   return BUNDLE_CANDIDATES.find((p) => fs.existsSync(p)) || null;
 }
 
+/**
+ * Mask the value of every secret-bearing flag before argv is echoed.
+ *
+ * The envelopes printed on the pre-load paths below are the only ones the
+ * bundle's own redaction (common/lib/envelope/user-command.js) does not see:
+ * the bundle is missing or failed to load, so its helper is unavailable and
+ * this file cannot require ../../common (absent in the dist/ layout). Mirror
+ * that helper's rule: a `--flag` whose last dash-separated segment is a
+ * secret word, excluding `--prompt-*` (boolean) and `--*-file` (a path).
+ */
+const SECRET_SUFFIX = /(^|-)(password|passwd|pass|token|secret|api-key)$/;
+const REDACTED = "***";
+
+function isSensitiveFlag(flag) {
+  if (!flag.startsWith("--")) return false;
+  if (flag.startsWith("--prompt-") || flag.endsWith("-file")) return false;
+  return SECRET_SUFFIX.test(flag.slice(2));
+}
+
+function redactArgv(argv) {
+  const out = [];
+  for (let i = 0; i < argv.length; i++) {
+    const token = String(argv[i]);
+    const eq = token.indexOf("=");
+    if (token.startsWith("--") && eq !== -1) {
+      const flag = token.slice(0, eq);
+      out.push(isSensitiveFlag(flag) ? `${flag}=${REDACTED}` : token);
+      continue;
+    }
+    out.push(token);
+    if (isSensitiveFlag(token) && i + 1 < argv.length) {
+      if (!String(argv[i + 1]).startsWith("--")) {
+        out.push(REDACTED);
+        i++;
+      }
+    }
+  }
+  return out;
+}
+
 /** Print one failure envelope to stdout — the only stdout write on this path. */
 function printFailure(errorCode, errorCategory, message, suggestedFix) {
   const envelope = {
@@ -67,7 +107,7 @@ function printFailure(errorCode, errorCategory, message, suggestedFix) {
           : {}),
       },
     ],
-    command: [PROGRAM, ...process.argv.slice(2)].join(" ").trim(),
+    command: [PROGRAM, ...redactArgv(process.argv.slice(2))].join(" ").trim(),
   };
   process.stdout.write(JSON.stringify(envelope, null, 2) + "\n");
 }

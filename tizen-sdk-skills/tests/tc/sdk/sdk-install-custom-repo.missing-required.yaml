@@ -4,7 +4,7 @@ id: tizen-sdk.sdk-install-custom-repo.missing-required
 plugin: tizen-sdk
 command: sdk-install-custom-repo
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-install-custom-repo fails with invalid_argument when --repo-url is missing"
 

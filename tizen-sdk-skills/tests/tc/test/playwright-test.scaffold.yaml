@@ -9,6 +9,8 @@ description: "playwright-test --scaffold --project-dir --app-id returns success 
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — writes into the Linux fixture path /tmp/test-project.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "playwright-test", "--scaffold", "--project-dir", "/tmp/test-project", "--app-id", "abcDEF1234.MyWebApp"]
     timeout_sec: 60
     expect:

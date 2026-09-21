@@ -101,6 +101,7 @@ Optional:
 - `node "$CLI" --include-iot-headed` (also download IOT-Headed extension)
 - `node "$CLI" --iot-headed-version 10.0` (specify IOT-Headed version)
 - `node "$CLI" --force` (force reinstall)
+- `node "$CLI" --download-jobs 4` (concurrent download jobs, 1-8, default 4)
 
 Exit code: `0` = success (Mobile platform already installed), `1` = failure (Mobile platform not installed — proceed to Phase 2, or Tizen SDK not installed).
 

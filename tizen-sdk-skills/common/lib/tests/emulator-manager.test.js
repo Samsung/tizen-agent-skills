@@ -32,6 +32,8 @@ const {
   parseManagerDetails,
   parseTemplateDetails,
   MANAGE_ACTIONS,
+  ACTION_ALIASES,
+  normalizeAction,
 } = require("../core/emulator");
 
 console.log("=== Emulator Manager Test ===\n");
@@ -344,6 +346,28 @@ check(
   MANAGE_ACTIONS.length,
   11,
 );
+
+// The plural spellings a caller guesses from the project runner's
+// `list-templates` resolve to the singular em-cli action; every alias must
+// land on a real action, and a genuinely unknown value must pass through so
+// the caller's validation still names it.
+console.log("--- action aliases ---");
+check(
+  "plural list-* spellings map to the em-cli actions",
+  Object.keys(ACTION_ALIASES).map((alias) => normalizeAction(alias)),
+  ["list-vm", "list-platform", "list-template"],
+);
+checkTrue(
+  "every alias target is a MANAGE_ACTIONS entry",
+  Object.values(ACTION_ALIASES).every((a) => MANAGE_ACTIONS.includes(a)),
+  `Aliases: ${JSON.stringify(ACTION_ALIASES)}`,
+);
+check(
+  "canonical actions pass through normalizeAction unchanged",
+  MANAGE_ACTIONS.map((a) => normalizeAction(a)),
+  MANAGE_ACTIONS,
+);
+check("unknown action passes through", normalizeAction("list-foo"), "list-foo");
 
 for (const action of MANAGE_ACTIONS) {
   checkTrue(
@@ -711,6 +735,31 @@ async function checkOptionScreening() {
       `${label} passes the screen`,
       !isParameterRejection(envelope),
       `Wrongly rejected: ${JSON.stringify(envelope.errors)}`,
+    );
+  }
+
+  console.log("\n--- action aliases through manageEmulator ---");
+  // `list-vms` used to fail with "Invalid action" before touching em-cli. It
+  // must now get past action validation (whatever happens next without an SDK
+  // is not a parameter rejection), while a made-up action is still refused.
+  for (const alias of Object.keys(ACTION_ALIASES)) {
+    const envelope = await manageEmulator({ action: alias }, "test");
+    checkTrue(
+      `'${alias}' is not rejected as an invalid action`,
+      !(
+        isParameterRejection(envelope) &&
+        /Invalid action/.test(envelope.errors[0].message)
+      ),
+      `Got ${envelope.status}: ${JSON.stringify(envelope.errors)}`,
+    );
+  }
+  {
+    const envelope = await manageEmulator({ action: "list-foo" }, "test");
+    checkTrue(
+      "an unknown action is still refused",
+      isParameterRejection(envelope) &&
+        /Invalid action: list-foo/.test(envelope.errors[0].message),
+      `Got ${envelope.status}: ${JSON.stringify(envelope.errors)}`,
     );
   }
 }

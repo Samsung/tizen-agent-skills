@@ -189,18 +189,40 @@ function loadTCs(args) {
 /**
  * Resolve which binary to call. Prefer `tizen-cli` on PATH; fall back to
  * `tizen-sdk` directly (useful when testing the plugin standalone).
+ *
+ * Returns { bin, prefix, kind } where `kind` is "tizen-cli" or "tizen-sdk"
+ * (decides whether the leading "tizen-sdk" argv token is stripped), and
+ * `prefix` holds any arguments that must precede the TC argv.
+ *
+ * Windows: Node's execFileSync refuses the .cmd shims that pnpm/npm create
+ * (EINVAL since CVE-2024-27980) and a POSIX shell shim is not a Win32
+ * executable (ENOENT). So on win32 the runner drives the standalone launcher
+ * through the current Node binary instead of a PATH lookup:
+ *   - TC_LAUNCHER_JS=<path to tizen-sdk.js launcher>   (explicit)
+ *   - ../tizen-cli/bin/tizen-sdk.js                    (source checkout after `pnpm build`)
  */
+const LAUNCHER_JS_CANDIDATES = [
+  process.env.TC_LAUNCHER_JS,
+  join(ROOT, "..", "tizen-cli", "bin", "tizen-sdk.js"),
+].filter(Boolean);
+
 function resolveExecutor() {
+  if (process.platform === "win32") {
+    const launcher = LAUNCHER_JS_CANDIDATES.find((p) => existsSync(p));
+    return launcher
+      ? { bin: process.execPath, prefix: [launcher], kind: "tizen-sdk" }
+      : null;
+  }
   try {
     execFileSync("which", ["tizen-cli"], { stdio: "pipe", timeout: 3000 });
-    return "tizen-cli";
+    return { bin: "tizen-cli", prefix: [], kind: "tizen-cli" };
   } catch {
     try {
       execFileSync("which", ["tizen-sdk"], {
         stdio: "pipe",
         timeout: 3000,
       });
-      return "tizen-sdk";
+      return { bin: "tizen-sdk", prefix: [], kind: "tizen-sdk" };
     } catch {
       return null;
     }
@@ -216,7 +238,9 @@ function runCommand(argv, timeoutSec, env) {
         {
           error_code: "RUNNER_NO_EXECUTOR",
           message:
-            "Neither tizen-cli nor tizen-sdk found on PATH. Install tizen-cli or add the plugin to PATH.",
+            process.platform === "win32"
+              ? "No tizen-sdk launcher found. Build tizen-cli (`pnpm build`) or set TC_LAUNCHER_JS to the launcher's tizen-sdk.js."
+              : "Neither tizen-cli nor tizen-sdk found on PATH. Install tizen-cli or add the plugin to PATH.",
         },
       ],
     };
@@ -238,10 +262,13 @@ function runCommand(argv, timeoutSec, env) {
 
   // If executor is tizen-cli, argv already starts with "tizen-sdk <command>"
   // If executor is tizen-sdk, strip the leading "tizen-sdk" token
-  const finalArgv = executor === "tizen-cli" ? expanded : expanded.slice(1);
+  const finalArgv = [
+    ...executor.prefix,
+    ...(executor.kind === "tizen-cli" ? expanded : expanded.slice(1)),
+  ];
 
   try {
-    const stdout = execFileSync(executor, finalArgv, {
+    const stdout = execFileSync(executor.bin, finalArgv, {
       timeout: timeoutSec * 1000,
       encoding: "utf-8",
       env: mergedEnv,

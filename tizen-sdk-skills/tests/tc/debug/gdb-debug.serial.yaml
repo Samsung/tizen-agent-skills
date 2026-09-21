@@ -9,6 +9,8 @@ description: "gdb-debug --app-id --binary --serial returns success with gdb_comm
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs org.tizen.myapp installed on the device and the host binary /tmp/MyApp/bin/MyApp.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "gdb-debug", "--app-id", "org.tizen.myapp", "--binary", "/tmp/MyApp/bin/MyApp", "--serial", "emulator-26101"]
     timeout_sec: 120
     expect:

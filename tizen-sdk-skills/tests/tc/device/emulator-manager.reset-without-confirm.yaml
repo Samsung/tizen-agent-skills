@@ -3,7 +3,7 @@ id: tizen-sdk.emulator-manager.reset-without-confirm
 plugin: tizen-sdk
 command: emulator-manager
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager --action reset --vm-name without --confirm fails (user_input_required)"
 

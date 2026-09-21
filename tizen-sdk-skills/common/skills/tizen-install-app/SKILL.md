@@ -4,7 +4,7 @@ description: Tizen install app, 타이젠 앱 설치, tpk 설치, wgt 설치, rp
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-07-14"
+  last-updated: "2026-09-18"
   keywords:
     - Tizen install app
     - tpk install
@@ -84,6 +84,7 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 - **`--package`** (required) — absolute path to `.tpk`, `.wgt`, `.rpk`, or `.rpm`
 - **`--device-serial`** (optional) — device serial; omit to auto-select the single connected device
 - **`--run`** (optional) — flag to launch an executable app after install. **It is invalid for `.rpk`**; it is valid for `.tpk`, `.wgt`, and `.rpm`. Omit entirely for install-only — do NOT pass `false` or `no`, just omit it.
+- **`--reset-rds`** (optional) — clear the host-side `.tizen-rds/` state for the project that owns the package path, then return without installing. It is for recovery from stale or corrupt RDS state and cannot be combined with `--run`.
 
 If user provides a project directory instead of a package path, build first with `tizen-build-project`.
 
@@ -93,7 +94,46 @@ With `--run`, the success envelope carries two launch fields: `app_launched`
 (the launch was accepted) and `app_running` (the app was still alive seconds
 later). For `.tpk`/`.wgt` the running check is the `app_launcher -S` list; for
 `.rpm` it is a `pgrep` poll of the `/usr/bin/<name>` process. `null` = not
-verifiable (install-only, or `-S` unusable on this profile).
+verifiable (install-only, `-S` unusable on this profile, or an RDS deploy).
+
+The app id is read from the package manifest (`.wgt` `config.xml`, `.tpk`
+`tizen-manifest.xml`); `app_launcher -l` is only a fallback. On Samsung TV
+images `app_launcher` prints nothing for a non-root shell, so the runner retries
+the launch with the TV launcher `0 was_execute <app-id>` — `app_launched: true`
+with `app_running: null` is the normal TV outcome.
+
+The envelope also carries `deploy_type`: `"full"` (regular `tz install`),
+`"rds"` (only changed Debug build-output files were pushed into the installed
+app and it was relaunched — needs a previous full install of the same
+project's Debug output on that device), or `"fast-deploy"` (nothing changed,
+relaunch only). `.rpk`/`.rpm`, packages outside `Debug/`, and any change to
+`tizen-manifest.xml`/`config.xml` always take the full path.
+`TIZEN_RDS_ENABLED=0` forces `"full"`.
+
+## RDS fast-deploy recovery
+
+RDS is enabled by default. To temporarily disable RDS for a normal build or
+install, set `TIZEN_RDS_ENABLED=0` for that command. The package is still
+installed normally; only the RDS manifest scan and delta-deploy path are
+skipped.
+
+```bash
+# Bash / Git Bash:
+TIZEN_RDS_ENABLED=0 node "$CLI" install --package "<package-path>" --run
+
+# Clear stale or corrupt host-side RDS state without installing:
+node "$CLI" install --package "<package-path>" --reset-rds
+```
+
+The reset command uses the package path to find its Tizen project, removes the
+whole host-side `.tizen-rds/` directory, and returns a success envelope with
+`result.rds_state: "reset"` (or an `io_error` if the directory could not be
+removed, e.g. a locked file). The package file does not need to exist, but its
+path must still end in `.tpk`, `.wgt`, `.rpk`, or `.rpm`. Run the normal install
+again afterward; it will take the full-install path and recreate the baseline.
+
+On PowerShell, use `$env:TIZEN_RDS_ENABLED="0"; node "$CLI" install --package "<package-path>"`.
+On `cmd.exe`, use `set TIZEN_RDS_ENABLED=0 && node "<found-path>" install --package "<package-path>"`.
 
 ## RPK packages
 
@@ -150,7 +190,7 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - SDK not installed → `tizen-sdk-install`
 - Device creation failed → `tizen-device-manager`
 - **`app_running: false` in a success envelope** → the app launched but exited right after start. For `.tpk`/`.wgt` the most common cause is a full `/opt` partition (crash dumps; `/opt` is separate from `/`): use the `tizen-sdb-helper` skill's storage-triage commands (`df -h /opt`) and `clean-crash-dumps` recipe — the cleanup requires `sdb root on` first. For `.rpm` the envelope `warnings` carry the device-side `app-log:` lines from `/tmp/<name>.log` plus a hint (display-server/`owner` problem, or missing `dali`/`dali-toolkit` runtime RPMs) — report those, not the `/opt` advice.
-- **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → the device does not trust the signing certificate. A build with **no signing profile** is signed with the SDK default developer certificates, which only the **emulator** accepts — on a real device this error is expected until a proper profile is used. Hand off to `tizen-certificate-manager` to create a signing profile for the target device (Samsung-certificate flow for Samsung hardware), rebuild with `tizen-build-project` passing the profile name, then retry install. **NEVER attempt `sdb root on` or manual cert installation.**
+- **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → the device does not trust the signing certificate. A build with **no signing profile** is signed with the SDK default developer certificates, which only the **emulator** accepts — on a real device this error is expected until a proper profile is used. Hand off to `tizen-certificate-manager` to create a signing profile for the target device (Samsung-certificate flow for Samsung hardware), rebuild with `tizen-build-project` passing the profile name, then retry install. The reverse case is also expected: a package signed with a **Samsung** profile installs only on the **TV emulator** (`--profile tv`) or a registered Samsung TV — on a standard Tizen emulator it fails with the same certificate error. Rebuild with a local profile for that emulator, or install on the TV emulator instead. **NEVER attempt `sdb root on` or manual cert installation.**
 
 **Suggested next steps (only when user asks):**
 

@@ -18,7 +18,9 @@ import * as path from "path";
 import { writeStatus, writeSection, show } from "./log";
 import {
   detectHosts,
+  noTargets,
   resolveTargets,
+  targetLabels,
   hasBash,
   getHome,
 } from "./install/detect";
@@ -29,16 +31,26 @@ import {
   clineCacheBase,
   clineHooksDir,
 } from "./install/cline";
+import { installCodex, removeCodex } from "./install/codex";
+import {
+  codexAgentsDir,
+  codexCacheBase,
+  codexHome,
+  codexSkillsDir,
+} from "./install/codexLayout";
 import {
   installClaudeHooks,
   installClineHooks,
+  installCodexHooks,
   removeClaudeHooks,
   removeClineHooks,
+  removeCodexHooks,
 } from "./install/hooks";
 import { needsSync, readManifest, writeManifest } from "./install/manifest";
 import {
   validateClaudeInstall,
   validateClineInstall,
+  validateCodexInstall,
   summarizeResults,
   ValidationResult,
 } from "./install/validate";
@@ -188,6 +200,7 @@ function installedManifestVersions(): (string | undefined)[] {
     versions.push(readManifest(path.join(home, ".claude"))?.version);
   if (targets.cline)
     versions.push(readManifest(path.join(home, ".cline"))?.version);
+  if (targets.codex) versions.push(readManifest(codexHome(home))?.version);
   return versions;
 }
 
@@ -222,9 +235,9 @@ async function doInstall(silent: boolean): Promise<boolean> {
     writeStatus(`Extension version: ${version}`, "Info");
     writeStatus(`Assets directory: ${assetsDir}`, "Info");
 
-    if (!targets.claude && !targets.cline) {
+    if (noTargets(targets)) {
       writeStatus(
-        'No AI host detected. Set tizenAiExtension.targets to "claude", "cline", or "both" to force installation.',
+        'No AI host detected. Set tizenAiExtension.targets to "claude", "cline", "codex", "both" or "all" to force installation.',
         "Warning",
       );
       if (!silent) show();
@@ -234,7 +247,7 @@ async function doInstall(silent: boolean): Promise<boolean> {
     // Check for bash if hooks are being installed
     if (config.installHooks && !(await hasBash())) {
       writeStatus(
-        "bash not found on PATH — Claude Code hooks will not work. " +
+        "bash not found on PATH — Claude Code and Codex CLI hooks will not work. " +
           "Install Git Bash or WSL and add it to PATH. Installation continues without hook enforcement.",
         "Warning",
       );
@@ -316,6 +329,38 @@ async function doInstall(silent: boolean): Promise<boolean> {
       }
     }
 
+    // Install for Codex CLI (independent try-catch, same as above)
+    if (targets.codex) {
+      try {
+        const result = await installCodex(assetsDir, home, version);
+        // Manifest written before hooks — same rationale as Claude above. The
+        // manifest lives in ~/.codex even though the skills sit in the shared
+        // ~/.agents/skills, because that directory belongs to no single host.
+        writeManifest(codexHome(home), {
+          version,
+          installedAt,
+          skills: result.owned.skills,
+          agents: result.owned.agents,
+        });
+        if (config.installHooks) {
+          try {
+            await installCodexHooks(assetsDir, home);
+          } catch (hookErr: unknown) {
+            const msg =
+              hookErr instanceof Error ? hookErr.message : String(hookErr);
+            writeStatus(
+              `Codex CLI hooks install failed (non-fatal): ${msg}`,
+              "Warning",
+            );
+          }
+        }
+      } catch (e: unknown) {
+        const message = e instanceof Error ? e.message : String(e);
+        writeStatus(`Codex CLI install failed: ${message}`, "Error");
+        allSucceeded = false;
+      }
+    }
+
     if (!allSucceeded) {
       writeSection("Installation Completed with Errors");
       writeStatus(
@@ -327,11 +372,20 @@ async function doInstall(silent: boolean): Promise<boolean> {
       return false;
     }
 
+    const hosts = targetLabels(targets);
     writeSection("Installation Complete");
     writeStatus(
-      "Restart your Claude Code / Cline session to load the new skill/agent definitions.",
+      `Restart your ${hosts} session to load the new skill/agent definitions.`,
       "Info",
     );
+    if (targets.codex && config.installHooks) {
+      writeStatus(
+        "Codex: run /hooks once to TRUST the new hooks (untrusted hooks are skipped). " +
+          "If they stay inert, add `[features] hooks = true` to ~/.codex/config.toml. " +
+          "Skills are read from ~/.agents/skills — check with /skills and /agent.",
+        "Info",
+      );
+    }
 
     // Refresh the sidebar tree view to reflect the updated install state.
     treeProvider?.refresh();
@@ -339,7 +393,7 @@ async function doInstall(silent: boolean): Promise<boolean> {
     if (!silent) show();
     void vscode.window
       .showInformationMessage(
-        `Tizen AI Extension v${version} installed. Restart your Claude Code / Cline session.`,
+        `Tizen AI Extension v${version} installed. Restart your ${hosts} session.`,
         "Show Log",
       )
       .then((action) => {
@@ -381,6 +435,7 @@ async function runShowStatus(): Promise<void> {
   const hostDirs: [string, string][] = [];
   if (targets.claude) hostDirs.push(["Claude", path.join(home, ".claude")]);
   if (targets.cline) hostDirs.push(["Cline", path.join(home, ".cline")]);
+  if (targets.codex) hostDirs.push(["Codex", codexHome(home)]);
   for (const [label, hostDir] of hostDirs) {
     const onDisk = readManifest(hostDir)?.version;
     writeStatus(
@@ -425,6 +480,20 @@ async function runShowStatus(): Promise<void> {
     );
   }
 
+  if (targets.codex) {
+    writeSection("Codex CLI Validation");
+    allResults.push(
+      ...(await validateCodexInstall(
+        codexCacheBase(home, version),
+        assetsDir,
+        codexSkillsDir(home),
+        codexAgentsDir(home),
+        home,
+        config.installHooks,
+      )),
+    );
+  }
+
   const summary = summarizeResults(allResults);
   writeSection("Validation Summary");
   writeStatus(
@@ -461,6 +530,11 @@ async function runRemove(): Promise<void> {
     if (targets.cline) {
       await removeCline(home);
       await removeClineHooks(home);
+    }
+
+    if (targets.codex) {
+      await removeCodex(home);
+      await removeCodexHooks(home);
     }
 
     await extensionContext.globalState.update("installedVersion", undefined);

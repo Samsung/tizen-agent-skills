@@ -16,6 +16,7 @@ Each step runs automatically when you **tell Claude in natural language** — no
 - **Tizen SDK installed**: the SDK must be installed and `~/.tizen.sdk.path.config` must point to it. (If not, see "Install the Tizen SDK" below)
 - **OS**: Windows / Ubuntu (Linux) / macOS are all supported. Claude detects the current OS and runs the matching script.
 - **Samsung Account** (optional): required only if you plan to use Samsung distribution certificates. A valid Samsung Account and at least one device DUID are prerequisites.
+- **TV emulator or Samsung TV** (Scenario B): Samsung certificates and Samsung signing profiles are for TV targets only. Take the DUID from the TV emulator (`tizen-create-emulator --profile tv`, needs the TV SDK) or a real Samsung TV, and install packages built with the Samsung profile only on those targets. For a standard Tizen emulator (`--profile tizen`) use the local profile from Scenario A.
 - **Example goal**:
   - Scenario A (Local only): Create a local Tizen certificate, use it to build and sign an app.
   - Scenario B (With Samsung): Generate a Samsung author certificate, add DUIDs for a Samsung distributor certificate, create a signing profile, and use it for distribution builds.

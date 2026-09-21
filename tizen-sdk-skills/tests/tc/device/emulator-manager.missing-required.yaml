@@ -4,7 +4,7 @@ id: tizen-sdk.emulator-manager.missing-required
 plugin: tizen-sdk
 command: emulator-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager create fails with user_input_required when --size is missing"
 

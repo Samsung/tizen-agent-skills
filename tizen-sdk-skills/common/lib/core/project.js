@@ -25,6 +25,19 @@ const {
 } = require("./output-summary");
 const { preflightSigningProfile } = require("./certificate");
 const { readSdkPath, repairSdkInfo, describeSdkInfoRepair } = require("./sdk");
+const { resolveSdbBinary, resolveSerial, ensureSdbServer } = require("./sdb");
+const {
+  detectAppType,
+  rdsStateExists,
+  resetAllRdsState,
+  saveBuildManifest,
+  scanInputFilesAsync,
+  scanOutputFilesAsync,
+  tryRdsDeploy,
+  updateRdsState,
+  parseWebAppId,
+  parseManifestAppId,
+} = require("./rds");
 
 const VALID_PROJECT_TYPES = [
   "native",
@@ -51,6 +64,16 @@ function isPlatformProject(projectPath) {
  */
 function isRpkProject(projectPath) {
   return fs.existsSync(path.join(projectPath, "tizen_resource_project.yaml"));
+}
+
+/**
+ * RDS kill switch — `TIZEN_RDS_ENABLED=0` reverts build/install to today's
+ * exact behavior, with no RDS entry point engaged in either path.
+ *
+ * @returns {boolean}
+ */
+function rdsEnabled() {
+  return process.env.TIZEN_RDS_ENABLED !== "0";
 }
 
 /**
@@ -1012,6 +1035,28 @@ async function buildProject(
         "Signed with Tizen default developer certificates (tempMobile.p12) because no signing profile is set or active. The package installs on the emulator; real Samsung devices and store submission need a custom signing profile — create one with tizen-certificate-manager and rebuild with --sign-profile.",
       );
     }
+
+    // RDS: write build-manifest.json after a successful build. Gated on
+    // rdsStateExists() — a project that has never been deployed has nothing
+    // to interop with, and the scan is not free.
+    if (rdsEnabled() && rdsStateExists(normalizedProjectPath)) {
+      try {
+        const appType = detectAppType(normalizedProjectPath); // null for GBS/platform
+        if (appType) {
+          saveBuildManifest(normalizedProjectPath, {
+            projectDir: normalizedProjectPath,
+            timestamp: new Date().toISOString(),
+            hashAlgorithm: "xxh3-128",
+            input: await scanInputFilesAsync(normalizedProjectPath, appType),
+            output: await scanOutputFilesAsync(normalizedProjectPath, appType),
+          });
+        }
+      } catch (err) {
+        // Non-fatal — the build did succeed.
+        console.error("[RDS] Failed to write build-manifest:", err.message);
+      }
+    }
+
     return formatProjectBuild(artifacts, warnings, startTime);
   } catch (error) {
     return formatError(
@@ -1027,13 +1072,21 @@ async function buildProject(
 /**
  * Query template list: list available project templates from installed SDK
  *
- * Script output format (section header + indented template names):
+ * Script output format (section header + indented template names), preceded by
+ * machine lines — PROFILE= / PROFILES= always, TV_PROFILE= / TV_WEB= / TV_DOTNET=
+ * only when the Samsung TV SDK extension is installed:
+ *   PROFILE=tizen-11.0
+ *   TV_PROFILE=tv-samsung-10.0
+ *   TV_WEB=Basic_Empty,Basic_Tizen_Blank
+ *   TV_DOTNET=TizenNUIApp
  *   webapp:
  *     Basic
  *     WebService
  *
- * @param {string} [type] - project type (native, dotnet, webapp) — omit for all
- * @returns {object} Standard JSON Envelope — result.templates = { <type>: [names...] }
+ * @param {string} [type] - project type (native, dotnet, webapp, rpk, tv, platform) — omit for all
+ * @returns {object} Standard JSON Envelope — result.templates = { <type>: [names...] },
+ *   result.profile = tz profile listed under, and result.tv = { profile, web, dotnet }
+ *   when the TV SDK is installed (absent otherwise) — present for typed lists too.
  */
 async function listTemplates(type, command = "tizen-sdk list-templates") {
   const envelope = new Envelope(command);
@@ -1086,6 +1139,26 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
       .map((p) => p.trim())
       .filter(Boolean);
 
+    // TV SDK machine lines — printed by the script (typed or untyped list) ONLY
+    // when the Samsung TV SDK extension is installed. The web / dotnet split
+    // lets a plain "webapp" request offer the TV *web* templates alongside the
+    // tizen webapp ones without the agent guessing kinds from template names.
+    const machineList = (key) =>
+      ((output.match(new RegExp(`^${key}=(.*)$`, "m")) || [])[1] || "")
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    const tvProfile = (
+      (output.match(/^TV_PROFILE=(.*)$/m) || [])[1] || ""
+    ).trim();
+    const tv = tvProfile
+      ? {
+          profile: tvProfile,
+          web: machineList("TV_WEB"),
+          dotnet: machineList("TV_DOTNET"),
+        }
+      : null;
+
     const totalCount = Object.values(templates).reduce(
       (n, list) => n + list.length,
       0,
@@ -1136,6 +1209,7 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
     return envelope.success({
       templates,
       ...(profile ? { profile } : {}),
+      ...(tv ? { tv } : {}),
     });
   } catch (error) {
     // execSync's message is "Command failed: <cmd>" plus stderr only, while the
@@ -1184,7 +1258,7 @@ function summarizeInstallOutput(output) {
     keep: /warn|error|fail|not found|missing|invalid|storage|exited|crash|disk/i,
     // APP_RUNNING is the machine channel parsed into app_running — repeating
     // it here would duplicate the finding into warnings.
-    skip: /^(Device Serial:|App Package:|Found app ID:|APP_RUNNING=|Could not find app in app_launcher)/i,
+    skip: /^(Device Serial:|App Package:|Found app ID:|APP_RUNNING=|Could not find app)/i,
     max: 10,
   });
 }
@@ -1207,6 +1281,142 @@ function parseAppRunning(output) {
   return m[1] === "yes" ? true : m[1] === "no" ? false : null;
 }
 
+const PROJECT_ROOT_MARKER_FILES = [
+  "tizen_native_project.yaml",
+  "tizen_dotnet_project.yaml",
+  "tizen_web_project.yaml",
+  "tizen_resource_project.yaml",
+  "tizen-manifest.xml",
+  "project_def.prop",
+  "config.xml",
+];
+
+/**
+ * Cheap, single-level check for "does this directory look like a Tizen
+ * project root at all" — one `readdirSync`, no recursion.
+ *
+ * This exists to gate `detectAppType()`, whose dotnet branch does an
+ * unbounded recursive file search (`findFilesByName`) when no root-level
+ * marker is found. Calling `detectAppType()` directly while walking upward
+ * from a package file would run that recursive search against generic
+ * ancestor directories (`/tmp`, the home directory, ...) — on a real
+ * filesystem that can take effectively forever. Filtering with this first
+ * ensures the expensive call only ever runs against a directory that
+ * already looks like a real (and therefore reasonably small) project.
+ *
+ * @param {string} dir
+ * @returns {boolean}
+ */
+function looksLikeProjectRoot(dir) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir);
+  } catch {
+    return false;
+  }
+  return (
+    PROJECT_ROOT_MARKER_FILES.some((f) => entries.includes(f)) ||
+    entries.some((e) => e.endsWith(".csproj"))
+  );
+}
+
+/**
+ * Find the Tizen project root that produced a package, by walking up from
+ * the package's directory until `detectAppType()` recognizes one — this
+ * copes with dotnet's nested `bin/Debug/{tfm}/tpkroot/` output layout, not
+ * just the flat `<projectDir>/Debug/*.tpk` case.
+ *
+ * @param {string} resolvedPath - absolute path to the package file
+ * @returns {string|null} absolute project directory, or null if none of the
+ *   package's ancestors (within a reasonable depth) look like a project
+ */
+function resolveProjectDirFromPackage(resolvedPath) {
+  let dir = path.dirname(resolvedPath);
+  for (let depth = 0; depth < 8; depth++) {
+    if (looksLikeProjectRoot(dir) && detectAppType(dir)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+  return null;
+}
+
+/**
+ * Resolve the device serial RDS should target, without disturbing the
+ * install script's own device handling.
+ *
+ * This queries `sdb devices` itself so RDS and the install script always
+ * agree on the same device — ambiguous (0 or >1 device) cases resolve
+ * to `null` and the script falls through to its existing
+ * auto-provision / "specify a serial" behavior.
+ *
+ * @returns {string|null}
+ */
+function resolveSingleDeviceSerial() {
+  const sdbResolved = resolveSdbBinary();
+  if (sdbResolved.error) return null;
+  // viaTempFile: this may be the very first sdb call of the session, which
+  // has to start the sdb server daemon — a plain pipe would then hang
+  // forever (the daemon inherits the pipe write handle; see runSdb()).
+  const result = resolveSerial(sdbResolved.sdbPath, null, {
+    viaTempFile: true,
+  });
+  return result.serial || null;
+}
+
+/**
+ * Whether the package sits inside the build-output tree RDS tracks.
+ *
+ * The RDS scanners are hard-wired to the Debug output (`Debug/tpk_contents`,
+ * `Debug/projects/<name>/`, `bin/Debug/<tfm>/tpkroot/` — see
+ * rds/constants.js), so a baseline only describes what a *Debug* package
+ * contains. Installing anything else from the same project (a Release or
+ * Test build, an old copy kept elsewhere) must bypass RDS entirely:
+ * otherwise reconcile would compare the untouched Debug tree against the
+ * baseline, find no drift, and "fast-deploy" without installing the package
+ * the user actually asked for.
+ *
+ * @param {string} projectDir
+ * @param {string} resolvedPath - absolute path to the package file
+ * @returns {boolean}
+ */
+function isRdsTrackedPackage(projectDir, resolvedPath) {
+  const rel = path.relative(projectDir, resolvedPath);
+  if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return false;
+  const segments = rel.split(path.sep);
+  // Package file itself is the last segment; "Debug" must be a directory
+  // somewhere above it (native/web: `Debug/App.tpk`, dotnet:
+  // `<csprojDir>/bin/Debug/<tfm>/App.tpk`).
+  return segments.slice(0, -1).includes("Debug");
+}
+
+/**
+ * Whether RDS has any business with this project/package at all —
+ * permanently ineligible cases (platform/GBS, RPM/RPK, a package outside the
+ * Debug output tree, unrecognized app type) are excluded here rather than
+ * repeated at each call site.
+ *
+ * Deliberately does NOT check `rdsStateExists()` — callers that require an
+ * existing baseline (the delta-deploy attempt) append that check
+ * themselves; `updateRdsState()` is what creates that state in the first
+ * place, so baking the check in here would make it impossible to ever
+ * bootstrap.
+ *
+ * @param {string} projectDir
+ * @param {string} resolvedPath - absolute path to the package file
+ * @returns {boolean}
+ */
+function rdsEligible(projectDir, resolvedPath) {
+  if (!projectDir) return false;
+  return (
+    rdsEnabled() &&
+    !isPlatformProject(projectDir) &&
+    !/\.(rpm|rpk)$/i.test(resolvedPath) &&
+    isRdsTrackedPackage(projectDir, resolvedPath) &&
+    Boolean(detectAppType(projectDir))
+  );
+}
+
 /**
  * Install Tizen app package (.tpk/.wgt/.rpk/.rpm) on connected device/emulator
  *
@@ -1225,6 +1435,7 @@ function parseAppRunning(output) {
  * @param {string} packagePath - .tpk/.wgt/.rpk/.rpm absolute path (relative paths are resolved)
  * @param {string} [deviceSerial] - target device serial (omit to auto-select single connected)
  * @param {boolean} [runAfterInstall=false] - whether to run app after installation
+ * @param {boolean} [resetRds=false] - clear host-side RDS state for the package's project and return without installing
  * @returns {object} Standard JSON Envelope
  */
 async function installApp(
@@ -1232,6 +1443,7 @@ async function installApp(
   deviceSerial,
   runAfterInstall = false,
   command = "tizen-sdk install-app",
+  resetRds = false,
 ) {
   const startTime = Date.now();
   try {
@@ -1245,6 +1457,60 @@ async function installApp(
     }
 
     const resolvedPath = path.resolve(packagePath);
+
+    // RDS recovery is deliberately handled before normal package validation:
+    // the package may have been removed or become stale while the project's
+    // host-side .tizen-rds state is still corrupt. The package path is used
+    // only to locate the Tizen project root; no device or install script is
+    // touched in reset mode.
+    if (resetRds) {
+      if (runAfterInstall) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          "--reset-rds cannot be combined with --run; reset clears host-side RDS state without installing the package.",
+          null,
+          startTime,
+        );
+      }
+      if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `Invalid app package path: ${resolvedPath}. Use the path to a .tpk, .wgt, .rpk, or .rpm package so its project can be located.`,
+          null,
+          startTime,
+        );
+      }
+
+      const resetProjectDir = resolveProjectDirFromPackage(resolvedPath);
+      if (!resetProjectDir) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `Could not locate a Tizen project for package path: ${resolvedPath}. Pass a package path inside the project build output directory.`,
+          null,
+          startTime,
+        );
+      }
+
+      if (!resetAllRdsState(resetProjectDir)) {
+        return formatError(
+          command,
+          "io_error",
+          `Could not remove RDS state at ${path.join(resetProjectDir, ".tizen-rds")} — a file may be locked by another process. Close editors or tools holding it open and retry.`,
+          null,
+          startTime,
+        );
+      }
+      const envelope = new Envelope(command);
+      envelope.startTime = startTime;
+      return envelope.success({
+        project_path: resetProjectDir,
+        rds_state: "reset",
+      });
+    }
+
     if (!fs.existsSync(resolvedPath)) {
       return formatError(
         command,
@@ -1280,24 +1546,87 @@ async function installApp(
     const unsafePackage = checkShellSafe(resolvedPath, "package path", command);
     if (unsafePackage) return unsafePackage;
 
+    // RDS: resolve project dir + device serial once, in JS, so both the RDS
+    // attempt below and the install script (via -s/-DeviceSerial) target the
+    // same device (§2a). Gated behind rdsEnabled() so the kill switch reverts
+    // this to exactly today's behavior — no extra `sdb devices` call, no
+    // RDS attempt.
+    const projectDir = rdsEnabled()
+      ? resolveProjectDirFromPackage(resolvedPath)
+      : null;
+    const resolvedSerial = rdsEnabled()
+      ? (deviceSerial ?? resolveSingleDeviceSerial())
+      : deviceSerial;
+
+    let rdsResult = null;
+    if (
+      resolvedSerial &&
+      rdsEligible(projectDir, resolvedPath) &&
+      rdsStateExists(projectDir) // a delta needs a prior baseline to diff against
+    ) {
+      try {
+        // With an explicit --device-serial the `sdb devices` call above was
+        // skipped, so the RDS primitives' execFile-based sdb calls may be the
+        // first of the session — a cold daemon would hang them (see
+        // ensureSdbServer). Cheap no-op when the server is already up.
+        const sdbResolved = resolveSdbBinary();
+        if (!sdbResolved.error) ensureSdbServer(sdbResolved.sdbPath);
+
+        rdsResult = await tryRdsDeploy(
+          projectDir,
+          resolvedSerial,
+          runAfterInstall,
+        );
+      } catch (err) {
+        // Non-fatal — falls through to the full install below.
+        console.error("[RDS] deploy attempt failed:", err.message);
+      }
+    }
+
+    if (rdsResult && rdsResult.deployed) {
+      // Same meaning as the full-install path's app_id (the launchable ID
+      // from `app_launcher -l`): web `<tizen:application id>`, native/dotnet
+      // `<ui-application appid>` — NOT the package ID.
+      const appType = detectAppType(projectDir);
+      const appId =
+        (appType === "web"
+          ? parseWebAppId(projectDir)
+          : parseManifestAppId(projectDir)) ?? null;
+
+      const envelope = new Envelope(command);
+      envelope.startTime = startTime;
+      return envelope.success(
+        {
+          package_path: resolvedPath,
+          device_serial: resolvedSerial,
+          app_id: appId,
+          installation_status: "completed",
+          app_launched: Boolean(runAfterInstall),
+          app_running: null, // no app_launcher -S check on this path
+          deploy_type: rdsResult.type, // "rds" | "fast-deploy"
+        },
+        { warnings: [] },
+      );
+    }
+
     const resolved = resolveScript("tizen-install-app");
     if (resolved.error) {
       return formatError(command, "io_error", resolved.error);
     }
 
     console.error(
-      `[tizen-install] Installing ${resolvedPath}${deviceSerial ? ` on ${deviceSerial}` : ""}`,
+      `[tizen-install] Installing ${resolvedPath}${resolvedSerial ? ` on ${resolvedSerial}` : ""}`,
     );
 
     // Pass forward slash paths to Windows script (Node.js compatible)
     const winPath = resolvedPath.replace(/\\/g, "/");
     const winArgs =
       `-PackagePath "${winPath}"` +
-      (deviceSerial ? ` -DeviceSerial "${deviceSerial}"` : "") +
+      (resolvedSerial ? ` -DeviceSerial "${resolvedSerial}"` : "") +
       (runAfterInstall ? " -RunAfterInstall" : "");
     const unixArgs =
       `-p "${resolvedPath}"` +
-      (deviceSerial ? ` -s "${deviceSerial}"` : "") +
+      (resolvedSerial ? ` -s "${resolvedSerial}"` : "") +
       (runAfterInstall ? " -r" : "");
 
     let output;
@@ -1429,18 +1758,28 @@ async function installApp(
       );
     }
 
+    // RDS: record this full install as the new baseline for the device, so a
+    // future install-app can fast-deploy/RDS-delta against it. Uses the
+    // serial the script actually reported, not the possibly-unresolved
+    // parameter/pre-resolved value.
+    const installedSerial = serialMatch
+      ? serialMatch[1].trim()
+      : resolvedSerial || null;
+    if (installedSerial && rdsEligible(projectDir, resolvedPath)) {
+      await updateRdsState(projectDir, installedSerial, "full").catch(() => {});
+    }
+
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
     return envelope.success(
       {
         package_path: resolvedPath,
-        device_serial: serialMatch
-          ? serialMatch[1].trim()
-          : deviceSerial || null,
+        device_serial: installedSerial,
         app_id: appIdMatch ? appIdMatch[1].trim() : null,
         installation_status: "completed",
         app_launched: launched,
         app_running: appRunning,
+        deploy_type: "full",
       },
       {
         // Key lines only (warnings/errors) instead of full installation log
@@ -1473,4 +1812,6 @@ module.exports = {
   parseAppRunning,
   // Exported for tests — the RPK res-type uniqueness patch.
   patchRpkManifestResType,
+  // Exported for tests — the RDS "is this package the Debug output" gate.
+  isRdsTrackedPackage,
 };

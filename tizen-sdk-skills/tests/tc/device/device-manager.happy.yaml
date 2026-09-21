@@ -3,9 +3,9 @@ id: tizen-sdk.device-manager.happy
 plugin: tizen-sdk
 command: device-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "device-manager returns success with devices array"
+description: "device-manager returns success with the selected device_serial"
 
 lanes:
   cli:
@@ -14,4 +14,7 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.devices", min_length: 0 }
+        # Result is a single selected device (SKILL.md: device_serial, device_type,
+        # device_profile), not a devices[] array — fixed 2026-09-17 after a real run.
+        - { path: "$.result.device_serial", min_length: 1 }
+        - { path: "$.result.device_type", matches: "^(emulator|usb)$" }

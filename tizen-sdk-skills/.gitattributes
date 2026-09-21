@@ -34,3 +34,11 @@ cline/hooks/PreToolUse text eol=lf
 *.png       binary
 # tizen-dlog-analyzer native binaries (no file extension)
 tizen-dlog-analyzer binary
+
+# Vendored third-party code — not authored here, exclude from diffs/stats
+common/lib/vendor/** linguist-vendored
+
+# Extensionless POSIX test fixtures (fake sdb/tz) — a CRLF shebang line makes
+# the kernel fail with ENOENT, e.g. when a Windows checkout is run under WSL
+common/lib/tests/fixtures/rds-sdb-bin/sdb text eol=lf
+common/lib/tests/fixtures/rds-tz-bin/tz text eol=lf

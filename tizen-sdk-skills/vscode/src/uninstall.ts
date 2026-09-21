@@ -7,16 +7,19 @@
 // `code --uninstall-extension`. It cleans up what the extension installed:
 //   - Claude: cache, personal skills/agents (per manifest), hooks (settings.json + scripts)
 //   - Cline:  cache, personal skills (per manifest), hooks (PreToolUse, guard scripts, guard rule)
+//   - Codex:  cache, ~/.agents/skills + ~/.codex/agents/*.toml (per manifest),
+//             hooks.json (only if ours), guard scripts, the AGENTS.md section
 //
 // This script runs as a standalone Node process, so it must not touch the
 // `vscode` API — it only imports the vscode-free helpers shared with the
-// extension (claudeSettings.ts, manifest.ts).
+// extension (claudeSettings.ts, manifest.ts, codexLayout.ts, guardSection.ts).
 //
 // It also runs unattended, with no chance to prompt. Locations namespaced to us
 // (the plugin cache, hooks/tizen-sdk-skills/, the guard rule) are removed
-// outright; the shared ~/.claude/skills, ~/.claude/agents and ~/.cline/skills
-// namespaces are pruned strictly from the install manifest, so a hand-written
-// or setup.sh-installed `tizen-*` skill is never collateral damage.
+// outright; the shared ~/.claude/skills, ~/.claude/agents, ~/.cline/skills,
+// ~/.agents/skills and ~/.codex/agents namespaces are pruned strictly from the
+// install manifest, so a hand-written or setup.sh-installed `tizen-*` skill is
+// never collateral damage.
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -26,6 +29,15 @@ import {
   hasOurMarker,
   stripOurHooks,
 } from "./install/claudeSettings";
+import {
+  codexAgentsDir,
+  codexContextFile,
+  codexHome,
+  codexHooksJsonPath,
+  codexSkillsDir,
+  isOurCodexHooksJson,
+} from "./install/codexLayout";
+import { hasGuardSection, stripGuardSection } from "./install/guardSection";
 import { readManifest, removeManifest } from "./install/manifest";
 
 const home = os.homedir();
@@ -142,11 +154,68 @@ function removeClineAll(): void {
   }
 }
 
+function removeCodexAll(): void {
+  const hostHome = codexHome(home);
+
+  // Namespaced — all caches, under the current and any previous plugin name
+  for (const name of ALL_PLUGIN_NAMES) {
+    removeDir(path.join(hostHome, "plugins", "cache", "tizen-platform", name));
+  }
+
+  // Shared namespaces — manifest only. Skills live in ~/.agents/skills (shared
+  // with Gemini CLI), agents are the TOML files we converted into ~/.codex/agents.
+  const manifest = readManifest(hostHome);
+  if (!manifest) {
+    log(
+      `No install manifest in ${hostHome} — leaving ${codexSkillsDir(home)} and ` +
+        `${codexAgentsDir(home)} untouched (not installed by this extension).`,
+    );
+  } else {
+    for (const skill of manifest.skills) {
+      removeDir(path.join(codexSkillsDir(home), skill));
+    }
+    for (const agent of manifest.agents) {
+      removeFile(path.join(codexAgentsDir(home), agent));
+    }
+    removeManifest(hostHome);
+  }
+
+  // hooks.json — only when its _source says it is ours
+  const hooksJson = codexHooksJsonPath(home);
+  if (fs.existsSync(hooksJson)) {
+    if (isOurCodexHooksJson(fs.readFileSync(hooksJson, "utf-8"))) {
+      removeFile(hooksJson);
+    } else {
+      log(`Existing hooks.json (not ours) kept: ${hooksJson}`);
+    }
+  }
+  for (const name of ALL_PLUGIN_NAMES) {
+    removeDir(path.join(hostHome, "hooks", name));
+  }
+
+  // AGENTS.md — cut our section out, keep everything else the user wrote
+  const contextFile = codexContextFile(home);
+  if (fs.existsSync(contextFile)) {
+    const text = fs.readFileSync(contextFile, "utf-8");
+    if (hasGuardSection(text)) {
+      let rest = text;
+      for (const name of ALL_PLUGIN_NAMES) rest = stripGuardSection(rest, name);
+      if (rest.trim().length === 0) {
+        removeFile(contextFile);
+      } else {
+        fs.writeFileSync(contextFile, rest.trimEnd() + "\n", "utf-8");
+        log(`Removed guard section from: ${contextFile}`);
+      }
+    }
+  }
+}
+
 // Main
 log("Starting cleanup...");
 try {
   removeClaudeAll();
   removeClineAll();
+  removeCodexAll();
   log("Cleanup complete.");
 } catch (e: unknown) {
   // Never fail the uninstall: VS Code has already removed the extension.

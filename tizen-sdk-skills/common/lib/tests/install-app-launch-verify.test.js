@@ -25,6 +25,12 @@
  *   STUB_PGREP         what `pgrep -f <name>` reports for the rpm path:
  *     "found"   → a pid
  *     "missing" → nothing (process gone)
+ *   STUB_TV            "1" → behave like a Samsung TV image: every app_launcher
+ *     call prints nothing (non-root shell), only `0 was_execute` answers
+ *   STUB_TV_LAUNCH     what `0 was_execute` reports when STUB_TV=1:
+ *     "ok"      → "app_id[<id>] launched"
+ *     "resumed" → "app_id[<id>] resumed" (the app was already running)
+ *     "fail"    → a launch-failed line
  */
 
 const path = require("path");
@@ -79,6 +85,7 @@ try {
 }
 
 const APP_ID = "xA4DHr9cFv.MyTizenWebApp";
+const TV_APP_ID = "O2Y67T4h9a.MyTVWebApp";
 const RPM_NAME = "my-platform-project";
 const RPM_PKG = `${RPM_NAME}-1.0.0-1.x86_64.rpm`;
 
@@ -99,6 +106,25 @@ case "\${1:-}" in
     ;;
   shell)
     shift
+    # Samsung TV image: a non-root shell gets nothing back from app_launcher;
+    # the TV launcher is the only command that answers.
+    if [ "\${STUB_TV:-0}" = "1" ]; then
+      case "$*" in
+        app_launcher*)
+          exit 0
+          ;;
+        "0 was_execute "*)
+          echo "launch app $3"
+          echo "app_id[$3] launch start"
+          case "\${STUB_TV_LAUNCH:-ok}" in
+            ok)      echo "app_id[$3] launched" ;;
+            resumed) echo "app_id[$3] resumed" ;;
+            *)       echo "app_id[$3] launch failed" ;;
+          esac
+          exit 0
+          ;;
+      esac
+    fi
     case "$*" in
       "rpm -ivh "*|"rpm -Uvh "*)
         echo "Preparing...   ################# [100%]"
@@ -158,7 +184,72 @@ echo "Installed the package"
 exit 0
 `;
 
-function makeTree(pkgName = "MyTizenWebApp-1.0.0.wgt") {
+// Minimal stored (uncompressed) zip so a test package can carry a real
+// manifest — the script reads the app id from it with `unzip -p`.
+function crc32(buf) {
+  let crc = 0xffffffff;
+  for (const byte of buf) {
+    let c = (crc ^ byte) & 0xff;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    crc = (crc >>> 8) ^ c;
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function storedZip(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [name, text] of Object.entries(entries)) {
+    const nameBuf = Buffer.from(name);
+    const data = Buffer.from(text);
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBuf.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBuf.length, 28);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, nameBuf, data);
+    centrals.push(central, nameBuf);
+    offset += local.length + nameBuf.length + data.length;
+  }
+  const cd = Buffer.concat(centrals);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);
+  eocd.writeUInt16LE(Object.keys(entries).length, 8);
+  eocd.writeUInt16LE(Object.keys(entries).length, 10);
+  eocd.writeUInt32LE(cd.length, 12);
+  eocd.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, cd, eocd]);
+}
+
+function wgtWithAppId(appId) {
+  const pkgId = appId.split(".")[0];
+  return storedZip({
+    "config.xml": `<?xml version="1.0" encoding="UTF-8"?>
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://yourdomain/Template01" version="0.2.1" viewmodes="maximized">
+   <name>Empty Template</name>
+   <tizen:application id="${appId}" package="${pkgId}" required_version="2.3"></tizen:application>
+</widget>`,
+    "index.html": "<!DOCTYPE html><html><body></body></html>",
+  });
+}
+
+function makeTree(
+  pkgName = "MyTizenWebApp-1.0.0.wgt",
+  pkgBytes = "stub package",
+) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-install-test-"));
   const toolsDir = path.join(root, "sdk", "tools");
   fs.mkdirSync(path.join(toolsDir, "tizen-core"), { recursive: true });
@@ -167,7 +258,7 @@ function makeTree(pkgName = "MyTizenWebApp-1.0.0.wgt") {
     mode: 0o755,
   });
   const pkg = path.join(root, pkgName);
-  fs.writeFileSync(pkg, "stub package");
+  fs.writeFileSync(pkg, pkgBytes);
   return {
     root,
     sdk: path.join(root, "sdk"),
@@ -176,8 +267,8 @@ function makeTree(pkgName = "MyTizenWebApp-1.0.0.wgt") {
   };
 }
 
-function runInstall(args, stubEnv = {}, pkgName) {
-  const tree = makeTree(pkgName);
+function runInstall(args, stubEnv = {}, pkgName, pkgBytes) {
+  const tree = makeTree(pkgName, pkgBytes);
   fs.writeFileSync(tree.log, "");
   const result = spawnSync("bash", [SCRIPT_PATH, "-p", tree.pkg, ...args], {
     encoding: "utf8",
@@ -356,6 +447,142 @@ console.log("\n--- rpm install without launch ---");
   check("rpm install-only exits 0", r.code === 0, `exit=${r.code}`);
   check("no APP_RUNNING line", !r.output.includes("APP_RUNNING="), r.output);
   check("no pgrep poll issued", pgrepPolls(r.calls) === 0, r.calls.join("\n"));
+}
+
+const wasExecuteCalls = (calls) =>
+  calls.filter((c) => c.includes("shell 0 was_execute")).length;
+
+// --- 8. Real .wgt manifest → app id read from the package, no TV fallback ----
+console.log("\n--- app id from the package manifest (standard emulator) ---");
+{
+  const r = runInstall(
+    ["-r"],
+    { STUB_RUNNING_LIST: "present" },
+    "MyTizenWebApp-1.0.0.wgt",
+    wgtWithAppId(APP_ID),
+  );
+  check("install+run exits 0", r.code === 0, `exit=${r.code}\n${r.output}`);
+  check(
+    "app id reported from config.xml",
+    r.output.includes(`Found app ID: ${APP_ID}`),
+    r.output,
+  );
+  check(
+    "launched via app_launcher, TV launcher not tried",
+    r.calls.some((c) => c.includes(`app_launcher -s ${APP_ID}`)) &&
+      wasExecuteCalls(r.calls) === 0,
+    r.calls.join("\n"),
+  );
+  check("APP_RUNNING=yes emitted", r.output.includes("APP_RUNNING=yes"));
+}
+
+// --- 9. Samsung TV image → id from manifest, launch via 0 was_execute --------
+console.log(
+  "\n--- Samsung TV image: app_launcher silent, 0 was_execute launches ---",
+);
+{
+  const r = runInstall(
+    ["-r"],
+    { STUB_TV: "1" },
+    "MyTVWebApp-1.0.0.wgt",
+    wgtWithAppId(TV_APP_ID),
+  );
+  check("install+run exits 0", r.code === 0, `exit=${r.code}\n${r.output}`);
+  check(
+    "app id found although app_launcher -l printed nothing",
+    r.output.includes(`Found app ID: ${TV_APP_ID}`),
+    r.output,
+  );
+  check(
+    "app_launcher -s tried first, then 0 was_execute",
+    r.calls.some((c) => c.includes(`app_launcher -s ${TV_APP_ID}`)) &&
+      r.calls.some((c) => c.includes(`shell 0 was_execute ${TV_APP_ID}`)),
+    r.calls.join("\n"),
+  );
+  check(
+    "App launched successfully logged (app_launched: true)",
+    r.output.includes("App launched successfully"),
+    r.output,
+  );
+  check(
+    "APP_RUNNING=unknown (-S is silent on TV)",
+    r.output.includes("APP_RUNNING=unknown"),
+    r.output,
+  );
+  check(
+    "no 'Could not find app' warning",
+    !r.output.includes("Could not find app"),
+    r.output,
+  );
+}
+
+// --- 8b. Unsafe manifest id is rejected → falls back to app_launcher -l ------
+console.log(
+  "\n--- manifest app id outside the Tizen alphabet is never used ---",
+);
+{
+  const r = runInstall(
+    ["-r"],
+    { STUB_RUNNING_LIST: "present" },
+    "MyTizenWebApp-1.0.0.wgt",
+    wgtWithAppId("evil.MyApp; rm -rf /tmp/x"),
+  );
+  check("install+run exits 0", r.code === 0, `exit=${r.code}\n${r.output}`);
+  check(
+    "unsafe manifest id never reported or launched",
+    !r.output.includes("rm -rf") && !r.calls.some((c) => c.includes("rm -rf")),
+    `${r.output}\n${r.calls.join("\n")}`,
+  );
+  check(
+    "fell back to the app_launcher -l id",
+    r.output.includes(`Found app ID: ${APP_ID}`) &&
+      r.calls.some((c) => c.includes(`app_launcher -s ${APP_ID}`)),
+    `${r.output}\n${r.calls.join("\n")}`,
+  );
+}
+
+// --- 9b. Samsung TV image, app already running → "resumed" counts as launched
+console.log("\n--- Samsung TV image: 0 was_execute resumes a running app ---");
+{
+  const r = runInstall(
+    ["-r"],
+    { STUB_TV: "1", STUB_TV_LAUNCH: "resumed" },
+    "MyTVWebApp-1.0.0.wgt",
+    wgtWithAppId(TV_APP_ID),
+  );
+  check("install+run exits 0", r.code === 0, `exit=${r.code}\n${r.output}`);
+  check(
+    "resumed app reported as launched",
+    r.output.includes("App launched successfully"),
+    r.output,
+  );
+}
+
+// --- 10. Samsung TV image, TV launcher refuses → launch failed, install ok ---
+console.log("\n--- Samsung TV image: 0 was_execute reports failure ---");
+{
+  const r = runInstall(
+    ["-r"],
+    { STUB_TV: "1", STUB_TV_LAUNCH: "fail" },
+    "MyTVWebApp-1.0.0.wgt",
+    wgtWithAppId(TV_APP_ID),
+  );
+  check(
+    "install still exits 0 (install DID succeed)",
+    r.code === 0,
+    `exit=${r.code}`,
+  );
+  check(
+    "launch failure reported for the app id",
+    r.output.includes(`App launch failed for id '${TV_APP_ID}'`),
+    r.output,
+  );
+  check(
+    "not reported as launched",
+    !r.output.includes("App launched successfully"),
+    r.output,
+  );
+  check("no APP_RUNNING line", !r.output.includes("APP_RUNNING="), r.output);
 }
 
 // --- project.js parsing ------------------------------------------------------

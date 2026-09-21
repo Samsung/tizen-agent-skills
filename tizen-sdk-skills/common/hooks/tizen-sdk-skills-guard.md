@@ -21,9 +21,11 @@ because each one is a mistake the model has actually made.
    `Get-Command sdb`, `find -name sdb`, `command -v sdb`), do not parse `sdb devices`, and do
    not type `sdb …` from memory — every sdb action has a runner that resolves sdb
    (`<sdk>/tools/sdb`, `.exe` on Windows; not under `tools/tizen-core/`, not `sdb/sdb`) on its
-   own: shell / forward / reboot / logs / launch / kill → `tizen-sdb-helper`
-   (`sdb-helper-cli.js --request "<the user's ask>"`); connect to an IP →
-   `tizen-remote-device`; list devices → `tizen-device-manager`; push/pull →
+   own: shell / forward / reboot / launch / kill → `tizen-sdb-helper`
+   (`sdb-helper-cli.js --request "<the user's ask>"`); device logs — view / tail / save /
+   clear, `dlog` → `tizen-dlog-analyzer` (`dlog-analyzer-cli.js log-dump`, `log-clear
+   --confirm`, `start start-monitoring`; sdb-helper hands log requests off there); connect
+   to an IP → `tizen-remote-device`; list devices → `tizen-device-manager`; push/pull →
    `tizen-file-transfer`. The one exception is a **gated** `result.command` the user
    has explicitly confirmed — run that exact string. Emulator VMs: `tz emul list-vm`
    (there is no `tz list-device`).

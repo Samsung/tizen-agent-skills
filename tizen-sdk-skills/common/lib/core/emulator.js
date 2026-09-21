@@ -1063,7 +1063,7 @@ async function createEmulator(
   opts = {},
   command = "tizen-sdk create-emulator",
 ) {
-  const action = opts.action || "create";
+  const action = normalizeAction(opts.action || "create");
   const vmName = opts.vmName;
   // `let`: a create without --platform resolves it below (issue #48).
   let platform = opts.platform;
@@ -1071,6 +1071,15 @@ async function createEmulator(
   const launch = opts.launch === true || opts.launch === "true";
   const assumeDefaults =
     opts.assumeDefaults === true || opts.assumeDefaults === "true";
+  // How long the create --launch path waits for the new VM to show up in
+  // `sdb devices`. The script's own default is 300 s, which a fresh Tizen 11
+  // image's first boot can exceed on a slow host; let the caller raise it the
+  // same way launch-emulator does (1-540, Bash tool headroom). Only meaningful
+  // with --launch — ignored otherwise.
+  const launchTimeoutSec =
+    launch && opts.timeoutSec !== undefined && opts.timeoutSec !== null
+      ? parseInt(opts.timeoutSec, 10)
+      : undefined;
 
   // A template name copied straight out of `list-template` can carry a
   // platform suffix — "HD1080 TV (tv-samsung-10.0-x86_64)". em-cli resolves the
@@ -1106,6 +1115,20 @@ async function createEmulator(
         command,
         "invalid_parameters",
         `Invalid profile: ${profile}. Must be 'tizen' or 'tv'.`,
+      );
+    }
+
+    // Validate the --launch wait (same bounds as launch-emulator)
+    if (
+      launchTimeoutSec !== undefined &&
+      (!Number.isFinite(launchTimeoutSec) ||
+        launchTimeoutSec < 1 ||
+        launchTimeoutSec > 540)
+    ) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid timeout: ${opts.timeoutSec}. Must be 1-540 seconds (Bash tool max is 600s; leave headroom).`,
       );
     }
 
@@ -1341,6 +1364,7 @@ async function createEmulator(
         platform,
         template,
         launch,
+        timeoutSec: launchTimeoutSec,
         detail: opts.detail,
         count: opts.count,
         ...hardware,
@@ -1546,8 +1570,9 @@ async function createEmulator(
     if (launchTimedOut) {
       sizeWarnings.push(
         `VM '${createdVmName}' was created, but the emulator did not connect to sdb within the ` +
-          `launch wait — it may still be booting, or the boot failed. Check or relaunch with: ` +
-          `node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+          `${launchTimeoutSec || 300}s launch wait — it may still be booting (a fresh image's first ` +
+          `boot can take longer; pass --timeout <seconds> up to 540 to wait longer), or the boot ` +
+          `failed. Check or relaunch with: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
       );
     }
 
@@ -1864,6 +1889,29 @@ const MANAGE_ACTIONS = [
 ];
 
 /**
+ * Alternative spellings accepted for the list-* actions. em-cli's commands are
+ * singular (list-vm, list-platform, list-template) but the project runner's
+ * action is the plural `list-templates`, so callers guess `list-vms` here and
+ * used to get "Unknown action". Map the plural onto the em-cli spelling instead.
+ */
+const ACTION_ALIASES = Object.freeze({
+  "list-vms": "list-vm",
+  "list-platforms": "list-platform",
+  "list-templates": "list-template",
+});
+
+/**
+ * Resolve an action alias to the canonical em-cli action name. Unknown values
+ * pass through unchanged so the caller's validation still reports them.
+ *
+ * @param {string} action
+ * @returns {string}
+ */
+function normalizeAction(action) {
+  return ACTION_ALIASES[action] || action;
+}
+
+/**
  * Apply the WSL home screen fix to an already running emulator, without a
  * relaunch. Same work the post-launch hook does: stop starter's retry loop and
  * its "Unable to launch" popup, reclaim the crash dumps that fill /opt, and
@@ -1994,7 +2042,7 @@ async function manageEmulator(
   opts = {},
   command = "tizen-sdk emulator-manager",
 ) {
-  const action = opts.action || "create";
+  const action = normalizeAction(opts.action || "create");
 
   if (!MANAGE_ACTIONS.includes(action)) {
     return formatError(
@@ -2301,6 +2349,8 @@ module.exports = {
   launchEmulator,
   DEFAULT_SIZE,
   MANAGE_ACTIONS,
+  ACTION_ALIASES,
+  normalizeAction,
   // Exported for tests — size resolution and output parsing are pure and worth
   // covering without em-cli.
   parseTemplateDetails,

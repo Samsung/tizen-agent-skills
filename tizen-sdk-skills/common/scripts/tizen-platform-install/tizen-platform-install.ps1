@@ -17,6 +17,7 @@ param(
     [string]$SdkPath = "",
     [string]$PlatformVersion = "",
     [switch]$Force,
+    [ValidateRange(1,8)][int]$DownloadJobs = 4,
     [switch]$DryRun,
     [switch]$Help
 )
@@ -76,6 +77,9 @@ Examples:
 "@
     exit 0
 }
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+$scriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 # Set default SDK path if not provided
 if (-not $SdkPath) {
@@ -321,6 +325,7 @@ if ($DryRun) {
         "    {0,3}. {1,-48} {2}{3}" -f $n, $pkg, $p, $tag | Write-Host
     }
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 0
 }
 
@@ -330,6 +335,11 @@ if (-not (Test-Path $SdkPath)) {
 }
 
 $idx = 0; $ok = 0; $skip = 0; $fail = 0
+
+# Pre-filter (fast, synchronous): resolve resume/version/meta skips up front so
+# only packages that actually need download+extract+merge go into the
+# parallel work queue below.
+$workItems = @()
 foreach ($pkg in $resolved) {
     $idx++
 
@@ -373,86 +383,36 @@ foreach ($pkg in $resolved) {
         continue
     }
 
-    $url = "$PkgRepo$relPath"
-    $zip = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
-    Write-Info "[$idx/$total] Downloading $pkg ..."
-    try {
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($url, $zip)
-        $wc.Dispose()
-    } catch {
-        Write-Err "[$idx/$total] Download failed: $url - $_"
-        $fail++
-        continue
+    $workItems += [pscustomobject]@{
+        Pkg   = $pkg
+        Idx   = $idx
+        Url   = "$PkgRepo$relPath"
+        Zip   = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
+        Stage = Join-Path $workdir ("stage_" + $idx)
     }
-
-    $stage = Join-Path $workdir ("stage_" + $idx)
-    if (Test-Path $stage) { Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $stage -Force | Out-Null
-
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-        $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
-        try {
-            foreach ($entry in $archive.Entries) {
-                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-                $destPath = Join-Path $stage $entry.FullName
-                $destDir = Split-Path -Parent $destPath
-                if ($destDir -and -not (Test-Path $destDir)) {
-                    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                }
-                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-            }
-        } finally {
-            $archive.Dispose()
-        }
-    } catch {
-        Write-Err "[$idx/$total] Extraction failed: $pkg - $_"
-        $fail++
-        Remove-Item -Force $zip -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-        continue
-    }
-
-    # Merge data\ contents into the SDK root
-    $dataDir = Join-Path $stage "data"
-    if (Test-Path $dataDir) {
-        $dataItems = Get-ChildItem -Path $dataDir -Force -ErrorAction SilentlyContinue
-        if ($dataItems.Count -gt 0) {
-            if ($PkgOs -eq "windows-64") {
-                robocopy $dataDir $SdkPath /E /NFL /NDL /NJH /NJS /NP /R:5 /W:2 /XO | Out-Null
-                if ($LASTEXITCODE -ge 8) {
-                    Write-Err "[$idx/$total] Merge failed: $pkg (robocopy $LASTEXITCODE)"
-                    $fail++
-                    Remove-Item -Force $zip -ErrorAction SilentlyContinue
-                    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-                    continue
-                }
-            } else {
-                Copy-Item -Path "$dataDir/*" -Destination $SdkPath -Recurse -Force
-            }
-        } else {
-            Write-Info "[$idx/$total] ${pkg}: data\ is empty, skip merge"
-        }
-    }
-
-    # Keep manifest record
-    $manifest = Join-Path $stage "pkginfo.manifest"
-    if (Test-Path $manifest) {
-        Copy-Item -Path $manifest -Destination (Join-Path $pkgInfoDir "$pkg.manifest") -Force
-    }
-
-    Remove-Item -Force $zip -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-    $ok++
-    Write-Success "[$idx/$total] $pkg installed"
 }
 
+# Download phase: only the packages the pre-filter left in the work queue,
+# so a resumed run does not re-fetch what it is about to skip.
+$downloadTimer = [System.Diagnostics.Stopwatch]::StartNew()
+Invoke-ParallelDownloads -Items (ConvertTo-DownloadItems $workItems) -Jobs $DownloadJobs | Out-Null
+$downloadTimer.Stop()
+Write-Info "Download phase took $(Format-Duration $downloadTimer.Elapsed)"
+
+# Extract + merge + manifest phase: shared worker/driver in lib/common.ps1.
+$extractTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$installed = Invoke-ParallelPackageInstall -Items $workItems `
+    -PkgInfoDir $pkgInfoDir -DestPath $SdkPath -PkgOs $PkgOs -Total $total
+$ok += $installed.Ok; $skip += $installed.Skip; $fail += $installed.Fail
+
+$extractTimer.Stop()
+Write-Info "Extraction phase took $(Format-Duration $extractTimer.Elapsed)"
 Write-Success "Platform package result: OK $ok / skipped $skip / failed $fail (total $total)"
 
 if ($fail -gt 0) {
     Write-Err "Some packages failed to install. Not creating .platform-installed marker."
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 1
 }
 
@@ -463,4 +423,5 @@ Write-Success ".platform-installed created: $platformPkgMarkerPath"
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
 Write-Success "Tizen platform package installation completed!"
+Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
 exit 0

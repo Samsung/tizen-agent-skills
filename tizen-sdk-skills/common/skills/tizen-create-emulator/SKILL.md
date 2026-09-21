@@ -130,7 +130,7 @@ follow-up `wait` has been seen reporting "Script completed" with only the runner
 
 - Pass `yield_time_ms: 30000` on every runner call. `list-*`, `detail`, `create` (without
   `--launch`), `modify` and `delete` finish inside that window.
-- **`create --launch` boots the emulator (up to 300 s) — never run it in the foreground
+- **`create --launch` boots the emulator (up to 300 s by default, `--timeout <seconds>` up to 540) — never run it in the foreground
   under Codex.** Add `--background`: the runner returns a job receipt at once. Then poll:
 
   ```powershell
@@ -194,8 +194,9 @@ node "$CLI" create --vm-name my-vm --size 1080 --platform tizen-10.0-x86_64
 # Create a TV emulator VM at 3840x1080
 node "$CLI" create --vm-name my-tv-vm --profile tv --size 3840
 
-# Create and launch immediately (waits up to 300s for boot)
+# Create and launch immediately (waits up to 300s for boot; raise with --timeout, max 540)
 node "$CLI" create --vm-name my-vm --size 1080 --launch
+node "$CLI" create --vm-name my-vm --size 1080 --launch --timeout 480
 
 # Create a VM from a raw disk image (skips size/template selection;
 # em-cli's confirmation prompt is auto-answered)
@@ -301,7 +302,7 @@ observed result, so it is the honest answer to "did my size actually apply?".
 
 Exit code: `0` = success envelope, `1` = failure/error envelope.
 
-> **Note:** With `--launch`, the runner waits up to 300s for the emulator to boot and connect via sdb. Claude Code: set the Bash tool timeout to 600000ms. Codex CLI: add `--background` and poll with `job-cli.js wait` (see "Codex CLI" above). sdb is located in {TIZEN_SDK}/tools.
+> **Note:** With `--launch`, the runner waits up to 300s (default; `--timeout <seconds>`, 1–540) for the emulator to boot and connect via sdb. A fresh image's first boot can take longer than 300s on a slow host — pass e.g. `--timeout 480` rather than reporting a boot failure. Claude Code: set the Bash tool timeout to 600000ms. Codex CLI: add `--background` and poll with `job-cli.js wait` (see "Codex CLI" above). sdb is located in {TIZEN_SDK}/tools.
 > If the emulator never connects, the envelope is still `status: "success"` (the VM exists) but `result.launched` is `false`, `result.status` is `created_launch_timeout`, and a warning tells you to relaunch — do not report it as launched.
 
 ## Envelope Output

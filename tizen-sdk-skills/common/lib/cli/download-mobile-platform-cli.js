@@ -12,7 +12,7 @@
  */
 
 const { downloadMobilePlatform } = require("../core/sdk-commands");
-const { runCli, getFlagValue } = require("./cli-runner");
+const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
 
 const args = process.argv.slice(2);
 
@@ -23,6 +23,10 @@ const includeIotHeaded = args.includes("--include-iot-headed");
 const iotHeadedVersion = getFlagValue(args, "--iot-headed-version");
 
 const force = args.includes("--force") || args.includes("-Force");
+const downloadJobs = getDownloadJobsOrExit(
+  "tizen-sdk download-mobile-platform",
+  args,
+);
 
 runCli("tizen-sdk download-mobile-platform", () =>
   downloadMobilePlatform(
@@ -31,5 +35,6 @@ runCli("tizen-sdk download-mobile-platform", () =>
     iotHeadedVersion,
     force,
     "tizen-sdk download-mobile-platform",
+    downloadJobs,
   ),
 );

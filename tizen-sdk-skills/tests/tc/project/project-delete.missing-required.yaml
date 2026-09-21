@@ -4,7 +4,7 @@ id: tizen-sdk.project-delete.missing-required
 plugin: tizen-sdk
 command: project-delete
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "project-delete fails with invalid_argument when --project is missing"
 

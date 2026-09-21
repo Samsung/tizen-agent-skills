@@ -16,6 +16,7 @@
 - **Tizen SDK 설치**: SDK가 설치되어 있고 `~/.tizen.sdk.path.config`가 이를 가리켜야 합니다. (설치되어 있지 않으면 아래 "Tizen SDK 설치" 참조)
 - **OS**: Windows / Ubuntu (Linux) / macOS 모두 지원됩니다. Claude가 현재 OS를 감지하여 해당 스크립트를 실행합니다.
 - **Samsung 계정** (선택): Samsung 배포 인증서를 사용할 경우에만 필요합니다. 유효한 Samsung 계정과 최소 하나의 디바이스 DUID가 필요합니다.
+- **TV 에뮬레이터 또는 Samsung TV** (시나리오 B): Samsung 인증서와 Samsung 서명 프로필은 TV 대상 전용입니다. DUID는 TV 에뮬레이터(`tizen-create-emulator --profile tv`, TV SDK 필요) 또는 실제 Samsung TV에서 얻고, Samsung 프로필로 빌드한 패키지도 그 대상에만 설치합니다. 표준 Tizen 에뮬레이터(`--profile tizen`)에는 시나리오 A의 로컬 프로필을 사용합니다.
 - **예제 목표**:
   - 시나리오 A (로컬만): 로컬 Tizen 인증서를 생성하고, 이를 사용하여 앱을 빌드 및 서명합니다.
   - 시나리오 B (Samsung 포함): Samsung 작성자 인증서를 생성하고, Samsung 배포자 인증서를 위한 DUID를 추가하고, 서명 프로필을 생성하여 배포 빌드에 사용합니다.

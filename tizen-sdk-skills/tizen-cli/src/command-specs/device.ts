@@ -70,6 +70,11 @@ export const DEVICE_SPECS: CommandSpec[] = [
         default: false,
       },
       {
+        flags: "--timeout <seconds>",
+        description:
+          "With --launch: seconds to wait for the new VM to connect via sdb (1-540, default 300). A fresh image's first boot can exceed 300 s on a slow host.",
+      },
+      {
         flags: "--raw-image-path <path>",
         description:
           "Directory holding raw disk images (create only). Creates a VM from a raw disk image instead of a template — skips size/template selection. em-cli prompts for confirmation; the runner auto-answers 'y'.",
@@ -86,6 +91,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
           assumeDefaults: o.assumeDefaults,
           profile: o.profile,
           launch: o.launch,
+          timeoutSec: o.timeout,
           rawImagePath: o.rawImagePath,
         },
         "tizen-sdk create-emulator",
@@ -349,6 +355,12 @@ export const DEVICE_SPECS: CommandSpec[] = [
           "Launch the app after installation. Omit entirely for install-only — do NOT pass --run false.",
         default: false,
       },
+      {
+        flags: "--reset-rds",
+        description:
+          "Clear host-side RDS state for this package's project and return without installing. The package path is used only to locate the project. Cannot be combined with --run.",
+        default: false,
+      },
     ],
     handler: (o) =>
       sdkCommands.installApp(
@@ -356,18 +368,19 @@ export const DEVICE_SPECS: CommandSpec[] = [
         o.serial,
         !!o.run,
         "tizen-sdk install-app",
+        !!o.resetRds,
       ),
   },
   {
     name: "sdb-helper",
     description:
-      "Run the correct sdb command for a Tizen device based on a natural-language request (log capture, shell, port forward, reboot, etc.)",
+      "Run the correct sdb command for a Tizen device based on a natural-language request (shell, port forward, reboot, launch/kill, etc.). Device-log requests (tail/show/save/clear logs) return a handoff to dlog-analyzer.",
     collectAllMissing: true,
     options: [
       {
         flags: "--request <text>",
         description:
-          'Natural-language sdb request (e.g., "tail the logs", "open a shell", "forward port 9229")',
+          'Natural-language sdb request (e.g., "run shell command ls -la", "open a shell", "forward port 9229")',
         required: true,
       },
       SERIAL_OPTION,

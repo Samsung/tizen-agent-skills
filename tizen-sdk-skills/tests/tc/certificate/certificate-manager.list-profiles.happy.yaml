@@ -4,7 +4,7 @@ id: tizen-sdk.certificate-manager.list-profiles.happy
 plugin: tizen-sdk
 command: certificate-manager
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "certificate-manager list-profiles returns success with profile list"
 

@@ -4,7 +4,7 @@ id: tizen-sdk.install-rootstrap.missing-required
 plugin: tizen-sdk
 command: install-rootstrap
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "install-rootstrap fails with invalid_argument when --zip-path is missing"
 

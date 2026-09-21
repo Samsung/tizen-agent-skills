@@ -1,18 +1,15 @@
 ---
 name: tizen-sdb-helper
-description: sdb helper, sdb command, sdb shell, run shell command on the device, shell command, 쉘 명령 실행, sdb dlog, tail logs, device log, sdb forward, forward port, port forward, port forwarding, 포트 포워딩, sdb reboot, reboot the device, 디바이스 재부팅, shutdown device, sdb root, root on, sendkey, launch app, kill app, list running apps, list installed packages, disk space df /opt. Runs ONE sdb action on a Tizen device — shell command, port forward, reboot/shutdown, log capture, launch/kill, root toggle, sendkey — with device auto-selection and confirmation gates on destructive actions. For ANY request that would be answered with an sdb command, ROUTE HERE FIRST — do NOT locate sdb or type `sdb ...` yourself. Connect to an IP → remote-device; install → install-app; push/pull → file-transfer.
+description: sdb helper, sdb command, sdb shell, run shell command on the device, shell command, 쉘 명령 실행, sdb forward, forward port, port forward, port forwarding, 포트 포워딩, sdb reboot, reboot the device, 디바이스 재부팅, shutdown device, sdb root, root on, sendkey, launch app, kill app, list running apps, list installed packages, disk space df /opt. Runs ONE sdb action on a Tizen device — shell command, port forward, reboot/shutdown, launch/kill, root toggle, sendkey — with device auto-selection and confirmation gates on destructive actions. For ANY request that would be answered with an sdb command, ROUTE HERE FIRST — do NOT locate sdb or type `sdb ...` yourself. Connect to an IP → remote-device; install → install-app; push/pull → file-transfer; device logs of ANY kind (tail/show/save/clear logs, dlog) → dlog-analyzer (sdb-helper returns a handoff for them).
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-07-30"
+  last-updated: "2026-09-18"
   keywords:
     - sdb
     - sdb command
     - sdb shell
-    - sdb dlog
     - sdb forward
     - sdb reboot
-    - sdb log
-    - tail logs
     - port forward
     - sdb root
 ---
@@ -21,10 +18,11 @@ metadata:
 
 ## When to use
 
-User asks for a single sdb action on a Tizen device — run a shell command, log capture,
-port forward, reboot, screen state, etc. The command matches the request to an intent,
-resolves the correct sdb invocation, and either executes it (read-only) or returns it for
-confirmation (gated/destructive).
+User asks for a single sdb action on a Tizen device — run a shell command, port forward,
+reboot, screen state, etc. The command matches the request to an intent, resolves the
+correct sdb invocation, and either executes it (read-only) or returns it for confirmation
+(gated/destructive). Device-log requests (tail/show/save/clear logs, dlog) are matched but
+**handed off** to `tizen-cli tizen-sdk dlog-analyzer` (`--action log-dump` / `log-clear`).
 
 **✅ ALWAYS run this command with the user's request — NEVER search for the sdb binary
 (`which`/`where`/`Get-Command sdb`, `find -name sdb`), parse `sdb devices`, or type
@@ -39,7 +37,7 @@ tizen-cli tizen-sdk sdb-helper --request "<natural-language request>" [--serial 
 
 | Option              | Required | Default | Description                                                                               |
 | ------------------- | -------- | ------- | ----------------------------------------------------------------------------------------- |
-| `--request <text>`  | **yes**  | —       | Natural-language sdb request (e.g., "list devices", "tail the logs", "screenshot the TV") |
+| `--request <text>`  | **yes**  | —       | Natural-language sdb request (e.g., "run shell command ls -la", "reboot the device", "forward port 9229") |
 | `--serial <serial>` | no       | auto    | Target device serial (omit to auto-select the single connected device)                    |
 
 ## Boundary
@@ -70,12 +68,10 @@ of executing the command.
 | Uninstall            | "uninstall app"                  | Yes    | `tizen-install-app`       |
 | List packages        | "list installed packages"        | No     | —                         |
 | Package info         | "show package info"              | No     | —                         |
-| Launch app           | "launch app"                     | No     | —                         |
+| Launch app           | "launch app"                     | No     | — (`app_launcher -s`; when it prints no `successfully launched` — Samsung TV images are silent for a non-root shell — retried with the TV launcher `0 was_execute <appid>`, accepted on `app_id[<appid>] launched` / `resumed`) |
 | Kill app             | "kill app"                       | Yes    | —                         |
 | List running apps    | "list running apps"              | No     | —                         |
-| Stream log           | "tail the logs"                  | No     | —                         |
-| Clear log            | "clear log"                      | Yes    | —                         |
-| Save log             | "save logs"                      | No     | —                         |
+| Logs — tail / save / clear | "tail the logs", "save logs", "clear log" | — | `tizen-dlog-analyzer` (`result.note` names the action: `log-dump`, `log-clear --confirm`, `start`) |
 | Screenshot           | "screenshot the TV"             | No     | `tizen-screenshot`        |
 
 | Shell command | "run shell command" | No | — |
@@ -99,14 +95,33 @@ of executing the command.
   "command": "tizen-sdk sdb-helper",
   "status": "success",
   "result": {
-    "intent": "log-stream",
-    "command": "sdb -s \"emulator-26101\" dlog -v threadtime",
+    "intent": "shell-command",
+    "command": "sdb -s \"emulator-26101\" shell \"ls -la; echo __SDB_EXIT:$?\"",
     "device_serial": "emulator-26101",
-    "output": "...",
+    "output": "total 12\ndrwxr-xr-x ...",
     "gated": false
   }
 }
 ```
+
+**Success (handoff intent — device logs):**
+
+```json
+{
+  "command": "tizen-sdk sdb-helper",
+  "status": "success",
+  "result": {
+    "intent": "log-stream",
+    "handoff": "tizen-dlog-analyzer",
+    "message": "Intent \"log-stream\" is handled by the tizen-dlog-analyzer skill. Use that skill instead.",
+    "suggested_skill": "tizen-dlog-analyzer",
+    "note": "Run the dlog-analyzer runner: log-dump [serial] [--filter \"*:E\"] for a one-shot view, or start start-monitoring for continuous monitoring with crash detection."
+  }
+}
+```
+
+Follow it with `tizen-cli tizen-sdk dlog-analyzer --action log-dump` (view/save) or
+`--action log-clear` (clear; refused without `--confirm`). Never run `sdb dlog` yourself.
 
 **Success (gated intent, not executed — returns command for confirmation):**
 
@@ -206,6 +221,7 @@ of executing the command.
 
 ## Follow-ups
 
+- Device logs (view / save / clear) and crash analysis → `tizen-cli tizen-sdk dlog-analyzer`
 - Screenshot capture → `tizen-cli tizen-sdk screenshot`
 - Package install/uninstall → `tizen-cli tizen-sdk install-app`
 - Device discovery → `tizen-cli tizen-sdk device-manager`

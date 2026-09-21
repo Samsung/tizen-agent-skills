@@ -81,6 +81,7 @@ tizen-cli tizen-sdk create-emulator
 | `--template <name>`   | no            | —        | Exact template name (e.g. `HD1080 Tizen`). Overrides `--size`; normally prefer `--size`.                             |
 | `--profile <profile>` | no            | `tizen`  | `tizen` (standard) or `tv` (Samsung TV; requires TV SDK extension)                                                   |
 | `--launch`            | no            | `false`  | Launch the VM after creating (create action only). **Omit entirely for create-only** — do NOT pass `--launch false`. |
+| `--timeout <seconds>` | no            | `300`    | With `--launch`: seconds to wait for the new VM to connect via sdb (1–540). A fresh image's first boot can exceed 300 s on a slow host. |
 | `--raw-image-path <path>` | no       | —        | Directory holding raw disk images (create only). Creates a VM from a raw disk image instead of a template — skips size/template selection. em-cli prompts for confirmation; the runner auto-answers 'y'. |
 
 > **⚠️ This runner accepts only `--profile tizen` or `tv` — never narrate a `mobile`
@@ -109,8 +110,9 @@ tizen-cli tizen-sdk create-emulator --vm-name my-vm --size 1080 --platform tizen
 # Create a TV emulator VM at 3840x1080
 tizen-cli tizen-sdk create-emulator --vm-name my-tv-vm --profile tv --size 3840
 
-# Create and launch immediately (--launch — waits up to 300s for boot)
+# Create and launch immediately (--launch — waits up to 300s for boot; --timeout raises it, max 540)
 tizen-cli tizen-sdk create-emulator --vm-name my-vm --size 1080 --launch
+tizen-cli tizen-sdk create-emulator --vm-name my-vm --size 1080 --launch --timeout 480
 
 # Create from a raw disk image (skips size/template selection; confirmation auto-answered)
 tizen-cli tizen-sdk create-emulator --vm-name my-vm --raw-image-path /path/to/raw-images --platform tizen-10.0-x86_64

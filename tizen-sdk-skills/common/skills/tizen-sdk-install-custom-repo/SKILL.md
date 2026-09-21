@@ -147,8 +147,9 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-ins
 node "$CLI" "<repo-url>"
 ```
 
-Optional: `node "$CLI" --repo-url "<url>" --platform-version 11.0 --force`
-(`--platform-version` omitted = highest `TIZEN-X.Y` the repository offers).
+Optional: `node "$CLI" --repo-url "<url>" --platform-version 11.0 --force --download-jobs 4`
+(`--platform-version` omitted = highest `TIZEN-X.Y` the repository offers;
+`--download-jobs` = concurrent download jobs, 1-8, default 4).
 
 Exit code: `0` = success (SDK already installed — **read the warnings**, see below),
 `1` = not installed yet or URL rejected. Inspect `errors[0].error_category`:
