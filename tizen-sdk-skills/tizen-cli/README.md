@@ -221,14 +221,21 @@ node dist/bin/tizen-sdk.js --schema          # release ZIP / dist-only layout
   `tizen-sdk …` standalone, `tizen-cli tizen-sdk …` inside the host. Set
   `TIZEN_SDK_USER_COMMAND_PREFIX` to override it (for example from an alias or
   wrapper script).
-- Recent pnpm releases removed `pnpm link --global`; it now fails with
-  `ERR_PNPM_LINK_BAD_PARAMS: You must provide a parameter`. Run
-  `pnpm add -g .` from inside `tizen-cli/` instead: it links this checkout as
-  a global package and drops a `tizen-sdk` shim into pnpm's global bin
-  directory (a link, not a copy, so a fresh `pnpm build` is picked up
-  immediately). Undo with `pnpm remove -g tizen-cli-plugin-tizen-sdk`. If the
-  global bin directory is not on PATH yet, run `pnpm setup` and restart the
-  shell. pnpm 9 and earlier still accept `pnpm link --global`.
+- `pnpm add -g .` is pnpm's documented replacement for global linking
+  (verified on pnpm 11.22.0). It registers this checkout as a global package
+  and drops a `tizen-sdk` shim into pnpm's global bin directory (a link, not a
+  copy, so a fresh `pnpm build` is picked up immediately). Undo with
+  `pnpm remove -g tizen-cli-plugin-tizen-sdk` (the `name` in `package.json`).
+- How `pnpm link` changed across versions: pnpm 9 and earlier link the current
+  package globally with `pnpm link --global` (or `-g`). pnpm 10 removed that
+  flag and made the no-argument `pnpm link` do the global link. pnpm 11 removed
+  the no-argument form as well, so on pnpm 11+ both `pnpm link --global` and
+  `pnpm link` fail with `ERR_PNPM_LINK_BAD_PARAMS: You must provide a
+  parameter`. `pnpm link <dir>` only links a package into the current project.
+- If `pnpm add -g .` fails with `ERR_PNPM_NO_GLOBAL_BIN_DIR`, or it succeeds
+  but `tizen-sdk` is still not found, pnpm's global bin directory
+  (`pnpm bin -g`) is missing or not on PATH: run `pnpm setup` and restart the
+  shell.
 - On Windows run it as `node bin\tizen-sdk.js …`, or use the `tizen-sdk.CMD`
   shim that `pnpm add -g .` creates.
 
