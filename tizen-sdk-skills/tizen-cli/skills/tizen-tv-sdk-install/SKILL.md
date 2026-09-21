@@ -27,6 +27,7 @@ tizen-cli tizen-sdk tv-sdk-install
 | Option | Required | Default | Description |
 |---|---|---|---|
 | `--force` | no | off | Force reinstall even if already installed |
+| `--download-jobs <count>` | no | `4` | Number of concurrent download jobs (1-8) |
 
 ## Two-phase flow (same pattern as sdk-install)
 

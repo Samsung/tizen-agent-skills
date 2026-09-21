@@ -1,0 +1,25 @@
+# Install a well-formed but unavailable version (YAML-only, no CSV TC ID)
+id: tizen-sdk.sdk-install.unavailable-version
+plugin: tizen-sdk
+command: sdk-install
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "sdk-install with an X.Y version that is not installed fails instead of reporting 'already installed'"
+
+lanes:
+  cli:
+    # 99.0 passes the X.Y syntax check, so the pre-check reaches the host:
+    #   - SDK installed (this TC): the requested platform must be one of the
+    #     platforms/tizen-X.Y directories → platform_version_not_found, with
+    #     suggested_fix pointing at `platform-install --platform-version 99.0`.
+    #   - No SDK installed: the pre-check hands the installer command back as
+    #     usual (execution_error + suggested_fix) and the installer itself,
+    #     now given -Platform/--platform 99.0, rejects the version against
+    #     pkg_list ("Specified platform not found"). Not covered by this TC.
+    argv: ["tizen-sdk", "sdk-install", "--tizen-version", "99.0"]
+    timeout_sec: 60
+    expect:
+      status: failure
+      errors:
+        - { error_category: "platform_version_not_found", has_suggested_fix: true }

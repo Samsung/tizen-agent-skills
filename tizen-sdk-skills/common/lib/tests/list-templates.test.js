@@ -116,6 +116,14 @@ if [ "$1" = "list" ] && [ "$2" = "templates" ]; then
   echo "  ServiceApp [native_app]"
   echo "tizen-9.0:"
   echo "  OldOnly [web_app]"
+  if [ -n "\${STUB_TZ_TV:-}" ]; then
+    # TV SDK profile: tz lists it from templates.yaml metadata whether or not
+    # the extension package is installed (phantom-template guard).
+    echo "tv-samsung-9.0:"
+    echo "  Basic_Empty [web_app]"
+    echo "  TizenNUIApp [dotnet_app]"
+    echo "  jQuery Mobile_NavigationView [web_app]"
+  fi
   exit 0
 fi
 exit 0
@@ -296,6 +304,110 @@ exit 0
       !/not writable from this shell/.test(okSync.stderr),
     okSync.stderr.slice(-400),
   );
+
+  // TV SDK detection. tz lists tv-samsung-9.0 in every case below; only the
+  // SDK tree decides whether the extension is installed.
+  const tvPhantom = runApp(["--list-templates"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_TV: "1" },
+  });
+  check(
+    "a tv-samsung-* section without its platform dir is a phantom: no tv: section, no TV_ lines",
+    tvPhantom.code === 0 &&
+      /^PROFILES=tizen-10\.0,tizen-9\.0,tv-samsung-9\.0$/m.test(
+        tvPhantom.stdout,
+      ) &&
+      !/^tv:/m.test(tvPhantom.stdout) &&
+      !/^TV_PROFILE=/m.test(tvPhantom.stdout),
+    `exit ${tvPhantom.code}\n${tvPhantom.stdout}`.slice(-600),
+  );
+
+  // The bug: the active profile is tizen-10.0 but the TV extension sits under
+  // platforms/tizen-9.0/tv-samsung — the old check looked only under the
+  // active profile and reported "TV SDK not installed".
+  const tvInstalled = runApp(["--list-templates"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_TV: "1" },
+    prepare: (fx) => {
+      fs.mkdirSync(path.join(fx.sdk, "platforms", "tizen-9.0", "tv-samsung"), {
+        recursive: true,
+      });
+    },
+  });
+  // `sort -u` order is locale-dependent (C: uppercase first; en_US.UTF-8:
+  // case-insensitive), so compare the section as a set, not a fixed sequence.
+  const sectionOf = (stdout, name) => {
+    const m = stdout.match(new RegExp(`^${name}:\\n((?: {2}.*\\n)*)`, "m"));
+    return m
+      ? m[1]
+          .split("\n")
+          .filter(Boolean)
+          .map((l) => l.trim())
+          .sort()
+      : null;
+  };
+  const machineSet = (stdout, key) => {
+    const m = stdout.match(new RegExp(`^${key}=(.*)$`, "m"));
+    return m ? m[1].split(",").filter(Boolean).sort() : null;
+  };
+  check(
+    "the TV extension under another tizen-X.Y than the active profile IS detected (tv: section + TV_PROFILE)",
+    tvInstalled.code === 0 &&
+      /^PROFILE=tizen-10\.0$/m.test(tvInstalled.stdout) &&
+      /^TV_PROFILE=tv-samsung-9\.0$/m.test(tvInstalled.stdout) &&
+      JSON.stringify(sectionOf(tvInstalled.stdout, "tv")) ===
+        JSON.stringify(
+          ["Basic_Empty", "TizenNUIApp", "jQuery Mobile_NavigationView"].sort(),
+        ),
+    `exit ${tvInstalled.code}\n${tvInstalled.stdout}\n${tvInstalled.stderr}`.slice(
+      -800,
+    ),
+  );
+  check(
+    "TV_WEB / TV_DOTNET split the TV templates by kind and keep whole names",
+    JSON.stringify(machineSet(tvInstalled.stdout, "TV_WEB")) ===
+      JSON.stringify(["Basic_Empty", "jQuery Mobile_NavigationView"].sort()) &&
+      JSON.stringify(machineSet(tvInstalled.stdout, "TV_DOTNET")) ===
+        '["TizenNUIApp"]',
+    tvInstalled.stdout.slice(0, 400),
+  );
+
+  const tvDirOnly = runApp(["--list-templates", "--type=webapp"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_TV: "1" },
+    prepare: (fx) => {
+      fs.mkdirSync(path.join(fx.sdk, "platforms", "tv-samsung-9.0"), {
+        recursive: true,
+      });
+    },
+  });
+  check(
+    "platforms/tv-samsung-<ver> also counts as installed, and a typed webapp list still carries the TV_ lines (no tv: section)",
+    tvDirOnly.code === 0 &&
+      /^TV_PROFILE=tv-samsung-9\.0$/m.test(tvDirOnly.stdout) &&
+      JSON.stringify(machineSet(tvDirOnly.stdout, "TV_WEB")) ===
+        JSON.stringify(
+          ["Basic_Empty", "jQuery Mobile_NavigationView"].sort(),
+        ) &&
+      /^webapp:\n {2}Basic\n?$/m.test(tvDirOnly.stdout) &&
+      !/^tv:/m.test(tvDirOnly.stdout),
+    `exit ${tvDirOnly.code}\n${tvDirOnly.stdout}`.slice(-600),
+  );
+
+  const tvTypedMissing = runApp(["--list-templates", "--type=tv"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_TV: "1" },
+  });
+  check(
+    "--type tv without the extension: empty tv: section, exit 0, stderr says to install the TV SDK",
+    tvTypedMissing.code === 0 &&
+      /^tv:\s*$/m.test(tvTypedMissing.stdout) &&
+      !/^TV_PROFILE=/m.test(tvTypedMissing.stdout) &&
+      /No TV SDK \(tv-samsung-\*\) profile found/.test(tvTypedMissing.stderr),
+    `exit ${tvTypedMissing.code}\n${tvTypedMissing.stdout}\n${tvTypedMissing.stderr}`.slice(
+      -600,
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -440,6 +552,62 @@ async function withPluginRoot(lines, code, fn) {
       withProfile.result?.profile === "tizen-11.0" &&
       JSON.stringify(withProfile.result?.templates) === '{"webapp":["Basic"]}',
     JSON.stringify(withProfile).slice(0, 400),
+  );
+  check(
+    "without TV_PROFILE= there is no result.tv (TV SDK not installed)",
+    withProfile.result?.tv === undefined,
+    JSON.stringify(withProfile.result),
+  );
+
+  // TV SDK installed: the machine lines become result.tv, split by kind, on a
+  // typed webapp list too — that is what lets a webapp request offer the TV
+  // web templates alongside.
+  const withTv = await withPluginRoot(
+    [
+      "PROFILE=tizen-11.0",
+      "PROFILES=tizen-11.0,tizen-10.0,tv-samsung-10.0",
+      "TV_PROFILE=tv-samsung-10.0",
+      "TV_WEB=Basic_Empty,Basic_Tizen_Blank,jQuery Mobile_NavigationView",
+      "TV_DOTNET=TizenNUIApp,TizenServiceApp",
+      "webapp:",
+      "  Basic",
+      "  WebService",
+    ],
+    0,
+    () => listTemplates("webapp", "tizen-sdk list-templates"),
+  );
+  check(
+    "TV_PROFILE/TV_WEB/TV_DOTNET → result.tv = {profile, web[], dotnet[]} on a --type webapp list",
+    withTv.status === "success" &&
+      JSON.stringify(withTv.result?.templates) ===
+        '{"webapp":["Basic","WebService"]}' &&
+      JSON.stringify(withTv.result?.tv) ===
+        '{"profile":"tv-samsung-10.0","web":["Basic_Empty","Basic_Tizen_Blank","jQuery Mobile_NavigationView"],"dotnet":["TizenNUIApp","TizenServiceApp"]}',
+    JSON.stringify(withTv).slice(0, 600),
+  );
+  const allWithTv = await withPluginRoot(
+    [
+      "PROFILE=tizen-11.0",
+      "TV_PROFILE=tv-samsung-10.0",
+      "TV_WEB=Basic_Empty",
+      "TV_DOTNET=",
+      "webapp:",
+      "  Basic",
+      "tv:",
+      "  Basic_Empty",
+      "platform:",
+      "  dali-demo",
+    ],
+    0,
+    () => listTemplates(undefined, "tizen-sdk list-templates"),
+  );
+  check(
+    "untyped list: the tv: section is grouped like any other and an empty TV_DOTNET= is []",
+    allWithTv.status === "success" &&
+      JSON.stringify(allWithTv.result?.templates?.tv) === '["Basic_Empty"]' &&
+      JSON.stringify(allWithTv.result?.tv?.dotnet) === "[]" &&
+      allWithTv.result?.tv?.profile === "tv-samsung-10.0",
+    JSON.stringify(allWithTv).slice(0, 600),
   );
 
   // Issue #72: --type webapp with an empty section was a success envelope.

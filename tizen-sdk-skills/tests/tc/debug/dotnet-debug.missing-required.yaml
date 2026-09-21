@@ -4,7 +4,7 @@ id: tizen-sdk.dotnet-debug.missing-required
 plugin: tizen-sdk
 command: dotnet-debug
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "dotnet-debug fails with invalid_argument when --app-id is missing"
 

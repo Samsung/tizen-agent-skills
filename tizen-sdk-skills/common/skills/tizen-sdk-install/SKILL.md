@@ -55,10 +55,15 @@ The check targets the **user's home directory drive** only (e.g., `C:\` on Windo
 ### installSdk() Flow (3-step pre-check)
 
 ```
-1. Node.js check (first) ← if not installed, abort with guide
+0. Version syntax ← a requested version must be X.Y (10.0, 11.0); else invalid_argument
+1. Node.js check ← if not installed, abort with guide
 2. SDK already installed? ← if yes, return success (auto sdk-init: writes ~/.tizen.sdk.path.config)
+   A requested version must be one of the installed platforms/tizen-X.Y,
+   else platform_version_not_found (suggested_fix: platform-install --platform-version X.Y)
 3. Disk space check (15 GB) ← if insufficient, abort with details
-4. Return installer command for Phase 2 (background install)
+4. Return installer command for Phase 2 (background install); a requested
+   version is forwarded as --platform / -Platform and the installer rejects
+   versions the repository does not offer
 ```
 
 ### Install path (where the SDK goes)
@@ -200,7 +205,10 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-ins
 node "$CLI"
 ```
 
-Optional: `node "$CLI" 10.0 tizen --force` (version, label, force reinstall)
+Optional: `node "$CLI" 10.0 tizen --force` (version, label, force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4).
+The version is the Tizen platform `X.Y` (e.g. `10.0`); omit it to install the newest available. A malformed
+version fails with `invalid_argument`; a valid one that is not installed fails with `platform_version_not_found`
+(never "already installed") — do not run an installer for those, show the message instead.
 
 Exit code: `0` = success (SDK already installed), `1` = failure (SDK not installed — proceed to Phase 2).
 

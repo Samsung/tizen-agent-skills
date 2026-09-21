@@ -3,7 +3,7 @@ id: tizen-sdk.emulator-manager.detail
 plugin: tizen-sdk
 command: emulator-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager --action detail returns success with VM details"
 

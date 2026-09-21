@@ -31,7 +31,9 @@
  *
  * Actions:
  *   create (default) | delete | launch | list-vm | list-platform | list-template |
- *   detail | modify | reset | create-image
+ *   detail | modify | reset | create-image | fix-homescreen
+ *   The plural spellings list-vms / list-platforms / list-templates are accepted
+ *   as aliases of the singular em-cli actions.
  *
  * Options:
  *   --vm-name <name>        Emulator VM name. Required for every action except
@@ -71,6 +73,7 @@
  */
 
 const { manageEmulator } = require("../core/sdk-commands");
+const { normalizeAction } = require("../core/emulator");
 const { runCli, parseArgsOrExit, exitWithUsageError } = require("./cli-runner");
 
 const COMMAND = "tizen-sdk emulator";
@@ -78,7 +81,7 @@ const COMMAND = "tizen-sdk emulator";
 const USAGE =
   "Usage: node emulator-manager-cli.js <action> [options]. Actions: create, delete, " +
   "launch, list-vm, list-platform, list-template, detail, modify, reset, create-image, " +
-  "fix-homescreen. " +
+  "fix-homescreen (the plural list-vms, list-platforms, list-templates are accepted too). " +
   "create --vm-name <name> --size 1080|720|3840|1920x1080 [--assume-defaults] " +
   "[--platform <name>] [--template <name>] [--profile tizen|tv] [--launch] " +
   "[--skin 1|2] [--ram-size 512|768|1024] [--file-sharing-path <path>] " +
@@ -133,7 +136,11 @@ const { options, positional } = parseArgsOrExit(
   BOOLEAN_FLAGS,
 );
 
-const [action = "create", ...extraPositionals] = positional;
+// list-vms / list-platforms / list-templates are accepted as spellings of the
+// singular em-cli actions — the project runner's action is the plural
+// list-templates, so the plural is a natural guess here (see ACTION_ALIASES).
+const [rawAction = "create", ...extraPositionals] = positional;
+const action = normalizeAction(rawAction);
 if (extraPositionals.length > 0) {
   usageError(`Unexpected argument(s): ${extraPositionals.join(" ")}`);
 }

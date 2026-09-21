@@ -86,7 +86,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/platfor
 node "$CLI"
 ```
 
-**Required:** `node "$CLI" --platform-version 10.0` (specify platform version — **mandatory**), `node "$CLI" --force` (force reinstall)
+**Required:** `node "$CLI" --platform-version 10.0` (specify platform version — **mandatory**, `X.Y` form; anything else such as `99.99.99` fails with `invalid_argument` before anything runs), `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
 Exit code: `0` = success (platform package already installed), `1` = failure (platform package not installed — proceed to Phase 2, or Tizen SDK not installed).
 

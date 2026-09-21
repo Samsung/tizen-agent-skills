@@ -45,7 +45,8 @@ Never ask the user to put a password in Cline/Claude chat or send a literal `--p
     Returns cert path and password reference. Opens the system browser for Samsung Account login and
     blocks until it completes (5-minute timeout); a cached valid token is reused without prompting.
     Do not substitute the local `generate-author` action — that produces a `Tizen Developers CA`
-    certificate, which cannot sign for Samsung distribution.
+    certificate, which cannot sign for Samsung distribution. (The only exception is the
+    TV-target rule below: a standard-emulator target cannot use a Samsung certificate at all.)
 12. **Generate Samsung distributor certificate** — authenticates with Samsung Account, generates an
     RSA key pair with a CSR that includes DUIDs as subjectAltName URN entries, submits to Samsung
     `/apis/v1/distributors` (and `/apis/v3/distributors` for VD mode), packages the result as
@@ -62,6 +63,20 @@ Never ask the user to put a password in Cline/Claude chat or send a literal `--p
 16. **Samsung login** — performs only the Samsung Account login and caches the token for a profile.
 17. **Reveal Samsung password** — decrypts the stored password for a Samsung profile.
 
+**Samsung certificates are for Samsung TV targets only (mandatory).** A Samsung online-CA
+certificate and the profile from `create-samsung-profile` are valid only for the **TV emulator**
+(`tizen-create-emulator --profile tv`, needs `tizen-tv-sdk-install`) and a real Samsung TV whose DUID
+is in the distributor certificate. A standard Tizen emulator (`--profile tizen`) accepts only the
+SDK-bundled distributor certificate and rejects a Samsung-signed package with a certificate error.
+Before any `generate-samsung-*` / `create-samsung-profile` / `import-samsung-certificate` action,
+confirm the target is the TV emulator or a Samsung TV. For a standard emulator, say so in one
+sentence and use `generate-author` → `create-profile` instead. If the user asked for a Samsung
+certificate but named no target, ask which target they are signing for (TV emulator / Samsung TV,
+or a standard emulator) — do not silently substitute the local flow. Take DUIDs
+from the TV emulator/TV (`acquire-duid --serial <tv-emulator-serial>`), never from a standard
+emulator. If no TV emulator exists, hand off to `tizen-tv-sdk-install` →
+`tizen-create-emulator --profile tv` → `tizen-launch-emulator` first.
+
 ### DUID Utilities
 18. **Parse DUIDs** — parses and normalizes a raw DUID string (comma/newline separated): trims,
     uppercases, deduplicates, validates, and caps at 50 entries. Returns the valid DUIDs, skipped
@@ -77,7 +92,7 @@ Never ask the user to put a password in Cline/Claude chat or send a literal `--p
 
 ## Password handling — mandatory
 
-Never request a certificate password in chat. In Cline, use the matching hidden prompt option. In Claude Code, Bash tool and sub-agent processes do not have an interactive TTY, so offer the user exactly two options: (1) run a provided `--prompt-...` command personally through `!` shell mode or another terminal, or (2) use a protected one-line environment file. For option 1, first resolve the CLI path and fill every known non-secret value into one ready-to-run command; no `<...>` placeholders are permitted. For option 2, offer to create an empty template and ask for the preferred absolute location. If approved, create and lock down a file containing only `TIZEN_CERTIFICATE_PASSWORD=`; the user enters the value locally and replies only that it is ready. Then pass only its path as `--password-file <path>`. From that point, never read, inspect, edit, overwrite, or otherwise modify the file. If a format error occurs, tell the user the required format and wait for them to correct it locally. Do not read, print, or ask for the file contents. For author/distributor/distributor2 passwords use `--author-password-file`, `--distributor-password-file`, or `--distributor2-password-file` with `TIZEN_AUTHOR_CERTIFICATE_PASSWORD`, `TIZEN_DISTRIBUTOR_CERTIFICATE_PASSWORD`, or `TIZEN_DISTRIBUTOR2_CERTIFICATE_PASSWORD` respectively.
+Never request a certificate password in chat. In Cline, use the matching hidden prompt option. In Claude Code, Bash tool and sub-agent processes do not have an interactive TTY, so offer the user exactly two options: (1) run a provided `--prompt-...` command personally through `!` shell mode or another terminal, or (2) use a protected one-line environment file. For option 1, first resolve the CLI path and fill every known non-secret value into one ready-to-run command; no `<...>` placeholders are permitted. **Windows path rule:** on Windows the Bash locate block returns an MSYS path (`/c/Users/...`) that only Git Bash understands; pasted into cmd.exe or PowerShell, Node resolves it as `C:\c\Users\...` and fails with `MODULE_NOT_FOUND`. Before placing the path in the user-facing command, convert it with `cygpath -w "$CLI"` and hand over the result in double quotes, i.e. `node "C:\Users\...\cert-manager-cli.js" ...`; that form works in cmd.exe, PowerShell, and Git Bash (`!` mode) alike. Never hand over the `/c/Users/...` form. For option 2, offer to create an empty template and ask for the preferred absolute location. If approved, create and lock down a file containing only `TIZEN_CERTIFICATE_PASSWORD=`; the user enters the value locally and replies only that it is ready. Then pass only its path as `--password-file <path>`. From that point, never read, inspect, edit, overwrite, or otherwise modify the file. If a format error occurs, tell the user the required format and wait for them to correct it locally. Do not read, print, or ask for the file contents. For author/distributor/distributor2 passwords use `--author-password-file`, `--distributor-password-file`, or `--distributor2-password-file` with `TIZEN_AUTHOR_CERTIFICATE_PASSWORD`, `TIZEN_DISTRIBUTOR_CERTIFICATE_PASSWORD`, or `TIZEN_DISTRIBUTOR2_CERTIFICATE_PASSWORD` respectively.
 
 **✅ ALWAYS call the certificate functions from `lib/core/sdk-commands.js` via the shipped CLI
 runner — NEVER run `tz cert` yourself directly.**
@@ -292,4 +307,8 @@ output. If the runner ran more than once, return the envelope of the **last** ru
 - **Single-task** (e.g., "배포자 인증서 목록 보여줘") → DONE. Report `result.distributors`, and
   mention `result.unavailable` if the user asked for a specific combo that doesn't exist.
 - After `create-profile`, use the returned `profile_name` with `tz build -s <profile>`.
+- Samsung certificate requested for a standard Tizen emulator → do not run the Samsung flow;
+  explain the TV-only rule and use `generate-author` → `create-profile`.
+- Samsung flow requested but no TV emulator exists → `tizen-tv-sdk-install` →
+  `tizen-create-emulator --profile tv` → `tizen-launch-emulator`
 - SDK not installed → `tizen-sdk-install`

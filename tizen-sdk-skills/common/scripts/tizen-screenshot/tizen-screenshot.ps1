@@ -420,10 +420,25 @@ from PIL import Image
 img = Image.open(sys.argv[1])
 width, height = img.size
 
+# --- Detect and crop the emulator control panel ---
+# The emulator window is [display][control panel] or, when the panel splits the
+# display, [left display area][control panel][right display area]. The panel is a
+# vertical strip of predominantly light grayscale pixels (R~G~B), so the first
+# sustained run of such columns is taken as the panel and removed.
+# This block is byte-identical in tizen-screenshot.sh and tizen-screenshot.ps1;
+# common/lib/tests/screenshot-postprocess.test.js fails when the two drift.
 if width > 100 and height > 100:
     sample_ys = [int(height * (i + 0.5) / 10) for i in range(10)]
     grayscale_threshold = 15
     min_brightness = 80  # Control panel is light gray, not black
+
+    # A control panel is a sidebar, far narrower than the display beside it on every
+    # skin the emulator ships, even at the smallest 1/4x scale (TV remote: 134 px next
+    # to a 480 px display; general-skin key window next to a 320 px HD720 display). A
+    # light or blank app screen passes the same grayscale test, so a matched run wider
+    # than this fraction of the window is the app's own screen, not chrome - the frame
+    # is kept as captured instead of discarding the display.
+    max_panel_fraction = 0.5
 
     def is_grayscale_column(x):
         count = 0
@@ -434,7 +449,7 @@ if width > 100 and height > 100:
                 count += 1
         return count / len(sample_ys) >= 0.8
 
-
+    # Scan left-to-right for the first sustained grayscale region
     control_panel_start = None
     for x in range(width):
         if is_grayscale_column(x):
@@ -448,15 +463,20 @@ if width > 100 and height > 100:
                 break
 
     if control_panel_start is not None and control_panel_start < width * 0.95:
+        # Find where the control panel ends (first non-grayscale column after the run)
         control_panel_end = width
         for x in range(control_panel_start + 20, width):
             if not is_grayscale_column(x):
                 control_panel_end = x
                 break
 
-        has_content_after = control_panel_end < width
+        panel_width = control_panel_end - control_panel_start
 
-        if has_content_after:
+        if panel_width > width * max_panel_fraction:
+            print(f"  Skipped control panel removal: grayscale run cols {control_panel_start}-{control_panel_end} is {panel_width}px of {width}px (over {max_panel_fraction:.0%}) - too wide for a control panel, likely the app's own light screen")
+        elif control_panel_end < width:
+            # Display content continues after the panel: the panel splits the display,
+            # so stitch right + left (swapped - the right portion is the left of the screen)
             left_part = img.crop((0, 0, control_panel_start, height))
             right_part = img.crop((control_panel_end, 0, width, height))
             new_width = left_part.width + right_part.width
@@ -466,6 +486,7 @@ if width > 100 and height > 100:
             img = stitched
             print(f"  Stitched display (swapped, removed control panel cols {control_panel_start}-{control_panel_end}): {width}x{height} -> {new_width}x{height}")
         else:
+            # Control panel reaches the right edge - crop it off
             img = img.crop((0, 0, control_panel_start, height))
             print(f"  Cropped to display area: {width}x{height} -> {control_panel_start}x{height}")
 

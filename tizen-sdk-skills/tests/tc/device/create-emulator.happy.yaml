@@ -3,7 +3,7 @@ id: tizen-sdk.create-emulator.happy
 plugin: tizen-sdk
 command: create-emulator
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "create-emulator --action create --vm-name --size 1080 returns success"
 
@@ -14,5 +14,7 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.emulator_name", min_length: 1 }
+        # Result key is `vm_name` per tizen-create-emulator SKILL.md, not
+        # `emulator_name` — fixed 2026-09-17 after a real run.
+        - { path: "$.result.vm_name", min_length: 1 }
         - { path: "$.result.status", matches: "created" }

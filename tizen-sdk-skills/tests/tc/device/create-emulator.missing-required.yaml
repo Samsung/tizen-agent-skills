@@ -4,7 +4,7 @@ id: tizen-sdk.create-emulator.missing-required
 plugin: tizen-sdk
 command: create-emulator
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "create-emulator fails with user_input_required when --size is missing for create action"
 

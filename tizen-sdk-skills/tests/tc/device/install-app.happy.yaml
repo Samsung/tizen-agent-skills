@@ -9,6 +9,8 @@ description: "install-app --package returns success with device_id and app_id"
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture package /tmp/MyApp.tpk.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk"]
     timeout_sec: 120
     expect:

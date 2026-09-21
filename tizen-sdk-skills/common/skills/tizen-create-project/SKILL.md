@@ -3,7 +3,7 @@ name: tizen-create-project
 description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, 앱 템플릿, 타이젠 앱 템플릿, 앱 템플릿 알려줘, 프로젝트 템플릿, app templates, project templates, list app templates, show app templates, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. Listing/browsing APP project templates is also THIS skill (its list-templates action) — NEVER locate or run SDK tools directly for that. DELETING a Tizen project directory is also THIS skill (its delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself, and never delegate that to a shell command; the delete runs on the SDK host and refuses any path without a Tizen project marker. For EMULATOR VM templates (screen sizes/resolutions), use tizen-create-emulator instead; if the user says just "템플릿" with no qualifier, ask whether they mean app project templates or emulator templates. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this agent, which scaffolds from real SDK templates. Use this skill to interactively create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — by discovering templates from the installed SDK and generating a project scaffold, and to delete an existing project directory when the user asks to remove or clean one up.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
     - Tizen project
     - create tizen project
@@ -90,6 +90,37 @@ node "$CLI" list-templates --type <type>
 
 → Show the returned template list to the user; they MUST pick one.
 
+#### Samsung TV templates come along (when the TV SDK is installed)
+
+The `list-templates` envelope carries `result.tv` **only when the Samsung TV SDK extension is
+installed** — on typed calls such as `--type webapp` too, not just on the untyped list:
+
+```json
+"tv": {
+  "profile": "tv-samsung-10.0",
+  "web": ["Basic_Empty", "Basic_Tizen_Blank", "Caph_Empty_AngularJS", "Caph_Empty_jQuery", "jQueryMobile_NavigationView"],
+  "dotnet": ["TizenNSClassLib", "TizenNUIApp", "TizenServiceApp"]
+}
+```
+
+`result.tv` is the ONLY way to decide whether the TV SDK is installed — never inspect the SDK
+folders or run `tz` yourself. No `result.tv` → TV SDK not installed → do not list TV templates
+(at most one line: "TV SDK를 설치하면 TV 템플릿도 선택할 수 있습니다").
+
+| User asked                                                      | Run                                          | Show the user                                                                                                                                                                                          |
+| --------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Web app — "웹앱 만들어줘", "타이젠 웹앱 생성", "create a webapp" | `list-templates --type webapp`               | `result.templates.webapp` **and**, when `result.tv` exists, `result.tv.web` under its own heading — "Samsung TV 웹앱 템플릿 (`result.tv.profile`)". The user picks from either list.                        |
+| Any app, type not given — "타이젠 앱 만들어줘", "앱 생성해줘"    | `list-templates` (no `--type`) BEFORE asking the type | Every type's list from `result.templates` as its own group — `native`, `dotnet`, `webapp`, `rpk`, and **`platform`** ("Platform 앱 (GBS 빌드)": the plugin's GBS samples such as `dali-demo`, created with `--type platform`) — **plus** the TV list when `result.tv` exists — `result.tv.web` (웹) and `result.tv.dotnet` (닷넷) — and say in the type question (Q1) that TV templates are available. |
+| TV app — "TV 앱 만들어줘", "TV 웹앱 생성"                        | `list-templates --type tv`                   | `result.tv.web` and `result.tv.dotnet` as two groups (the flat `result.templates.tv` mixes both).                                                                                                          |
+
+- A TV template is created with **`create --type tv --template <name>`** — never `--type webapp`,
+  even when the user started with "웹앱 만들어줘": the runner builds TV projects on the
+  `tv-samsung-*` profile and picks web vs. dotnet from the template itself.
+- Use template names exactly as they appear in the envelope (e.g. `Basic_Empty`); quote a name
+  that contains a space.
+- The AskUserQuestion 4-option cap still applies: print the full lists as markdown text first,
+  then ask with the 3 most relevant templates + `더 보기…` (see [Parameters](#parameters)).
+
 > **Where templates come from.** The `plugins/cache/...` path in the snippets above is only where the
 > **runner** lives; templates are read from the **installed Tizen SDK** (`tz list templates`, under the
 > highest installed `tizen-X.Y` profile — `result.profile` says which). The runner never returns an
@@ -161,7 +192,10 @@ fails with `InputValidationError: too_big`. Never put all six types in one
 question. Select the type in TWO steps instead:
 
 - **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `기타 (rpk · tv · platform)…`
-  — list all six type names in the question TEXT so nothing is hidden.
+  — list all six type names in the question TEXT so nothing is hidden. When the
+  `list-templates` envelope has `result.tv`, also state in the question text that the TV SDK
+  is installed and how many TV templates are available (see
+  [Samsung TV templates come along](#samsung-tv-templates-come-along-when-the-tv-sdk-is-installed)).
 - **Q2 (only if 기타 was chosen, 3 options):** `rpk` / `tv` / `platform`
 
 The 4-option cap applies to EVERY AskUserQuestion in this flow. When a template

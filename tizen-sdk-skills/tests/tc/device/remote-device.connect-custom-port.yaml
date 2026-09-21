@@ -9,6 +9,8 @@ description: "remote-device --action connect --ip --port returns success"
 
 lanes:
   cli:
+    # NOTE (2026-09-17): executed on Windows — environment failure, same as
+    # remote-device.connect (no device at 192.168.1.50:26101). Kept draft.
     argv: ["tizen-sdk", "remote-device", "--action", "connect", "--ip", "192.168.1.50", "--port", "26101"]
     timeout_sec: 30
     expect:

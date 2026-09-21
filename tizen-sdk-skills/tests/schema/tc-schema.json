@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/Samsung/tizen-agent-skills/tizen-sdk-skills/tests/schema/tc-schema.json",
+  "$id": "https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/tests/schema/tc-schema.json",
   "title": "tizen-sdk test case",
   "description": "TC YAML schema for the tizen-sdk plugin test suite. Each TC verifies a command's envelope output (cli lane) and/or LLM tool-call behavior (prompt lane).",
   "type": "object",

@@ -29,6 +29,7 @@ tizen-cli tizen-sdk download-emulator-package
 |---|---|---|---|
 | `--platform-version <version>` | no | auto-detect latest | Tizen platform version (e.g., `10.0`, `11.0`) |
 | `--force` | no | off | Force reinstall even if already installed |
+| `--download-jobs <count>` | no | `4` | Number of concurrent download jobs (1-8) |
 
 ## Two-phase flow (same pattern as sdk-install / tv-sdk-install)
 

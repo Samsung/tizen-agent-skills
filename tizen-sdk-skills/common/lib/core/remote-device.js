@@ -358,7 +358,10 @@ async function connectRemoteDevice(
       "device_not_found",
       `Failed to connect to ${target} after ${CONNECT_ATTEMPTS} attempts. ` +
         `Ensure the device is on the network with developer mode enabled. sdb output: ${lastOutput.trim()}`,
-      null,
+      // The registry default for device_not_found suggests launching an emulator,
+      // which is unrelated to a network device that did not answer — point at
+      // the scan that finds hosts listening on the sdb port instead.
+      "tizen-cli tizen-sdk remote-device --action scan",
       startTime,
     );
   } catch (error) {
@@ -708,7 +711,9 @@ async function removeRemoteDeviceFromList(
         command,
         "device_not_found",
         `${ip}:${portNum} was not found in the remote device list.`,
-        null,
+        // Not a connectivity problem: show the saved list (with ports) rather
+        // than the registry default that suggests launching an emulator.
+        "tizen-cli tizen-sdk remote-device --action list-saved",
         startTime,
       );
     }
@@ -822,7 +827,9 @@ async function editRemoteDeviceInList(
         command,
         "device_not_found",
         `${ip}:${portNum} was not found in the remote device list.`,
-        null,
+        // Not a connectivity problem: show the saved list (with ports) rather
+        // than the registry default that suggests launching an emulator.
+        "tizen-cli tizen-sdk remote-device --action list-saved",
         startTime,
       );
     }

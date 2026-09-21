@@ -4,7 +4,7 @@ id: tizen-sdk.file-transfer.missing-required
 plugin: tizen-sdk
 command: file-transfer
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "file-transfer fails with invalid_argument when --direction and --remote are missing"
 

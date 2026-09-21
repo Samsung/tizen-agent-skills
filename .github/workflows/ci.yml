@@ -157,3 +157,46 @@ jobs:
           node runner.mjs --dry-run
           node scripts/verify-doc-stats.mjs
           node scripts/runner-helpers.test.mjs
+
+      # ── tizen-sdk launcher on PATH ─────────────────────────────────────────
+      # tests/runner.mjs executes TCs through `tizen-cli` or, failing that, a
+      # `tizen-sdk` binary found on PATH (resolveExecutor). Nothing installs
+      # tizen-cli on the runner, so expose the standalone launcher
+      # (tizen-cli/bin/tizen-sdk.js) under that name instead. The launcher
+      # loads ../dist/tizen-sdk.js relative to its real path, so the bundle
+      # must be built first and the symlink must point at the source tree —
+      # Node resolves the main-module symlink, so __dirname stays tizen-cli/bin.
+      #
+      # `pnpm link --global` is deliberately not used: it needs `pnpm setup`
+      # and a shell restart to land a global bin dir on PATH, which is fragile
+      # in a non-interactive job. A plain symlink into $RUNNER_TEMP + GITHUB_PATH
+      # does the same thing with no hidden state.
+      - name: Install pnpm
+        run: npm install -g pnpm@${PNPM_VERSION}
+
+      - name: Build tizen-sdk plugin bundle
+        working-directory: tizen-sdk-skills/tizen-cli
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
+
+      - name: Link tizen-sdk launcher onto PATH
+        run: |
+          set -euo pipefail
+          BIN_DIR="${RUNNER_TEMP}/tizen-sdk-bin"
+          mkdir -p "${BIN_DIR}"
+          chmod +x "${GITHUB_WORKSPACE}/tizen-sdk-skills/tizen-cli/bin/tizen-sdk.js"
+          ln -sf "${GITHUB_WORKSPACE}/tizen-sdk-skills/tizen-cli/bin/tizen-sdk.js" "${BIN_DIR}/tizen-sdk"
+          echo "${BIN_DIR}" >> "${GITHUB_PATH}"
+
+      # GITHUB_PATH only affects later steps, so the lookup is verified here,
+      # exactly the way runner.mjs will resolve it (`which tizen-sdk`).
+      - name: Verify tizen-sdk resolves on PATH
+        run: |
+          set -euo pipefail
+          which tizen-sdk
+          tizen-sdk --capabilities > /dev/null
+
+      # Next gate to add once the SDK-dependent safe TCs are classified:
+      #   working-directory: tizen-sdk-skills/tests
+      #   run: node runner.mjs --tier=safe --status=approved

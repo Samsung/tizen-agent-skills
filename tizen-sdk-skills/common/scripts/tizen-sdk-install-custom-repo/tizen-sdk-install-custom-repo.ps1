@@ -28,6 +28,7 @@ param(
     [switch]$ValidateOnly,          # validate the URL and exit (no install)
     [switch]$DryRun,
     [switch]$Force,
+    [ValidateRange(1,8)][int]$DownloadJobs = 4,
     [switch]$Status,
     [switch]$Wait,
     [switch]$Detach,
@@ -56,6 +57,7 @@ Options:
   -Platform <ver>    Tizen platform version to install (e.g. 10.0, 11.0).
                      Omit to auto-pick the highest version the repository's
                      pkg_list offers.
+  -DownloadJobs <n>  Parallel download workers, 1-8 (default: 4)
   -ValidateOnly      Validate -RepoUrl only and exit
                      (exit 0 = valid repository, 1 = invalid)
   -DryRun            Resolve and print the package list without installing
@@ -139,6 +141,7 @@ $installArgs = @(
 if ($Path) { $installArgs += @('-Path', $Path) }
 if ($Platform) { $installArgs += @('-Platform', $Platform) }
 if ($Force) { $installArgs += '-Force' }
+$installArgs += @('-DownloadJobs', "$DownloadJobs")
 if ($DryRun) { $installArgs += '-DryRun' }
 if ($Detach) { $installArgs += '-Detach' }
 

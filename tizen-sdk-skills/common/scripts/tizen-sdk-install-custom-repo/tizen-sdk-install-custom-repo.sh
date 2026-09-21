@@ -36,6 +36,7 @@ REPO_URL=""
 INSTALL_PATH=""            # empty = installer default ($HOME/tizen-sdk)
 PLATFORM_VERSION=""        # empty = auto-select highest version in pkg_list
 FORCE=false
+DOWNLOAD_JOBS=4
 DRY_RUN=false
 VALIDATE_ONLY=false        # validate the URL and exit (no install)
 DETACH=false
@@ -104,6 +105,8 @@ while [ $# -gt 0 ]; do
                       VALIDATE_ONLY=true; shift ;;
     --dry-run)        DRY_RUN=true; shift ;;
     -f|--force)       FORCE=true; shift ;;
+    --download-jobs) DOWNLOAD_JOBS="${2:-}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift 2 ;;
+    --download-jobs=*) DOWNLOAD_JOBS="${1#*=}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift ;;
     -s|--status)      STATUS=true; shift ;;
     --wait)           WAIT=true; shift ;;
     --detach)         DETACH=true; shift ;;
@@ -167,6 +170,7 @@ install_args=(--repo-url "$NORMALIZED_URL")
 [ -n "$INSTALL_PATH" ] && install_args+=(--path "$INSTALL_PATH")
 [ -n "$PLATFORM_VERSION" ] && install_args+=(--platform "$PLATFORM_VERSION")
 [ "$FORCE" = true ] && install_args+=(--force)
+[ -n "$DOWNLOAD_JOBS" ] && install_args+=(--download-jobs "$DOWNLOAD_JOBS")
 [ "$DRY_RUN" = true ] && install_args+=(--dry-run)
 [ "$DETACH" = true ] && install_args+=(--detach)
 

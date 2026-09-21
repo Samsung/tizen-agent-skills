@@ -28,6 +28,7 @@ param(
     [switch]$IncludeIotHeaded,
     [string]$IotHeadedVersion = "",
     [switch]$Force,
+    [ValidateRange(1,8)][int]$DownloadJobs = 4,
     [switch]$DryRun,
     [switch]$Help
 )
@@ -100,6 +101,9 @@ Examples:
 "@
     exit 0
 }
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+$scriptTimer = [System.Diagnostics.Stopwatch]::StartNew()
 
 # Set default SDK path if not provided
 if (-not $SdkPath) {
@@ -356,6 +360,7 @@ if ($DryRun) {
         "    {0,3}. {1,-48} {2}{3}" -f $n, $pkg, $p, $tag | Write-Host
     }
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 0
 }
 
@@ -365,13 +370,18 @@ if (-not (Test-Path $SdkPath)) {
 }
 
 $idx = 0; $ok = 0; $skip = 0; $fail = 0
-
 # Skip MOBILE platform download if only IOT-Headed is needed
+$extractTimer = [System.Diagnostics.Stopwatch]::StartNew()
 if ($SkipMobilePlatform) {
     Write-Info "Skipping MOBILE platform download (already installed) - only downloading IOT-Headed extension"
     $ok = $resolved.Count
     $skip = $resolved.Count
 } else {
+
+# Pre-filter (fast, synchronous): resolve resume/version/meta skips up front
+# so only packages that actually need download+extract+merge go into the
+# parallel work queue below.
+$workItems = @()
 foreach ($pkg in $resolved) {
     $idx++
 
@@ -415,87 +425,37 @@ foreach ($pkg in $resolved) {
         continue
     }
 
-    $url = "$PkgRepo$relPath"
-    $zip = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
-    Write-Info "[$idx/$total] Downloading $pkg ..."
-    try {
-        $wc = New-Object System.Net.WebClient
-        $wc.DownloadFile($url, $zip)
-        $wc.Dispose()
-    } catch {
-        Write-Err "[$idx/$total] Download failed: $url - $_"
-        $fail++
-        continue
+    $workItems += [pscustomobject]@{
+        Pkg   = $pkg
+        Idx   = $idx
+        Url   = "$PkgRepo$relPath"
+        Zip   = Join-Path $workdir ([System.IO.Path]::GetFileName($relPath))
+        Stage = Join-Path $workdir ("stage_" + $idx)
     }
-
-    $stage = Join-Path $workdir ("stage_" + $idx)
-    if (Test-Path $stage) { Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue }
-    New-Item -ItemType Directory -Path $stage -Force | Out-Null
-
-    try {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-        $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
-        try {
-            foreach ($entry in $archive.Entries) {
-                if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-                $destPath = Join-Path $stage $entry.FullName
-                $destDir = Split-Path -Parent $destPath
-                if ($destDir -and -not (Test-Path $destDir)) {
-                    New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                }
-                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-            }
-        } finally {
-            $archive.Dispose()
-        }
-    } catch {
-        Write-Err "[$idx/$total] Extraction failed: $pkg - $_"
-        $fail++
-        Remove-Item -Force $zip -ErrorAction SilentlyContinue
-        Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-        continue
-    }
-
-    # Merge data\ contents into the SDK root
-    $dataDir = Join-Path $stage "data"
-    if (Test-Path $dataDir) {
-        $dataItems = Get-ChildItem -Path $dataDir -Force -ErrorAction SilentlyContinue
-        if ($dataItems.Count -gt 0) {
-            if ($PkgOs -eq "windows-64") {
-                robocopy $dataDir $SdkPath /E /NFL /NDL /NJH /NJS /NP /R:5 /W:2 /XO | Out-Null
-                if ($LASTEXITCODE -ge 8) {
-                    Write-Err "[$idx/$total] Merge failed: $pkg (robocopy $LASTEXITCODE)"
-                    $fail++
-                    Remove-Item -Force $zip -ErrorAction SilentlyContinue
-                    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-                    continue
-                }
-            } else {
-                Copy-Item -Path "$dataDir/*" -Destination $SdkPath -Recurse -Force
-            }
-        } else {
-            Write-Info "[$idx/$total] ${pkg}: data\ is empty, skip merge"
-        }
-    }
-
-    # Keep manifest record
-    $manifest = Join-Path $stage "pkginfo.manifest"
-    if (Test-Path $manifest) {
-        Copy-Item -Path $manifest -Destination (Join-Path $pkgInfoDir "$pkg.manifest") -Force
-    }
-
-    Remove-Item -Force $zip -ErrorAction SilentlyContinue
-    Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
-    $ok++
-    Write-Success "[$idx/$total] $pkg installed"
 }
+
+# Download phase: only the packages the pre-filter left in the work queue,
+# so a resumed run does not re-fetch what it is about to skip.
+$downloadTimer = [System.Diagnostics.Stopwatch]::StartNew()
+Invoke-ParallelDownloads -Items (ConvertTo-DownloadItems $workItems) -Jobs $DownloadJobs | Out-Null
+$downloadTimer.Stop()
+Write-Info "Download phase took $(Format-Duration $downloadTimer.Elapsed)"
+
+# Extract + merge + manifest phase: shared worker/driver in lib/common.ps1.
+$extractTimer = [System.Diagnostics.Stopwatch]::StartNew()
+$installed = Invoke-ParallelPackageInstall -Items $workItems `
+    -PkgInfoDir $pkgInfoDir -DestPath $SdkPath -PkgOs $PkgOs -Total $total
+$ok += $installed.Ok; $skip += $installed.Skip; $fail += $installed.Fail
 }
+$extractTimer.Stop()
+Write-Info "Extraction phase took $(Format-Duration $extractTimer.Elapsed)"
 
 Write-Success "Mobile platform package result: OK $ok / skipped $skip / failed $fail (total $total)"
 
 if ($fail -gt 0) {
     Write-Err "Some packages failed to install. Not creating .mobile-platform-installed marker."
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 1
 }
 
@@ -675,11 +635,14 @@ if ($IncludeIotHeaded) {
                     $iotTotal = $iotResolved.Count
                     Write-Success "Total IOT-Headed resolved packages: $iotTotal"
                     
-                    # Download and install IOT-Headed packages
+                    # Pre-filter (fast, synchronous): resolve resume/version/meta
+                    # skips up front so only packages that actually need
+                    # download+extract+merge go into the parallel work queue.
                     $iotIdx = 0; $iotOk = 0; $iotSkip = 0; $iotFail = 0
+                    $iotWorkItems = @()
                     foreach ($pkg in $iotResolved) {
                         $iotIdx++
-                        
+
                         # Skip if already installed
                         $iotManifestFile = Join-Path $pkgInfoDir "$pkg.manifest"
                         if ((Test-Path $iotManifestFile) -and -not $Force) {
@@ -697,87 +660,32 @@ if ($IncludeIotHeaded) {
                                 continue
                             }
                         }
-                        
+
                         $iotRelPath = if ($iotDb.ContainsKey($pkg)) { $iotDb[$pkg].Path } else { $null }
                         if (-not $iotRelPath) {
                             Write-Warn "[IOT $iotIdx/$iotTotal] ${pkg}: no binary path (meta/skip)"
                             $iotSkip++
                             continue
                         }
-                        
-                        $iotUrl = "$iotRepo$iotRelPath"
-                        $iotZip = Join-Path $workdir ([System.IO.Path]::GetFileName($iotRelPath))
-                        Write-Info "[IOT $iotIdx/$iotTotal] Downloading $pkg ..."
-                        try {
-                            $wc = New-Object System.Net.WebClient
-                            $wc.DownloadFile($iotUrl, $iotZip)
-                            $wc.Dispose()
-                        } catch {
-                            Write-Err "[IOT $iotIdx/$iotTotal] Download failed: $iotUrl - $_"
-                            $iotFail++
-                            continue
+
+                        $iotWorkItems += [pscustomobject]@{
+                            Pkg   = $pkg
+                            Idx   = $iotIdx
+                            Url   = "$iotRepo$iotRelPath"
+                            Zip   = Join-Path $workdir ([System.IO.Path]::GetFileName($iotRelPath))
+                            Stage = Join-Path $workdir ("iot_stage_" + $iotIdx)
                         }
-                        
-                        $iotStage = Join-Path $workdir ("iot_stage_" + $iotIdx)
-                        if (Test-Path $iotStage) { Remove-Item -Recurse -Force $iotStage -ErrorAction SilentlyContinue }
-                        New-Item -ItemType Directory -Path $iotStage -Force | Out-Null
-                        
-                        try {
-                            Add-Type -AssemblyName System.IO.Compression.FileSystem -ErrorAction SilentlyContinue
-                            $iotArchive = [System.IO.Compression.ZipFile]::OpenRead($iotZip)
-                            try {
-                                foreach ($entry in $iotArchive.Entries) {
-                                    if ([string]::IsNullOrEmpty($entry.Name)) { continue }
-                                    $destPath = Join-Path $iotStage $entry.FullName
-                                    $destDir = Split-Path -Parent $destPath
-                                    if ($destDir -and -not (Test-Path $destDir)) {
-                                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                                    }
-                                    [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destPath, $true)
-                                }
-                            } finally {
-                                $iotArchive.Dispose()
-                            }
-                        } catch {
-                            Write-Err "[IOT $iotIdx/$iotTotal] Extraction failed: $pkg - $_"
-                            $iotFail++
-                            Remove-Item -Force $iotZip -ErrorAction SilentlyContinue
-                            Remove-Item -Recurse -Force $iotStage -ErrorAction SilentlyContinue
-                            continue
-                        }
-                        
-                        # Merge data\ contents into the SDK root
-                        $iotDataDir = Join-Path $iotStage "data"
-                        if (Test-Path $iotDataDir) {
-                            $iotDataItems = Get-ChildItem -Path $iotDataDir -Force -ErrorAction SilentlyContinue
-                            if ($iotDataItems.Count -gt 0) {
-                                if ($PkgOs -eq "windows-64") {
-                                    robocopy $iotDataDir $SdkPath /E /NFL /NDL /NJH /NJS /NP /R:5 /W:2 /XO | Out-Null
-                                    if ($LASTEXITCODE -ge 8) {
-                                        Write-Err "[IOT $iotIdx/$iotTotal] Merge failed: $pkg (robocopy $LASTEXITCODE)"
-                                        $iotFail++
-                                        Remove-Item -Force $iotZip -ErrorAction SilentlyContinue
-                                        Remove-Item -Recurse -Force $iotStage -ErrorAction SilentlyContinue
-                                        continue
-                                    }
-                                } else {
-                                    Copy-Item -Path "$iotDataDir/*" -Destination $SdkPath -Recurse -Force
-                                }
-                            }
-                        }
-                        
-                        # Keep manifest record
-                        $iotManifest = Join-Path $iotStage "pkginfo.manifest"
-                        if (Test-Path $iotManifest) {
-                            Copy-Item -Path $iotManifest -Destination (Join-Path $pkgInfoDir "$pkg.manifest") -Force
-                        }
-                        
-                        Remove-Item -Force $iotZip -ErrorAction SilentlyContinue
-                        Remove-Item -Recurse -Force $iotStage -ErrorAction SilentlyContinue
-                        $iotOk++
-                        Write-Success "[IOT $iotIdx/$iotTotal] $pkg installed"
                     }
-                    
+
+                    # Each work item is downloaded by its own worker (no separate prefetch
+                    # pass), so several workers give parallel download + extraction together.
+                    $iotTimer = [System.Diagnostics.Stopwatch]::StartNew()
+                    $iotInstalled = Invoke-ParallelPackageInstall -Items $iotWorkItems `
+                        -PkgInfoDir $pkgInfoDir -DestPath $SdkPath -PkgOs $PkgOs -Total $iotTotal -LabelPrefix "IOT "
+                    $iotOk += $iotInstalled.Ok; $iotSkip += $iotInstalled.Skip; $iotFail += $iotInstalled.Fail
+                    $iotTimer.Stop()
+                    Write-Info "IOT-Headed download+extract phase took $(Format-Duration $iotTimer.Elapsed)"
+
                     Write-Success "IOT-Headed extension result: OK $iotOk / skipped $iotSkip / failed $iotFail (total $iotTotal)"
                     
                     if ($iotFail -eq 0) {
@@ -816,4 +724,5 @@ if ($SkipMobilePlatform -and $iotHeadedInstalled) {
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
 Write-Success "Tizen Mobile platform package download completed!"
+Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
 exit 0

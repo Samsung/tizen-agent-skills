@@ -44,6 +44,7 @@ const EXCLUDE = [
   /^_repo-root\//,
   /(^|\/)dist\//,
   /(^|\/)node_modules\//,
+  /^common\/lib\/vendor\//,
 ];
 
 function commentPrefix(rel) {

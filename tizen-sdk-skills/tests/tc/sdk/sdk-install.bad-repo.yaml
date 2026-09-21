@@ -3,7 +3,7 @@ id: tizen-sdk.sdk-install.bad-repo
 plugin: tizen-sdk
 command: sdk-install
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-install with unreachable repo URL returns failure"
 

@@ -9,6 +9,8 @@ description: "playwright-test --app-id --test-file --project-dir returns success
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs abcDEF1234.MyWebApp on the device and the Linux fixture project /tmp/test-project.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--project-dir", "/tmp/test-project"]
     timeout_sec: 120
     expect:

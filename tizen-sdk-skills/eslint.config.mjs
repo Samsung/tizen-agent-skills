@@ -20,6 +20,8 @@ export default tseslint.config(
       "common/scripts/tizen-create-project/templates/**",
       // Prebuilt binaries only, but keep it excluded defensively
       "common/tools/**",
+      // Vendored third-party code — not authored here
+      "common/lib/vendor/**",
       // Generated at build time by vscode/esbuild.config.js
       "vscode/assets/**",
       // Tool-generated dot-dirs (gitignored, but ESLint does not read .gitignore)

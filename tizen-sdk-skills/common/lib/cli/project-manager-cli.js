@@ -22,6 +22,7 @@
  *   node .../project-manager-cli.js list-templates
  *   node .../project-manager-cli.js install --package "$HOME/tizen-apps/MyApp/Debug/MyApp.tpk"
  *   node .../project-manager-cli.js install --package "$HOME/tizen-apps/MyApp/Debug/MyApp.tpk" --device-serial emulator-26101 --run
+ *   node .../project-manager-cli.js install --package "$HOME/tizen-apps/MyApp/Debug/MyApp.tpk" --reset-rds
  *
  * Actions:
  *   build | create | delete | list-templates | install
@@ -59,6 +60,7 @@
  *     --package <path>        (required) Absolute path to .tpk/.wgt/.rpk/.rpm
  *     --device-serial <serial> (optional) Target device serial. Omit to auto-select
  *     --run                   (optional) Run app after installation
+ *     --reset-rds             (optional) Clear host-side RDS state and return without installing
  *
  * Exit code: success=0, failure/error=1
  */
@@ -81,7 +83,7 @@ const USAGE =
   "create --type <type> --template <name> --parent-path <dir> --name <appName> [--force] [--open] | " +
   "delete --project <path> [--expect-name <appName>] [--dry-run] | " +
   "list-templates [--type <type>] | " +
-  "install --package <path> [--device-serial <serial>] [--run]";
+  "install --package <path> [--device-serial <serial>] [--run] [--reset-rds]";
 
 const usageError = (message) => exitWithUsageError(COMMAND, USAGE, message);
 
@@ -106,6 +108,7 @@ const BOOLEAN_FLAGS = {
   "--force": "force",
   "--open": "open",
   "--dry-run": "dryRun",
+  "--reset-rds": "resetRds",
 };
 
 const { options, positional } = parseArgsOrExit(
@@ -178,6 +181,7 @@ switch (action) {
         options.deviceSerial,
         !!options.run,
         "tizen-sdk install-app",
+        !!options.resetRds,
       ),
     );
     break;

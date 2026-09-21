@@ -3,7 +3,7 @@ id: tizen-sdk.meta.list-commands
 plugin: tizen-sdk
 command: "no-args"
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "No args lists commands and meta-commands"
 

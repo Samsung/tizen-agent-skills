@@ -81,7 +81,7 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 | 에뮬레이터 수정·초기화·이미지 캡처 / full em-cli surface | `emulator-manager` | tizen-create-emulator, tizen-launch-emulator |
 | 디바이스 찾기·에뮬레이터 종료 / find device, stop emulator | `device-manager` | tizen-device-manager |
 | 원격 디바이스 검색·연결 / network scan, sdb connect | `remote-device` | tizen-remote-device |
-| sdb 명령 / shell, port forward, reboot | `sdb-helper` | tizen-sdb-helper |
+| sdb 명령 / shell, port forward, reboot, launch·kill (로그 제외 — 로그는 `dlog-analyzer`) | `sdb-helper` | tizen-sdb-helper |
 | 파일 전송 / sdb push, pull | `file-transfer` | tizen-file-transfer |
 
 ### App, debugging, test (6)
@@ -100,7 +100,7 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 | User intent (ko/en) | Command | Skill |
 |---|---|---|
 | 인증서·서명 프로파일 / certificates, signing profiles | `certificate-manager` | tizen-certificate-manager |
-| 로그 분석·크래시 탐지 / dlog analysis, crash detection | `dlog-analyzer` | tizen-dlog-analyzer |
+| 로그 보기·저장·지우기, 로그 분석·크래시 탐지 / show, tail, save, clear device logs (`log-dump`, `log-clear`), dlog analysis, crash detection | `dlog-analyzer` | tizen-dlog-analyzer |
 
 ## Discovering state
 

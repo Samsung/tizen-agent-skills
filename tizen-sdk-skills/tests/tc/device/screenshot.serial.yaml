@@ -3,7 +3,7 @@ id: tizen-sdk.screenshot.serial
 plugin: tizen-sdk
 command: screenshot
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "screenshot --serial returns success on specific device"
 
@@ -14,4 +14,7 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.screenshot_path", min_length: 1 }
+        # Result key is `output_path`, not `screenshot_path` (fixed 2026-09-17).
+        # Writes ./emulator_screenshot.png into the cwd: run from a scratch directory.
+        - { path: "$.result.output_path", min_length: 1 }
+        - { path: "$.result.device_serial", equals: "emulator-26101" }

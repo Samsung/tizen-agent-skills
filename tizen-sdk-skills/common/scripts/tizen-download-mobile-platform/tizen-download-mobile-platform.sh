@@ -35,6 +35,7 @@ INCLUDE_IOT_HEADED=false
 IOT_HEADED_VERSION=""
 IOT_TARGET_PACKAGE=""
 FORCE=false
+DOWNLOAD_JOBS=4
 DRY_RUN=false
 HELP=false
 
@@ -74,6 +75,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         --force)
             FORCE=true
+            shift
+            ;;
+        --download-jobs)
+            DOWNLOAD_JOBS="${2:-}"
+            validate_download_jobs "$DOWNLOAD_JOBS" || exit 2
+            shift 2
+            ;;
+        --download-jobs=*)
+            DOWNLOAD_JOBS="${1#*=}"
+            validate_download_jobs "$DOWNLOAD_JOBS" || exit 2
             shift
             ;;
         --dry-run)
@@ -140,6 +151,9 @@ fi
 PKG_OS_SHORT="$(pkg_os_base)"
 [[ -n "$PKG_OS_SHORT" ]] || PKG_OS_SHORT="ubuntu"
 PKG_OS="${PKG_OS_SHORT}-64"
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+SCRIPT_START=$SECONDS
 
 log_info "Tizen Mobile platform package downloader started"
 
@@ -395,6 +409,7 @@ if [[ "$DRY_RUN" == true ]]; then
         [[ -n "${SHARED_SYNC_ONLY[$pkg]+x}" ]] && tag=" [shared sync-only]"
         printf "    %3d. %-48s %s%s\n" "$n" "$pkg" "$p" "$tag"
     done
+    log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 0
 fi
 
@@ -414,9 +429,15 @@ if [[ "$SKIP_MOBILE_PLATFORM" == true ]]; then
     OK=$TOTAL
     SKIP=$TOTAL
 else
+DOWNLOAD_QUEUE="$WORKDIR/download.queue"; DOWNLOAD_RESULTS="$WORKDIR/downloads"
+: > "$DOWNLOAD_QUEUE"
+
+# Pass 1: decide skips (shared-sync-only / same version / meta) BEFORE anything
+# is downloaded, so a re-run only fetches what it will actually install.
+WORK_ITEMS=()   # "<idx>\t<pkg>" per package that needs download + install
 for pkg in "${RESOLVED[@]}"; do
     IDX=$((IDX + 1))
-    
+
     MANIFEST_FILE="$PKG_INFO_DIR/$pkg.manifest"
 
     # Shared-tool sync never installs something new — it only refreshes what
@@ -447,11 +468,26 @@ for pkg in "${RESOLVED[@]}"; do
         SKIP=$((SKIP + 1))
         continue
     fi
-    
+
+    printf '%s\t%s\t%s\n' "$pkg" "${PKG_REPO}${REL_PATH}" "$WORKDIR/$(basename "$REL_PATH")" >> "$DOWNLOAD_QUEUE"
+    WORK_ITEMS+=("$IDX"$'\t'"$pkg")
+done
+
+log_info "Downloading packages with $DOWNLOAD_JOBS parallel workers..."
+DOWNLOAD_START=$SECONDS
+download_queue_parallel "$DOWNLOAD_QUEUE" "$DOWNLOAD_JOBS" "$DOWNLOAD_RESULTS"
+log_info "Download phase took $(format_duration $((SECONDS - DOWNLOAD_START)))"
+EXTRACT_START=$SECONDS
+
+# Pass 2: extract + merge the packages queued above.
+for work_item in ${WORK_ITEMS[@]+"${WORK_ITEMS[@]}"}; do
+    IDX="${work_item%%$'\t'*}"
+    pkg="${work_item#*$'\t'}"
+    REL_PATH="${DB_PATH[$pkg]}"
     URL="$PKG_REPO$REL_PATH"
     ZIP_FILE="$WORKDIR/$(basename "$REL_PATH")"
-    log_info "[$IDX/$TOTAL] Downloading $pkg ..."
-    if ! curl -fsSL -o "$ZIP_FILE" "$URL"; then
+    log_info "[$IDX/$TOTAL] Processing downloaded $pkg ..."
+    if [[ "$(download_queue_status "$pkg" "$DOWNLOAD_RESULTS")" != "OK" ]]; then
         log_error "[$IDX/$TOTAL] Download failed: $URL"
         FAIL=$((FAIL + 1))
         continue
@@ -496,11 +532,13 @@ for pkg in "${RESOLVED[@]}"; do
     log_success "[$IDX/$TOTAL] $pkg installed"
 done
 fi
+log_info "Extraction phase took $(format_duration $((SECONDS - EXTRACT_START)))"
 
 log_success "Mobile platform package result: OK $OK / skipped $SKIP / failed $FAIL (total $TOTAL)"
 
 if [[ $FAIL -gt 0 ]]; then
     log_error "Some packages failed to install. Not creating .mobile-platform-installed marker."
+    log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 1
 fi
 
@@ -685,7 +723,13 @@ if [[ "$INCLUDE_IOT_HEADED" == true ]]; then
             IOT_OK=0
             IOT_SKIP=0
             IOT_FAIL=0
-            
+
+            IOT_DOWNLOAD_QUEUE="$WORKDIR/iot-download.queue"; IOT_DOWNLOAD_RESULTS="$WORKDIR/iot-downloads"
+            : > "$IOT_DOWNLOAD_QUEUE"
+
+            # Pass 1: decide skips (same version / meta) BEFORE downloading, so a
+            # re-run only fetches what it will actually install.
+            IOT_WORK_ITEMS=()   # "<idx>\t<pkg>"
             for pkg in "${IOT_RESOLVED[@]}"; do
                 IOT_IDX=$((IOT_IDX + 1))
                 
@@ -707,11 +751,26 @@ if [[ "$INCLUDE_IOT_HEADED" == true ]]; then
                     IOT_SKIP=$((IOT_SKIP + 1))
                     continue
                 fi
-                
+
+                printf '%s\t%s\t%s\n' "$pkg" "${IOT_REPO}${IOT_REL_PATH}" "$WORKDIR/$(basename "$IOT_REL_PATH")" >> "$IOT_DOWNLOAD_QUEUE"
+                IOT_WORK_ITEMS+=("$IOT_IDX"$'\t'"$pkg")
+            done
+
+            log_info "Downloading IOT-Headed packages with $DOWNLOAD_JOBS parallel workers..."
+            IOT_DOWNLOAD_START=$SECONDS
+            download_queue_parallel "$IOT_DOWNLOAD_QUEUE" "$DOWNLOAD_JOBS" "$IOT_DOWNLOAD_RESULTS"
+            log_info "IOT-Headed download phase took $(format_duration $((SECONDS - IOT_DOWNLOAD_START)))"
+            IOT_EXTRACT_START=$SECONDS
+
+            # Pass 2: extract + merge the packages queued above.
+            for iot_work_item in ${IOT_WORK_ITEMS[@]+"${IOT_WORK_ITEMS[@]}"}; do
+                IOT_IDX="${iot_work_item%%$'\t'*}"
+                pkg="${iot_work_item#*$'\t'}"
+                IOT_REL_PATH="${IOT_DB_PATH[$pkg]}"
                 IOT_URL="$IOT_REPO$IOT_REL_PATH"
                 IOT_ZIP_FILE="$WORKDIR/$(basename "$IOT_REL_PATH")"
-                log_info "[IOT $IOT_IDX/$IOT_TOTAL] Downloading $pkg ..."
-                if ! curl -fsSL -o "$IOT_ZIP_FILE" "$IOT_URL"; then
+                log_info "[IOT $IOT_IDX/$IOT_TOTAL] Processing downloaded $pkg ..."
+                if [[ "$(download_queue_status "$pkg" "$IOT_DOWNLOAD_RESULTS")" != "OK" ]]; then
                     log_error "[IOT $IOT_IDX/$IOT_TOTAL] Download failed: $IOT_URL"
                     IOT_FAIL=$((IOT_FAIL + 1))
                     continue
@@ -753,7 +812,8 @@ if [[ "$INCLUDE_IOT_HEADED" == true ]]; then
                 IOT_OK=$((IOT_OK + 1))
                 log_success "[IOT $IOT_IDX/$IOT_TOTAL] $pkg installed"
             done
-            
+            log_info "IOT-Headed extraction phase took $(format_duration $((SECONDS - IOT_EXTRACT_START)))"
+
             log_success "IOT-Headed extension result: OK $IOT_OK / skipped $IOT_SKIP / failed $IOT_FAIL (total $IOT_TOTAL)"
             
             if [[ $IOT_FAIL -eq 0 ]]; then
@@ -790,4 +850,5 @@ else
     log_success ".mobile-platform-installed created: $MOBILE_PKG_MARKER"
 fi
 log_success "Tizen Mobile platform package download completed!"
+log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 exit 0

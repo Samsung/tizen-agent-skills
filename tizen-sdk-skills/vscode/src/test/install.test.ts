@@ -28,7 +28,18 @@ import {
   clineCacheBase,
   clineCacheRoot,
 } from "../install/cline";
+import { installCodex, removeCodex } from "../install/codex";
+import {
+  codexAgentsDir,
+  codexCacheBase,
+  codexContextFile,
+  codexHooksDir,
+  codexHooksJsonPath,
+  codexSkillsDir,
+} from "../install/codexLayout";
 import { mirrorDir } from "../install/fsutil";
+import { guardMarkers } from "../install/guardSection";
+import { installCodexHooks, removeCodexHooks } from "../install/hooks";
 import { readManifest, writeManifest, manifestPath } from "../install/manifest";
 import { takeLog } from "./vscode-stub";
 
@@ -876,6 +887,362 @@ test("removal of a symlinked skill does not empty the target either", async () =
     fs.existsSync(path.join(target, "SKILL.md")),
     "the symlink target's contents must survive",
   );
+});
+
+// ─── 5. Codex CLI ───────────────────────────────────────────────────────
+
+section("Codex CLI install (shared ~/.agents/skills, TOML agents)");
+
+// The tests below resolve ~/.codex from the fixture HOME; a CODEX_HOME in the
+// environment of whoever runs `npm test` must not redirect them.
+delete process.env.CODEX_HOME;
+
+/** The bundled converter, so the TOML the test sees is what the user gets. */
+function realAgentConverter(): string {
+  const candidates = [
+    path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "common",
+      "lib",
+      "tools",
+      "agent-convert.js",
+    ),
+    path.resolve(__dirname, "assets", "lib", "tools", "agent-convert.js"),
+  ];
+  const found = candidates.find((p) => fs.existsSync(p));
+  if (!found)
+    throw new Error(`agent-convert.js not found in ${candidates.join(", ")}`);
+  return found;
+}
+
+function agentMd(name: string): string {
+  return `---\nname: ${name}\ndescription: ${name} agent\ntools: Bash, Read\nmodel: sonnet\n---\nDo the ${name} thing.\nPaths like C:\\Tizen\\sdb.exe must survive.\n`;
+}
+
+/**
+ * makeFixture() plus what Codex needs: agents with real frontmatter (the
+ * converter rejects a bare heading), the converter itself, the guard scripts and
+ * document, and pre-existing user content in ~/.agents/skills, ~/.codex/agents
+ * and ~/.codex/AGENTS.md.
+ */
+function makeCodexFixture(): Fixture {
+  const fx = makeFixture();
+  for (const a of ASSET_AGENTS) {
+    write(path.join(fx.assets, "agents", a), agentMd(a.replace(/\.md$/, "")));
+  }
+  fs.mkdirSync(path.join(fx.assets, "lib", "tools"), { recursive: true });
+  fs.copyFileSync(
+    realAgentConverter(),
+    path.join(fx.assets, "lib", "tools", "agent-convert.js"),
+  );
+  write(
+    path.join(fx.assets, "hooks", "check-project-writes.sh"),
+    "#!/bin/bash\n",
+  );
+  write(
+    path.join(fx.assets, "hooks", "tizen-sdk-skills-guard.md"),
+    "# Tizen SDK Skills — guard rules\n\n1. never hunt for sdb\n",
+  );
+
+  for (const s of USER_SKILLS) {
+    write(path.join(codexSkillsDir(fx.home), s, "SKILL.md"), `user: ${s}\n`);
+  }
+  // A Gemini-installed neighbour in the shared namespace
+  write(
+    path.join(codexSkillsDir(fx.home), "gemini-thing", "SKILL.md"),
+    "gemini\n",
+  );
+  write(path.join(codexAgentsDir(fx.home), "my-agent.toml"), 'name = "mine"\n');
+  write(
+    path.join(codexAgentsDir(fx.home), "tizen-hand-written.toml"),
+    'name = "hand"\n',
+  );
+  write(
+    codexContextFile(fx.home),
+    "# My Codex rules\n\nAlways answer in Korean.\n",
+  );
+  return fx;
+}
+
+test("the Codex install fills the cache, mirrors skills into ~/.agents/skills and converts agents to TOML", async () => {
+  const fx = makeCodexFixture();
+  const r = await installCodex(fx.assets, fx.home, VERSION);
+
+  assert.strictEqual(r.skillsDir, codexSkillsDir(fx.home));
+  assert.deepStrictEqual(r.owned.skills, ASSET_SKILLS);
+  assert.deepStrictEqual(
+    r.owned.agents,
+    ASSET_AGENTS.map((a) => a.replace(/\.md$/, ".toml")),
+  );
+
+  for (const s of ASSET_SKILLS) {
+    assert.ok(
+      fs.existsSync(path.join(codexSkillsDir(fx.home), s, "SKILL.md")),
+      s,
+    );
+  }
+  for (const s of USER_SKILLS) {
+    assert.strictEqual(
+      fs.readFileSync(
+        path.join(codexSkillsDir(fx.home), s, "SKILL.md"),
+        "utf-8",
+      ),
+      `user: ${s}\n`,
+      `${s} must survive`,
+    );
+  }
+  assert.ok(
+    fs.existsSync(
+      path.join(codexSkillsDir(fx.home), "gemini-thing", "SKILL.md"),
+    ),
+  );
+
+  const toml = fs.readFileSync(
+    path.join(codexAgentsDir(fx.home), "tizen-build-project.toml"),
+    "utf-8",
+  );
+  assert.ok(toml.includes('name = "tizen-build-project"'));
+  assert.ok(toml.includes("developer_instructions = '''"));
+  assert.ok(
+    toml.includes("C:\\Tizen\\sdb.exe"),
+    "backslashes survive the literal string",
+  );
+  assert.ok(!toml.includes("tools ="), "tools has no Codex equivalent");
+  assert.ok(
+    !fs.existsSync(
+      path.join(codexAgentsDir(fx.home), "tizen-build-project.md"),
+    ),
+  );
+
+  const cache = codexCacheBase(fx.home, VERSION);
+  for (const sub of ["skills", "agents", "scripts", "lib", "assets"]) {
+    assert.ok(fs.existsSync(path.join(cache, sub)), `cache/${sub}`);
+  }
+  assert.strictEqual(
+    fs.existsSync(path.join(cache, "docs")),
+    false,
+    "codex cache has no docs",
+  );
+  assert.ok(fs.existsSync(path.join(fx.outside, "precious.txt")));
+});
+
+test("Codex removal deletes ours and keeps the user's and Gemini's files", async () => {
+  const fx = makeCodexFixture();
+  const r = await installCodex(fx.assets, fx.home, VERSION);
+  writeManifest(path.join(fx.home, ".codex"), {
+    version: VERSION,
+    installedAt: "2026-08-20T00:00:00.000Z",
+    skills: r.owned.skills,
+    agents: r.owned.agents,
+  });
+  await removeCodex(fx.home);
+
+  for (const s of ASSET_SKILLS) {
+    assert.strictEqual(
+      fs.existsSync(path.join(codexSkillsDir(fx.home), s)),
+      false,
+      s,
+    );
+  }
+  for (const a of r.owned.agents) {
+    assert.strictEqual(
+      fs.existsSync(path.join(codexAgentsDir(fx.home), a)),
+      false,
+      a,
+    );
+  }
+  for (const s of USER_SKILLS) {
+    assert.ok(
+      fs.existsSync(path.join(codexSkillsDir(fx.home), s, "SKILL.md")),
+      s,
+    );
+  }
+  assert.ok(
+    fs.existsSync(
+      path.join(codexSkillsDir(fx.home), "gemini-thing", "SKILL.md"),
+    ),
+  );
+  assert.ok(fs.existsSync(path.join(codexAgentsDir(fx.home), "my-agent.toml")));
+  assert.ok(
+    fs.existsSync(
+      path.join(codexAgentsDir(fx.home), "tizen-hand-written.toml"),
+    ),
+  );
+  assert.strictEqual(fs.existsSync(codexCacheBase(fx.home, VERSION)), false);
+  assert.strictEqual(
+    fs.existsSync(manifestPath(path.join(fx.home, ".codex"))),
+    false,
+  );
+});
+
+test("without a manifest, Codex removal drops only the cache and says why", async () => {
+  const fx = makeCodexFixture();
+  await installCodex(fx.assets, fx.home, VERSION);
+  takeLog();
+  await removeCodex(fx.home);
+  assert.ok(takeLog().some((l) => l.includes("No install manifest")));
+  for (const s of ASSET_SKILLS) {
+    assert.ok(
+      fs.existsSync(path.join(codexSkillsDir(fx.home), s)),
+      `${s} kept without manifest`,
+    );
+  }
+  assert.strictEqual(fs.existsSync(codexCacheBase(fx.home, VERSION)), false);
+});
+
+test("a Codex upgrade prunes the skill and agent the new version no longer ships", async () => {
+  const fx = makeCodexFixture();
+  const v1 = await installCodex(fx.assets, fx.home, "1.0.0");
+  writeManifest(path.join(fx.home, ".codex"), {
+    version: "1.0.0",
+    installedAt: "x",
+    skills: v1.owned.skills,
+    agents: v1.owned.agents,
+  });
+
+  // v2 drops the second skill and agent
+  fs.rmSync(path.join(fx.assets, "skills", ASSET_SKILLS[1]), {
+    recursive: true,
+  });
+  fs.rmSync(path.join(fx.assets, "agents", ASSET_AGENTS[1]));
+  const v2 = await installCodex(fx.assets, fx.home, "2.0.0");
+
+  assert.deepStrictEqual(v2.owned.skills, [ASSET_SKILLS[0]]);
+  assert.strictEqual(
+    fs.existsSync(path.join(codexSkillsDir(fx.home), ASSET_SKILLS[1])),
+    false,
+  );
+  assert.strictEqual(
+    fs.existsSync(
+      path.join(
+        codexAgentsDir(fx.home),
+        ASSET_AGENTS[1].replace(/\.md$/, ".toml"),
+      ),
+    ),
+    false,
+  );
+  assert.strictEqual(
+    fs.existsSync(codexCacheBase(fx.home, "1.0.0")),
+    false,
+    "old cache pruned",
+  );
+  assert.ok(fs.existsSync(codexCacheBase(fx.home, "2.0.0")));
+  assert.ok(fs.existsSync(path.join(codexAgentsDir(fx.home), "my-agent.toml")));
+});
+
+test("CODEX_HOME redirects the config side but not the shared skills directory", async () => {
+  const fx = makeCodexFixture();
+  const override = path.join(fx.root, "codex-elsewhere");
+  process.env.CODEX_HOME = override;
+  try {
+    const r = await installCodex(fx.assets, fx.home, VERSION);
+    assert.ok(r.cacheBase.startsWith(override), r.cacheBase);
+    assert.strictEqual(r.agentsDir, path.join(override, "agents"));
+    assert.strictEqual(r.skillsDir, path.join(fx.home, ".agents", "skills"));
+    assert.strictEqual(
+      fs.existsSync(path.join(fx.home, ".codex", "plugins")),
+      false,
+    );
+  } finally {
+    delete process.env.CODEX_HOME;
+  }
+});
+
+test("Codex hooks: scripts, a tagged hooks.json, and a guard section appended after the user's AGENTS.md text", async () => {
+  const fx = makeCodexFixture();
+  await installCodexHooks(fx.assets, fx.home);
+
+  for (const g of ["check-tizen-commands.sh", "check-project-writes.sh"]) {
+    assert.ok(fs.existsSync(path.join(codexHooksDir(fx.home), g)), g);
+  }
+  const hooks = JSON.parse(
+    fs.readFileSync(codexHooksJsonPath(fx.home), "utf-8"),
+  );
+  assert.strictEqual(hooks._source, "tizen-sdk-skills");
+  assert.strictEqual(hooks.hooks.PreToolUse.length, 2);
+
+  const ctx = fs.readFileSync(codexContextFile(fx.home), "utf-8");
+  const { begin, end } = guardMarkers();
+  assert.ok(
+    ctx.startsWith(
+      "# My Codex rules\n\nAlways answer in Korean.\n\n" + begin + "\n",
+    ),
+  );
+  assert.ok(ctx.includes("never hunt for sdb"));
+  assert.ok(ctx.includes("This host is Codex CLI"));
+  assert.ok(
+    ctx.includes(path.join(fx.home, ".codex", "plugins", "cache")),
+    "this host's cache root is pinned",
+  );
+  assert.ok(ctx.trimEnd().endsWith(end));
+
+  // Re-running changes nothing
+  await installCodexHooks(fx.assets, fx.home);
+  assert.strictEqual(fs.readFileSync(codexContextFile(fx.home), "utf-8"), ctx);
+  assert.strictEqual((ctx.match(/tizen-sdk-skills:begin/g) || []).length, 1);
+});
+
+test("a hooks.json that is not ours is kept, and the merge snippet is logged", async () => {
+  const fx = makeCodexFixture();
+  const theirs = '{\n  "hooks": { "PreToolUse": [] }\n}\n';
+  write(codexHooksJsonPath(fx.home), theirs);
+  takeLog();
+  await installCodexHooks(fx.assets, fx.home);
+
+  assert.strictEqual(
+    fs.readFileSync(codexHooksJsonPath(fx.home), "utf-8"),
+    theirs,
+  );
+  const log = takeLog();
+  assert.ok(log.some((l) => l.includes("NOT overwriting")));
+  assert.ok(
+    log.some((l) => l.includes("check-tizen-commands.sh")),
+    "snippet printed",
+  );
+  // Guard scripts and the AGENTS.md section still go in
+  assert.ok(
+    fs.existsSync(path.join(codexHooksDir(fx.home), "check-tizen-commands.sh")),
+  );
+  assert.ok(
+    fs
+      .readFileSync(codexContextFile(fx.home), "utf-8")
+      .includes(guardMarkers().begin),
+  );
+
+  // …and removal leaves their file alone
+  await removeCodexHooks(fx.home);
+  assert.strictEqual(
+    fs.readFileSync(codexHooksJsonPath(fx.home), "utf-8"),
+    theirs,
+  );
+});
+
+test("removing Codex hooks cuts our section out of AGENTS.md and keeps the rest", async () => {
+  const fx = makeCodexFixture();
+  await installCodexHooks(fx.assets, fx.home);
+  await removeCodexHooks(fx.home);
+
+  assert.strictEqual(
+    fs.existsSync(codexHooksJsonPath(fx.home)),
+    false,
+    "ours → removed",
+  );
+  assert.strictEqual(fs.existsSync(codexHooksDir(fx.home)), false);
+  assert.strictEqual(
+    fs.readFileSync(codexContextFile(fx.home), "utf-8"),
+    "# My Codex rules\n\nAlways answer in Korean.\n",
+  );
+});
+
+test("an AGENTS.md we created from nothing is removed with the section", async () => {
+  const fx = makeCodexFixture();
+  fs.rmSync(codexContextFile(fx.home));
+  await installCodexHooks(fx.assets, fx.home);
+  assert.ok(fs.existsSync(codexContextFile(fx.home)));
+  await removeCodexHooks(fx.home);
+  assert.strictEqual(fs.existsSync(codexContextFile(fx.home)), false);
 });
 
 // ─── run ────────────────────────────────────────────────────────────────

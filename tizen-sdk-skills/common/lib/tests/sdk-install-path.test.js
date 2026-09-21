@@ -26,7 +26,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { installerPathArgs } = require("../core/sdk");
+const { installerPathArgs, sdkInstallerFlags } = require("../core/sdk");
 
 console.log("=== SDK install-path tests (#70) ===\n");
 
@@ -58,6 +58,10 @@ console.log("--- installerPathArgs ---");
   );
   const b = installerPathArgs("/home/u/tizen sdk");
   check("unix: spaces stay quoted", b.unix, '--path "/home/u/tizen sdk"');
+  // The explicit path is the first argument of every installer command line.
+  const f = sdkInstallerFlags({ sdkPath: "C:\\Users\\me\\tizen-sdk" });
+  check("sdkInstallerFlags: win[0] is -Path", f.win[0], a.win);
+  check("sdkInstallerFlags: unix[0] is --path", f.unix[0], a.unix);
 }
 
 // --- sdk.js source guards -------------------------------------------------------
@@ -72,15 +76,30 @@ console.log("\n--- sdk.js source guards ---");
     src.indexOf("function buildScriptCommand("),
   );
   check(
-    "installSdk: installerFix(tizen-sdk-install) receives installerPathArgs",
-    /installerFix\(\s*"tizen-sdk-install",\s*installer\.scriptPath,\s*`\$\{pathArgs\.win\}/.test(
+    "installSdk: installer flags come from sdkInstallerFlags({sdkPath, ...})",
+    /sdkInstallerFlags\(\{\s*sdkPath,/.test(installSdkBody),
+    true,
+  );
+  const flagsBody = src.slice(
+    src.indexOf("function sdkInstallerFlags("),
+    src.indexOf("function installerFix("),
+  );
+  check(
+    "sdkInstallerFlags: both lists start with installerPathArgs",
+    /const win = \[pathArgs\.win\]/.test(flagsBody) &&
+      /const unix = \[pathArgs\.unix\]/.test(flagsBody),
+    true,
+  );
+  check(
+    "installSdk: installerFix(tizen-sdk-install) receives those flags",
+    /installerFix\(\s*"tizen-sdk-install",\s*installer\.scriptPath,\s*winFlags\.join\(" "\),\s*unixFlags\.join\(" "\)/.test(
       installSdkBody,
     ),
     true,
   );
   check(
-    "installSdk: pkg branch execPluginScript receives installerPathArgs",
-    /execPluginScript\(\s*installer\.scriptPath,\s*`\$\{pathArgs\.win\}/.test(
+    "installSdk: pkg branch execPluginScript receives those flags",
+    /execPluginScript\(\s*installer\.scriptPath,\s*winFlags\.join\(" "\),\s*unixFlags\.join\(" "\)/.test(
       installSdkBody,
     ),
     true,

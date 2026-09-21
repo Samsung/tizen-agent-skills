@@ -879,7 +879,7 @@ node <plugin>/lib/cli/update-package-cli.js [--force] [--dry-run]
 
 ### 20. tizen-sdb-helper
 
-**설명:** Tizen 디바이스에 대한 자연어 요청을 올바른 sdb 명령으로 매칭 — 로그 캡처, 셸, 포트 포워드, root 토글, 리부트, 화면 상태 등 — 파괴적 작업은 확인 게이트(confirmed gate) 적용.
+**설명:** Tizen 디바이스에 대한 자연어 요청을 올바른 sdb 명령으로 매칭 — 셸, 포트 포워드, root 토글, 리부트, 화면 상태 등 — 파괴적 작업은 확인 게이트(confirmed gate) 적용. 로그 요청(보기/저장/지우기)은 `tizen-dlog-analyzer`(`log-dump`, `log-clear`)로 핸드오프.
 
 **사용 시점:** 연결된 디바이스에 임시 sdb 명령 실행 (로그, 셸, 포트 포워딩, 디바이스 전원 제어). 일부 intent(screenshot, install/uninstall, list devices, connect/disconnect)는 sdb-helper가 매칭하되 더 풍부한 파이프라인을 제공하는 전용 스킬로 핸드오프합니다. 파일 전송은 `tizen-file-transfer` 스킬을 직접 사용하세요.
 
@@ -899,7 +899,7 @@ node <plugin>/lib/cli/sdb-helper-cli.js --request <text> [--serial <serial>]
 **CLI 예제:**
 
 ```bash
-node .../sdb-helper-cli.js --request "tail the logs"
+node .../sdb-helper-cli.js --request "run shell command ls -la"
 node .../sdb-helper-cli.js --request "open a shell" --serial emulator-26101
 node .../sdb-helper-cli.js --request="reboot the device" --serial=emulator-26101
 ```

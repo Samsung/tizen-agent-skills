@@ -1,0 +1,305 @@
+#!/bin/sh
+# Fake `sdb` binary for rds-sdb.test.js.
+#
+# No real device is involved — this script stands in for the sdb binary so
+# common/lib/core/sdb-helper.js's RDS primitives (execute/pushFile/
+# pushDirectory/root/getAppInstallPath) can be exercised through a real
+# execFile spawn (argv array, no shell) without a Tizen emulator. The
+# scenario is selected by the `-s <serial>` value; see rds-sdb.test.js for
+# what each one asserts.
+#
+# This fixture only proves the JS-side argv construction and response
+# parsing. The real-device behaviour it models was verified on a Tizen 11
+# emulator (2026-09-17, see docs/RDS_FAST_DEPLOY_PLAN.md "Real-device
+# verification"): `0 getappinstallpath` is not a command there (tier 1
+# falls through), `pkgcmd -a` answers `/opt/usr/home/owner/apps_rw`, that
+# directory is owner-writable (marker/snapshot push needs no root) while
+# `res`/`bin` are symlinks into root-owned `/opt/usr/globalapps/<pkgid>/`
+# (delta push needs `root on`).
+
+serial="$2"
+shift 2
+rest="$*"
+
+case "$serial" in
+  tier1-ok)
+    if [ "$rest" = "shell 0 getappinstallpath" ]; then
+      echo "Tizen Application Installation Path: /opt/usr/apps"
+      exit 0
+    fi
+    echo "unexpected command: $rest" >&2
+    exit 1
+    ;;
+
+  tier2-ok)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "no secure protocol support" >&2
+        exit 1
+        ;;
+      "shell /usr/bin/pkgcmd -a")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  # Tiers 3/4 model real sdb: `sdb shell` exits 0 whatever the remote command
+  # did, so the JS side must look for the echoed marker, not the exit code.
+  tier3-ok)
+    case "$rest" in
+      "shell 0 getappinstallpath" | "shell /usr/bin/pkgcmd -a")
+        echo "not supported" >&2
+        exit 1
+        ;;
+      "shell test -d /home/owner/apps_rw && echo __RDS_DIR_OK__")
+        echo "__RDS_DIR_OK__"
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  tier4-ok)
+    case "$rest" in
+      "shell 0 getappinstallpath" | "shell /usr/bin/pkgcmd -a")
+        echo "not supported" >&2
+        exit 1
+        ;;
+      "shell test -d /home/owner/apps_rw && echo __RDS_DIR_OK__")
+        # Directory missing: `test -d` fails on the device, nothing is echoed,
+        # but sdb itself still exits 0.
+        exit 0
+        ;;
+      "shell test -d /opt/usr/apps && echo __RDS_DIR_OK__")
+        echo "__RDS_DIR_OK__"
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  tier-none-silent)
+    # Every probe "succeeds" at the sdb level but no directory exists —
+    # getAppInstallPath() must NOT return tier 3's path here.
+    case "$rest" in
+      "shell 0 getappinstallpath" | "shell /usr/bin/pkgcmd -a")
+        exit 0
+        ;;
+      shell\ test\ -d\ *)
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  all-fail)
+    echo "device unreachable" >&2
+    exit 1
+    ;;
+
+  # ── Scenarios for rds-deploy-service.test.js (step 17) ──────────────────
+  # Marker/push destination paths embed a package ID the JS side resolves
+  # from a test project's manifest, so these match with wildcards rather
+  # than a hardcoded package ID.
+
+  deploy-marker-missing)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      shell\ cat\ \'*/.rds_deploy_marker\')
+        # sdb shell often exits 0 even when the remote command failed —
+        # readDeviceMarker() must detect this via the "cat:" prefix in stdout.
+        echo "cat: /opt/usr/apps/somepkg/.rds_deploy_marker: No such file or directory"
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  deploy-marker-ahead)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      shell\ cat\ \'*/.rds_deploy_marker\')
+        echo '{"deployId":99,"deployType":"rds","timestamp":"2026-01-01T00:00:00.000Z"}'
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  deploy-marker-behind)
+    # Device restored to an older deploy (emulator snapshot, re-flash) —
+    # marker says 1 while host state has moved on.
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      shell\ cat\ \'*/.rds_deploy_marker\')
+        echo '{"deployId":1,"deployType":"rds","timestamp":"2026-01-01T00:00:00.000Z"}'
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  launch-fail)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      shell\ cat\ \'*/.rds_deploy_marker\')
+        echo '{"deployId":1,"deployType":"rds","timestamp":"2026-01-01T00:00:00.000Z"}'
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  sync-push-fail)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      push\ */.\ *)
+        # Always reports a skipped file, forcing pushDirectory() to throw —
+        # used to prove updateRdsState()/tryRdsDeploy() swallow sync failures.
+        echo "0 file(s) pushed. 1 file(s) skipped."
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  # `192.168.0.10:26101` is a TCP-connected device serial — it must never end
+  # up in a host temp-directory name (`:` is illegal on Windows).
+  rds-fast-ok | rds-delta-ok | rds-delta-delete-ok | 192.168.0.10:26101)
+    case "$rest" in
+      "shell 0 getappinstallpath")
+        echo "Tizen Application Installation Path: /opt/usr/apps"
+        exit 0
+        ;;
+      shell\ cat\ \'*/.rds_deploy_marker\')
+        echo '{"deployId":1,"deployType":"rds","timestamp":"2026-01-01T00:00:00.000Z"}'
+        exit 0
+        ;;
+      "root on" | "root off")
+        exit 0
+        ;;
+      shell\ rm\ -f\ * | shell\ chmod\ go-w\ *)
+        # Every path must arrive single-quoted as one word — the device shell
+        # would otherwise split `my icon.png` into two arguments.
+        for word in $rest; do
+          case "$word" in
+            shell | rm | -f | chmod | go-w) ;;
+            \'*\') ;;
+            *)
+              echo "rm -f received an unquoted path: $word" >&2
+              exit 1
+              ;;
+          esac
+        done
+        exit 0
+        ;;
+      push\ */.\ *)
+        # Count real files under the staging dir so the reported count always
+        # matches pushDirectory()'s expectedFileCount, whether this is the
+        # delta push (N files) or the marker+snapshot push (always 2).
+        localdir="${rest#push }"
+        localdir="${localdir%/. *}"
+        count=$(find "$localdir" -type f | wc -l | tr -d ' ')
+        echo "$count file(s) pushed. 0 file(s) skipped."
+        exit 0
+        ;;
+      *)
+        echo "unexpected command: $rest" >&2
+        exit 1
+        ;;
+    esac
+    ;;
+
+  push-ok)
+    echo "1 file(s) pushed. 0 file(s) skipped."
+    exit 0
+    ;;
+
+  push-fail)
+    echo "0 file(s) pushed. 1 file(s) skipped."
+    exit 0
+    ;;
+
+  pushdir-ok)
+    echo "5 file(s) pushed. 0 file(s) skipped."
+    exit 0
+    ;;
+
+  pushdir-skipped)
+    echo "4 file(s) pushed. 1 file(s) skipped."
+    exit 0
+    ;;
+
+  pushdir-mismatch)
+    echo "3 file(s) pushed. 0 file(s) skipped."
+    exit 0
+    ;;
+
+  pushdir-garbled)
+    echo "sdb: sync failed" >&2
+    exit 0
+    ;;
+
+  root-ok)
+    exit 0
+    ;;
+
+  exec-ok)
+    echo "$rest"
+    exit 0
+    ;;
+
+  exec-fail)
+    echo "device says no" >&2
+    exit 1
+    ;;
+
+  *)
+    echo "fake-sdb: unhandled serial '$serial' (args: $rest)" >&2
+    exit 1
+    ;;
+esac

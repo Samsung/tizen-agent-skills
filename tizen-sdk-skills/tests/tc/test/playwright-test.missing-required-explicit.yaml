@@ -3,7 +3,7 @@ id: tizen-sdk.playwright-test.missing-required-explicit
 plugin: tizen-sdk
 command: playwright-test
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "playwright-test without --app-id returns failure with invalid_parameters"
 

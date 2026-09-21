@@ -439,6 +439,22 @@ const ERROR_CODES = {
     },
   },
 
+  // 플랫폼 버전 관련
+  // platform_version_not_found = the SDK is installed, but the explicitly
+  // requested TIZEN-{version} platform is not part of it (no
+  // platforms/tizen-X.Y directory). Either the version is a typo (releases
+  // look like 10.0 / 11.0) or the platform still has to be added with
+  // platform-install. Malformed versions (not X.Y) are invalid_argument.
+  PLATFORM_VERSION_NOT_FOUND: {
+    error_code: "TIZEN_SDK_PLATFORM_E001",
+    error_category: "platform_version_not_found",
+    suggested_fix: {
+      command:
+        "tizen-cli tizen-sdk platform-install --platform-version <version>",
+      auto_fixable: false,
+    },
+  },
+
   // 인증서 관련
   CERT_GENERATION_FAILED: {
     error_code: "TIZEN_SDK_CERT_E001",

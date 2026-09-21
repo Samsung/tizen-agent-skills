@@ -21,6 +21,14 @@ import {
   preToolUseEntries,
 } from "./claudeSettings";
 import { claudeHooksDir, expectedHookCommand } from "./hooks";
+import {
+  CODEX_GUARD_SCRIPTS,
+  codexContextFile,
+  codexHooksDir,
+  codexHooksJsonPath,
+  isOurCodexHooksJson,
+} from "./codexLayout";
+import { guardMarkers } from "./guardSection";
 
 export interface ValidationResult {
   label: string;
@@ -341,6 +349,115 @@ export async function validateClineInstall(
           hasGuard,
           hasGuard ? "present" : `missing - ${guardPath}`,
         ),
+      );
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Run full validation of a Codex CLI install: cache mirror, the shared skills
+ * directory, one TOML per shipped agent, and — mirroring host_validate_extras
+ * in hosts/codex.sh — the guard scripts, hooks.json and the AGENTS.md section
+ * with its Codex-specific lines.
+ */
+export async function validateCodexInstall(
+  cacheBase: string,
+  assetsDir: string,
+  skillsDir: string,
+  agentsDir: string,
+  home: string,
+  hooksExpected: boolean,
+): Promise<ValidationResult[]> {
+  const results: ValidationResult[] = [];
+
+  // Cache vs assets (tools validated separately)
+  for (const sub of ["skills", "agents", "lib", "assets"] as const) {
+    const label = sub.charAt(0).toUpperCase() + sub.slice(1);
+    results.push(
+      await compareDirectories(
+        path.join(assetsDir, sub),
+        path.join(cacheBase, sub),
+        `${label} (assets <-> cache)`,
+      ),
+    );
+  }
+  results.push(...(await validateTools(assetsDir, cacheBase)));
+
+  // Skills: per-skill comparison in the shared ~/.agents/skills namespace
+  for (const skillName of await listSubdirs(path.join(assetsDir, "skills"))) {
+    results.push(
+      await compareDirectories(
+        path.join(assetsDir, "skills", skillName),
+        path.join(skillsDir, skillName),
+        `Codex skill: ${skillName}`,
+      ),
+    );
+  }
+
+  // Agents: every shipped .md must have its .toml twin
+  const agentSources = (await listFiles(path.join(assetsDir, "agents"))).filter(
+    (f) => f.endsWith(".md"),
+  );
+  let missingToml = 0;
+  for (const md of agentSources) {
+    const toml = path.join(agentsDir, md.replace(/\.md$/, ".toml"));
+    if (!(await pathExists(toml))) missingToml++;
+  }
+  results.push(
+    check(
+      "Codex agents (TOML)",
+      missingToml === 0,
+      missingToml === 0
+        ? `${agentSources.length} agent(s) converted`
+        : `${missingToml} of ${agentSources.length} agent(s) missing in ${agentsDir}`,
+    ),
+  );
+
+  if (hooksExpected) {
+    const hooksDir = codexHooksDir(home);
+    for (const g of CODEX_GUARD_SCRIPTS) {
+      const guardPath = path.join(hooksDir, g);
+      const hasGuard = await pathExists(guardPath);
+      results.push(
+        check(
+          `Codex hooks: ${g}`,
+          hasGuard,
+          hasGuard ? "present" : `missing - ${guardPath}`,
+        ),
+      );
+    }
+
+    const hooksJson = codexHooksJsonPath(home);
+    let hooksDetail = `missing - ${hooksJson}`;
+    let hooksOk = false;
+    if (await pathExists(hooksJson)) {
+      const content = await fsp.readFile(hooksJson, "utf-8");
+      const referencesGuard = content.includes("check-tizen-commands.sh");
+      hooksOk = referencesGuard;
+      hooksDetail = referencesGuard
+        ? isOurCodexHooksJson(content)
+          ? "present (ours)"
+          : "present (user-owned; references the guard)"
+        : "does not reference the guard";
+    }
+    results.push(check("Codex hooks: hooks.json", hooksOk, hooksDetail));
+
+    const contextFile = codexContextFile(home);
+    const contextChecks: [string, string][] = [
+      ["AGENTS.md: guard section", guardMarkers().begin],
+      ["AGENTS.md: Codex cache-root line", "This host is Codex CLI"],
+      ["AGENTS.md: sandbox / escalation guidance", "sandbox_blocked"],
+      ["AGENTS.md: 30 s / --background guidance", "job-cli.js wait"],
+    ];
+    const contextText = (await pathExists(contextFile))
+      ? await fsp.readFile(contextFile, "utf-8")
+      : "";
+    for (const [label, needle] of contextChecks) {
+      const has = contextText.includes(needle);
+      results.push(
+        check(label, has, has ? "present" : `missing - ${contextFile}`),
       );
     }
   }

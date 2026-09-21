@@ -1,0 +1,16 @@
+id: tizen-sdk.dlog-analyzer.log-clear-without-confirm
+plugin: tizen-sdk
+command: dlog-analyzer
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "dlog-analyzer --action log-clear without --confirm fails (user_input_required) before touching any device"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dlog-analyzer", "--action", "log-clear"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - has_suggested_fix: true

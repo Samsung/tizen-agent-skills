@@ -10,6 +10,7 @@
 
 const { execSync } = require("child_process");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { readSdkPath } = require("./sdk");
 const { isValidSerial } = require("./shell-safety");
@@ -191,16 +192,57 @@ function resolveSdkDataPath() {
 
 /**
  * Run sdb and return stdout. Throws on non-zero exit.
+ *
+ * @param {string} sdbPath
+ * @param {string} args
+ * @param {{timeout?: number, viaTempFile?: boolean}} [opts]
+ * @param {boolean} [opts.viaTempFile] - redirect output to a temp file instead of a pipe.
+ *   REQUIRED when sdb has to start its own server daemon (e.g. a cold `sdb devices` with
+ *   no server running yet): the daemon inherits the pipe write handle, so the pipe never
+ *   closes when `sdb` itself exits and execSync blocks forever — file redirection returns
+ *   as soon as the immediate child exits, regardless of what the daemon still holds open
+ *   (same fix as plugin-cache.js's `execPluginScript({ captureViaTempFile: true })`).
  */
 function runSdb(sdbPath, args, opts = {}) {
   const timeout = opts.timeout || 30000;
   const cmd = `"${sdbPath}" ${args}`;
-  return execSync(cmd, {
-    encoding: "utf-8",
-    stdio: ["pipe", "pipe", "pipe"],
-    maxBuffer: 16 * 1024 * 1024,
-    timeout,
-  });
+
+  if (!opts.viaTempFile) {
+    return execSync(cmd, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 16 * 1024 * 1024,
+      timeout,
+    });
+  }
+
+  const tmpFile = path.join(
+    os.tmpdir(),
+    `tizen-sdb-${process.pid}-${Date.now()}.out`,
+  );
+  const readTmp = () => {
+    try {
+      return fs.readFileSync(tmpFile, "utf-8");
+    } catch (_e) {
+      return "";
+    }
+  };
+  try {
+    execSync(`${cmd} > "${tmpFile}" 2>&1`, {
+      stdio: ["ignore", "ignore", "ignore"],
+      timeout,
+    });
+    return readTmp();
+  } catch (error) {
+    error.stdout = readTmp();
+    throw error;
+  } finally {
+    try {
+      fs.unlinkSync(tmpFile);
+    } catch (_e) {
+      // ignore — a still-running daemon may hold the file open
+    }
+  }
 }
 
 /**
@@ -242,10 +284,13 @@ function parseDevices(output) {
  *
  * @param {string} sdbPath
  * @param {string|null|undefined} serial - explicit serial (skips discovery)
+ * @param {{viaTempFile?: boolean}} [opts] - forwarded to runSdb() — pass
+ *   `{viaTempFile: true}` when the sdb server may not be running yet (see
+ *   runSdb()'s doc comment)
  * @returns {{serial: string, devices?: Array}|{errorCategory: string, message: string, devices?: Array}}
  *   On failure, errorCategory is one of "io_error" | "device_not_found" | "multiple_devices".
  */
-function resolveSerial(sdbPath, serial) {
+function resolveSerial(sdbPath, serial, opts = {}) {
   if (serial) {
     // Every caller splices the serial into `-s "<serial>"` on a command line
     // that goes through a shell (runSdb → execSync). Screening it here covers
@@ -262,7 +307,7 @@ function resolveSerial(sdbPath, serial) {
   }
   let output;
   try {
-    output = runSdb(sdbPath, "devices");
+    output = runSdb(sdbPath, "devices", opts);
   } catch (error) {
     return {
       errorCategory: "io_error",
@@ -289,9 +334,32 @@ function resolveSerial(sdbPath, serial) {
   return { serial: online[0].serial, devices };
 }
 
+/**
+ * Make sure the sdb server daemon is running before any argv-style
+ * (`execFile`, piped stdout) sdb call is made.
+ *
+ * A cold `sdb` client that has to spawn the daemon leaves the daemon holding
+ * the client's stdout pipe, so an `execFile`-based caller waiting for the
+ * pipe to close hangs even after the client exits (the reason `runSdb()`
+ * has `viaTempFile`). `sdb start-server` through the temp-file path pays
+ * that cost once, safely; afterwards every `execFile` call talks to an
+ * already-running daemon. Failures are swallowed — the caller's own sdb
+ * call will surface a real problem with a better message.
+ *
+ * @param {string} sdbPath
+ */
+function ensureSdbServer(sdbPath) {
+  try {
+    runSdb(sdbPath, "start-server", { viaTempFile: true, timeout: 15000 });
+  } catch (_e) {
+    // best effort — see doc comment
+  }
+}
+
 module.exports = {
   resolveSdb,
   resolveSdbBinary,
+  ensureSdbServer,
   findSdbOnPath,
   sdkRootFromSdb,
   looksLikeSdkRoot,

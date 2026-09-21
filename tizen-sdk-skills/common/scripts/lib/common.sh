@@ -46,6 +46,23 @@ log_section() { echo "" >&2; echo -e "${BLUE}=== $* ===${NC}" >&2; }
 log_success() { log_ok "$@"; }
 log_warning() { log_warn "$@"; }
 
+# Formats a whole-second duration as "1h 2m 3s" / "2m 3s" / "3s", picking the
+# coarsest units that apply so a phase timing line stays short at any duration.
+# Usage: start=$(date +%s); ...; format_duration $(( $(date +%s) - start ))
+format_duration() {
+  local total="${1:-0}" h m s
+  h=$(( total / 3600 ))
+  m=$(( (total % 3600) / 60 ))
+  s=$(( total % 60 ))
+  if [ "$h" -gt 0 ]; then
+    printf '%dh %dm %ds\n' "$h" "$m" "$s"
+  elif [ "$m" -gt 0 ]; then
+    printf '%dm %ds\n' "$m" "$s"
+  else
+    printf '%ds\n' "$s"
+  fi
+}
+
 # ----------------------------------------------------------------------------
 # OS detection -> linux | mac | windows | unknown
 # (includes WSL subtype detection for WSL2: set DETECTED_WSL=1 if running in WSL)
@@ -400,4 +417,145 @@ to_absolute_path() {
   else
     echo "$(cd "$(dirname "$path")" && pwd)/$(basename "$path")"
   fi
+}
+
+validate_download_jobs() {
+  case "${1:-}" in
+    1|2|3|4|5|6|7|8) return 0 ;;
+    *) log_error "--download-jobs must be an integer from 1 to 8"; return 1 ;;
+  esac
+}
+
+# Atomically increments (and prints) the shared "N downloads completed so far"
+# counter used for progress reporting below. `mkdir` is atomic on every POSIX
+# filesystem (unlike flock, which isn't available on macOS by default), so it
+# doubles as a portable spin-lock: only one concurrent caller can ever create
+# "$1/.counter.lock", so the read-increment-write in between is race-free —
+# no two workers can ever observe/print the same count.
+_download_queue_bump_counter() {
+  local dir="$1" n
+  while ! mkdir "$dir/.counter.lock" 2>/dev/null; do
+    sleep 0.02
+  done
+  n=$(( $(cat "$dir/.counter" 2>/dev/null || echo 0) + 1 ))
+  echo "$n" > "$dir/.counter"
+  rmdir "$dir/.counter.lock"
+  echo "$n"
+}
+
+# Download queue helper. The queue is TSV: id<TAB>url<TAB>destination.
+# Sharding avoids non-portable flock/wait -n requirements on macOS Bash 3.
+#
+# Every caller runs under `set -euo pipefail`, so nothing in here may fail as a
+# bare statement (a plain `rmdir` of a missing dir would abort the whole
+# script), and no possibly-empty array may be expanded without the
+# ${arr[@]+"${arr[@]}"} guard (bash < 4.4 treats that as unbound under -u).
+download_queue_parallel() {
+  local queue="$1" jobs="$2" result_dir="$3" i shard total worker_pid
+  validate_download_jobs "$jobs" || return 2
+  if [ ! -f "$queue" ]; then
+    log_error "download queue not found: $queue"
+    return 2
+  fi
+  mkdir -p "$result_dir"
+  rm -f "$result_dir"/result.* "$result_dir"/queue.* "$result_dir/.counter"
+  rmdir "$result_dir/.counter.lock" 2>/dev/null || true
+  : > "$result_dir/results"
+  total=$(wc -l < "$queue" | tr -d '[:space:]')
+  # Empty queue (everything already installed / only meta packages): nothing to
+  # spawn, and download_queue_status must still find an (empty) results file.
+  if [ "${total:-0}" -eq 0 ]; then
+    return 0
+  fi
+  echo 0 > "$result_dir/.counter"
+  awk -F '\t' -v n="$jobs" -v d="$result_dir" '{ print > (d "/queue." ((NR-1)%n)) }' "$queue"
+
+  # Job control (`set -m`) makes each backgrounded worker below the leader of
+  # its OWN process group (pgid == its pid), and curl inherits that pgid when
+  # the worker execs it. Without this, a background `cmd &` in a script has
+  # SIGINT/SIGQUIT ignored (POSIX async-list rule) and shares the script's
+  # pgid, so killing/Ctrl-C'ing the main process leaves the worker (and its
+  # in-flight curl) running as an orphan. `kill -- -PGID` below then reaches
+  # the whole worker+curl subtree in one shot. Each worker's pgid is fixed at
+  # creation time, so it's safe to flip monitor mode back off right after
+  # spawning them all (see below) without losing this grouping.
+  local monitor_was_on=0
+  case $- in *m*) monitor_was_on=1 ;; esac
+  set -m
+
+  local worker_pids=()
+  _download_queue_kill_workers() {
+    local pid
+    for pid in ${worker_pids[@]+"${worker_pids[@]}"}; do
+      kill -TERM -- "-$pid" 2>/dev/null || true
+    done
+  }
+  # Remember the caller's INT/TERM/HUP handlers so they can be reinstated
+  # afterwards instead of being silently dropped by `trap -` below.
+  local saved_trap_int saved_trap_term saved_trap_hup
+  saved_trap_int=$(trap -p INT)
+  saved_trap_term=$(trap -p TERM)
+  saved_trap_hup=$(trap -p HUP)
+  trap '_download_queue_kill_workers; trap - INT; kill -INT $$' INT
+  trap '_download_queue_kill_workers; trap - TERM; kill -TERM $$' TERM
+  trap '_download_queue_kill_workers; trap - HUP; kill -HUP $$' HUP
+
+  for ((i=0; i<jobs; i++)); do
+    shard="$result_dir/queue.$i"
+    [ -f "$shard" ] || continue
+    (
+      while IFS=$'\t' read -r id url dest; do
+        [ -n "$id" ] || continue
+        printf '[%s] Downloading %s...\n' "$(date '+%H:%M:%S')" "$id" >&2
+        if curl -fsSL --max-time 1800 -o "$dest.tmp" "$url" && mv -f "$dest.tmp" "$dest"; then
+          printf '%s\tOK\n' "$id" >> "$result_dir/result.$i"
+          status_mark='✓'
+        else
+          rm -f "$dest.tmp" "$dest"
+          printf '%s\tFAIL\n' "$id" >> "$result_dir/result.$i"
+          status_mark='✗'
+        fi
+        completed=$(_download_queue_bump_counter "$result_dir")
+        printf '[%s] %s %s [%d/%d]\n' \
+          "$(date '+%H:%M:%S')" \
+          "$status_mark" \
+          "$id" "$completed" "$total" >&2
+      done < "$shard"
+    ) &
+    worker_pid=$!
+    worker_pids+=("$worker_pid")
+  done
+
+  # Turn monitor mode back off before waiting: process groups assigned above
+  # persist regardless (they're a kernel-level attribute fixed at fork time),
+  # but leaving monitor mode on here is what makes an interactive shell print
+  # "[N] Terminated <full job source>" for every worker once it's reaped by
+  # `wait` (or killed by our trap above). (Tried `disown` first — don't: it
+  # silently breaks `wait "$pid"`, which then returns immediately instead of
+  # blocking, so the script would exit while workers are still orphaned —
+  # exactly the bug this is fixing.)
+  set +m
+
+  if [ "${#worker_pids[@]}" -gt 0 ]; then
+    wait "${worker_pids[@]}" 2>/dev/null || true
+  fi
+
+  trap - INT TERM HUP
+  if [ -n "$saved_trap_int" ]; then eval "$saved_trap_int"; fi
+  if [ -n "$saved_trap_term" ]; then eval "$saved_trap_term"; fi
+  if [ -n "$saved_trap_hup" ]; then eval "$saved_trap_hup"; fi
+  if [ "$monitor_was_on" = 1 ]; then set -m; fi
+
+  for ((i=0; i<jobs; i++)); do
+    if [ -f "$result_dir/result.$i" ]; then
+      cat "$result_dir/result.$i" >> "$result_dir/results"
+    fi
+  done
+  rm -f "$result_dir/.counter"
+  rmdir "$result_dir/.counter.lock" 2>/dev/null || true
+  return 0
+}
+
+download_queue_status() {
+  awk -F '\t' -v id="$1" '$1==id {s=$2} END {print s}' "$2/results" 2>/dev/null
 }

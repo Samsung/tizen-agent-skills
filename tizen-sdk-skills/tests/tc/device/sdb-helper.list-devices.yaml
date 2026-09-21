@@ -3,9 +3,9 @@ id: tizen-sdk.sdb-helper.list-devices
 plugin: tizen-sdk
 command: sdb-helper
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "sdb-helper --request 'list devices' returns success with command"
+description: "sdb-helper --request 'list devices' hands off to tizen-device-manager"
 
 lanes:
   cli:
@@ -14,4 +14,7 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.command", min_length: 1 }
+        # "list devices" is a handoff intent, like "take a screenshot": the runner
+        # returns handoff/suggested_skill instead of a command — fixed 2026-09-17.
+        - { path: "$.result.handoff", equals: "tizen-device-manager" }
+        - { path: "$.result.suggested_skill", equals: "tizen-device-manager" }

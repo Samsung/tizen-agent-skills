@@ -3,9 +3,9 @@ id: tizen-sdk.sdb-helper.screenshot
 plugin: tizen-sdk
 command: sdb-helper
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "sdb-helper --request 'take a screenshot' returns success with command and fallbacks"
+description: "sdb-helper --request 'take a screenshot' returns a handoff to tizen-screenshot (no sdb command is run)"
 
 lanes:
   cli:
@@ -14,4 +14,5 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.command", min_length: 1 }
+        - { path: "$.result.handoff", equals: "tizen-screenshot" }
+        - { path: "$.result.suggested_skill", equals: "tizen-screenshot" }

@@ -33,6 +33,7 @@ PKG_OS="${PKG_OS_BASE}-64"
 # Defaults (SDK path resolution: TIZEN_SDK_PATH -> ~/.tizen.sdk.path.config -> ~/tizen-sdk)
 SDK_PATH="$(get_sdk_path)"
 FORCE=false
+DOWNLOAD_JOBS=4
 CHECK=false
 DRY_RUN=false
 WAIT=false
@@ -43,6 +44,8 @@ while [[ $# -gt 0 ]]; do
         --sdk-path=*) SDK_PATH="${1#*=}"; shift ;;
         --sdk-path)   SDK_PATH="$2"; shift 2 ;;
         --force)      FORCE=true; shift ;;
+        --download-jobs) DOWNLOAD_JOBS="${2:-}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift 2 ;;
+        --download-jobs=*) DOWNLOAD_JOBS="${1#*=}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift ;;
         --check)      CHECK=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         --wait)       WAIT=true; shift ;;
@@ -98,6 +101,9 @@ if [[ "$WAIT" == "true" ]]; then
     fi
     exit 0
 fi
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+SCRIPT_START=$SECONDS
 
 echo "[INFO] Tizen TV SDK extension installer started"
 echo "[INFO] SDK path: $SDK_PATH"
@@ -232,6 +238,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
         printf "  %3d. %-48s %s\n" "$n" "$pkg" "$p"
     done
     rm -rf "$WORKDIR"
+    echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 0
 fi
 
@@ -239,7 +246,13 @@ fi
 PKG_INFO_DIR="${SDK_PATH}/.package"
 mkdir -p "$PKG_INFO_DIR"
 
+DOWNLOAD_QUEUE="$WORKDIR/download.queue"; DOWNLOAD_RESULTS="$WORKDIR/downloads"
+: > "$DOWNLOAD_QUEUE"
+
 IDX=0; OK=0; SKIP=0; FAIL=0
+# Pass 1: decide skips (already installed / meta) BEFORE anything is
+# downloaded, so a re-run only fetches what it will actually install.
+WORK_ITEMS=()   # "<idx>\t<pkg>" per package that needs download + install
 for pkg in "${RESOLVED[@]}"; do
     IDX=$((IDX+1))
 
@@ -257,10 +270,25 @@ for pkg in "${RESOLVED[@]}"; do
         continue
     fi
 
+    printf '%s\t%s\t%s\n' "$pkg" "${PKG_REPO}${REL_PATH}" "$WORKDIR/$(basename "$REL_PATH")" >> "$DOWNLOAD_QUEUE"
+    WORK_ITEMS+=("$IDX"$'\t'"$pkg")
+done
+
+echo "[INFO] Downloading packages with $DOWNLOAD_JOBS parallel workers..."
+DOWNLOAD_START=$SECONDS
+download_queue_parallel "$DOWNLOAD_QUEUE" "$DOWNLOAD_JOBS" "$DOWNLOAD_RESULTS"
+echo "[INFO] Download phase took $(format_duration $((SECONDS - DOWNLOAD_START)))"
+EXTRACT_START=$SECONDS
+
+# Pass 2: extract + merge the packages queued above.
+for work_item in ${WORK_ITEMS[@]+"${WORK_ITEMS[@]}"}; do
+    IDX="${work_item%%$'\t'*}"
+    pkg="${work_item#*$'\t'}"
+    REL_PATH="${PKG_PATH[$pkg]}"
     URL="${PKG_REPO}${REL_PATH}"
     ZIP="${WORKDIR}/$(basename "$REL_PATH")"
-    echo "[INFO] [$IDX/$TOTAL] Downloading $pkg ..."
-    if ! curl -fsSL -o "$ZIP" "$URL"; then
+    echo "[INFO] [$IDX/$TOTAL] Processing downloaded $pkg ..."
+    if [[ "$(download_queue_status "$pkg" "$DOWNLOAD_RESULTS")" != "OK" ]]; then
         echo "[ERROR] [$IDX/$TOTAL] Download failed: $URL"
         FAIL=$((FAIL+1))
         continue
@@ -306,11 +334,13 @@ for pkg in "${RESOLVED[@]}"; do
     OK=$((OK+1))
 done
 
+echo "[INFO] Extraction phase took $(format_duration $((SECONDS - EXTRACT_START)))"
 echo "[OK] TV SDK package result: OK $OK / skipped $SKIP / failed $FAIL (total $TOTAL)"
 
 if [[ $FAIL -gt 0 ]]; then
     echo "[ERROR] Some packages failed to install. Not creating .tv-sdk-installed marker."
     rm -rf "$WORKDIR"
+    echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 1
 fi
 
@@ -320,4 +350,5 @@ echo "[OK] .tv-sdk-installed created: $TV_SDK_MARKER"
 
 rm -rf "$WORKDIR"
 echo "[OK] Tizen TV SDK extension installation completed!"
+echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 exit 0

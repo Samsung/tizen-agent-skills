@@ -75,7 +75,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/tv-sdk-
 node "$CLI"
 ```
 
-Optional: `node "$CLI" --force` (force reinstall)
+Optional: `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
 Exit code: `0` = success (TV SDK already installed), `1` = failure (TV SDK not installed — proceed to Phase 2, or Tizen SDK not installed).
 

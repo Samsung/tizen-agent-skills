@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
-// src/install/hooks.ts — Claude Code settings.json merge + Cline hook/rule install
+// src/install/hooks.ts — Claude Code settings.json merge + Cline hook/rule
+// install + Codex CLI hooks.json / AGENTS.md guard section
 //
 // This is where the extension improves on the shell scripts:
 //  (a) Automatic settings.json merge (scripts only printed a snippet)
@@ -9,11 +10,14 @@
 //  (c) All three hooks installed (scripts omitted check-skill-routing.sh)
 //  (d) CRLF→LF normalization + chmod +x for VSIX-extracted scripts
 //  (e) Cline non-clobber check + guard rule install
+//  (f) Codex hooks.json written only when missing or ours; AGENTS.md section
+//      inserted between markers so the user's own instructions survive
 import * as fsp from "fs/promises";
 import * as path from "path";
 import { writeStatus } from "../log";
 import { normalizeExec, pathExists, removeLegacyDirs } from "./fsutil";
 import {
+  ALL_PLUGIN_NAMES,
   ClaudeSettings,
   DEFAULT_INDENT,
   HOOK_SOURCE_TAG,
@@ -27,6 +31,22 @@ import {
   hookCommandPath,
   stripOurHooks,
 } from "./claudeSettings";
+import {
+  CODEX_GUARD_SCRIPTS,
+  buildCodexHooksJson,
+  codexContextFile,
+  codexGuardExtra,
+  codexHooksDir,
+  codexHooksJsonPath,
+  isOurCodexHooksJson,
+  legacyCodexHooksDirs,
+} from "./codexLayout";
+import {
+  findOrphanGuardMarkers,
+  hasGuardSection,
+  stripGuardSection,
+  upsertGuardSection,
+} from "./guardSection";
 
 /** Guard scripts the Cline adapter dispatches to (Cline has no Skill tool). */
 const CLINE_GUARD_SCRIPTS = [
@@ -393,6 +413,157 @@ export async function removeClineHooks(home: string): Promise<void> {
     writeStatus(`Removed Cline guard rule: ${guardRule}`, "Success");
   }
   await removeLegacyFiles(legacyClineGuardRules(home), "Cline guard rule");
+}
+
+// ─── Codex CLI ──────────────────────────────────────────────────────────
+
+/** File name of the shared guard document in the asset tree. */
+function guardDocName(pluginName: string): string {
+  return `${pluginName}-guard.md`;
+}
+
+/**
+ * Install Codex CLI hooks — port of host_install_extras in hosts/codex.sh:
+ *  - Copy check-tizen-commands.sh / check-project-writes.sh to
+ *    ~/.codex/hooks/tizen-sdk-skills/ (version-independent; CRLF→LF + chmod +x)
+ *  - Write ~/.codex/hooks.json when it is missing or already ours (`_source`).
+ *    A file that is not ours is left alone and the PreToolUse block is printed
+ *    for manual merging.
+ *  - Insert/refresh the guard section in ~/.codex/AGENTS.md between our
+ *    markers, with the Codex-specific lines (this host's cache root, the 30 s
+ *    exec limit, sandbox escalation) appended inside the section.
+ *
+ * Codex only runs hooks the user has trusted once via /hooks, and older builds
+ * need `[features] hooks = true` in config.toml — the completion notes say so.
+ */
+export async function installCodexHooks(
+  assetsDir: string,
+  home: string,
+): Promise<void> {
+  const hooksDir = codexHooksDir(home);
+  const hooksJson = codexHooksJsonPath(home);
+  const contextFile = codexContextFile(home);
+  const commonHooksDir = path.join(assetsDir, "hooks");
+
+  // Guard scripts
+  await fsp.mkdir(hooksDir, { recursive: true });
+  for (const g of CODEX_GUARD_SCRIPTS) {
+    const src = path.join(commonHooksDir, g);
+    if (!(await pathExists(src))) {
+      writeStatus(`Codex guard script missing from assets: ${src}`, "Warning");
+      continue;
+    }
+    const dst = path.join(hooksDir, g);
+    await fsp.copyFile(src, dst);
+    await normalizeExec(dst);
+  }
+  writeStatus(`Codex guard scripts installed to: ${hooksDir}`, "Success");
+
+  // hooks.json — ours when missing, or tagged with our (or pre-rename) _source
+  const ours = buildCodexHooksJson(hooksDir);
+  let mayWrite = true;
+  if (await pathExists(hooksJson)) {
+    mayWrite = isOurCodexHooksJson(await fsp.readFile(hooksJson, "utf-8"));
+  }
+  if (mayWrite) {
+    await writeTextAtomic(hooksJson, ours);
+    writeStatus(`Codex hooks written: ${hooksJson}`, "Success");
+    // The registry now dispatches to hooksDir; a pre-rename guard dir is dead.
+    await removeLegacyDirs(legacyCodexHooksDirs(home), "Codex guard dir");
+  } else {
+    writeStatus(
+      `Existing ${hooksJson} (not ours) found - NOT overwriting. ` +
+        "Merge this into its hooks.PreToolUse:",
+      "Warning",
+    );
+    for (const line of ours.trimEnd().split("\n")) {
+      writeStatus(`  ${line}`, "Info");
+    }
+  }
+
+  // AGENTS.md guard section
+  const guardSrc = path.join(commonHooksDir, guardDocName(PLUGIN_NAME));
+  if (!(await pathExists(guardSrc))) {
+    writeStatus(`Guard document missing from assets: ${guardSrc}`, "Warning");
+    return;
+  }
+  const body = await fsp.readFile(guardSrc, "utf-8");
+  const existing = (await pathExists(contextFile))
+    ? await fsp.readFile(contextFile, "utf-8")
+    : "";
+  const refreshed = hasGuardSection(existing);
+  // A begin without its end (or vice versa) is left in place as the user's
+  // text and a complete section is written alongside it — say so, since the
+  // stray line is theirs to clean up.
+  for (const orphan of findOrphanGuardMarkers(existing)) {
+    writeStatus(
+      `AGENTS.md guard: line ${orphan.line} of ${contextFile} is a ` +
+        `${orphan.pluginName} marker with no matching pair — left as-is; ` +
+        "delete it by hand if it is a leftover.",
+      "Warning",
+    );
+  }
+  await fsp.mkdir(path.dirname(contextFile), { recursive: true });
+  await writeTextAtomic(
+    contextFile,
+    upsertGuardSection(existing, body, codexGuardExtra(home)),
+  );
+  writeStatus(
+    `AGENTS.md guard: section ${refreshed ? "refreshed in" : "appended to"} ${contextFile}`,
+    "Success",
+  );
+}
+
+/**
+ * Remove Codex CLI hooks (used by uninstall): the guard-script directory and,
+ * when it is ours, hooks.json; the AGENTS.md section is cut out between its
+ * markers and the rest of the user's file is kept. A file that held nothing
+ * but our section is removed.
+ */
+export async function removeCodexHooks(home: string): Promise<void> {
+  const hooksDir = codexHooksDir(home);
+  const hooksJson = codexHooksJsonPath(home);
+  const contextFile = codexContextFile(home);
+
+  if (await pathExists(hooksJson)) {
+    if (isOurCodexHooksJson(await fsp.readFile(hooksJson, "utf-8"))) {
+      await fsp.rm(hooksJson, { force: true });
+      writeStatus(`Removed Codex hooks.json: ${hooksJson}`, "Success");
+    } else {
+      writeStatus(`Existing hooks.json (not ours) kept: ${hooksJson}`, "Info");
+    }
+  }
+
+  if (await pathExists(hooksDir)) {
+    await fsp.rm(hooksDir, { recursive: true, force: true });
+    writeStatus(`Removed Codex guard scripts: ${hooksDir}`, "Success");
+  }
+  await removeLegacyDirs(legacyCodexHooksDirs(home), "Codex guard dir");
+
+  if (await pathExists(contextFile)) {
+    const text = await fsp.readFile(contextFile, "utf-8");
+    if (hasGuardSection(text)) {
+      let rest = text;
+      for (const name of ALL_PLUGIN_NAMES) rest = stripGuardSection(rest, name);
+      if (rest.trim().length === 0) {
+        await fsp.rm(contextFile, { force: true });
+        writeStatus(
+          `Removed ${contextFile} (it held only our guard section)`,
+          "Success",
+        );
+      } else {
+        await writeTextAtomic(contextFile, rest.trimEnd() + "\n");
+        writeStatus(`Removed guard section from ${contextFile}`, "Success");
+      }
+    }
+  }
+}
+
+/** Text twin of writeJsonAtomic for the documents we author as strings. */
+async function writeTextAtomic(file: string, text: string): Promise<void> {
+  const tmp = `${file}.tizen-tmp`;
+  await fsp.writeFile(tmp, text, "utf-8");
+  await fsp.rename(tmp, file);
 }
 
 /**

@@ -3,13 +3,23 @@ id: tizen-sdk.create-emulator.launch
 plugin: tizen-sdk
 command: create-emulator
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "create-emulator --action create --vm-name --size --launch returns success"
 
 lanes:
   cli:
-    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "test-vm", "--size", "1080", "--launch"]
-    timeout_sec: 300
+    # TC defect fixed 2026-09-17: timeout_sec was 300, the same as the command's own
+    # default boot wait — the runner killed the process at 300 s (RUNNER_EXEC_ERROR,
+    # no envelope) before create (~35 s) + wait could finish. A fresh Tizen 11 image
+    # first-booted in ~349 s on the Windows test host, so the wait is raised with the
+    # new --timeout option and the runner gets headroom above create + wait + the
+    # sdb-restart rescue. On a launch timeout the command still returns success with
+    # result.status "created_launch_timeout" (the VM exists) — assert the real boot.
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--vm-name", "test-vm", "--size", "1080", "--launch", "--timeout", "480"]
+    timeout_sec: 570
     expect:
       status: success
+      jsonpath:
+        - { path: "$.result.vm_name", equals: "test-vm" }
+        - { path: "$.result.launched", matches: "^true$" }

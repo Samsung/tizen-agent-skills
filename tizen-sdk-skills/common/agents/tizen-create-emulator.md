@@ -58,7 +58,7 @@ node "$CLI" create --vm-name my-vm --size 1080 --platform tizen-10.0-x86_64
 # Create a TV emulator VM at 3840x1080:
 node "$CLI" create --vm-name my-tv-vm --profile tv --size 3840
 
-# Create and launch immediately (waits up to 300s for boot):
+# Create and launch immediately (waits up to 300s for boot; --timeout raises it, max 540):
 node "$CLI" create --vm-name my-vm --size 1080 --launch
 
 # Delete a VM:
@@ -107,7 +107,7 @@ The action is the first positional argument; everything else is a flag.
 | `--output-dir <path>`          | no                  | SDK data | Destination for `create-image`. **em-cli will NOT create it** — the directory must already exist |
 | `--compress`                   | no                  | off      | Compress the created image (`create-image`)                                            |
 | `--confirm`                    | **reset**           | off      | Required for `reset` — see the warning below                                           |
-| `--timeout <seconds>`          | no                  | `300`    | Emulator connection wait on `launch` (1–540)                                           |
+| `--timeout <seconds>`          | no                  | `300`    | Emulator connection wait on `launch` and `create --launch` (1–540)                     |
 | `--emulator-path <path>`       | no                  | —        | Directory of the emulator program (`launch` only)                                      |
 
 > **⚠️ This runner accepts only `--profile tizen` or `tv` — never narrate a `mobile`
@@ -161,7 +161,7 @@ The action is the first positional argument; everything else is a flag.
 Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout).
 
 **⚠️ CRITICAL — when `launch=true`, run it in the FOREGROUND with a long timeout.**
-The runner launches the emulator and waits up to **300s** for it to boot and connect
+The runner launches the emulator and waits up to **300s** (default; `--timeout`, max 540) for it to boot and connect
 to `sdb`. Set the Bash tool timeout to **`timeout: 600000`** (ms). Without `launch`,
 the command returns quickly (a few seconds for em-cli to create the VM). sdb is located in {TIZEN_SDK}/tools.
 

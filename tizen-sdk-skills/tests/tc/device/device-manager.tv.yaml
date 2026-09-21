@@ -3,7 +3,7 @@ id: tizen-sdk.device-manager.tv
 plugin: tizen-sdk
 command: device-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "device-manager --profile tv returns success"
 

@@ -51,6 +51,7 @@ tizen-cli tizen-sdk download-mobile-platform --force
 | `--include-iot-headed` | no | false | Also download and install the IOT-Headed extension. First downloads `extension_info.xml` to get the IoT Headed repository URL, then downloads `IOT-Headed-{version}`. |
 | `--iot-headed-version <version>` | no | Auto-detect latest | Specific IOT-Headed version to install. Requires `--include-iot-headed`. Auto-detects latest if not specified. |
 | `--force` | no | false | Force reinstall even if already installed |
+| `--download-jobs <count>` | no | `4` | Number of concurrent download jobs (1-8) |
 
 ## Two-phase flow (same pattern as sdk-install)
 

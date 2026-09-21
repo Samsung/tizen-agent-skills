@@ -2,7 +2,44 @@
 
 All notable changes to the Tizen AI Extension will be documented in this file.
 
-The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline. Changes to the skills are marked **(skills)**.
+The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
+
+## [1.3.0] — 2026-09-18
+
+Codex CLI becomes a third install target, and the release ships the updated skill and agent asset tree (29 skills, 24 agents).
+
+### Added
+
+- **(skills)** RDS fast deploy (Rapid Development Support) in `tizen-install-app` / `tizen-build-project`: after one full install of a project's Debug output, `install` pushes only the changed build-output files into the installed app and relaunches it (`deploy_type`: `full` / `rds` / `fast-deploy`); state lives in `.tizen-rds/` with hashes byte-identical to this extension's own RDS state files. `TIZEN_RDS_ENABLED=0` forces a full install, `install --reset-rds` clears the host-side state. Platform/GBS, `.rpm`, `.rpk`, non-Debug packages and manifest changes always take the full path.
+- **(skills)** Parallel package downloads in every SDK installer: `--download-jobs <1-8>` (default 4) on the sdk-install, custom-repo, platform-install, tv-sdk-install, emulator-package, mobile-platform and update-package runners and scripts. Downloads write to a `.tmp` file renamed after the ZIP validates, retry transient failures (robocopy merge too), time out when stalled, kill the whole curl subtree on interrupt, and print per-package progress and the total elapsed time.
+- **(skills)** `tizen-dlog-analyzer` one-shot device-log actions: `log-dump` dumps the current dlog buffer once (tail in the envelope, full dump always written to a file) and `log-clear --confirm` clears it, refusing with `user_input_required` when `--confirm` is missing. Filterspecs are screened before reaching the shell.
+- **(skills)** Standalone `tizen-sdk` launcher (`tizen-cli/bin/tizen-sdk.js`) runs the built plugin bundle without the tizen-cli host; envelopes print the command prefix the user actually typed.
+- **Codex CLI as an install target.** `tizenAiExtension.targets` gains `codex` and `all` (`both` still means Claude Code + Cline); `auto` detects `~/.codex` (or `CODEX_HOME`) and OpenAI's Codex extension. The extension writes the same layout as `setup.sh` does for Codex: the versioned runner cache under `~/.codex/plugins/cache/…`, skills into the shared `~/.agents/skills/` (a cross-tool directory that also holds your own skills — the install manifest records what was written and removal deletes only those folders), agents converted to `~/.codex/agents/*.toml` with the bundled `agent-convert.js`, the two guard scripts plus `~/.codex/hooks.json` (written only when missing or already ours), and the guard section — with the Codex cache-root, 30 s `--background` and sandbox-escalation notes — inserted into `~/.codex/AGENTS.md` between `<!-- tizen-sdk-skills:begin/end -->` markers so your own instructions survive: a begin marker with no end, or a marker that is indented or quoted in a sentence, is left as your text (nothing after it is ever deleted, and the log names the stray line), and the file keeps its own CRLF or LF line endings. **Show Install Status** validates all of it; **Remove** and `vscode:uninstall` strip exactly what was written.
+
+### Changed
+
+- **(skills)** Every device/emulator log request routes to `tizen-dlog-analyzer`; the `sdb-helper` `log-stream` / `log-save` / `log-clear` intents return a handoff envelope naming the dlog-analyzer action instead of running `sdb dlog`. Trigger phrases moved accordingly in the skill/agent descriptions, guard text and docs.
+- **(skills)** `list-templates` envelopes carry `result.tv` (profile, web and dotnet TV templates) whenever the TV SDK is installed; `tizen-create-project` shows the Samsung TV web templates next to the tizen webapp ones for a web-app request and the whole TV list for a generic app request.
+- **(skills)** The PowerShell package-install worker (download, unzip, robocopy merge, manifest) and its Start-Job driver live once in `lib/common.ps1` instead of seven copies across the installer scripts.
+- **(skills)** Values spliced into a shell command line go through one shared screen, `lib/core/shell-safety.js`, instead of ad-hoc quoting at each call site, with unit tests for it, `mask-secrets.js` and `password-file.js`.
+- **(skills)** Samsung certificates and `create-samsung-profile` profiles are documented as valid only for the TV emulator and real Samsung TVs; the certificate-manager agent confirms the target before any `generate-samsung-*` action.
+- **(skills)** `tizen-dlog-analyzer` binaries (Linux, Windows) updated to v0.1.2.dev0.
+
+### Security
+
+- **(skills)** Shell injection through model-chosen values: `--serial`, project/parent/package paths, `--zip-path` and the GDB `--binary` path are screened with `shell-safety.js` and rejected as `invalid_parameters`; `sdb-helper` `shell-command` on Windows refuses `"` and `%`.
+- **(skills)** Certificate passwords are masked in `tz cert` / `tz security-profiles` error text; `mask-secrets.js` also recognises camelCase secret suffixes; detached job output files are created 0600 and `samsung-reveal-password` refuses `--background`.
+- **(skills)** PreToolUse guard hooks no longer exempt a whole command line because its first token is `git`/`gh`; every simple command split on unquoted `&&`/`||`/`;`/`|` must be git/gh, `cd` or a bare assignment.
+
+### Fixed
+
+- **(skills)** RDS fast-deploy hardening: every device path is allowlisted and single-quoted before `rm -f` / `cat` on the device shell; TCP serials (`ip:port`) no longer break the Windows staging directory so RDS engages for Wi-Fi devices; progress lines go to stderr instead of corrupting the JSON envelope; a full install to one device no longer makes another device report a no-op `fast-deploy` over stale files; state writes are atomic; a device marker behind host state is rejected; Release/Test packages take the full path; the RDS envelope's `app_id` is the launchable app id like the full path; a cold sdb server is started before the first RDS call; pushed files get `chmod go-w`; `--reset-rds` reports `io_error` instead of claiming success.
+- **(skills)** Parallel download/extract hardening: `download_queue_parallel` no longer aborts fresh runs under `set -e`, `tizen-update-package.{sh,ps1}` record their result line again, resume runs skip already-downloaded packages before downloading, Start-Job workers enable TLS 1.2 themselves and tolerate an abandoned merge mutex, and an invalid `--download-jobs` is a usage envelope instead of a stack trace.
+- **(skills)** `tizen-install-app --run` on Samsung TV images: the app id is read from the package manifest (`app_launcher -l` is empty in a non-root TV shell) and the launch is retried with the TV launcher `0 was_execute <app-id>`; every id is checked against `[A-Za-z0-9._-]` before it reaches a device shell. `tizen-sdb-helper` `launch` gains the same fallback.
+- **(skills)** `tizen-screenshot` discarded the real 16:9 display of a Samsung TV emulator as a "control panel" when a light app background matched its grayscale-column heuristic; a match wider than half the window now skips the crop. The Python post-processing block is byte-identical in the `.sh` and `.ps1` runners and pinned by a unit test.
+- **(skills)** `create-project` / `list-templates` reported the Samsung TV SDK as not installed whenever the TV extension sat under an older `tizen-X.Y` platform than the active one; every `tv-samsung-*` profile is now verified against its own platform folder.
+- **(skills)** `tizen-certificate-manager` hands Windows users a double-quoted `C:\Users\...` path (via `cygpath -w`) instead of the MSYS `/c/Users/...` form that fails in cmd.exe / PowerShell; `emulator-manager-cli.js` accepts the plural `list-vms` / `list-platforms` / `list-templates` aliases; `https-proxy-agent` is a declared runtime dependency so Samsung online-CA calls tunnel through `HTTPS_PROXY` behind a corporate proxy.
+- **(skills)** `check-project-writes.sh` denied any write that merely co-occurred with `config.xml` on the same line; the writer now has to name the project file itself.
 
 ## [1.2.0] — 2026-09-10
 

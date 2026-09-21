@@ -40,7 +40,11 @@ function check(name, actual, expected) {
   );
 }
 
-const workDir = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-sdk-data-path-"));
+// realpath: on Windows %TEMP% may be an 8.3 short name (C:\Users\JOHNDO~1.DOE\…)
+// while `where sdb` reports the long form — compare like with like.
+const workDir = fs.realpathSync.native(
+  fs.mkdtempSync(path.join(os.tmpdir(), "tizen-sdk-data-path-")),
+);
 
 /** A fake SDK root: optional sdk.info, optional tools/sdb. */
 function makeSdk(name, { sdkInfo = null, withSdb = false } = {}) {
@@ -65,7 +69,22 @@ function resolveIn({ configured, pathDirs = [] } = {}) {
   }
   // node itself must stay reachable for the child; everything else drops off
   // PATH so `command -v sdb` / `where sdb` only ever finds our fake.
+  // On Windows the probe is `where sdb`, and `where.exe` is an external
+  // program in System32 (unlike the `command -v` shell builtin) — keep that
+  // one directory, or cmd fails with "'where' is not recognized" and the
+  // lookup reports "no sdb on PATH" for a reason unrelated to the code under
+  // test. System32 ships no sdb, so the fake is still the only match.
   const nodeDir = path.dirname(process.execPath);
+  const systemDirs =
+    process.platform === "win32"
+      ? [
+          path.join(
+            process.env.SystemRoot || process.env.SYSTEMROOT || "C:\\Windows",
+            "System32",
+          ),
+        ]
+      : [];
+  const childPath = [...pathDirs, nodeDir, ...systemDirs].join(path.delimiter);
   const r = spawnSync(
     process.execPath,
     [
@@ -78,8 +97,8 @@ function resolveIn({ configured, pathDirs = [] } = {}) {
         ...process.env,
         HOME: home,
         USERPROFILE: home,
-        PATH: [...pathDirs, nodeDir].join(path.delimiter),
-        Path: [...pathDirs, nodeDir].join(path.delimiter),
+        PATH: childPath,
+        Path: childPath,
       },
       timeout: 30000,
     },

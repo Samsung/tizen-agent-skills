@@ -140,6 +140,13 @@ Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error
 > Samsung-certificate flow), then pass the profile name:
 > `node "$CLI" build --project "<project>" --build-type Debug --sign-profile MyProfile`.
 >
+> **Pick the profile by target.** A **Samsung** signing profile (Samsung online-CA certificates)
+> is for the **TV emulator** (`tizen-create-emulator --profile tv`) and real Samsung TVs only; a
+> package built with it does not install on a standard Tizen emulator (`--profile tizen`). For a
+> standard emulator use a **local** profile (generate-author → create-profile) or the default
+> certificates. If the user asks to build with a Samsung profile for a standard emulator, say so
+> and use a local profile instead.
+>
 > **Standalone RPK projects have no default-certificate fallback.** They are packaged by the
 > legacy `tizen package -t rpk`, so a missing profile is still rejected with
 > `signing_profile_invalid` before packaging — create and activate a profile first.

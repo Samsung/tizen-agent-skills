@@ -4,7 +4,7 @@ id: tizen-sdk.build-project.missing-required
 plugin: tizen-sdk
 command: build-project
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "build-project fails with invalid_argument when --project is missing"
 

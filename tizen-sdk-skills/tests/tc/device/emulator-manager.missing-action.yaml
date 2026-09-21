@@ -3,7 +3,7 @@ id: tizen-sdk.emulator-manager.missing-action
 plugin: tizen-sdk
 command: emulator-manager
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager without --action defaults to create, which then fails on the missing vmName"
 

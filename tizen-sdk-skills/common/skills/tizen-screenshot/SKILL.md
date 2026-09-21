@@ -36,7 +36,8 @@ Out of scope:
 
 **✅ ALWAYS call `captureScreenshot()` via the shipped CLI runner — NEVER hand-construct `sdb` commands, resolve the SDK/sdb path yourself, or write ad hoc inline PowerShell/Bash to do what the runner already does.** The runner internally handles sdb discovery, device-serial resolution, emulator-vs-device fallback ordering, and dispatches to the platform script (`.ps1` on Windows, `.sh` on Linux/macOS/Ubuntu) — reimplementing any of that by hand is how fragile one-liners and shell-quoting bugs creep in.
 
-**Windows (Cline — cmd.exe):**
+**Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
+
 ```
 cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*screenshot-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*screenshot-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*screenshot-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*screenshot-cli.js"
 ```
@@ -48,12 +49,19 @@ $h = ".cline"; if ($env:CODEX_THREAD_ID -or $env:CODEX_SANDBOX_NETWORK_DISABLED 
 $CLI = $null; foreach ($d in @($h, ".claude", ".cline", ".codex", ".gemini")) { $CLI = Get-ChildItem "$env:USERPROFILE\$d\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\screenshot-cli.js" -ErrorAction SilentlyContinue | Sort-Object { [version]$_.Directory.Parent.Parent.Name } | Select-Object -Last 1 -ExpandProperty FullName; if ($CLI) { break } }
 node "$CLI" [serial] [output_path]
 ```
+
 Pick the highest-version path (the PowerShell form above already resolved `$CLI`), then:
+
 ```
 node "<found-path>" [serial] [output_path]
 ```
 
-**Linux / macOS / Ubuntu (Bash):**
+> Do not wrap the PowerShell block in `powershell -Command "..."` from Git Bash: bash expands
+> `$CLI`, `$d` and `$env:USERPROFILE` inside the double quotes before PowerShell sees them, and
+> the parser fails on ` = ; foreach ( in @(...))`. Git Bash runs the Bash block below directly.
+
+**Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**
+
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/screenshot-cli.js 2>/dev/null | sort -V | tail -1) || true
@@ -62,12 +70,14 @@ node "$CLI" [serial] [output_path]
 ```
 
 **Arguments (both optional):**
+
 1. `serial` — sdb device serial. Omit to auto-detect (errors if 0 or 2+ devices are connected; the envelope lists them).
 2. `output_path` — where to save the PNG. Defaults to `./emulator_screenshot.png`.
 
 Exit code: `0` = success envelope, non-zero = failure/error envelope (JSON on stdout either way).
 
 **IMPORTANT:** On a failure/error envelope, relay it and STOP. Do not run manual diagnostics (`sdb devices`, hand-rolled PowerShell probing `.tizen.sdk.path.config`, etc.) — the runner already performed device discovery and sdb resolution and the envelope carries the facts (`errors[0].message`, suggested fixes). Common failure causes surfaced this way:
+
 - 0 devices connected → direct the user to `tizen-create-emulator` (create a VM) and `tizen-launch-emulator` (launch it).
 - 2+ devices connected → the envelope lists them; re-run with the `serial` argument.
 - `offline` / `locked` device → the user must fix developer mode, accept the on-device RSA key prompt, or replace the cable.

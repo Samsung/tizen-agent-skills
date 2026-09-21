@@ -3,7 +3,7 @@ id: tizen-sdk.sdk-init.invalid-path
 plugin: tizen-sdk
 command: sdk-init
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-init fails when path does not exist"
 

@@ -4,7 +4,7 @@ id: tizen-sdk.create-project.invalid-type
 plugin: tizen-sdk
 command: create-project
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "create-project fails with invalid_argument when --type is not a valid choice"
 

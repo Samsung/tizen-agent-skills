@@ -12,11 +12,11 @@
  */
 
 const { installTvSdk } = require("../core/sdk-commands");
-const { runCli } = require("./cli-runner");
+const { runCli, getDownloadJobsOrExit } = require("./cli-runner");
 
+const COMMAND = "tizen-sdk tv-sdk-install";
 const args = process.argv.slice(2);
 const force = args.includes("--force") || args.includes("-Force");
+const downloadJobs = getDownloadJobsOrExit(COMMAND, args);
 
-runCli("tizen-sdk tv-sdk-install", () =>
-  installTvSdk(force, "tizen-sdk tv-sdk-install"),
-);
+runCli(COMMAND, () => installTvSdk(force, COMMAND, downloadJobs));

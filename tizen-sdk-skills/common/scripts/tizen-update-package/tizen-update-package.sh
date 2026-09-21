@@ -42,6 +42,7 @@ esac
 # Defaults (get_sdk_path: TIZEN_SDK_PATH -> ~/.tizen.sdk.path.config -> ~/tizen-sdk)
 SDK_PATH="$(get_sdk_path)"
 FORCE=false
+DOWNLOAD_JOBS=4
 DRY_RUN=false
 
 # Parse arguments
@@ -50,6 +51,8 @@ while [[ $# -gt 0 ]]; do
         --sdk-path=*) SDK_PATH="${1#*=}"; shift ;;
         --sdk-path)   SDK_PATH="$2"; shift 2 ;;
         --force)      FORCE=true; shift ;;
+        --download-jobs) DOWNLOAD_JOBS="${2:-}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift 2 ;;
+        --download-jobs=*) DOWNLOAD_JOBS="${1#*=}"; validate_download_jobs "$DOWNLOAD_JOBS" || exit 2; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         --help|-h)
             cat <<EOF
@@ -76,6 +79,9 @@ EOF
         *) echo "[ERROR] Unknown option: $1"; exit 1 ;;
     esac
 done
+
+# Wall-clock timer for the whole run, printed at every real exit point below.
+SCRIPT_START=$SECONDS
 
 echo "[INFO] Tizen SDK package updater started"
 echo "[INFO] SDK path: $SDK_PATH"
@@ -320,6 +326,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "[OK] Update result: $RESULT_LINE"
     write_result_marker 0 "$RESULT_LINE"
     rm -rf "$WORKDIR"
+    echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 0
 fi
 
@@ -328,6 +335,20 @@ fi
 # -----------------------------------------------------------------------------
 IDX=0; OK=0; SKIP=0; FAIL=0
 TOTAL=$OUTDATED_COUNT
+
+DOWNLOAD_QUEUE="$WORKDIR/download.queue"
+DOWNLOAD_RESULTS="$WORKDIR/downloads"
+: > "$DOWNLOAD_QUEUE"
+for ((i=0; i<OUTDATED_COUNT; i++)); do
+    REL_PATH="${OUTDATED_PATHS[$i]}"
+    [ -n "$REL_PATH" ] || continue
+    printf '%s\t%s\t%s\n' "${OUTDATED_NAMES[$i]}" "${PKG_REPO}${REL_PATH}" "$WORKDIR/$(basename "$REL_PATH")" >> "$DOWNLOAD_QUEUE"
+done
+echo "[INFO] Downloading packages with $DOWNLOAD_JOBS parallel workers..."
+DOWNLOAD_START=$SECONDS
+download_queue_parallel "$DOWNLOAD_QUEUE" "$DOWNLOAD_JOBS" "$DOWNLOAD_RESULTS"
+echo "[INFO] Download phase took $(format_duration $((SECONDS - DOWNLOAD_START)))"
+EXTRACT_START=$SECONDS
 
 # Remove the per-package zip and staging directory (after success or failure).
 cleanup_pkg_stage() {
@@ -350,8 +371,8 @@ for ((i=0; i<OUTDATED_COUNT; i++)); do
 
     URL="${PKG_REPO}${REL_PATH}"
     ZIP="${WORKDIR}/$(basename "$REL_PATH")"
-    echo "[INFO] [$IDX/$TOTAL] Downloading $PKG ($INST_VER -> $AVAIL_VER) ..."
-    if ! curl -fsSL -o "$ZIP" "$URL"; then
+    echo "[INFO] [$IDX/$TOTAL] Processing downloaded $PKG ($INST_VER -> $AVAIL_VER) ..."
+    if [[ "$(download_queue_status "$PKG" "$DOWNLOAD_RESULTS")" != "OK" ]]; then
         echo "[ERROR] [$IDX/$TOTAL] Download failed: $URL"
         FAIL=$((FAIL+1))
         continue
@@ -397,6 +418,9 @@ for ((i=0; i<OUTDATED_COUNT; i++)); do
     echo "[OK] [$IDX/$TOTAL] $PKG updated: $INST_VER -> $AVAIL_VER"
 done
 
+echo "[INFO] Extraction phase took $(format_duration $((SECONDS - EXTRACT_START)))"
+# RESULT_LINE is also what write_result_marker records; sdk.js parses it back
+# out of the marker, so it must carry the full "updated N / ..." summary.
 RESULT_LINE="updated $OK / skipped $SKIP / failed $FAIL / up-to-date $UP_TO_DATE (total $MANIFEST_COUNT)"
 echo "[OK] Update result: $RESULT_LINE"
 
@@ -404,10 +428,12 @@ if [[ $FAIL -gt 0 ]]; then
     echo "[ERROR] Some packages failed to update."
     write_result_marker 1 "$RESULT_LINE"
     rm -rf "$WORKDIR"
+    echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 1
 fi
 
 write_result_marker 0 "$RESULT_LINE"
 rm -rf "$WORKDIR"
 echo "[OK] Tizen SDK package update completed!"
+echo "[INFO] Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
 exit 0

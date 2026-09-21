@@ -1,6 +1,7 @@
 usage/
 common/scripts/tizen-create-project/templates/
 common/tools/
+common/lib/vendor/
 vscode/assets/
 # Build outputs (esbuild); CI checks a clean checkout, local runs should match
 tizen-cli/dist/

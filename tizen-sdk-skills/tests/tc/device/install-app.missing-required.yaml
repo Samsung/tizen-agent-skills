@@ -4,7 +4,7 @@ id: tizen-sdk.install-app.missing-required
 plugin: tizen-sdk
 command: install-app
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "install-app fails with invalid_argument when --package is missing"
 

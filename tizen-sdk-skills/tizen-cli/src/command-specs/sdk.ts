@@ -8,6 +8,12 @@
 
 import { CommandSpec, sdkCommands } from "./types";
 
+const DOWNLOAD_JOBS_OPTION = {
+  flags: "--download-jobs <count>",
+  description: "Number of concurrent download jobs (1-8)",
+  default: "4",
+};
+
 export const SDK_SPECS: CommandSpec[] = [
   {
     name: "sdk-init",
@@ -34,8 +40,8 @@ export const SDK_SPECS: CommandSpec[] = [
     options: [
       {
         flags: "--tizen-version <version>",
-        description: "Tizen platform version to install",
-        default: "10.0",
+        description:
+          "Tizen platform version to install (X.Y, e.g. 10.0, 11.0). Omit to install the newest version the repository offers. Fails when the version is malformed or not available.",
       },
       {
         flags: "--label <label>",
@@ -52,6 +58,7 @@ export const SDK_SPECS: CommandSpec[] = [
         description:
           "Install from a custom package repository URL instead of the timezone-selected CDN mirror (equivalent to sdk-install-custom-repo; the URL must serve pkg_list_{OS}-{64,32})",
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.installSdk(
@@ -60,6 +67,7 @@ export const SDK_SPECS: CommandSpec[] = [
         !!o.force,
         o.repoUrl || "",
         "tizen-sdk sdk-install",
+        o.downloadJobs,
       ),
   },
   {
@@ -88,12 +96,14 @@ export const SDK_SPECS: CommandSpec[] = [
           "Force reinstall even if already installed (required to re-point an existing install at a different repository)",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.installSdkFromRepo(
         o.repoUrl,
         o.platformVersion || "",
         !!o.force,
+        o.downloadJobs,
       ),
   },
   {
@@ -124,9 +134,14 @@ export const SDK_SPECS: CommandSpec[] = [
         description: "Force reinstall even if already installed",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
-      sdkCommands.installTvSdk(!!o.force, "tizen-sdk tv-sdk-install"),
+      sdkCommands.installTvSdk(
+        !!o.force,
+        "tizen-sdk tv-sdk-install",
+        o.downloadJobs,
+      ),
   },
   {
     name: "tv-sdk-install-from-zip",
@@ -173,12 +188,14 @@ export const SDK_SPECS: CommandSpec[] = [
         description: "List outdated packages without updating",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.updatePackage(
         !!o.force,
         !!o.dryRun,
         "tizen-sdk update-package",
+        o.downloadJobs,
       ),
   },
   {
@@ -205,12 +222,14 @@ export const SDK_SPECS: CommandSpec[] = [
         description: "Force reinstall even if already installed",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.downloadEmulatorPackage(
         o.platformVersion || "",
         !!o.force,
         "tizen-sdk download-emulator-package",
+        o.downloadJobs,
       ),
   },
 
@@ -224,7 +243,7 @@ export const SDK_SPECS: CommandSpec[] = [
       {
         flags: "--platform-version <version>",
         description:
-          "Tizen platform version (e.g., 10.0, 11.0). Required — the TIZEN-{version} package to install.",
+          "Tizen platform version, X.Y (e.g., 10.0, 11.0). Required — the TIZEN-{version} package to install. Any other shape fails with invalid_argument.",
         required: true,
         missingHint: "Tizen platform version, e.g. 10.0, 11.0",
       },
@@ -233,12 +252,14 @@ export const SDK_SPECS: CommandSpec[] = [
         description: "Force reinstall even if already installed",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.installPlatform(
         o.platformVersion,
         !!o.force,
         "tizen-sdk platform-install",
+        o.downloadJobs,
       ),
   },
   {
@@ -269,6 +290,7 @@ export const SDK_SPECS: CommandSpec[] = [
         description: "Force reinstall even if already installed",
         default: false,
       },
+      DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
       sdkCommands.downloadMobilePlatform(
@@ -277,6 +299,7 @@ export const SDK_SPECS: CommandSpec[] = [
         o.iotHeadedVersion || "",
         !!o.force,
         "tizen-sdk download-mobile-platform",
+        o.downloadJobs,
       ),
   },
   {

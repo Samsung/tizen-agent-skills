@@ -3,7 +3,7 @@ id: tizen-sdk.sdk-init.explicit-path
 plugin: tizen-sdk
 command: sdk-init
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-init with explicit --path returns success"
 

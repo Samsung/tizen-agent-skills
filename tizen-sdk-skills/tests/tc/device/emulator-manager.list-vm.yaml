@@ -3,9 +3,9 @@ id: tizen-sdk.emulator-manager.list-vm
 plugin: tizen-sdk
 command: emulator-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
-description: "emulator-manager --action list-vm returns success with emulators array"
+description: "emulator-manager --action list-vm returns success with the vms array"
 
 lanes:
   cli:
@@ -14,4 +14,6 @@ lanes:
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.emulators", min_length: 0 }
+        # Result key is `vms` (+ `count`, `vm_details`) per tizen-create-emulator
+        # SKILL.md, not `emulators` — fixed 2026-09-17 after a real run.
+        - { path: "$.result.vms", min_length: 0 }

@@ -62,6 +62,9 @@ node "$CLI" install --package "<ABSOLUTE_PACKAGE_PATH>" --device-serial emulator
 # Install and launch the app:
 node "$CLI" install --package "<ABSOLUTE_PACKAGE_PATH>" --run
 
+# Clear stale or corrupt host-side RDS state without installing:
+node "$CLI" install --package "<ABSOLUTE_PACKAGE_PATH>" --reset-rds
+
 # RPK: install only. RPK is resource-only and MUST NOT be launched:
 node "$CLI" install --package "<ABSOLUTE_RPK_PATH>"
 
@@ -69,21 +72,53 @@ node "$CLI" install --package "<ABSOLUTE_RPK_PATH>"
 #   --device-serial (optional) - device serial; omit to auto-select the single connected device
 #   --run (optional) - flag to launch an executable app after install; valid for .tpk/.wgt/.rpm,
 #                      invalid for .rpk. OMIT entirely for install-only — do NOT pass "false" or "no"
+#   --reset-rds (optional) - clear host-side .tizen-rds state for the package's project and return
+#                           without installing. The package path is used only to locate the project;
+#                           it cannot be combined with --run.
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
 Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout).
 
+### RDS fast-deploy recovery
+
+RDS is enabled by default. Set `TIZEN_RDS_ENABLED=0` for a normal build or
+install to skip RDS manifest scanning and delta deployment while preserving the
+existing full-install behavior:
+
+```bash
+TIZEN_RDS_ENABLED=0 node "$CLI" install --package "<ABSOLUTE_PACKAGE_PATH>"
+```
+
+Use `--reset-rds` when host-side RDS state is stale or corrupt:
+
+```bash
+node "$CLI" install --package "<ABSOLUTE_PACKAGE_PATH>" --reset-rds
+```
+
+This command does not access a device or install the package. It uses the
+package path to locate its Tizen project, removes the whole host-side
+`.tizen-rds/` directory, and returns `result.rds_state: "reset"`. If the
+directory cannot be removed (e.g. a file is locked by another process) the
+command returns an `io_error` instead of claiming success. The package file
+may be missing, but its path must end in `.tpk`, `.wgt`, `.rpk`, or `.rpm`.
+Afterward, run the normal install again; it will perform a full install and
+recreate the baseline. Do not combine `--reset-rds` with `--run`.
+
 ### What installApp() handles internally:
 
-1. ✅ **Parameter validation** — package exists, .tpk/.wgt/.rpk/.rpm extension, safe serial; rejects `--run` for `.rpk`
+1. ✅ **Parameter validation** — normal installs require an existing .tpk/.wgt/.rpk/.rpm package and safe serial; reset mode resolves the project from the package path (the file may be missing), and rejects `--run` for `.rpk` or `--reset-rds`
 
 2. ✅ **OS detection** — Windows/Linux/macOS automatically
 3. ✅ **Tool location** — finds `tz` and `sdb` in the Tizen SDK
 4. ✅ **Push + install** — `sdb push` then `tz install -e <serial> -p <pkg>`
 5. ✅ **Verification** — lists installed packages after install
-6. ✅ **Optional launch** — `app_launcher -s <app-id>` when `run` is passed, then a
+6. ✅ **Optional launch** — the app id is read from the package manifest (`.wgt`
+   `config.xml` `<tizen:application id>`, `.tpk` `tizen-manifest.xml` `appid`), with
+   `app_launcher -l` only as a fallback; the launch is `app_launcher -s <app-id>` when
+   `run` is passed, retried with the Samsung TV launcher `0 was_execute <app-id>` when
+   `app_launcher` prints nothing (TV images silence it for a non-root shell), then a
    best-effort `app_launcher -S` running-list check: `app_launched` only means
    launchpad ACCEPTED the launch; `app_running` means the app was still alive
    seconds later (`null` = not verifiable on this profile / install-only).
@@ -106,7 +141,8 @@ Success (`exit 0`):
     "app_id": "org.example.myapp",
     "installation_status": "completed",
     "app_launched": true,
-    "app_running": true
+    "app_running": true,
+    "deploy_type": "full"
   }
 }
 ```
@@ -114,8 +150,20 @@ Success (`exit 0`):
 (`app_id` is populated when a `.tpk`/`.wgt` app was launched and is always `null` for
 `.rpm` — platform apps are not registered with `app_launcher`. `app_launched` is `false`
 for install-only runs. `app_running` is `null` when the check could not verify either
-way — install-only, or a profile where `app_launcher -S` is unusable; for `.rpm` it is
-always a real `true`/`false` from the `pgrep` poll.)
+way — install-only, a profile where `app_launcher -S` is unusable, or any RDS deploy;
+for `.rpm` it is always a real `true`/`false` from the `pgrep` poll.)
+
+`deploy_type` says how the package reached the device:
+
+| `deploy_type` | Meaning |
+|---------------|---------|
+| `"full"` | Regular `tz install` of the package (also the first install of any project). |
+| `"rds"` | Only the changed build-output files were pushed into the installed app's directory, then the app was relaunched. Requires a previous full install of the same project's **Debug** output to the same device. |
+| `"fast-deploy"` | Nothing changed since the last deploy; only the relaunch happened. |
+
+RDS/fast-deploy never happens for `.rpk`/`.rpm`, for a package outside the project's `Debug/`
+output tree, or when `tizen-manifest.xml`/`config.xml` changed (those need the package
+manager, so a full install runs). Set `TIZEN_RDS_ENABLED=0` to force `"full"` always.
 
 Failure (`exit 1`) is a failure/error envelope. The important case is
 `error_category: "device_not_found"` — **no device is connected**. Then:

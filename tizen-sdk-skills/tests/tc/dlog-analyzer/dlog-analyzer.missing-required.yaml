@@ -1,10 +1,10 @@
 # Required-omission: --action is required.
-# Source: command-specs/dlog-analyzer.ts — --action required, choices: start|stop|check|status|app-launch|app-terminate|dlog-collect|stop-collect|error-analyze
+# Source: command-specs/dlog-analyzer.ts — --action required, choices: start|stop|check|status|app-launch|app-terminate|dlog-collect|stop-collect|error-analyze|log-dump|log-clear
 id: tizen-sdk.dlog-analyzer.missing-required
 plugin: tizen-sdk
 command: dlog-analyzer
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "dlog-analyzer fails with invalid_argument when --action is missing"
 

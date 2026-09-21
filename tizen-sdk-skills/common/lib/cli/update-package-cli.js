@@ -12,12 +12,12 @@
  */
 
 const { updatePackage } = require("../core/sdk-commands");
-const { runCli } = require("./cli-runner");
+const { runCli, getDownloadJobsOrExit } = require("./cli-runner");
 
+const COMMAND = "tizen-sdk update-package";
 const args = process.argv.slice(2);
 const force = args.includes("--force") || args.includes("-Force");
 const dryRun = args.includes("--dry-run") || args.includes("-DryRun");
+const downloadJobs = getDownloadJobsOrExit(COMMAND, args);
 
-runCli("tizen-sdk update-package", () =>
-  updatePackage(force, dryRun, "tizen-sdk update-package"),
-);
+runCli(COMMAND, () => updatePackage(force, dryRun, COMMAND, downloadJobs));

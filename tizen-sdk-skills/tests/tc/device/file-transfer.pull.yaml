@@ -9,6 +9,8 @@ description: "file-transfer --direction pull returns success with bytes_transfer
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture directory /tmp/logs/ (and /tmp/log.txt on the device for pull).
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "file-transfer", "--direction", "pull", "--remote", "/tmp/log.txt", "--local", "/tmp/logs/"]
     timeout_sec: 60
     expect:

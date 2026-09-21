@@ -3,7 +3,7 @@ name: tizen-create-project
 description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. DELETING a Tizen project directory is also THIS skill (its project-delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this command, which scaffolds from real SDK templates. Use this skill to create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — from the installed SDK templates, and to delete an existing project directory when the user asks to remove or clean one up.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-18"
   keywords:
     - Tizen project
     - create tizen project
@@ -49,6 +49,21 @@ longer than 4 behind a `더 보기…` follow-up question.
 1. Tizen SDK installed (`tizen-cli tizen-sdk sdk-install` succeeds).
 2. Discover real template names first: `tizen-cli tizen-sdk list-templates --type <type>`.
 3. For `dotnet` projects, run `tizen-cli tizen-sdk dotnet-setup` first.
+
+**Samsung TV templates come along.** The `list-templates` envelope carries `result.tv`
+(`{ profile, web: [...], dotnet: [...] }`) **only when the TV SDK extension is installed** —
+on typed calls such as `--type webapp` too. That field is the only way to tell whether the
+TV SDK is installed; never probe the SDK folders yourself.
+
+- Web-app request ("웹앱 만들어줘", "create a webapp"): run `list-templates --type webapp` and
+  show `result.templates.webapp` **plus** `result.tv.web` (heading: "Samsung TV 웹앱 템플릿
+  (`result.tv.profile`)") when present. A TV pick is created with `--type tv`, never `--type webapp`.
+- Generic request ("타이젠 앱 만들어줘", type not given): run `list-templates` (no `--type`)
+  before asking the type and show every group of `result.templates` — including
+  `platform` ("Platform 앱", GBS samples such as `dali-demo`, created with `--type platform`) —
+  plus the TV list (`result.tv.web` / `result.tv.dotnet`) when present; mention in the type
+  question that the TV SDK is installed.
+- No `result.tv` → TV SDK not installed → do not list TV templates.
 
 ## Command
 

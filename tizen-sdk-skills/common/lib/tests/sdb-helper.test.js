@@ -6,9 +6,11 @@
  *
  * Covers the pure (no-device) parts of the sdb-helper domain:
  *   - matchIntent: intent classification order (specific patterns must win
- *     over catch-alls like /\bshell\b/ and /\bforward\b/)
+ *     over catch-alls like /\bshell\b/, /\bforward\b/ and the log catch-all),
+ *     and the handoff contract — every log intent hands off to
+ *     tizen-dlog-analyzer with a hint naming the action to run
  *   - parseDevices: `sdb devices` output parsing (incl. 3-column output)
- *   - buildCommand: screenshot fallback chain contract
+ *   - buildCommand: screenshot fallback chain contract; no builder for log intents
  */
 
 const {
@@ -95,6 +97,68 @@ check(
   screenshotIntent.handoff,
   "tizen-screenshot",
 );
+
+// Every log intent (view/save/clear alike) hands off to tizen-dlog-analyzer —
+// sdb-helper never runs `sdb dlog` itself.
+for (const req of [
+  "tail the logs",
+  "show dlog",
+  "log",
+  "save logs",
+  "clear logs",
+]) {
+  const m = matchIntent(req);
+  check(
+    `  "${req}" hands off to tizen-dlog-analyzer`,
+    m.handoff,
+    "tizen-dlog-analyzer",
+  );
+  check(`  "${req}" carries a handoff hint`, typeof m.handoffHint, "string");
+}
+check(
+  "  log-clear keeps its gated flag",
+  matchIntent("clear logs").gated,
+  true,
+);
+check(
+  "  log-clear hint names the --confirm re-run",
+  matchIntent("clear logs").handoffHint.includes("--confirm"),
+  true,
+);
+check(
+  "  log-stream hint names log-dump",
+  matchIntent("tail the logs").handoffHint.includes("log-dump"),
+  true,
+);
+// An explicit shell request that merely mentions a log path / `tail` is still
+// a shell command — the log catch-all sits after the shell block.
+check(
+  "  shell request with a log path stays shell-command",
+  matchIntent("run shell command tail -n 20 /var/log/messages").id,
+  "shell-command",
+);
+check(
+  "  whoami is not stolen by the log catch-all",
+  matchIntent("whoami and show me the log").id,
+  "whoami",
+);
+// Non-handoff intents carry no hint key at all (envelope stays unchanged for them)
+check(
+  "  non-handoff intent has no handoffHint",
+  Object.prototype.hasOwnProperty.call(
+    matchIntent("reboot the device"),
+    "handoffHint",
+  ),
+  false,
+);
+// Log intents have no sdb builder any more — the handoff short-circuits first
+for (const id of ["log-stream", "log-save", "log-clear"]) {
+  check(
+    `  buildCommand(${id}) has no sdb command`,
+    buildCommand(id, "S", "tail the logs").command,
+    "",
+  );
+}
 
 check("  unmatched request returns null", matchIntent("qwertyuiop"), null);
 
@@ -240,6 +304,98 @@ for (const [intentId, request, expected] of substitutionCases) {
     `  ${intentId}: "${request}"`,
     buildCommand(intentId, "S", request).command,
     expected,
+  );
+}
+
+// Samsung TV images print nothing for `app_launcher -s` in a non-root shell, so
+// the launch intent must carry the TV launcher as a fallback and accept only an
+// output that actually confirms the launch (sdb exits 0 either way).
+console.log("\nTest 6b: launch falls back to the Samsung TV launcher");
+{
+  const launch = buildCommand("launch", "S", "launch app org.tizen.dali-demo");
+  check(
+    "  launch: TV fallback is 0 was_execute",
+    (launch.fallbacks || [])[0],
+    '-s "S" shell 0 was_execute "org.tizen.dali-demo"',
+  );
+  check(
+    "  launch: accepts app_launcher confirmation",
+    launch.accept("... successfully launched pid = 4242 with debug 0"),
+    true,
+  );
+  check(
+    "  launch: accepts was_execute confirmation",
+    launch.accept(
+      "launch app org.tizen.dali-demo\napp_id[org.tizen.dali-demo] launched",
+    ),
+    true,
+  );
+  check(
+    "  launch: accepts was_execute 'resumed' (app already running)",
+    launch.accept("app_id[org.tizen.dali-demo] resumed"),
+    true,
+  );
+  check("  launch: rejects silent output", launch.accept(""), false);
+  check(
+    "  launch: rejects 'launch start' without 'launched'",
+    launch.accept("app_id[org.tizen.dali-demo] launch start"),
+    false,
+  );
+  check(
+    "  launch: rejects 'launch failed'",
+    launch.accept("app_id[org.tizen.dali-demo] launch failed"),
+    false,
+  );
+  check(
+    "  launch: rejects a 'launched' line for a different app id",
+    launch.accept("app_id[org.other.app] launched"),
+    false,
+  );
+  check(
+    "  launch: app id dots are literal in the confirmation match",
+    launch.accept("app_id[orgXtizenXdali-demo] launched"),
+    false,
+  );
+}
+
+// runWithFallbacks: callers that pass no accept predicate (screenshot chain)
+// keep the exit-code-only behaviour; with a predicate, a rejected output moves
+// on to the next fallback and a rejection of every attempt is a failure.
+// `node -e` stands in for sdb so the test runs on every host.
+console.log("\nTest 6c: runWithFallbacks accept predicate");
+{
+  const { runWithFallbacks } = require("../core/sdb-helper");
+  const node = process.execPath;
+
+  const silent = runWithFallbacks(node, '-e "process.exit(0)"', [
+    '-e "process.exit(1)"',
+  ]);
+  check(
+    "  silent exit-0 output is accepted when no predicate is given",
+    silent.succeeded && silent.triedCommands.length === 1,
+    true,
+  );
+
+  const moved = runWithFallbacks(
+    node,
+    '-e "console.log(1)"',
+    ['-e "console.log(2)"'],
+    (out) => out.includes("2"),
+  );
+  check(
+    "  rejected primary output moves on to the fallback",
+    moved.succeeded &&
+      moved.output.trim() === "2" &&
+      moved.triedCommands.length === 2,
+    true,
+  );
+
+  const none = runWithFallbacks(node, '-e "console.log(1)"', [], () => false);
+  check(
+    "  rejecting every attempt reports a failure naming the output",
+    none.succeeded === false &&
+      /did not confirm success: 1/.test(none.lastError.message),
+    true,
   );
 }
 

@@ -113,26 +113,81 @@ declare -A TYPE_YAML_TOKEN=(
     [native]="native_app"
 )
 
-# Detect the latest tv-samsung-* profile installed in the SDK.
-# TV profiles are registered in templates.yaml, not as platform directories.
-# We parse `tz list templates` output to find the highest tv-samsung-* version.
-# Returns the profile name (e.g. "tv-samsung-9.0") or fails if not found.
+# Detect the newest tv-samsung-* profile whose TV SDK extension is actually
+# installed. `tz list templates` lists tv-samsung-* sections from templates.yaml
+# metadata even when the TV extension package is absent (phantom templates), so
+# every candidate is verified against the SDK tree, newest first. The extension
+# lives under platforms/tizen-<ver>/tv-samsung (Tizen Studio layout) or
+# platforms/tv-samsung-<ver> — NOT necessarily under the tizen-X.Y profile used
+# for non-TV projects: an SDK whose newest platform is tizen-11.0 with the TV
+# extension installed on tizen-10.0 used to be reported as "TV SDK not installed"
+# and its TV templates were hidden.
+# Prints the profile name (e.g. "tv-samsung-10.0"); fails when none is installed.
 detect_tv_profile() {
-    local tz_output result
+    local tz_output candidates p ver
     tz_output="$("$TZ_TOOL" list templates 2>/dev/null)" || return 1
-    result=$(echo "$tz_output" | awk '/^tv-samsung-/ { sub(/:[[:space:]]*$/,""); print }' | sort -V | tail -1)
-    if [ -z "$result" ]; then
-        return 1
+    candidates=$(echo "$tz_output" | awk '/^tv-samsung-/ { sub(/:[[:space:]]*$/,""); print }' | sort -rV)
+    [ -n "$candidates" ] || return 1
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        ver="${p#tv-samsung-}"
+        if [ -d "${TIZEN_STUDIO_PATH}/platforms/tizen-${ver}/tv-samsung" ] || \
+           [ -d "${TIZEN_STUDIO_PATH}/platforms/${p}" ]; then
+            echo "$p"
+            return 0
+        fi
+    done <<< "$candidates"
+    # Legacy check: the TV extension sits under the active tizen profile.
+    if [ -d "${TIZEN_STUDIO_PATH}/platforms/${TZ_PROFILE}/tv-samsung" ]; then
+        echo "$candidates" | head -1
+        return 0
     fi
-    # Verify the TV SDK extension is actually installed by checking the platform
-    # directory exists. `tz list templates` may list tv-samsung-* profiles from
-    # templates.yaml metadata even when the TV SDK extension package is not
-    # installed, causing phantom TV templates to appear.
-    local tv_platform_dir="${TIZEN_STUDIO_PATH}/platforms/${TZ_PROFILE}/tv-samsung"
-    if [ ! -d "$tv_platform_dir" ]; then
-        return 1
-    fi
-    echo "$result"
+    return 1
+}
+
+# Filter one `tz list templates` output (stdin) down to the template names of
+# the TV profile $1. $2 restricts to one tz token — web_app | dotnet_app — or
+# '' for both. Names are taken whole (up to the " [token]" suffix), so a TV
+# template such as "jQuery Mobile_NavigationView" keeps its space.
+filter_tv_templates() {
+    awk -v profile="$1" -v kind="${2:-}" '
+        /^[^[:space:]].+:[[:space:]]*$/ { p=$0; sub(/:[[:space:]]*$/,"",p); cur=(p==profile); next }
+        cur && /^[[:space:]]+[^[:space:]]/ {
+            if (match($0, /\[[a-z_]+\]/)) {
+                token = substr($0, RSTART+1, RLENGTH-2)
+                if (token != "web_app" && token != "dotnet_app") next
+                if (kind != "" && token != kind) next
+                name = $0
+                sub(/^[[:space:]]+/, "", name)
+                sub(/[[:space:]]*\[[a-z_]+\][[:space:]]*$/, "", name)
+                print name
+            }
+        }
+    ' | sort -u
+}
+
+# Set by collect_tv_info() (list mode, called from main — not a subshell): the
+# installed TV profile ('' when the TV SDK extension is absent) and one cached
+# `tz list templates` output to filter, so list mode does not re-run tz per kind.
+TV_PROFILE_DETECTED=""
+TV_LIST_OUTPUT=""
+
+collect_tv_info() {
+    TV_PROFILE_DETECTED="$(detect_tv_profile)" || TV_PROFILE_DETECTED=""
+    [ -n "$TV_PROFILE_DETECTED" ] || return 0
+    TV_LIST_OUTPUT="$("$TZ_TOOL" list templates 2>/dev/null)" || TV_LIST_OUTPUT=""
+}
+
+# Machine lines for the Node runner (list mode only): the installed TV SDK
+# profile and its web / dotnet template names (comma-separated), so the runner
+# can offer the Samsung TV *web* templates next to the plain webapp ones and the
+# agent never has to guess whether the TV SDK is installed. Prints nothing when
+# it is not.
+print_tv_info() {
+    [ -n "$TV_PROFILE_DETECTED" ] || return 0
+    echo "TV_PROFILE=$TV_PROFILE_DETECTED"
+    echo "TV_WEB=$(filter_tv_templates "$TV_PROFILE_DETECTED" web_app <<< "$TV_LIST_OUTPUT" | paste -sd, -)"
+    echo "TV_DOTNET=$(filter_tv_templates "$TV_PROFILE_DETECTED" dotnet_app <<< "$TV_LIST_OUTPUT" | paste -sd, -)"
 }
 
 
@@ -306,15 +361,7 @@ get_tv_templates() {
     fi
 
     # List all templates (both web_app and dotnet_app) under the tv-samsung-* profile
-    echo "$tz_output" | awk -v profile="$tv_profile" '
-        /^[^[:space:]].+:[[:space:]]*$/ { p=$0; sub(/:[[:space:]]*$/,"",p); cur=(p==profile); next }
-        cur && /^[[:space:]]+[^[:space:]]/ {
-            if (match($0, /\[[a-z_]+\]/)) {
-                token = substr($0, RSTART+1, RLENGTH-2)
-                if (token=="web_app" || token=="dotnet_app") print $1
-            }
-        }
-    ' | sort -u
+    filter_tv_templates "$tv_profile" "" <<< "$tz_output"
 }
 
 get_templates_for_type() {
@@ -543,11 +590,7 @@ create_tizen_project() {
             }
             tv_tz_output="$("$TZ_TOOL" list templates 2>&1)"
             # Check if template appears as [dotnet_app] under the tv profile
-            if echo "$tv_tz_output" | awk -v profile="$tv_profile" -v tmpl="$template" '
-                /^[^[:space:]].+:[[:space:]]*$/ { p=$0; sub(/:[[:space:]]*$/,"",p); cur=(p==profile); next }
-                cur && $1==tmpl && /\[dotnet_app\]/ { found=1 }
-                END { exit !found }
-            '; then
+            if filter_tv_templates "$tv_profile" dotnet_app <<< "$tv_tz_output" | grep -qxF -- "$template"; then
                 tz_type="dotnet"
             else
                 tz_type="web"
@@ -712,6 +755,11 @@ main() {
     # they asked for instead of all three sections.
     if [ "$LIST_ONLY" = true ]; then
         print_profile_info
+        # TV SDK machine lines come with EVERY list (typed or not): a webapp
+        # request must be able to offer the Samsung TV web templates too, and
+        # only the runner can say for sure whether the TV SDK is installed.
+        collect_tv_info
+        print_tv_info
         if [ -n "$OPT_TYPE" ]; then
             case "$OPT_TYPE" in
                 native|dotnet|webapp|rpk)
@@ -726,7 +774,11 @@ main() {
                     ;;
                 tv)
                     echo "tv:"
-                    get_tv_templates | sed 's/^/  /'
+                    if [ -n "$TV_PROFILE_DETECTED" ]; then
+                        filter_tv_templates "$TV_PROFILE_DETECTED" "" <<< "$TV_LIST_OUTPUT" | sed 's/^/  /'
+                    else
+                        echo "[INFO] No TV SDK (tv-samsung-*) profile found. Install TV SDK extension first." >&2
+                    fi
                     ;;
                 platform)
                     echo "platform:"
@@ -740,10 +792,9 @@ main() {
                 get_templates_for_type "$t" | sed 's/^/  /'
             done
             # Include TV templates if TV SDK extension is installed
-            local tv_profile
-            if tv_profile=$(detect_tv_profile); then
+            if [ -n "$TV_PROFILE_DETECTED" ]; then
                 echo "tv:"
-                get_tv_templates | sed 's/^/  /'
+                filter_tv_templates "$TV_PROFILE_DETECTED" "" <<< "$TV_LIST_OUTPUT" | sed 's/^/  /'
             fi
             # Always include platform samples (GBS-buildable sample apps)
             echo "platform:"

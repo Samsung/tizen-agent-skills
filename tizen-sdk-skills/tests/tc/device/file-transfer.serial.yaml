@@ -9,6 +9,8 @@ description: "file-transfer --direction push --serial returns success"
 
 lanes:
   cli:
+    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture file /tmp/config.xml.
+    # Kept draft pending a Linux/WSL fixture run.
     argv: ["tizen-sdk", "file-transfer", "--direction", "push", "--local", "/tmp/config.xml", "--remote", "/opt/usr/apps/", "--serial", "emulator-26101"]
     timeout_sec: 60
     expect:

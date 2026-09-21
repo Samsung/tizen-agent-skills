@@ -2,7 +2,7 @@
   "name": "tizen-ai-extension",
   "displayName": "Tizen AI Extension",
   "description": "Install and sync Tizen SDK Skills (skills, agents, hooks) for Claude Code and Cline from a single VS Code extension.",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "publisher": "tizen-sdk-team",
   "license": "Apache-2.0",
   "repository": {
@@ -94,15 +94,17 @@
             "auto",
             "claude",
             "cline",
-            "both"
+            "codex",
+            "both",
+            "all"
           ],
           "default": "auto",
-          "description": "Which AI host(s) to install for. 'auto' detects based on ~/.claude and ~/.cline existence and installed VS Code extensions. Use 'both' to force-install to both hosts regardless of detection."
+          "description": "Which AI host(s) to install for. 'auto' detects based on ~/.claude, ~/.cline and ~/.codex (or CODEX_HOME) existence and installed VS Code extensions. 'both' force-installs to Claude Code and Cline; 'all' adds Codex CLI."
         },
         "tizenAiExtension.installHooks": {
           "type": "boolean",
           "default": true,
-          "description": "Whether to install Claude Code hooks (settings.json merge) and Cline hooks/rules."
+          "description": "Whether to install Claude Code hooks (settings.json merge), Cline hooks/rules, and Codex CLI hooks (hooks.json) plus the AGENTS.md guard section."
         },
         "tizenAiExtension.autoSyncOnUpdate": {
           "type": "boolean",

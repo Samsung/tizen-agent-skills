@@ -3,7 +3,7 @@ id: tizen-sdk.sdb-helper.reboot
 plugin: tizen-sdk
 command: sdb-helper
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdb-helper --request 'reboot the device' returns success with command"
 

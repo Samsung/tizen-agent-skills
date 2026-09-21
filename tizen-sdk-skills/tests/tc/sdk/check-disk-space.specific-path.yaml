@@ -3,7 +3,7 @@ id: tizen-sdk.check-disk-space.specific-path
 plugin: tizen-sdk
 command: check-disk-space
 tier: safe
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "check-disk-space with --path and --required-gb returns success"
 

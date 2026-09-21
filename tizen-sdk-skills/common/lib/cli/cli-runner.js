@@ -393,6 +393,40 @@ function getFlagValue(args, flag) {
   return "";
 }
 
+const DOWNLOAD_JOBS_USAGE = "--download-jobs <n> (integer 1-8, default 4)";
+
+/**
+ * Read `--download-jobs <n>` / `--download-jobs=<n>` (default 4). Throws
+ * UsageError for anything but a single digit 1-8; prefer getDownloadJobsOrExit
+ * in a CLI entry point so the error becomes an envelope, not a stack trace.
+ */
+function getDownloadJobs(args) {
+  const raw = getFlagValue(args, "--download-jobs");
+  if (raw === "") return 4;
+  if (!/^[1-8]$/.test(raw)) {
+    throw new UsageError("--download-jobs must be an integer from 1 to 8");
+  }
+  return Number(raw);
+}
+
+/**
+ * getDownloadJobs for the index-based CLI runners: they read their flags at
+ * module top level, BEFORE runCli(), where a thrown UsageError would surface
+ * as a raw Node stack trace with no JSON envelope. This converts it into the
+ * same invalid_parameters envelope on stderr (exit 1) that parseArgsOrExit
+ * produces.
+ */
+function getDownloadJobsOrExit(command, args) {
+  try {
+    return getDownloadJobs(args);
+  } catch (e) {
+    if (e instanceof UsageError) {
+      exitWithUsageError(command, DOWNLOAD_JOBS_USAGE, e.message);
+    }
+    throw e;
+  }
+}
+
 module.exports = {
   runCli,
   parseArgs,
@@ -400,6 +434,8 @@ module.exports = {
   exitWithUsageError,
   UsageError,
   getFlagValue,
+  getDownloadJobs,
+  getDownloadJobsOrExit,
   backgroundRequested,
   // Exported for tests — key placement is a contract the envelope docs describe.
   withUserCommand,

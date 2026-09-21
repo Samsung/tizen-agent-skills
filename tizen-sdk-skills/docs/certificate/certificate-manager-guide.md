@@ -46,7 +46,7 @@ CLI 러너 (스킬/에이전트 경로)와 `tizen-cli` 명령 인터페이스의
 
 - **Tizen SDK** 설치 및 초기화 (`tizen-sdk-install` → `tizen-sdk-init`)
 - **Node.js 18+** (CLI 러너용)
-- Samsung 인증서의 경우: **Samsung 계정** 및 연결된 Tizen 디바이스 (DUID용)
+- Samsung 인증서의 경우: **Samsung 계정** 및 연결된 **TV 에뮬레이터 또는 Samsung TV** (DUID용) — Samsung 인증서는 TV 대상 전용입니다 (아래 [Samsung 온라인 CA 인증서](#samsung-온라인-ca-인증서) 참조)
 - 로컬 인증서의 경우: 네트워크 또는 Samsung 계정 불필요
 - 프록시 환경에서 Samsung 인증서 사용 시: `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` 환경변수 설정 — Samsung API 클라이언트는 표준 프록시 규칙을 따릅니다
 
@@ -452,6 +452,13 @@ node "$CLI" get-sdk-data-path
 Samsung 온라인 CA 인증서는 Samsung의 인증 기관이 발급합니다. Samsung 계정 로그인(브라우저 기반 OAuth)이 필요하며, `<tizen-sdk-data>/keystore/samsung/<profileName>/` 아래에 저장됩니다.
 
 > **`generate-author`를 Samsung 인증서로 대체하지 마세요.** 로컬 자체 서명 Tizen 인증서는 Samsung 배포용 앱을 서명할 수 없습니다.
+
+> **Samsung 인증서는 TV 대상 전용입니다.** Samsung 온라인 CA 인증서와 `create-samsung-profile`로 만든 서명 프로필은 **TV 에뮬레이터**(`tizen-create-emulator --profile tv`, TV SDK가 필요하므로 먼저 `tizen-tv-sdk-install`)와 배포자 인증서에 DUID를 등록한 **실제 Samsung TV**에서만 사용할 수 있습니다. 표준 Tizen 에뮬레이터(`--profile tizen`: mobile / wearable / IoT 플랫폼 이미지)는 SDK에 번들된 배포자 인증서만 허용하므로, Samsung 프로필로 서명한 패키지를 설치하면 인증서 오류로 거부됩니다.
+>
+> - Samsung 인증서 작업(`generate-samsung-*`, `create-samsung-profile`, `import-samsung-certificate`) 전에 대상이 TV 에뮬레이터 또는 Samsung TV인지 확인합니다. 대상이 표준 에뮬레이터이면 Samsung 인증서를 만들지 말고 `generate-author` → `create-profile`을 사용합니다. 대상이 명시되지 않았으면 에이전트가 어느 대상(TV 에뮬레이터/Samsung TV 또는 표준 에뮬레이터)에 서명할지 먼저 묻고, 로컬 흐름으로 조용히 대체하지 않습니다.
+> - DUID는 TV 에뮬레이터 또는 TV에서 얻습니다 (`acquire-duid --serial <TV 에뮬레이터 serial>`). 표준 에뮬레이터의 DUID로 만든 배포자 인증서는 어디에서도 쓸 수 없습니다.
+> - TV 에뮬레이터가 없으면 `tizen-tv-sdk-install` → `tizen-create-emulator --profile tv` → `tizen-launch-emulator` 순서로 먼저 준비합니다.
+> - Samsung 프로필로 빌드한 패키지는 TV 에뮬레이터 또는 등록된 TV에만 설치합니다. 표준 에뮬레이터에서 나는 인증서 오류는 규칙대로 동작한 것이므로 `sdb root on`이나 인증서 수동 설치로 우회하지 않습니다.
 
 ### Samsung 작성자 인증서 생성
 

@@ -9,6 +9,10 @@ description: "emulator-manager --action create-image --vm-name --output-dir --co
 
 lanes:
   cli:
+    # NOTE (2026-09-17): executed on Windows — environment failure (io_error): the
+    # command refuses to create --output-dir ("em-cli will not create it — make
+    # the directory first"), and /tmp/emulator-images is a Linux fixture path.
+    # Kept draft; needs a pre-created output directory as a fixture.
     argv: ["tizen-sdk", "emulator-manager", "--action", "create-image", "--vm-name", "test-vm", "--output-dir", "/tmp/emulator-images", "--compress"]
     timeout_sec: 120
     expect:

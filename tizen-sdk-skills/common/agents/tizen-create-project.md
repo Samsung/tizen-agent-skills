@@ -239,21 +239,25 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 
 ### 0. Ask the user to choose a project type (CRITICAL)
 
-**⚠️ When asking the user to select a project type, ALL FIVE types must be selectable — NEVER silently drop any:**
+**⚠️ When asking the user to select a project type, ALL SIX types must be selectable — NEVER silently drop any:**
 
 1. `native` — Native C/C++ app
 2. `dotnet` — C# / .NET app
 3. `webapp` — Web app
-4. `tv` — Samsung TV web app
-5. `platform` — Platform GBS-buildable sample app (e.g., `dali_demo`); builds to an `.rpm` whose `/usr/bin/<name>` binary is an executable app, launched via `tizen-install-app --run`
+4. `rpk` — Standalone resource package (non-executable)
+5. `tv` — Samsung TV app (web or .NET template; only when the TV SDK is installed — `result.tv` in the list-templates envelope)
+6. `platform` — Platform GBS-buildable sample app (e.g., `dali_demo`); builds to an `.rpm` whose `/usr/bin/<name>` binary is an executable app, launched via `tizen-install-app --run`
 
 **⚠️ AskUserQuestion accepts AT MOST 4 options per question** — passing 5 or more
-fails with `InputValidationError: too_big`. Never put all five types in one
+fails with `InputValidationError: too_big`. Never put all six types in one
 question. Select the type in TWO steps instead:
 
-- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `기타 (tv · platform)…`
-  — list all five type names in the question TEXT so nothing is hidden.
-- **Q2 (only if 기타 was chosen, 2 options):** `tv` / `platform`
+- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `기타 (rpk · tv · platform)…`
+  — list all six type names in the question TEXT so nothing is hidden. For a generic
+  "타이젠 앱 만들어줘" run `list-templates` (no `--type`) FIRST and, when the envelope has
+  `result.tv`, say in the question text that the TV SDK is installed and list the TV
+  templates (`result.tv.web` / `result.tv.dotnet`) together with the per-type lists.
+- **Q2 (only if 기타 was chosen, 3 options):** `rpk` / `tv` / `platform`
 
 ### 1. Check if a folder is open in VS Code
 
@@ -297,12 +301,35 @@ Returns a Standard JSON Envelope:
   "result": {
     "templates": {
       "webapp": ["Basic", "WebService"]
+    },
+    "profile": "tizen-11.0",
+    "tv": {
+      "profile": "tv-samsung-10.0",
+      "web": ["Basic_Empty", "Basic_Tizen_Blank", "Caph_Empty_AngularJS", "Caph_Empty_jQuery", "jQueryMobile_NavigationView"],
+      "dotnet": ["TizenNSClassLib", "TizenNUIApp", "TizenServiceApp"]
     }
   }
 }
 ```
 
 (Example actual template names — webapp: `Basic`, `WebService`. Always use the names EXACTLY as returned; never invent names like `WebTemplate`.)
+
+**`result.tv` — Samsung TV templates, present ONLY when the TV SDK extension is installed.**
+The runner prints it on typed lists too (`--type webapp` above), split into `web` and `dotnet`
+so the caller can offer the TV *web* templates next to the plain webapp ones. Rules:
+
+- `result.tv` is the only evidence that the TV SDK is installed — never probe the SDK folders
+  or run `tz` to find out. No `result.tv` → not installed → say nothing about TV templates.
+- Return the envelope **unchanged** — never drop `result.tv`. The caller shows
+  `result.tv.web` alongside `result.templates.webapp` for a web-app request ("웹앱 만들어줘"),
+  and the whole TV list next to the per-type lists for a generic request ("타이젠 앱 만들어줘").
+- A TV template is created with `--type tv` (never `--type webapp`): the runner builds it on
+  the `tv-samsung-*` profile and derives web vs. dotnet from the template name.
+- Invoked for a web-app or generic template listing? Run `list-templates --type webapp` /
+  `list-templates` (no type) — ONE call; the TV information rides along in the same envelope.
+- The untyped list also carries `result.templates.platform` — the plugin's GBS-buildable
+  samples (e.g. `dali-demo`). Show it as its own "Platform 앱" group, never folded into
+  `native`; a pick there is created with `--type platform`.
 
 Templates come from the **installed SDK** (`tz list templates` under the highest installed
 `tizen-X.Y` profile; `result.profile` names it), not from the plugin cache — the cache path in the
@@ -313,6 +340,12 @@ never conclude "no templates exist" or hand-write project files (issue #72).
 
 **CRITICAL: Show this list to the user and ask them to choose a template (e.g., via AskUserQuestion).**
 Never auto-default or skip template selection. The user MUST explicitly select one.
+
+For a **web app** request ("웹앱 만들어줘", "create a webapp") show `result.templates.webapp`
+**and**, when `result.tv` exists, `result.tv.web` under a separate heading
+("Samsung TV 웹앱 템플릿 (`result.tv.profile`)") so the user can pick either; a TV pick is
+created with `--type tv`. For a **TV** request (`--type tv`) show `result.tv.web` and
+`result.tv.dotnet` as two groups rather than the flat `result.templates.tv`.
 
 **⚠️ AskUserQuestion caps options at 4 per question.** When a type has more than 4
 templates (e.g. native: BasicUI, ServiceApp, SharedLibrary, StaticLibrary, gtest),

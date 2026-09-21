@@ -143,9 +143,16 @@ function Ask-Question {
 }
 
 function Detect-TvProfile {
-    # Find the newest tv-samsung-* profile in `tz list templates` output.
-    # Returns $null when no TV SDK is available. Mirrors detect_tv_profile in
-    # create-project-app.sh.
+    # Newest tv-samsung-* profile whose TV SDK extension is actually installed.
+    # `tz list templates` lists tv-samsung-* sections from templates.yaml
+    # metadata even when the TV extension package is absent (phantom
+    # templates), so every candidate is verified against the SDK tree, newest
+    # first. The extension lives under platforms/tizen-<ver>/tv-samsung (Tizen
+    # Studio layout) or platforms/tv-samsung-<ver> - NOT necessarily under the
+    # tizen-X.Y profile used for non-TV projects: an SDK whose newest platform
+    # is tizen-11.0 with the TV extension on tizen-10.0 used to be reported as
+    # "TV SDK not installed". Returns $null when none is installed. Mirrors
+    # detect_tv_profile in create-project-app.sh.
     $output = & $TZ_TOOL list templates 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
 
@@ -155,30 +162,36 @@ function Detect-TvProfile {
     }
     if ($profiles.Count -eq 0) { return $null }
 
-    $latest = $profiles |
-        Sort-Object { [version]($_ -replace '^tv-samsung-', '') } |
-        Select-Object -Last 1
+    $candidates = @($profiles |
+        Sort-Object { [version]($_ -replace '^tv-samsung-', '') } -Descending)
 
-    # `tz list templates` may list tv-samsung-* profiles from templates.yaml
-    # metadata even when the TV SDK extension package is not installed -
-    # verify the platform directory actually exists (phantom-template guard,
-    # same as the bash script).
-    $tvPlatformDir = Join-Path $TIZEN_STUDIO_PATH "platforms/$TZ_PROFILE/tv-samsung"
-    if (-not (Test-Path $tvPlatformDir)) { return $null }
-
-    return $latest
+    foreach ($p in $candidates) {
+        $ver = $p -replace '^tv-samsung-', ''
+        if ((Test-Path (Join-Path $TIZEN_STUDIO_PATH "platforms/tizen-$ver/tv-samsung") -PathType Container) -or
+            (Test-Path (Join-Path $TIZEN_STUDIO_PATH "platforms/$p") -PathType Container)) {
+            return $p
+        }
+    }
+    # Legacy check: the TV extension sits under the active tizen profile.
+    if (Test-Path (Join-Path $TIZEN_STUDIO_PATH "platforms/$TZ_PROFILE/tv-samsung") -PathType Container) {
+        return $candidates[0]
+    }
+    return $null
 }
 
-function Get-TvTemplates {
-    # Template names (web_app + dotnet_app) under the newest tv-samsung-*
-    # profile. Returns an empty array when no TV SDK is installed.
+function Get-TvTemplateTable {
+    # One pass over `tz list templates` for the installed TV profile:
+    #   @{ profile = 'tv-samsung-10.0'; web = @(...); dotnet = @(...) }
+    # or $null when no TV SDK is installed. Names are taken whole (up to the
+    # " [token]" suffix), so "jQuery Mobile_NavigationView" keeps its space.
+    # 1:1 with filter_tv_templates / collect_tv_info in the .sh.
     $tvProfile = Detect-TvProfile
-    if (-not $tvProfile) { return @() }
+    if (-not $tvProfile) { return $null }
 
     $output = & $TZ_TOOL list templates 2>&1
-    if ($LASTEXITCODE -ne 0) { return @() }
+    if ($LASTEXITCODE -ne 0) { return $null }
 
-    $names = @()
+    $web = @(); $dotnet = @()
     $inProfile = $false
     foreach ($line in $output) {
         if ($line -match '^\S.*:\s*$') {
@@ -186,11 +199,41 @@ function Get-TvTemplates {
             $inProfile = ($p -eq $tvProfile)
             continue
         }
-        if ($inProfile -and $line -match '^\s+(\S+)\s+\[(web_app|dotnet_app)\]') {
-            if ($names -notcontains $matches[1]) { $names += $matches[1] }
+        if ($inProfile -and $line -match '^\s+(.+?)\s+\[(web_app|dotnet_app)\]\s*$') {
+            $name = $matches[1]
+            if ($matches[2] -eq 'web_app') {
+                if ($web -notcontains $name) { $web += $name }
+            } else {
+                if ($dotnet -notcontains $name) { $dotnet += $name }
+            }
         }
     }
-    return @($names | Sort-Object)
+    return @{
+        profile = $tvProfile
+        web     = @($web | Sort-Object)
+        dotnet  = @($dotnet | Sort-Object)
+    }
+}
+
+function Get-TvTemplates {
+    # Template names (web_app + dotnet_app) under the newest installed
+    # tv-samsung-* profile. Returns an empty array when no TV SDK is installed.
+    $table = Get-TvTemplateTable
+    if (-not $table) { return @() }
+    return @(($table.web + $table.dotnet) | Sort-Object -Unique)
+}
+
+# Machine lines for the Node runner (list mode only): the installed TV SDK
+# profile and its web / dotnet template names (comma-separated), so the runner
+# can offer the Samsung TV *web* templates next to the plain webapp ones and the
+# agent never has to guess whether the TV SDK is installed. Prints nothing when
+# it is not. 1:1 with print_tv_info in the .sh.
+function Write-TvInfo {
+    param($Templates)
+    if (-not $Templates['tv_profile']) { return }
+    Write-Host "TV_PROFILE=$($Templates['tv_profile'])"
+    Write-Host ("TV_WEB=" + (@($Templates['tv_web']) -join ','))
+    Write-Host ("TV_DOTNET=" + (@($Templates['tv_dotnet']) -join ','))
 }
 
 function Get-TvTemplateTzType {
@@ -370,8 +413,20 @@ function Discover-Templates {
         $templates[$k] = @($templates[$k] | Sort-Object)
     }
 
-    # Samsung TV templates (present only when the TV SDK extension is installed)
-    $templates['tv'] = @(Get-TvTemplates)
+    # Samsung TV templates (present only when the TV SDK extension is installed),
+    # plus the web / dotnet split and the TV profile for the list-mode machine lines.
+    $tvTable = Get-TvTemplateTable
+    if ($tvTable) {
+        $templates['tv_profile'] = $tvTable.profile
+        $templates['tv_web'] = @($tvTable.web)
+        $templates['tv_dotnet'] = @($tvTable.dotnet)
+        $templates['tv'] = @(($tvTable.web + $tvTable.dotnet) | Sort-Object -Unique)
+    } else {
+        $templates['tv_profile'] = $null
+        $templates['tv_web'] = @()
+        $templates['tv_dotnet'] = @()
+        $templates['tv'] = @()
+    }
 
     # Collect GBS-buildable platform sample apps (not tz new templates)
     $templates['platform'] = @(Discover-PlatformSamples)
@@ -711,6 +766,10 @@ try {
     # they asked for instead of all three sections.
     if ($ListTemplates) {
         Write-ProfileInfo
+        # TV SDK machine lines come with EVERY list (typed or not): a webapp
+        # request must be able to offer the Samsung TV web templates too, and
+        # only the runner can say for sure whether the TV SDK is installed.
+        Write-TvInfo $templates
         if ($Type) {
             $typeKey = $Type.ToLower()
             if (@('native','dotnet','webapp','rpk','tv','platform') -notcontains $typeKey) {
@@ -721,6 +780,9 @@ try {
             foreach ($t in $templates[$typeKey]) { Write-Host "  $t" }
             if (@($templates[$typeKey]).Count -eq 0 -and @('native','dotnet','webapp','rpk') -contains $typeKey) {
                 Report-EmptyType $typeKey
+            }
+            if ($typeKey -eq 'tv' -and -not $templates['tv_profile']) {
+                [Console]::Error.WriteLine("[INFO] No TV SDK (tv-samsung-*) profile found. Install TV SDK extension first.")
             }
         } else {
             foreach ($k in @('native','dotnet','webapp','rpk')) {

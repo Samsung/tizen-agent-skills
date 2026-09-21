@@ -12,24 +12,24 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **283** |
+| YAML 테스트 케이스 총 개수 | **286** |
 | CSV TC ID 가 매핑된 케이스 | **254** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
 | └─ Prompt 레인 (`TC-P-*`) | 118 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **29** |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **32** |
 
 ### 도메인별 분포
 
 | 도메인 (`tc/<group>/`) | 케이스 수 |
 | --- | ---: |
 | `device` | 103 |
-| `sdk` | 64 |
+| `sdk` | 66 |
 | `debug` | 32 |
 | `project` | 26 |
 | `certificate` | 25 |
 | `meta` | 16 |
 | `test` | 15 |
-| `dlog-analyzer` | 2 |
+| `dlog-analyzer` | 3 |
 
 ### 티어별 분포
 
@@ -37,7 +37,7 @@
 | --- | ---: |
 | `device` | 141 |
 | `mutating` | 79 |
-| `safe` | 63 |
+| `safe` | 66 |
 
 ---
 
@@ -333,6 +333,7 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/device/install-app.missing-required.yaml](tc/device/install-app.missing-required.yaml) | `tizen-sdk.install-app.missing-required` | `install-app` | device | CLI | install-app fails with invalid_argument when --package is missing |
 | [tc/device/remote-device.scan-happy.yaml](tc/device/remote-device.scan-happy.yaml) | `tizen-sdk.remote-device.scan-happy` | `remote-device` | device | CLI | remote-device scan returns success with scan results |
 | [tc/device/sdb-helper.missing-required.yaml](tc/device/sdb-helper.missing-required.yaml) | `tizen-sdk.sdb-helper.missing-required` | `sdb-helper` | device | CLI | sdb-helper fails with invalid_argument when --request is missing |
+| [tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml](tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml) | `tizen-sdk.dlog-analyzer.log-clear-without-confirm` | `dlog-analyzer` | safe | CLI | dlog-analyzer --action log-clear without --confirm fails (user_input_required) before touching any device |
 | [tc/dlog-analyzer/dlog-analyzer.missing-required.yaml](tc/dlog-analyzer/dlog-analyzer.missing-required.yaml) | `tizen-sdk.dlog-analyzer.missing-required` | `dlog-analyzer` | device | CLI | dlog-analyzer fails with invalid_argument when --action is missing |
 | [tc/project/build-project.missing-required.yaml](tc/project/build-project.missing-required.yaml) | `tizen-sdk.build-project.missing-required` | `build-project` | safe | CLI | build-project fails with invalid_argument when --project is missing |
 | [tc/project/create-project.invalid-type.yaml](tc/project/create-project.invalid-type.yaml) | `tizen-sdk.create-project.invalid-type` | `create-project` | safe | CLI | create-project fails with invalid_argument when --type is not a valid choice |
@@ -341,9 +342,11 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/sdk/check-disk-space.happy.yaml](tc/sdk/check-disk-space.happy.yaml) | `tizen-sdk.check-disk-space.happy` | `check-disk-space` | safe | CLI | check-disk-space returns success with disk_free info |
 | [tc/sdk/check-node.happy.yaml](tc/sdk/check-node.happy.yaml) | `tizen-sdk.check-node.happy` | `check-node` | safe | CLI | check-node returns success with node_version matching v<digits> |
 | [tc/sdk/install-rootstrap.missing-required.yaml](tc/sdk/install-rootstrap.missing-required.yaml) | `tizen-sdk.install-rootstrap.missing-required` | `install-rootstrap` | safe | CLI | install-rootstrap fails with invalid_argument when --zip-path is missing |
+| [tc/sdk/platform-install.invalid-version.yaml](tc/sdk/platform-install.invalid-version.yaml) | `tizen-sdk.platform-install.invalid-version` | `platform-install` | safe | CLI | platform-install fails with invalid_argument when --platform-version is not X.Y |
 | [tc/sdk/platform-install.missing-required.yaml](tc/sdk/platform-install.missing-required.yaml) | `tizen-sdk.platform-install.missing-required` | `platform-install` | safe | CLI | platform-install fails with invalid_argument when --platform-version is missing |
 | [tc/sdk/sdk-init.invalid-path.yaml](tc/sdk/sdk-init.invalid-path.yaml) | `tizen-sdk.sdk-init.invalid-path` | `sdk-init` | safe | CLI | sdk-init fails when path does not exist |
 | [tc/sdk/sdk-install-custom-repo.missing-required.yaml](tc/sdk/sdk-install-custom-repo.missing-required.yaml) | `tizen-sdk.sdk-install-custom-repo.missing-required` | `sdk-install-custom-repo` | safe | CLI | sdk-install-custom-repo fails with invalid_argument when --repo-url is missing |
+| [tc/sdk/sdk-install.unavailable-version.yaml](tc/sdk/sdk-install.unavailable-version.yaml) | `tizen-sdk.sdk-install.unavailable-version` | `sdk-install` | safe | CLI | sdk-install with an X.Y version that is not installed fails instead of reporting 'already installed' |
 | [tc/sdk/sdk-repo-info.happy.yaml](tc/sdk/sdk-repo-info.happy.yaml) | `tizen-sdk.sdk-repo-info.happy` | `sdk-repo-info` | safe | CLI | sdk-repo-info returns success with repository URL info |
 | [tc/sdk/validate-repo-url.happy.yaml](tc/sdk/validate-repo-url.happy.yaml) | `tizen-sdk.validate-repo-url.happy` | `validate-repo-url` | safe | CLI | validate-repo-url returns success for the official Tizen SDK repository |
 | [tc/sdk/validate-repo-url.missing-required.yaml](tc/sdk/validate-repo-url.missing-required.yaml) | `tizen-sdk.validate-repo-url.missing-required` | `validate-repo-url` | safe | CLI | validate-repo-url fails with invalid_argument when --repo-url is missing |
@@ -375,11 +378,11 @@ prompt 레인 118건은 모두 실행 완료입니다
 
 | status | 케이스 수 |
 | --- | ---: |
-| `draft` | 163 |
-| `approved` | 110 |
+| `draft` | 79 |
+| `approved` | 199 |
 | `candidate` | 8 |
 
-`draft` 163건은 대부분 cli 레인 TC 로, 아직 전 레인 실행 검증이 끝나지 않은 케이스입니다.
+`draft` 79건은 대부분 cli 레인 TC 로, 아직 전 레인 실행 검증이 끝나지 않은 케이스입니다.
 
 ---
 

@@ -38,10 +38,11 @@ tizen-cli tizen-sdk sdk-install
 
 | Option                      | Required | Default | Description                               |
 | --------------------------- | -------- | ------- | ----------------------------------------- |
-| `--tizen-version <version>` | no       | `10.0`  | Tizen platform version                    |
+| `--tizen-version <version>` | no       | newest available | Tizen platform version, `X.Y` (e.g. `10.0`, `11.0`). Malformed → `invalid_argument`; not among the installed platforms → `platform_version_not_found` |
 | `--label <label>`           | no       | `tizen` | Installation label                        |
 | `--force`                   | no       | off     | Force reinstall even if already installed |
 | `--repo-url <url>`          | no       | CDN mirror | Install from a custom package repository URL instead of the timezone-selected CDN mirror |
+| `--download-jobs <count>`   | no       | `4`     | Number of concurrent download jobs (1-8) |
 
 ## Custom repository URL
 
@@ -92,7 +93,8 @@ This command is a **fast pre-check only** — it never performs the 10–15 minu
 
 1. **Phase 1 — pre-check**: run the command above.
    - `status: "success"` → SDK already installed (see `result.installation_status`); nothing more to do.
-   - `status: "failure"` → SDK is not installed. `errors[0].suggested_fix.command` contains a **ready-to-run installer command line** (a `powershell -ExecutionPolicy Bypass -File ...` / `bash ...` invocation).
+   - `status: "failure"` with `error_category: "execution_error"` → SDK is not installed. `errors[0].suggested_fix.command` contains a **ready-to-run installer command line** (a `powershell -ExecutionPolicy Bypass -File ...` / `bash ...` invocation).
+   - `status: "failure"` with `invalid_argument` / `platform_version_not_found` → the requested `--tizen-version` is malformed, or the SDK is installed without that platform. Do **not** run an installer; show the message (it lists the installed platforms) and, for a real version, offer `platform-install --platform-version <X.Y>` from `suggested_fix`.
 2. **Phase 2 — install**: run `errors[0].suggested_fix.command` verbatim. The install takes 10–15 minutes (~121 packages). The execution method depends on the harness:
    - **Claude Code**: use `run_in_background: true`, END YOUR TURN, wait for `<task-notification>`.
    - **Cline**: use `--detach` (Linux/macOS) / `-Detach` (Windows) to launch a detached process, then poll `--status` / `-Status` every 60 seconds until `STATUS=done`. **Do NOT use `run_in_background: true`** (10-min timeout kills the process). **Do NOT run in foreground** (121-package log floods the context window).

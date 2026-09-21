@@ -28,6 +28,7 @@ tizen-cli tizen-sdk update-package
 |---|---|---|---|
 | `--force` | no | off | Force update all installed packages regardless of version |
 | `--dry-run` | no | off | List outdated packages without updating |
+| `--download-jobs <count>` | no | `4` | Number of concurrent download jobs (1-8) |
 
 ## Two-phase flow (same pattern as sdk-install)
 

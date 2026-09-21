@@ -66,8 +66,8 @@ installs and where.
 
 ### VS Code extension
 
-The **Tizen AI Extension** installs and syncs the plugin for Claude Code and Cline from
-inside the editor, with no scripts to run. Download `tizen-ai-extension-vX.Y.Z.vsix` from
+The **Tizen AI Extension** installs and syncs the plugin for Claude Code, Cline and Codex CLI
+from inside the editor, with no scripts to run. Download `tizen-ai-extension-vX.Y.Z.vsix` from
 the [GitHub Releases](https://github.com/Samsung/tizen-agent-skills/releases) page and
 install it:
 
@@ -155,7 +155,7 @@ correspondence.
 | `gdb-debug` | Debug | Set up remote GDB debugging (Native apps) |
 | `dotnet-debug` | Debug | Set up remote netcoredbg debugging (.NET apps) |
 | `webapp-debug` | Debug | Set up remote Web app debugging via RWI/CDP |
-| `dlog-analyzer` | Debug | Collect dlog, detect crashes/exceptions, suggest root causes |
+| `dlog-analyzer` | Debug | View/save/clear device logs (`log-dump`, `log-clear`), collect dlog, detect crashes/exceptions, suggest root causes |
 | `playwright-test` | Test | Run/scaffold Playwright tests against a Tizen Web app |
 | `certificate-manager` | Certificate | Manage Tizen certificates and signing profiles |
 
@@ -201,7 +201,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │   ├── esbuild.config.js   #   Build config
 │   ├── plugin.json         #   tizen-cli plugin manifest (commands auto-updated on build)
 │   └── package.json        #   npm/pnpm package
-├── vscode/                 # VS Code extension — installs/syncs the plugin for Claude Code and Cline
+├── vscode/                 # VS Code extension — installs/syncs the plugin for Claude Code, Cline and Codex CLI
 ├── docs/                   # Documentation (architecture, walkthroughs, deployment, envelope, ...)
 ├── usage/                  # Usage scenarios and real-world examples
 ├── tests/                  # Self-contained test suite (TC YAMLs, runner, fixtures)
@@ -268,7 +268,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-09-10 against v1.2.0. Every row can be re-measured with the
+Measured on 2026-09-18 against v1.3.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -278,13 +278,13 @@ or test suite is added.
 | Skills (`common/skills/`) | 29 (+2 tizen-cli-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
 | tizen-cli commands | 34 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
-| Error codes | 59 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
+| Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Guard hooks | 3 PreToolUse scripts, 12 guard rules | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 38 files, ≈1,450 assertions | `node common/lib/tests/run-all.js` |
-| VS Code extension tests | 88 cases in 3 files | `cd vscode && npm test` |
-| Hook tests | 32 cases | `bash common/hooks/hooks.test.sh` |
-| Integration TCs (`tests/tc/`) | 281 TCs in 274 YAML files — safe 63 / mutating 79 / device 139; approved 110 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 204 Markdown files (`docs/` 91 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Unit tests (`common/lib/tests/`) | 66 files, ≈2,280 assertions | `node common/lib/tests/run-all.js` |
+| VS Code extension tests | 118 cases in 3 files | `cd vscode && npm test` |
+| Hook tests | 66 cases | `bash common/hooks/hooks.test.sh` |
+| Integration TCs (`tests/tc/`) | 286 TCs in 279 YAML files — safe 66 / mutating 79 / device 141; approved 199 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| Documentation | 210 Markdown files (`docs/` 89 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
@@ -305,6 +305,7 @@ before the plugin moved to this repository are not republished here.
 - [.NET Setup E2E](docs/sdk-install/DOTNET_SETUP_E2E.en.md)
 - [TV SDK Setup](docs/tv-setup/TV_SDK_SETUP.en.md)
 - [WSL Emulator Guide](docs/wsl/WSL_EMULATOR_GUIDE.en.md)
+- [RDS / Fast Deploy Plan](docs/rds/RDS_FAST_DEPLOY_PLAN.en.md)
 
 **Walkthroughs**
 

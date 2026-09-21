@@ -259,4 +259,6 @@ module.exports = {
   collectAppLogs: dlogAnalyzer.collectAppLogs,
   stopCollectAppLogs: dlogAnalyzer.stopCollectAppLogs,
   analyzeErrors: dlogAnalyzer.analyzeErrors,
+  dumpDeviceLogs: dlogAnalyzer.dumpDeviceLogs,
+  clearDeviceLogs: dlogAnalyzer.clearDeviceLogs,
 };
