@@ -30,7 +30,7 @@
     "url": "https://github.com/Samsung/tizen-agent-skills/issues"
   },
   "dependencies": {
-    "commander": "^12.1.0"
+    "commander": "^15.0.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.10",
