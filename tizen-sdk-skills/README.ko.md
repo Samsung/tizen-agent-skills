@@ -16,7 +16,7 @@ Tizen SDK 자동화 플러그인 — SDK 설치, 프로젝트 생성, 빌드, �
 - 지원 호스트 중 하나: Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli, VS Code.
 - Windows, Linux, macOS. 에뮬레이터는 WSL도 지원합니다 —
   [WSL 에뮬레이터 가이드](docs/wsl/WSL_EMULATOR_GUIDE.md) 참고.
-- **pnpm** (tizen-cli 하네스만 해당).
+- **pnpm** (tizen-sdk 독립 실행 도구 / tizen-cli 하네스만 해당).
 
 Tizen SDK 자체는 미리 설치할 필요가 **없습니다** — `tizen-sdk-install` 스킬이 설치해 줍니다.
 
@@ -74,17 +74,32 @@ code --install-extension tizen-ai-extension-vX.Y.Z.vsix
 확장은 활성화 시 자동으로 설치를 수행하고 Claude Code 훅을 `settings.json`에 병합해 줍니다.
 설정, 명령, 소스 빌드 방법은 [vscode/README.md](vscode/README.md)를 참고하세요.
 
-### tizen-cli
+### tizen-sdk 독립 실행 도구
+
+`tizen-sdk`는 AI 호스트 없이 이 저장소의 모든 명령을 실행하는 독립 실행형 CLI 도구입니다.
+Claude Code, Cline, tizen-cli가 없어도 스킬이 사용하는 것과 같은 러너를 실행하고,
+결과를 stdout에 단일 Standard JSON Envelope로 출력하므로 터미널, 셸 스크립트, CI에서
+바로 사용할 수 있습니다.
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
-tizen-cli plugin install dist/
-tizen-cli tizen-sdk --doctor
-node bin/tizen-sdk.js --doctor   # tizen-cli 호스트가 없으면 같은 번들을 독립 실행
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js 런처
+
+node bin/tizen-sdk.js --doctor           # SDK 경로, 캐시, 러너 상태
+node bin/tizen-sdk.js --capabilities     # 34개 명령 중 지금 사용 가능한 명령
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm add -g .                            # 선택: PATH에 `tizen-sdk` 등록
+tizen-sdk --doctor
 ```
 
-[tizen-cli/README.ko.md](tizen-cli/README.ko.md), [docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.
+- `--help`는 전체 명령 목록을, `<명령> --help`는 해당 명령의 옵션을 보여줍니다.
+- 빌드 전에는 런처가 빌드 명령이 담긴 `PLUGIN_NOT_BUILT` 엔벨로프를 출력합니다.
+- 같은 번들을 tizen-cli 플러그인으로도 설치할 수 있습니다 (`tizen-cli plugin install dist/`).
+
+[tizen-cli/README.ko.md](tizen-cli/README.ko.md#독립-실행-tizen-cli-호스트-없이),
+[docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.
 
 ### 자연어로 사용하기
 
@@ -230,7 +245,9 @@ tizen-sdk-skills/
   스킬·에이전트 파일은 그 자리에서 교체됩니다.
 - **`node`를 찾을 수 없음** — 러너는 `PATH`의 Node.js 20+가 필요합니다. 어시스턴트에
   "node 확인해줘"(`check-node`)라고 요청하거나 `node --version`을 실행해 보세요.
-- **tizen-cli** — `tizen-cli tizen-sdk --doctor`가 SDK 경로, 캐시, 러너 상태를 보고합니다.
+- **tizen-sdk / tizen-cli** — `tizen-sdk --doctor`(또는 `tizen-cli/`에서
+  `node bin/tizen-sdk.js --doctor`)와 `tizen-cli tizen-sdk --doctor`가 SDK 경로, 캐시,
+  러너 상태를 보고합니다.
 - **제거** — VS Code 확장은 제거 시 자신이 설치한 파일을 모두 정리합니다. 스크립트로 설치한
   경우에는 캐시 루트 `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, `tizen-*`
   스킬 폴더와 에이전트 파일, 훅/지침 항목을 삭제하면 됩니다. 호스트별 정확한 경로는

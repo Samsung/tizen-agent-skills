@@ -18,7 +18,7 @@ creation, building, device management, app installation, remote debugging
   or VS Code.
 - Windows, Linux or macOS. WSL is supported for the emulator — see the
   [WSL Emulator Guide](docs/wsl/WSL_EMULATOR_GUIDE.en.md).
-- **pnpm** (tizen-cli harness only).
+- **pnpm** (tizen-sdk standalone tool / tizen-cli harness only).
 
 The Tizen SDK itself does **not** need to be pre-installed — the `tizen-sdk-install`
 skill installs it for you.
@@ -79,17 +79,32 @@ The extension auto-installs on activation and merges the Claude Code hooks into
 `settings.json` for you. See [vscode/README.md](vscode/README.md) for settings,
 commands and building from source.
 
-### tizen-cli
+### tizen-sdk standalone tool
+
+`tizen-sdk` is a standalone command-line tool that runs every command in this
+repository without any AI host: no Claude Code, Cline or tizen-cli required. It
+executes the same runners the skills use and prints a single Standard JSON
+Envelope on stdout, so it works from a terminal, a shell script or CI.
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
-tizen-cli plugin install dist/
-tizen-cli tizen-sdk --doctor
-node bin/tizen-sdk.js --doctor   # no tizen-cli host? run the same bundle standalone
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js launcher
+
+node bin/tizen-sdk.js --doctor           # SDK path, cache and runner status
+node bin/tizen-sdk.js --capabilities     # which of the 34 commands are usable right now
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm add -g .                            # optional: put `tizen-sdk` on PATH
+tizen-sdk --doctor
 ```
 
-See [tizen-cli/README.md](tizen-cli/README.md) and [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
+- `--help` lists every command; `<command> --help` shows its options.
+- Without a build the launcher prints a `PLUGIN_NOT_BUILT` envelope with the build command.
+- The same bundle also installs as a tizen-cli plugin (`tizen-cli plugin install dist/`).
+
+See [tizen-cli/README.md](tizen-cli/README.md#standalone-use-without-the-tizen-cli-host) and
+[docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
 
 ### Using natural language
 
@@ -243,7 +258,8 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
   personal skill/agent files are replaced in place.
 - **`node` not found** — the runners need Node.js 20+ on `PATH`; ask the assistant to
   "check node" (`check-node`) or run `node --version`.
-- **tizen-cli** — `tizen-cli tizen-sdk --doctor` reports the SDK path, cache and
+- **tizen-sdk / tizen-cli** — `tizen-sdk --doctor` (or `node bin/tizen-sdk.js --doctor`
+  from `tizen-cli/`) and `tizen-cli tizen-sdk --doctor` report the SDK path, cache and
   runner status.
 - **Uninstall** — the VS Code extension removes everything it installed when
   uninstalled. For script installs, delete the cache root
