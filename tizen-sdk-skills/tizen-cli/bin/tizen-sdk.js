@@ -10,7 +10,7 @@
  * WITHOUT the host:
  *
  *   node bin/tizen-sdk.js <command> [--options...]
- *   tizen-sdk <command> [--options...]          (after `pnpm link --global`)
+ *   tizen-sdk <command> [--options...]          (after `pnpm add -g .` in tizen-cli/)
  *   node dist/bin/tizen-sdk.js <command> ...    (release ZIP / dist-only layout)
  *
  * It re-implements nothing: it locates the bundle, forwards argv to run(),

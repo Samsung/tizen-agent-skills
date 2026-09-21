@@ -167,7 +167,7 @@ jobs:
       # must be built first and the symlink must point at the source tree —
       # Node resolves the main-module symlink, so __dirname stays tizen-cli/bin.
       #
-      # `pnpm link --global` is deliberately not used: it needs `pnpm setup`
+      # `pnpm add -g .` (formerly `pnpm link --global`) is deliberately not used: it needs `pnpm setup`
       # and a shell restart to land a global bin dir on PATH, which is fragile
       # in a non-interactive job. A plain symlink into $RUNNER_TEMP + GITHUB_PATH
       # does the same thing with no hidden state.

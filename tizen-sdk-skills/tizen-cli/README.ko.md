@@ -205,7 +205,7 @@ node bin/tizen-sdk.js --capabilities         # 체크아웃에서 실행
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
-pnpm link --global                           # 선택: PATH에 `tizen-sdk` 등록
+pnpm add -g .                                # 선택: PATH에 `tizen-sdk` 등록
 tizen-sdk --doctor                           # (tests/runner.mjs의 폴백 실행기이기도 함)
 
 node dist/bin/tizen-sdk.js --schema          # 릴리스 ZIP / dist만 있는 레이아웃
@@ -218,8 +218,16 @@ node dist/bin/tizen-sdk.js --schema          # 릴리스 ZIP / dist만 있는 �
 - 엔벨로프의 `user_command`는 사용자가 입력한 접두어로 렌더링됩니다:
   독립 실행 시 `tizen-sdk …`, 호스트 안에서는 `tizen-cli tizen-sdk …`.
   alias나 래퍼 스크립트에서 바꾸려면 `TIZEN_SDK_USER_COMMAND_PREFIX`를 설정하세요.
-- Windows에서는 `node bin\tizen-sdk.js …`로 실행하거나, `pnpm link --global`이
-  만드는 `tizen-sdk.cmd` shim을 사용하세요.
+- 최신 pnpm에서는 `pnpm link --global`이 제거되어
+  `ERR_PNPM_LINK_BAD_PARAMS: You must provide a parameter`가 발생합니다.
+  대신 `tizen-cli/` 안에서 `pnpm add -g .`를 실행하면 이 체크아웃이 전역
+  패키지로 링크되고 `tizen-sdk` shim이 pnpm 전역 bin 디렉터리에 생성됩니다
+  (복사가 아니라 링크이므로 `pnpm build` 후 바로 반영됩니다). 해제는
+  `pnpm remove -g tizen-cli-plugin-tizen-sdk`입니다. 전역 bin 디렉터리가 PATH에
+  없다면 `pnpm setup` 후 셸을 다시 시작하세요. pnpm 9 이하에서는 기존처럼
+  `pnpm link --global`을 사용할 수 있습니다.
+- Windows에서는 `node bin\tizen-sdk.js …`로 실행하거나, `pnpm add -g .`가
+  만드는 `tizen-sdk.CMD` shim을 사용하세요.
 
 ## 미포함 (향후 작업)
 

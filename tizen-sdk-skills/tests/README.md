@@ -288,5 +288,5 @@ See `skills/run-test-suite.md` for instructions on how Cline or Claude agents ex
 - Node.js >= 20
 - For cli-lane execution, one of:
   - `tizen-cli` on PATH with the `tizen-sdk` plugin installed, or
-  - the standalone launcher `tizen-sdk` on PATH (`cd tizen-cli && pnpm build && pnpm link --global`) — the runner falls back to it when `tizen-cli` is absent
+  - the standalone launcher `tizen-sdk` on PATH (`cd tizen-cli && pnpm build && pnpm add -g .`; `pnpm link --global` was removed in recent pnpm) — the runner falls back to it when `tizen-cli` is absent
 - For `--dry-run` mode: no runtime needed, just Node.js + npm dependencies

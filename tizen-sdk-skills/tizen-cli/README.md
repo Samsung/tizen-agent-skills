@@ -207,7 +207,7 @@ node bin/tizen-sdk.js --capabilities         # from the checkout
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
-pnpm link --global                           # optional: put `tizen-sdk` on PATH
+pnpm add -g .                                # optional: put `tizen-sdk` on PATH
 tizen-sdk --doctor                           # (also what tests/runner.mjs falls back to)
 
 node dist/bin/tizen-sdk.js --schema          # release ZIP / dist-only layout
@@ -221,8 +221,16 @@ node dist/bin/tizen-sdk.js --schema          # release ZIP / dist-only layout
   `tizen-sdk …` standalone, `tizen-cli tizen-sdk …` inside the host. Set
   `TIZEN_SDK_USER_COMMAND_PREFIX` to override it (for example from an alias or
   wrapper script).
-- On Windows run it as `node bin\tizen-sdk.js …`, or use the `tizen-sdk.cmd`
-  shim that `pnpm link --global` creates.
+- Recent pnpm releases removed `pnpm link --global`; it now fails with
+  `ERR_PNPM_LINK_BAD_PARAMS: You must provide a parameter`. Run
+  `pnpm add -g .` from inside `tizen-cli/` instead: it links this checkout as
+  a global package and drops a `tizen-sdk` shim into pnpm's global bin
+  directory (a link, not a copy, so a fresh `pnpm build` is picked up
+  immediately). Undo with `pnpm remove -g tizen-cli-plugin-tizen-sdk`. If the
+  global bin directory is not on PATH yet, run `pnpm setup` and restart the
+  shell. pnpm 9 and earlier still accept `pnpm link --global`.
+- On Windows run it as `node bin\tizen-sdk.js …`, or use the `tizen-sdk.CMD`
+  shim that `pnpm add -g .` creates.
 
 ## Not included (future work)
 

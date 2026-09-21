@@ -9,6 +9,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Fixed
+
+- **`pnpm link --global` fails on current pnpm** (`ERR_PNPM_LINK_BAD_PARAMS: You must provide a
+  parameter`). pnpm removed the `--global` form of `pnpm link`; the documented way to put the
+  standalone `tizen-sdk` launcher on PATH is now `pnpm add -g .` from `tizen-cli/` (undo with
+  `pnpm remove -g tizen-cli-plugin-tizen-sdk`). Updated `tizen-cli/README*.md`,
+  `docs/tizen-cli/build-and-install*.md` (with a troubleshooting row), `tests/README.md`, the
+  launcher header comment, and the CI workflow comment.
+
 ## [1.3.0] — 2026-09-18
 
 ### Added
