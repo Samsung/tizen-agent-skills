@@ -116,7 +116,7 @@ cd tizen-cli
 node bin/tizen-sdk.js --capabilities        # same output as step 4
 node bin/tizen-sdk.js check-node
 
-pnpm link --global                          # optional: `tizen-sdk` on PATH
+pnpm add -g .                               # optional: `tizen-sdk` on PATH
 tizen-sdk --doctor
 
 node dist/bin/tizen-sdk.js --schema         # from a release ZIP (dist/ only)
@@ -132,6 +132,9 @@ command in `suggested_fix.command`. See
 |---|---|
 | `ERR_PNPM_IGNORED_BUILDS` | Ensure `pnpm-workspace.yaml` exists (allows esbuild postinstall) |
 | `pnpm: command not found` | Install with `npm install -g pnpm` |
+| `ERR_PNPM_LINK_BAD_PARAMS` (from `pnpm link --global` or a bare `pnpm link`) | pnpm 10 removed `--global`, pnpm 11 removed the no-argument form. Run `pnpm add -g .` inside `tizen-cli/` (undo: `pnpm remove -g tizen-cli-plugin-tizen-sdk`, the `name` in `package.json`) |
+| `ERR_PNPM_NO_GLOBAL_BIN_DIR` (from `pnpm add -g .`) | pnpm's global bin directory is not configured. Run `pnpm setup` and restart the shell |
+| `tizen-sdk: command not found` (after a successful `pnpm add -g .`) | The global bin directory (`pnpm bin -g`) is not on this shell's PATH. Run `pnpm setup` and restart the shell |
 | `tizen-cli: command not found` | Ensure tizen-cli is on PATH, or use the standalone launcher (`node bin/tizen-sdk.js …`) |
 | `PLUGIN_NOT_BUILT` from the launcher | Run `pnpm build` in `tizen-cli/` first |
 | Changes not reflected after rebuild | Run `tizen-cli plugin uninstall tizen-sdk` then reinstall |

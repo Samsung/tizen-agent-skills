@@ -3,7 +3,7 @@
 English | [한국어](README.ko.md)
 
 A Tizen SDK automation plugin for **Claude Code**, **Cline**, **Codex CLI**,
-**Gemini CLI**, **tizen-cli** and **VS Code** — automates SDK installation, project
+**Gemini CLI** and **VS Code**, plus a standalone **tizen-sdk** CLI — automates SDK installation, project
 creation, building, device management, app installation, remote debugging
 (GDB / netcoredbg / CDP), certificate management, and Playwright testing.
 
@@ -14,11 +14,11 @@ creation, building, device management, app installation, remote debugging
 - **Node.js 20+** on `PATH` — the CLI runners behind every skill need it
   (`check-node` verifies this).
 - **Git** to clone the repository.
-- One of the supported hosts: Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli
-  or VS Code.
+- One of the supported hosts: Claude Code, Cline, Codex CLI, Gemini CLI or VS Code —
+  or no host at all with the standalone `tizen-sdk` CLI.
 - Windows, Linux or macOS. WSL is supported for the emulator — see the
   [WSL Emulator Guide](docs/wsl/WSL_EMULATOR_GUIDE.en.md).
-- **pnpm** (tizen-cli harness only).
+- **pnpm** (standalone `tizen-sdk` CLI only).
 
 The Tizen SDK itself does **not** need to be pre-installed — the `tizen-sdk-install`
 skill installs it for you.
@@ -79,17 +79,32 @@ The extension auto-installs on activation and merges the Claude Code hooks into
 `settings.json` for you. See [vscode/README.md](vscode/README.md) for settings,
 commands and building from source.
 
-### tizen-cli
+### tizen-sdk standalone tool
+
+`tizen-sdk` is a standalone command-line tool that runs every command in this
+repository without any AI host: no Claude Code, Cline or other agent required. It
+executes the same runners the skills use and prints a single Standard JSON
+Envelope on stdout, so it works from a terminal, a shell script or CI.
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
-tizen-cli plugin install dist/
-tizen-cli tizen-sdk --doctor
-node bin/tizen-sdk.js --doctor   # no tizen-cli host? run the same bundle standalone
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js launcher
+
+node bin/tizen-sdk.js --doctor           # SDK path, cache and runner status
+node bin/tizen-sdk.js --capabilities     # which of the 34 commands are usable right now
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm add -g .                            # optional: put `tizen-sdk` on PATH
+tizen-sdk --doctor
 ```
 
-See [tizen-cli/README.md](tizen-cli/README.md) and [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
+- `--help` lists every command; `<command> --help` shows its options.
+- Without a build the launcher prints a `PLUGIN_NOT_BUILT` envelope with the build command.
+- The source, plugin manifest and host-integration details live under `tizen-cli/`.
+
+See [tizen-cli/README.md](tizen-cli/README.md#standalone-use-without-the-tizen-cli-host) and
+[docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
 
 ### Using natural language
 
@@ -118,7 +133,7 @@ returns the result as a Standard JSON Envelope. See the
 ## Commands (34)
 
 Every command below is exposed as a skill named `tizen-<command>` in the AI hosts
-(for example `tizen-build-project`) and as `tizen-cli tizen-sdk <command>` in tizen-cli.
+(for example `tizen-build-project`) and as `tizen-sdk <command>` in the standalone CLI.
 See [Skills ↔ Commands Mapping](docs/SKILLS_COMMANDS_MAPPING.en.md) for the exact
 correspondence.
 
@@ -194,12 +209,12 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 ├── gemini/                 # Google Gemini CLI
 │   ├── hooks/              #   BeforeTool adapter (Gemini hook protocol -> shared guards)
 │   └── setup/              #   wrappers
-├── tizen-cli/              # tizen-cli plugin harness (canonical source)
+├── tizen-cli/              # standalone tizen-sdk CLI (canonical source)
 │   ├── src/                #   TypeScript shell (34 flat commands, envelope adapter, --schema/--doctor)
 │   │   └── command-specs/  #   Per-domain declarative specs (sdk, check, project, device, debug, test, certificate)
-│   ├── skills/             #   31 SKILL.md files for agents driving tizen-cli (29 + umbrella router + tizen-list-templates)
+│   ├── skills/             #   31 SKILL.md files for agents driving the CLI (29 + umbrella router + tizen-list-templates)
 │   ├── esbuild.config.js   #   Build config
-│   ├── plugin.json         #   tizen-cli plugin manifest (commands auto-updated on build)
+│   ├── plugin.json         #   CLI manifest (commands auto-updated on build)
 │   └── package.json        #   npm/pnpm package
 ├── vscode/                 # VS Code extension — installs/syncs the plugin for Claude Code, Cline and Codex CLI
 ├── docs/                   # Documentation (architecture, walkthroughs, deployment, envelope, ...)
@@ -217,7 +232,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 | **cline/** | Cline: cache (lib/scripts/assets) + `~/.cline/skills`; PreToolUse adapter in `Documents/Cline/Hooks`, always-on rule in `Documents/Cline/Rules`. |
 | **codex/** | Codex CLI: cache under `~/.codex`; skills → `~/.agents/skills`; agents → `~/.codex/agents/*.toml`; guards → `~/.codex/hooks.json` (trust once with `/hooks`); rules → `~/.codex/AGENTS.md`. |
 | **gemini/** | Gemini CLI: cache under `~/.gemini`; skills → `~/.gemini/skills`; agents → `~/.gemini/agents/*.md`; `BeforeTool` adapter + `settings.json` snippet; rules → `~/.gemini/GEMINI.md`. |
-| **tizen-cli/** | tizen-cli plugin harness — bundles `common/lib` + `common/scripts` into an installable CLI plugin via esbuild. |
+| **tizen-cli/** | Standalone `tizen-sdk` CLI — bundles `common/lib` + `common/scripts` into a single executable bundle via esbuild. |
 | **vscode/** | VS Code extension — bundles `common/` and installs it into `~/.claude` / `~/.cline` from the editor. |
 
 Every harness mirrors the same `common/` into
@@ -243,8 +258,8 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
   personal skill/agent files are replaced in place.
 - **`node` not found** — the runners need Node.js 20+ on `PATH`; ask the assistant to
   "check node" (`check-node`) or run `node --version`.
-- **tizen-cli** — `tizen-cli tizen-sdk --doctor` reports the SDK path, cache and
-  runner status.
+- **Standalone CLI** — `tizen-sdk --doctor` (or `node bin/tizen-sdk.js --doctor` from
+  `tizen-cli/`) reports the SDK path, cache and runner status.
 - **Uninstall** — the VS Code extension removes everything it installed when
   uninstalled. For script installs, delete the cache root
   `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, the `tizen-*` skill
@@ -262,7 +277,7 @@ node common/lib/tests/run-all.js                                          # comm
 bash common/hooks/hooks.test.sh                                           # hook guard tests
 node scripts/rewrite-runner-snippets.js --check                           # runner-lookup snippets in sync
 node scripts/add-spdx-headers.js --check                                  # SPDX license headers present
-cd tizen-cli && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm run build   # tizen-cli harness
+cd tizen-cli && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm run build   # standalone tizen-sdk CLI
 cd tests && npm ci && node runner.mjs --dry-run                           # TC schema lint
 ```
 
@@ -274,10 +289,10 @@ or test suite is added.
 
 | Area | Count | How to re-measure |
 |------|-------|-------------------|
-| Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
-| Skills (`common/skills/`) | 29 (+2 tizen-cli-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
+| Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
+| Skills (`common/skills/`) | 29 (+2 CLI-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
-| tizen-cli commands | 34 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI commands | 34 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Guard hooks | 3 PreToolUse scripts, 12 guard rules | `common/hooks/` |
 | Unit tests (`common/lib/tests/`) | 66 files, ≈2,280 assertions | `node common/lib/tests/run-all.js` |
@@ -290,7 +305,7 @@ or test suite is added.
 
 Tagging `tizen-sdk-skills-vX.Y.Z` on the `tizen-agent-skills` repository runs
 [release.yml](../.github/workflows/release.yml), which builds and attaches
-`tizen-sdk-vX.Y.Z.zip` (tizen-cli plugin `dist/`) and
+`tizen-sdk-vX.Y.Z.zip` (standalone tizen-sdk CLI `dist/`) and
 `tizen-ai-extension-vX.Y.Z.vsix` (VS Code extension) to the GitHub Release.
 Changes per version are recorded in [CHANGELOG.md](CHANGELOG.md). Releases made
 before the plugin moved to this repository are not republished here.
@@ -333,7 +348,7 @@ before the plugin moved to this repository are not republished here.
 - [Harness Setup](docs/deployment/HARNESS_SETUP.en.md)
 - [Deployment & Sync Guide](docs/deployment/PLUGIN_DEPLOYMENT_SYNC.en.md)
 - [Integrated Setup & Sync Script](docs/deployment/CLINE_SETUP_AND_SYNC.en.md)
-- [tizen-cli Build & Install](docs/tizen-cli/build-and-install.en.md)
+- [tizen-sdk CLI Build & Install](docs/tizen-cli/build-and-install.en.md)
 - [VS Code extension](vscode/README.md)
 
 ## Contributing

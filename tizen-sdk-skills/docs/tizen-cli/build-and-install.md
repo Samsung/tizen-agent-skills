@@ -116,7 +116,7 @@ cd tizen-cli
 node bin/tizen-sdk.js --capabilities        # 4단계와 같은 출력
 node bin/tizen-sdk.js check-node
 
-pnpm link --global                          # 선택: PATH에 `tizen-sdk` 등록
+pnpm add -g .                               # 선택: PATH에 `tizen-sdk` 등록
 tizen-sdk --doctor
 
 node dist/bin/tizen-sdk.js --schema         # 릴리스 ZIP(dist/만 있는 경우)
@@ -132,6 +132,9 @@ node dist/bin/tizen-sdk.js --schema         # 릴리스 ZIP(dist/만 있는 경�
 |---|---|
 | `ERR_PNPM_IGNORED_BUILDS` | `pnpm-workspace.yaml`이 있는지 확인 (esbuild postinstall 허용) |
 | `pnpm: command not found` | `npm install -g pnpm`으로 설치 |
+| `ERR_PNPM_LINK_BAD_PARAMS` (`pnpm link --global` 또는 인자 없는 `pnpm link` 실행 시) | pnpm 10이 `--global`을, pnpm 11이 인자 없는 형태를 제거함. `tizen-cli/`에서 `pnpm add -g .` 실행 (해제: `pnpm remove -g tizen-cli-plugin-tizen-sdk`, `package.json`의 `name`) |
+| `ERR_PNPM_NO_GLOBAL_BIN_DIR` (`pnpm add -g .` 실행 시) | pnpm 전역 bin 디렉터리가 설정되지 않음. `pnpm setup` 실행 후 셸 재시작 |
+| `tizen-sdk: command not found` (`pnpm add -g .` 성공 이후) | 전역 bin 디렉터리(`pnpm bin -g`)가 현재 셸의 PATH에 없음. `pnpm setup` 실행 후 셸 재시작 |
 | `tizen-cli: command not found` | tizen-cli가 PATH에 있는지 확인, 또는 독립 런처(`node bin/tizen-sdk.js …`) 사용 |
 | 런처가 `PLUGIN_NOT_BUILT` 출력 | `tizen-cli/`에서 `pnpm build`를 먼저 실행 |
 | 빌드 후에도 변경사항 반영 안 됨 | `tizen-cli plugin uninstall tizen-sdk` 후 재설치 |

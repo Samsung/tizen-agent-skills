@@ -2,8 +2,8 @@
 
 [English](README.md) | 한국어
 
-**Claude Code**, **Cline**, **Codex CLI**, **Gemini CLI**, **tizen-cli**, **VS Code**를 위한
-Tizen SDK 자동화 플러그인 — SDK 설치, 프로젝트 생성, 빌드, 디바이스 관리, 앱 설치,
+**Claude Code**, **Cline**, **Codex CLI**, **Gemini CLI**, **VS Code**를 위한
+Tizen SDK 자동화 플러그인(독립 실행형 **tizen-sdk** CLI 포함) — SDK 설치, 프로젝트 생성, 빌드, 디바이스 관리, 앱 설치,
 원격 디버깅(GDB / netcoredbg / CDP), 인증서 관리, Playwright 테스트를 자동화합니다.
 
 ## 빠른 시작
@@ -13,10 +13,11 @@ Tizen SDK 자동화 플러그인 — SDK 설치, 프로젝트 생성, 빌드, �
 - **Node.js 20+** 가 `PATH`에 있어야 합니다 — 모든 스킬 뒤에서 동작하는 CLI 러너가
   사용합니다 (`check-node`로 확인 가능).
 - **Git** — 저장소 클론용.
-- 지원 호스트 중 하나: Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli, VS Code.
+- 지원 호스트 중 하나: Claude Code, Cline, Codex CLI, Gemini CLI, VS Code.
+  호스트 없이 독립 실행형 `tizen-sdk` CLI만 사용할 수도 있습니다.
 - Windows, Linux, macOS. 에뮬레이터는 WSL도 지원합니다 —
   [WSL 에뮬레이터 가이드](docs/wsl/WSL_EMULATOR_GUIDE.md) 참고.
-- **pnpm** (tizen-cli 하네스만 해당).
+- **pnpm** (독립 실행형 `tizen-sdk` CLI만 해당).
 
 Tizen SDK 자체는 미리 설치할 필요가 **없습니다** — `tizen-sdk-install` 스킬이 설치해 줍니다.
 
@@ -74,17 +75,32 @@ code --install-extension tizen-ai-extension-vX.Y.Z.vsix
 확장은 활성화 시 자동으로 설치를 수행하고 Claude Code 훅을 `settings.json`에 병합해 줍니다.
 설정, 명령, 소스 빌드 방법은 [vscode/README.md](vscode/README.md)를 참고하세요.
 
-### tizen-cli
+### tizen-sdk 독립 실행 도구
+
+`tizen-sdk`는 AI 호스트 없이 이 저장소의 모든 명령을 실행하는 독립 실행형 CLI 도구입니다.
+Claude Code, Cline 같은 에이전트가 없어도 스킬이 사용하는 것과 같은 러너를 실행하고,
+결과를 stdout에 단일 Standard JSON Envelope로 출력하므로 터미널, 셸 스크립트, CI에서
+바로 사용할 수 있습니다.
 
 ```bash
 cd tizen-cli
-pnpm install && pnpm run build   # -> dist/tizen-sdk.js + plugin.json + scripts/ + skills/ + bin/
-tizen-cli plugin install dist/
-tizen-cli tizen-sdk --doctor
-node bin/tizen-sdk.js --doctor   # tizen-cli 호스트가 없으면 같은 번들을 독립 실행
+pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js 런처
+
+node bin/tizen-sdk.js --doctor           # SDK 경로, 캐시, 러너 상태
+node bin/tizen-sdk.js --capabilities     # 34개 명령 중 지금 사용 가능한 명령
+node bin/tizen-sdk.js check-node
+node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
+
+pnpm add -g .                            # 선택: PATH에 `tizen-sdk` 등록
+tizen-sdk --doctor
 ```
 
-[tizen-cli/README.ko.md](tizen-cli/README.ko.md), [docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.
+- `--help`는 전체 명령 목록을, `<명령> --help`는 해당 명령의 옵션을 보여줍니다.
+- 빌드 전에는 런처가 빌드 명령이 담긴 `PLUGIN_NOT_BUILT` 엔벨로프를 출력합니다.
+- 소스, 매니페스트, 호스트 연동 관련 상세 내용은 `tizen-cli/` 폴더에 있습니다.
+
+[tizen-cli/README.ko.md](tizen-cli/README.ko.md#독립-실행-tizen-cli-호스트-없이),
+[docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.
 
 ### 자연어로 사용하기
 
@@ -111,7 +127,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 ## 명령어 (34개)
 
 아래 각 명령어는 AI 호스트에서는 `tizen-<명령어>` 이름의 스킬(예: `tizen-build-project`)로,
-tizen-cli에서는 `tizen-cli tizen-sdk <명령어>`로 노출됩니다. 정확한 대응 관계는
+독립 실행형 CLI에서는 `tizen-sdk <명령어>`로 노출됩니다. 정확한 대응 관계는
 [스킬 ↔ 커맨드 맵핑](docs/SKILLS_COMMANDS_MAPPING.md)을 참고하세요.
 
 | 명령어 | 도메인 | 용도 |
@@ -184,12 +200,12 @@ tizen-sdk-skills/
 ├── gemini/                 # Google Gemini CLI
 │   ├── hooks/              #   BeforeTool 어댑터 (Gemini 훅 프로토콜 -> 공용 가드)
 │   └── setup/              #   wrapper
-├── tizen-cli/              # tizen-cli 플러그인 하네스 (canonical 소스)
+├── tizen-cli/              # 독립 실행형 tizen-sdk CLI (canonical 소스)
 │   ├── src/                #   TypeScript 셸 (flat 34 커맨드, envelope 어댑터, --schema/--doctor)
 │   │   └── command-specs/  #   도메인별 선언적 스펙 (sdk, check, project, device, debug, test, certificate)
-│   ├── skills/             #   tizen-cli 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
+│   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
 │   ├── esbuild.config.js   #   빌드 설정
-│   ├── plugin.json         #   tizen-cli 플러그인 매니페스트 (빌드 시 commands 자동 업데이트)
+│   ├── plugin.json         #   CLI 매니페스트 (빌드 시 commands 자동 업데이트)
 │   └── package.json        #   npm/pnpm 패키지
 ├── vscode/                 # VS Code 확장 — 에디터에서 Claude Code / Cline / Codex CLI용 플러그인 설치·동기화
 ├── docs/                   # 문서 (아키텍처, 워크스루, 배포, envelope, ...)
@@ -207,7 +223,7 @@ tizen-sdk-skills/
 | **cline/** | Cline: 캐시(lib/scripts/assets) + `~/.cline/skills`; PreToolUse 어댑터는 `Documents/Cline/Hooks`, 상시 규칙은 `Documents/Cline/Rules`. |
 | **codex/** | Codex CLI: `~/.codex` 아래 캐시; 스킬 → `~/.agents/skills`; 에이전트 → `~/.codex/agents/*.toml`; 가드 → `~/.codex/hooks.json`(`/hooks`로 1회 신뢰); 규칙 → `~/.codex/AGENTS.md`. |
 | **gemini/** | Gemini CLI: `~/.gemini` 아래 캐시; 스킬 → `~/.gemini/skills`; 에이전트 → `~/.gemini/agents/*.md`; `BeforeTool` 어댑터 + `settings.json` 스니펫; 규칙 → `~/.gemini/GEMINI.md`. |
-| **tizen-cli/** | tizen-cli 플러그인 하네스 — `common/lib` + `common/scripts`를 esbuild로 번들링하여 설치형 CLI 플러그인으로 제공. |
+| **tizen-cli/** | 독립 실행형 `tizen-sdk` CLI — `common/lib` + `common/scripts`를 esbuild로 단일 실행 번들로 제공. |
 | **vscode/** | VS Code 확장 — `common/`을 번들해 에디터에서 `~/.claude` / `~/.cline`에 설치. |
 
 모든 하네스는 같은 `common/`을 `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills/<version>/`으로
@@ -230,7 +246,8 @@ tizen-sdk-skills/
   스킬·에이전트 파일은 그 자리에서 교체됩니다.
 - **`node`를 찾을 수 없음** — 러너는 `PATH`의 Node.js 20+가 필요합니다. 어시스턴트에
   "node 확인해줘"(`check-node`)라고 요청하거나 `node --version`을 실행해 보세요.
-- **tizen-cli** — `tizen-cli tizen-sdk --doctor`가 SDK 경로, 캐시, 러너 상태를 보고합니다.
+- **독립 실행형 CLI** — `tizen-sdk --doctor`(또는 `tizen-cli/`에서
+  `node bin/tizen-sdk.js --doctor`)가 SDK 경로, 캐시, 러너 상태를 보고합니다.
 - **제거** — VS Code 확장은 제거 시 자신이 설치한 파일을 모두 정리합니다. 스크립트로 설치한
   경우에는 캐시 루트 `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, `tizen-*`
   스킬 폴더와 에이전트 파일, 훅/지침 항목을 삭제하면 됩니다. 호스트별 정확한 경로는
@@ -247,7 +264,7 @@ node common/lib/tests/run-all.js                                          # comm
 bash common/hooks/hooks.test.sh                                           # 훅 가드 테스트
 node scripts/rewrite-runner-snippets.js --check                           # 러너 탐색 스니펫 동기화 확인
 node scripts/add-spdx-headers.js --check                                  # SPDX 라이선스 헤더 확인
-cd tizen-cli && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm run build   # tizen-cli 하네스
+cd tizen-cli && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm run build   # 독립 실행형 tizen-sdk CLI
 cd tests && npm ci && node runner.mjs --dry-run                           # TC 스키마 검사
 ```
 
@@ -258,10 +275,10 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 | 항목 | 수치 | 재측정 방법 |
 |------|------|-------------|
-| 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
-| 스킬 (`common/skills/`) | 29개 (+tizen-cli 전용 2개 → `tizen-cli/skills/`는 31개) | `ls -d common/skills/*/ \| wc -l` |
+| 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
+| 스킬 (`common/skills/`) | 29개 (+CLI 전용 2개 → `tizen-cli/skills/`는 31개) | `ls -d common/skills/*/ \| wc -l` |
 | 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
-| tizen-cli 커맨드 | 34개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI 커맨드 | 34개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 61개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 12개 | `common/hooks/` |
 | 단위 테스트 (`common/lib/tests/`) | 66 파일, 어설션 약 2,280개 | `node common/lib/tests/run-all.js` |
@@ -274,7 +291,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 `tizen-agent-skills` 저장소에 `tizen-sdk-skills-vX.Y.Z` 태그를 푸시하면
 [release.yml](../.github/workflows/release.yml)이 실행되어
-`tizen-sdk-vX.Y.Z.zip`(tizen-cli 플러그인 `dist/`)과
+`tizen-sdk-vX.Y.Z.zip`(독립 실행형 tizen-sdk CLI `dist/`)과
 `tizen-ai-extension-vX.Y.Z.vsix`(VS Code 확장)를 GitHub Release에 첨부합니다.
 버전별 변경 사항은 [CHANGELOG.md](CHANGELOG.md)에 기록됩니다. 플러그인이 이 저장소로
 옮겨오기 전의 릴리즈는 여기에 다시 게시되지 않습니다.
@@ -316,7 +333,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 - [하네스 설치 가이드](docs/deployment/HARNESS_SETUP.md)
 - [배포·동기화 가이드](docs/deployment/PLUGIN_DEPLOYMENT_SYNC.md)
 - [통합 설치·동기화 스크립트](docs/deployment/CLINE_SETUP_AND_SYNC.md)
-- [tizen-cli 빌드 & 설치](docs/tizen-cli/build-and-install.md)
+- [tizen-sdk CLI 빌드 & 설치](docs/tizen-cli/build-and-install.md)
 - [VS Code 확장](vscode/README.md)
 
 ## 기여
