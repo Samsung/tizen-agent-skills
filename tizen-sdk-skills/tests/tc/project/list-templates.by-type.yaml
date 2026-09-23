@@ -7,6 +7,11 @@ status: approved
 since_cli: 1.0.0
 description: "list-templates --type native returns success with filtered templates"
 
+# The template catalogue is read from the installed SDK — without one the
+# command fails, so the CI safe-tier gate skips this TC (--skip-requires=sdk).
+requires:
+  capabilities: [sdk]
+
 lanes:
   cli:
     argv: ["tizen-sdk", "list-templates", "--type", "native"]

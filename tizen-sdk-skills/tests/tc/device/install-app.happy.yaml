@@ -3,19 +3,25 @@ id: tizen-sdk.install-app.happy
 plugin: tizen-sdk
 command: install-app
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "install-app --package returns success with device_id and app_id"
 
 lanes:
   cli:
     # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture package /tmp/MyApp.tpk.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk"]
+    # NOTE (2026-09-22): /tmp/MyApp.tpk replaced by ${FIXTURE_NATIVE_TPK} (built by
+    # scripts/prepare-device-fixtures.mjs).
+    # NOTE (2026-09-23): the expect block asserted $.result.device_id, a field the envelope has
+    # never had — installApp returns device_serial (common/lib/core/project.js); fixed to the real
+    # field. First TC of device phase c2-fixture-apps (the driver's hook installs only the .NET and
+    # web packages). Executed on Windows via run-device-tier.mjs --include-drafts on 2026-09-23 —
+    # passed; promoted draft → approved.
+    argv: ["tizen-sdk", "install-app", "--package", "${FIXTURE_NATIVE_TPK}"]
     timeout_sec: 120
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.device_id", min_length: 1 }
+        - { path: "$.result.device_serial", min_length: 1 }
         - { path: "$.result.app_id", min_length: 1 }
         - { path: "$.result.installation_status", matches: "completed" }

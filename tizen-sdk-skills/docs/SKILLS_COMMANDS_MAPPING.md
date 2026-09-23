@@ -1,4 +1,4 @@
-# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 29개인데 커맨드는 34개인가
+# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 29개인데 커맨드는 35개인가
 
 [English](SKILLS_COMMANDS_MAPPING.en.md) | 한국어
 
@@ -11,16 +11,16 @@
 | 단위 | 개수 | 기준 위치 |
 |---|---|---|
 | **스킬** (Cline/Claude Code 자연어 트리거 단위) | **29** | `common/skills/*/SKILL.md` |
-| **커맨드** (`tizen-cli tizen-sdk <command>`) | **34** | `tizen-cli/src/command-specs/*.ts` |
+| **커맨드** (`tizen-cli tizen-sdk <command>`) | **35** | `tizen-cli/src/command-specs/*.ts` |
 | tizen-cli용 SKILL.md (참고) | 31 | `tizen-cli/skills/*/SKILL.md` — 아래 [스킬 집합이 두 개인 이유](#스킬-집합이-두-개인-이유) 참조 |
 
-숫자가 다른 것은 **설계상 의도된 것**입니다. 스킬은 사용자 의도(intent) 단위이고 커맨드는 실행 단위이므로, **스킬 하나가 커맨드 여러 개를 소유할 수 있습니다**. 예를 들어 "프로젝트 생성" 스킬(`tizen-create-project`)은 `create-project`, `project-delete`, `list-templates` 세 커맨드를 소유합니다.
+숫자가 다른 것은 **설계상 의도된 것**입니다. 스킬은 사용자 의도(intent) 단위이고 커맨드는 실행 단위이므로, **스킬 하나가 커맨드 여러 개를 소유할 수 있습니다**. 예를 들어 "프로젝트 생성" 스킬(`tizen-create-project`)은 `create-project`, `project-delete`, `list-templates`, `import-wgt` 네 커맨드를 소유합니다.
 
 ---
 
-## 차이 나는 5개 커맨드
+## 차이 나는 6개 커맨드
 
-34 − 29 = 5개의 "추가" 커맨드는 모두 기존 스킬에 얹힌 보조 커맨드입니다:
+35 − 29 = 6개의 "추가" 커맨드는 모두 기존 스킬에 얹힌 보조 커맨드입니다:
 
 | 추가 커맨드 | 소속 스킬 | 비고 |
 |---|---|---|
@@ -28,13 +28,14 @@
 | `validate-repo-url` | `tizen-sdk-install-custom-repo` | 설치 없이 저장소 URL 검증만 단독 실행 |
 | `project-delete` | `tizen-create-project` | 생성 스킬의 delete 액션 |
 | `list-templates` | `tizen-create-project` | 생성 스킬의 list-templates 액션 (tizen-cli에서는 별도 SKILL.md 존재 — 아래 참조) |
+| `import-wgt` | `tizen-create-project` | 생성 스킬의 import-wgt 액션 (기존 `.wgt`에 `tz import-wgt` 실행) |
 | `emulator-manager` | `tizen-create-emulator` + `tizen-launch-emulator` | em-cli 전체 표면(수정·초기화·이미지 캡처)을 두 스킬이 공유 |
 
 나머지 29개 커맨드는 스킬과 1:1로 대응합니다.
 
 ---
 
-## 전체 맵핑 표 (34개 커맨드 → 29개 스킬)
+## 전체 맵핑 표 (35개 커맨드 → 29개 스킬)
 
 그룹 구분은 [tizen-cli 우산 스킬의 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)과 동일합니다.
 
@@ -63,13 +64,14 @@
 | `check-disk-space` | `tizen-check-disk-space` | 1:1 |
 | `dotnet-setup` | `tizen-dotnet-setup` | 1:1 |
 
-### 프로젝트 (커맨드 4 → 스킬 2)
+### 프로젝트 (커맨드 5 → 스킬 2)
 
 | 커맨드 | 스킬 | 대응 |
 |---|---|---|
 | `create-project` | `tizen-create-project` | 공유 |
 | `project-delete` | `tizen-create-project` | 공유 (delete 액션) |
 | `list-templates` | `tizen-create-project` | 공유 (list-templates 액션)¹ |
+| `import-wgt` | `tizen-create-project` | 공유 (import-wgt 액션) |
 | `build-project` | `tizen-build-project` | 1:1 |
 
 ¹ tizen-cli 스킬 집합에는 이 커맨드 전용 `tizen-list-templates` SKILL.md가 별도로 존재합니다 (아래 참조).
@@ -104,7 +106,7 @@
 | `certificate-manager` | `tizen-certificate-manager` | 1:1 (프로파일/배포자/Samsung 온라인 CA 액션 내장) |
 | `dlog-analyzer` | `tizen-dlog-analyzer` | 1:1 (start/stop/check/status/app-launch/app-terminate/dlog-collect/stop-collect/error-analyze 액션 내장) |
 
-**검증**: 커맨드 12+3+4+7+6+2 = 34, 스킬 10+3+2+6+6+2 = 29.
+**검증**: 커맨드 12+3+5+7+6+2 = 35, 스킬 10+3+2+6+6+2 = 29.
 
 ---
 
@@ -119,10 +121,10 @@
 
 `tizen-cli/skills/`에만 있는 2개:
 
-1. **`tizen-sdk`** (우산 라우터) — 34개 커맨드 전체의 라우팅 테이블을 담은 진입점 스킬. common 쪽에는 대응물이 없습니다 (Cline/Claude Code는 스킬 설명 자체로 라우팅).
+1. **`tizen-sdk`** (우산 라우터) — 35개 커맨드 전체의 라우팅 테이블을 담은 진입점 스킬. common 쪽에는 대응물이 없습니다 (Cline/Claude Code는 스킬 설명 자체로 라우팅).
 2. **`tizen-list-templates`** — tizen-cli에서는 `list-templates`가 독립 커맨드이므로 전용 스킬로 분리. common 쪽에서는 `tizen-create-project` 스킬의 list-templates 액션으로 처리됩니다.
 
-즉 문서에서 "29개 스킬"은 **common/skills 기준**, "34개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
+즉 문서에서 "29개 스킬"은 **common/skills 기준**, "35개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
 
 ---
 

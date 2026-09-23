@@ -87,7 +87,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js 런처
 
 node bin/tizen-sdk.js --doctor           # SDK 경로, 캐시, 러너 상태
-node bin/tizen-sdk.js --capabilities     # 34개 명령 중 지금 사용 가능한 명령
+node bin/tizen-sdk.js --capabilities     # 35개 명령 중 지금 사용 가능한 명령
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -124,7 +124,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 돌려줍니다. 엔드투엔드 예시는 [사용 사례 & 시나리오 가이드](usage/usage.md), 전체 트리거
 문구 목록은 [스킬 레퍼런스](docs/SKILLS_REFERENCE.md)를 참고하세요.
 
-## 명령어 (34개)
+## 명령어 (35개)
 
 아래 각 명령어는 AI 호스트에서는 `tizen-<명령어>` 이름의 스킬(예: `tizen-build-project`)로,
 독립 실행형 CLI에서는 `tizen-sdk <명령어>`로 노출됩니다. 정확한 대응 관계는
@@ -150,6 +150,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 | `create-project` | Project | Native/DotNET/WebApp/TV/Platform 프로젝트 생성 (Platform은 GBS로 .rpm 생성) |
 | `project-delete` | Project | Tizen 프로젝트 디렉터리 삭제 |
 | `list-templates` | Project | 사용 가능한 프로젝트 템플릿 조회 |
+| `import-wgt` | Project | 기존 `.wgt` 아카이브를 SDK가 생성한 Web 프로젝트로 가져오기 |
 | `build-project` | Project | 프로젝트 빌드 + 패키징 (.tpk/.wgt/.rpm) |
 | `create-emulator` | Device | 커스텀 Tizen 에뮬레이터 VM 생성 |
 | `launch-emulator` | Device | 기존 에뮬레이터 VM 실행 |
@@ -201,7 +202,7 @@ tizen-sdk-skills/
 │   ├── hooks/              #   BeforeTool 어댑터 (Gemini 훅 프로토콜 -> 공용 가드)
 │   └── setup/              #   wrapper
 ├── tizen-cli/              # 독립 실행형 tizen-sdk CLI (canonical 소스)
-│   ├── src/                #   TypeScript 셸 (flat 34 커맨드, envelope 어댑터, --schema/--doctor)
+│   ├── src/                #   TypeScript 셸 (flat 35 커맨드, envelope 어댑터, --schema/--doctor)
 │   │   └── command-specs/  #   도메인별 선언적 스펙 (sdk, check, project, device, debug, test, certificate)
 │   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
 │   ├── esbuild.config.js   #   빌드 설정
@@ -270,7 +271,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 ### 프로젝트 현황
 
-2026-09-18, v1.3.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
+2026-09-23, v1.3.1 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
 있으며, 스킬·에이전트·커맨드·테스트 스위트가 추가될 때마다 이 표를 갱신합니다.
 
 | 항목 | 수치 | 재측정 방법 |
@@ -278,14 +279,14 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
 | 스킬 (`common/skills/`) | 29개 (+CLI 전용 2개 → `tizen-cli/skills/`는 31개) | `ls -d common/skills/*/ \| wc -l` |
 | 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI 커맨드 | 34개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI 커맨드 | 35개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 61개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 12개 | `common/hooks/` |
-| 단위 테스트 (`common/lib/tests/`) | 66 파일, 어설션 약 2,280개 | `node common/lib/tests/run-all.js` |
+| 단위 테스트 (`common/lib/tests/`) | 72 파일, 어설션 약 2,430개 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 118 케이스 | `cd vscode && npm test` |
 | 훅 테스트 | 66 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 286 TC / 279 YAML — safe 66 / mutating 79 / device 141; approved 199 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| 문서 | Markdown 210개 (`docs/` 89개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
+| 통합 TC (`tests/tc/`) | 286 TC / 279 YAML — safe 66 / mutating 79 / device 141; approved 264 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 문서 | Markdown 212개 (`docs/` 91개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
 

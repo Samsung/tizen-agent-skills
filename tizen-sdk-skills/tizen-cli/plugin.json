@@ -1,6 +1,6 @@
 {
   "plugin_name": "tizen-sdk",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "tizen_cli_required": "^1.0.0",
   "binary": "tizen-sdk.js",
   "commands": [
@@ -22,6 +22,7 @@
     "create-project",
     "project-delete",
     "list-templates",
+    "import-wgt",
     "build-project",
     "create-emulator",
     "launch-emulator",

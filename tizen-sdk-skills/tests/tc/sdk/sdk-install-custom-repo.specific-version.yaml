@@ -3,9 +3,12 @@ id: tizen-sdk.sdk-install-custom-repo.specific-version
 plugin: tizen-sdk
 command: sdk-install-custom-repo
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "sdk-install-custom-repo --repo-url --platform-version returns success"
+
+requires:
+  capabilities: [sdk, net]
 
 # NOTE: the repository URL is a ${TC_CUSTOM_REPO_URL} placeholder that
 # runner.mjs resolves from fixtures/fixtures.env (default: the public Tizen
@@ -13,6 +16,7 @@ description: "sdk-install-custom-repo --repo-url --platform-version returns succ
 # example.com URL never serves pkg_list_{OS}, so validation would fail before
 # the install path is exercised. Point the variable at your own mirror to test
 # a private repository.
+# NOTE (2026-09-23): see sdk-install-custom-repo.happy. executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase s1-sdk-idempotent) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
     argv: ["tizen-sdk", "sdk-install-custom-repo", "--repo-url", "${TC_CUSTOM_REPO_URL}", "--platform-version", "10.0"]

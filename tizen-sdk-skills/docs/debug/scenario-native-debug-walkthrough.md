@@ -145,7 +145,7 @@ Claude가 앱 ID, 바이너리 경로, 모드, 브레이크포인트를 확인�
 2. `pkgcmd -l`로 **wgt 앱 가드** — 웹앱이면 즉시 거절하고 `tizen-webapp-debug`로 안내
 3. 호스트 바이너리 검증 (없으면 근처에서 자동 검색)
 4. 디바이스 아키텍처에 맞는 **SDK GDB 자동 선택** + `sdb root on`
-5. 디바이스에서 `gdbserver` 위치 확인 (`which gdbserver`, 기본 `/usr/bin/gdbserver`)
+5. 디바이스에서 `gdbserver` 위치 확인 (`which gdbserver`, `/usr/bin/gdbserver`, 또는 이전에 온디맨드로 설치한 사본); 이미지에 없으면(Tizen 8 이후 에뮬레이터 이미지) `<sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar`를 `/home/owner/share/tmp/sdk_tools/`에 push·해제해 설치 — `tizen-dotnet-debug`가 netcoredbg에 쓰는 것과 같은 온디맨드 설치
 6. 모드별 타깃 결정
    - attach: `app_launcher -s <앱ID>` 실행 → `pidof <exec>`로 PID 확보 → `gdbserver :5039 --attach <PID>`
    - launch: `/opt/usr/globalapps/<앱ID>/bin`(또는 `/opt/usr/apps/...`)에서 디바이스 바이너리 검색 → `gdbserver :5039 <디바이스바이너리>`
@@ -256,7 +256,7 @@ Breakpoint 1, main (argc=1, argv=0x...) at src/myapp.c:42
 | 12 | attach 모드에서 PID 못 찾음 (미설치/실행 실패) | `error_category: "io_error"` — "Could not find the app PID within 30s", launch 모드 사용 안내 |
 | 13 | 호스트 바이너리 없음 (자동 검색도 실패) | `error_category: "io_error"` — 상세에 `Host binary not found`, `<project>\Debug\tpk\bin\<exec>` 힌트 |
 | 14 | launch 모드인데 디바이스에 바이너리 없음 (미설치) | `error_category: "io_error"` — `Cannot find app binary on device at /opt/usr/apps/<앱ID>/bin/` |
-| 15 | 디바이스에 gdbserver 없음 | `error_category: "io_error"` — `gdbserver not found at /usr/bin/gdbserver` |
+| 15 | 디바이스에 gdbserver 없음 + SDK `<sdk>/tools/on-demand`에 `gdbserver_<ver>_<arch>.tar` 없음 | `error_category: "io_error"` — `gdbserver package for '<arch>' not found under …/tools/on-demand/` (SDK 온디맨드 도구 설치 후 재시도) |
 | 16 | 호스트에 GDB 없음 (SDK·PATH 모두) | `error_category: "io_error"` — `No GDB found`, `-Gdb <경로>` 지정 안내 |
 | 17 | 잘못된 앱 ID / 포트 / 브레이크포인트 형식 | `error_category: "invalid_parameters"` |
 | 18 | attach 모드 + `main` 브레이크포인트 | 셋업은 성공하지만 브레이크포인트가 히트하지 않음 → launch 모드로 재시도 |

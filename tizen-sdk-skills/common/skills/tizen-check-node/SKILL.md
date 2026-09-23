@@ -1,6 +1,6 @@
 ---
 name: tizen-check-node
-description: Check Node.js, node check, node 설치 확인, Node.js installed, node version, 노드 확인. Use this skill to verify Node.js is installed and on PATH before installing the Tizen SDK. Runs a quick CLI runner that checks node --version and returns a Standard JSON Envelope with version/path info. Required before tizen-sdk-install.
+description: Check Node.js, node check, node 설치 확인, Node.js installed, node version, 노드 확인, "Node.js가 설치되어 있는지 확인해줘", "Do I have Node.js installed? Check the version.", 노드 버전, node 있어?, is node installed. Use this skill for ANY question about whether Node.js is installed or which Node.js version is present — it is the dedicated command for that question, and it answers with version/path info in a Standard JSON Envelope. Do NOT route a Node.js question to the generic environment health check (`--doctor` / core `doctor`) — doctor is a broad multi-component sweep (shell, scripts, SDK, sdb, em-cli) for "is my whole setup healthy?", not the answer to "is Node.js installed?". Also the pre-check before tizen-sdk-install.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-07-15"

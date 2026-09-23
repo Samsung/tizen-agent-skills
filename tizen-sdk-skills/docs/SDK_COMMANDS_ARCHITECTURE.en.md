@@ -71,6 +71,7 @@ Each CLI runner `require`s a specific function from `sdk-commands.js`:
 | `project-manager-cli.js` | `createProject()`        | `tizen-create-project` |
 | `project-manager-cli.js` | `deleteProject()`        | `tizen-create-project` (delete action) |
 | `project-manager-cli.js` | `listTemplates()`        | `tizen-create-project` |
+| `project-manager-cli.js` | `importWgt()`            | `tizen-create-project` (import-wgt action) |
 | `project-manager-cli.js`  | `buildProject()`         | `tizen-build-project`  |
 | `device-manager-cli.js` | `manageDevice()`         | `tizen-device-manager` |
 | `emulator-manager-cli.js` | `manageEmulator()` / `createEmulator()` / `launchEmulator()` | `tizen-create-emulator`, `tizen-launch-emulator` |
@@ -331,4 +332,4 @@ Functions that invoke scripts leaving (or potentially leaving) background proces
 ## Related Documents
 
 - [Intermediate Layer Introductions](SDK_LAYERS_OVERVIEW.en.md) — Why each layer is needed and why .ps1 is not called directly
-- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 29 skills map onto the 34 commands (and why the counts differ)
+- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 29 skills map onto the 35 commands (and why the counts differ)

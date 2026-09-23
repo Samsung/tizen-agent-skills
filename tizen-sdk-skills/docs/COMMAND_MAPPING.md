@@ -52,6 +52,7 @@ same shape: `tizen-sdk sdk-status` (internal SDK status probe),
 | `create-project`                                 | `tizen-sdk create-project`                          | `project.createProject`                     |
 | `project-delete`                                 | `tizen-sdk project-delete`                          | `project.deleteProject`                     |
 | `list-templates`                                 | `tizen-sdk list-templates`                          | `project.listTemplates`                     |
+| `import-wgt`                                     | `tizen-sdk import-wgt`                              | `project.importWgt`                         |
 | `build-project`                                  | `tizen-sdk build-project`                           | `project.buildProject`                      |
 | `create-emulator`                                | `tizen-sdk create-emulator`                         | `emulator.createEmulator`                   |
 | `launch-emulator`                                | `tizen-sdk launch-emulator`                         | `emulator.launchEmulator`                   |

@@ -7,6 +7,11 @@ status: approved
 since_cli: 1.0.0
 description: "sdk-init with default path returns success with sdk_path and config_file"
 
+# sdk-init validates that the path exists, so the default ~/tizen-sdk must hold
+# an SDK; the CI safe-tier gate skips this TC (--skip-requires=sdk).
+requires:
+  capabilities: [sdk]
+
 lanes:
   cli:
     argv: ["tizen-sdk", "sdk-init"]

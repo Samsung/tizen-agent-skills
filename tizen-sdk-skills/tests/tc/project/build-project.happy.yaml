@@ -3,9 +3,12 @@ id: tizen-sdk.build-project.happy
 plugin: tizen-sdk
 command: build-project
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "build-project defaults to Debug and returns success with artifacts"
+
+requires:
+  capabilities: [sdk]
 
 # NOTE (2026-09-01): --project pointed at /tmp/tizen-apps/MyApp, a path
 # create-project can never produce (package IDs must be exactly 10
@@ -15,9 +18,13 @@ description: "build-project defaults to Debug and returns success with artifacts
 # rootstrap installed — all separately fixed elsewhere in this session
 # (create-project.*, certificate-manager profile fixtures,
 # download-emulator-package/platform-install auto-detect bug).
+# NOTE (2026-09-23): MyTizenApp01 was never created by any TC; the target is now the BasicUI
+# project create-project.native-happy makes earlier in phase p1-projects
+# (${FIXTURE_PROJECTS_DIR}/MyNativeApp). Signing: the active myProfile from
+# scripts/prepare-device-fixtures.mjs. executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase p1-projects) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
-    argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyTizenApp01"]
+    argv: ["tizen-sdk", "build-project", "--project", "${FIXTURE_PROJECTS_DIR}/MyNativeApp"]
     timeout_sec: 300
     expect:
       status: success

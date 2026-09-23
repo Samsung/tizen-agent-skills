@@ -1026,6 +1026,15 @@ echo ""
 # it's a past incomplete install state, so don't exit early, proceed with reinstall.
 if [ -f "$INSTALL_PATH/sdk.info" ] && [ "$FORCE" != true ]; then
   if [ -x "$INSTALL_PATH/tools/sdb" ] && [ -x "$INSTALL_PATH/tools/tizen-core/tz" ]; then
+    # An explicit --platform that this SDK does not have is NOT "already
+    # installed": exiting 0 here made `--platform 99.99` look like a completed
+    # install to the caller (it only checks sdk.info afterwards).
+    if [ -n "$PLATFORM_VERSION" ] && [ ! -d "$INSTALL_PATH/platforms/tizen-$PLATFORM_VERSION" ]; then
+      log_error "Tizen SDK is already installed at $INSTALL_PATH, but platform TIZEN-$PLATFORM_VERSION is not part of it."
+      log_error "Add it with: tizen-cli tizen-sdk platform-install --platform-version $PLATFORM_VERSION"
+      log_error "or re-run with --force to reinstall the whole SDK with that platform (the repository must offer TIZEN-$PLATFORM_VERSION)."
+      exit 1
+    fi
     log_success "Tizen SDK already installed: $INSTALL_PATH"
     log_info "Confirmed sdk.info and core tools (sdb/tz) (previous install completed successfully)"
     log_info "To reinstall, run again with --force option"
@@ -1051,6 +1060,18 @@ if [ "$DRY_RUN" != true ]; then
   rm -f "$INSTALL_PATH/.install-result" 2>/dev/null || true
   : > "$INSTALL_PATH/.install-running"
   trap _on_exit_marker EXIT
+
+  # Keep the run's own log at <install>/.install.log (overwritten per run). A
+  # failed install that the caller reported as "SDK installation failed: \n\n"
+  # could not be diagnosed afterwards because no log existed anywhere. Every
+  # log_* helper writes to stderr, so mirroring that stream is enough.
+  INSTALL_LOG="$INSTALL_PATH/.install.log"
+  if : > "$INSTALL_LOG" 2>/dev/null; then
+    exec 2> >(tee -a "$INSTALL_LOG" >&2)
+    log_info "Installer log: $INSTALL_LOG"
+  else
+    INSTALL_LOG=""
+  fi
 fi
 
 # Install platform packages (core operation)
@@ -1077,6 +1098,7 @@ if [ "$INSTALL_FAILED" = true ]; then
   log_error "Tizen SDK installation not completed (some packages failed)."
   log_error "Not creating sdk.info. Check network and run again"
   log_error "(Already downloaded packages will be skipped and install continues)."
+  [ -z "${INSTALL_LOG:-}" ] || log_error "Full installer log: $INSTALL_LOG"
   log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
   exit 1
 fi
@@ -1119,6 +1141,7 @@ echo ""
 
 log_success "Tizen SDK platform package installation complete!"
 log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
+[ -z "${INSTALL_LOG:-}" ] || log_info "Installer log: $INSTALL_LOG"
 log_info "Next steps:"
 log_info "1. Open new terminal or apply environment variables and verify with:"
 log_info "   source ${PROFILE_FILE:-~/.bashrc} && tz --version"

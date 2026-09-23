@@ -89,11 +89,14 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 2. **binaryPath** (required) — host binary path with debug symbols (e.g., `<project>/Debug/tpk/bin/<exec>`)
 3. **mode** (optional, default `attach`) — `attach` (app already running, gdbserver attaches to PID) | `launch` (gdbserver starts binary, stops before `main`)
 4. **breakpoints** (optional, comma-separated, `-` for none) — e.g. `service_app_control`, `main`, `service_app_create`
-5. **port** (optional, default `5039`) — gdbserver port forwarded from host to device
+5. **port** (optional, default `5039`, `-` to keep the default) — gdbserver port forwarded from host to device
+6. **serial** (optional) — device serial (`sdb devices`), e.g. `emulator-26101`; default: the first connected device. `--serial` in tizen-cli.
 
 **Mode/breakpoint compatibility:** `main` and `service_app_create` require `launch` mode. If user selects `attach` with a launch-only breakpoint, inform and re-ask.
 
 Exit code: `0` = success envelope. The runner is **setup-only** — it returns `result.gdb_command` for the user to run in an interactive terminal. Do NOT start interactive gdb yourself.
+
+**gdbserver on the device:** the script uses the image's `gdbserver` when it has one; otherwise (emulator images since Tizen 8 ship none) it installs `<sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar` to `/home/owner/share/tmp/sdk_tools/` on first use — the same on-demand install `tizen-dotnet-debug` does for netcoredbg. Nothing to prepare by hand.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
 

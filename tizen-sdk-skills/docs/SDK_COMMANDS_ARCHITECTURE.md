@@ -71,6 +71,7 @@ Standard JSON Envelope 반환 → 에이전트가 사용자에게 결과 전달
 | `project-manager-cli.js` | `createProject()`    | `tizen-create-project` |
 | `project-manager-cli.js` | `deleteProject()`    | `tizen-create-project` (delete 액션) |
 | `project-manager-cli.js` | `listTemplates()`    | `tizen-create-project` |
+| `project-manager-cli.js` | `importWgt()`        | `tizen-create-project` (import-wgt 액션) |
 | `project-manager-cli.js`  | `buildProject()`     | `tizen-build-project`  |
 | `device-manager-cli.js` | `manageDevice()`     | `tizen-device-manager` |
 | `emulator-manager-cli.js` | `manageEmulator()` / `createEmulator()` / `launchEmulator()` | `tizen-create-emulator`, `tizen-launch-emulator` |
@@ -331,4 +332,4 @@ module.exports = {
 ## 관련 문서
 
 - [중간 계층 소개](SDK_LAYERS_OVERVIEW.md) — 각 계층이 왜 필요한지, 왜 .ps1을 직접 호출하지 않는지 설명
-- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 29개 스킬이 34개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)
+- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 29개 스킬이 35개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)

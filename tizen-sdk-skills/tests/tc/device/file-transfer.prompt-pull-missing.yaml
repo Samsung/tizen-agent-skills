@@ -2,13 +2,21 @@ id: tizen-sdk.file-transfer.prompt-pull-missing
 plugin: tizen-sdk
 command: file-transfer
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "Issue #95 — pull of a non-existent device path with a Windows destination: LLM resolves to file-transfer, gets remote_path_not_found, reports it and STOPS (no retry loop). max_tool_calls bounds the retries."
 
 lanes:
   # NOTE (2026-09-17): prompt-only lane — not executable by runner.mjs; NOT run in the
   # Windows safe+device pass (needs an agent session plus the /tmp/logs fixture).
+  # NOTE (2026-09-23): executed in a Claude Code session on Windows with test-vm booted
+  # (run-device-tier.mjs --yes --phase=c-boot-1) and C:\logs\ present, 3 attempts through the
+  # tizen-file-transfer agent: 3/3 resolved to `tizen-sdk file-transfer`, got the failure
+  # envelope with error_category remote_path_not_found (TIZEN_SDK_IO_E003) and stopped without
+  # retrying the same path. Observation: Git Bash's MSYS path conversion turned the /tmp/...
+  # argument into the Windows temp path on the first runner call of two attempts; the agent
+  # corrected the quoting once (still within max_tool_calls) and the category was identical.
+  # pass_rate 2/3 met — promoted draft → approved.
   prompt:
     text: "Pull /tmp/tizen-sdk-skills-definitely-missing-95.txt from the device to C:\\logs\\"
     timeout_sec: 300

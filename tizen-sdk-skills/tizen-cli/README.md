@@ -11,7 +11,7 @@ tizen-cli tizen-sdk <command> [--options...]   # inside the tizen-cli host
 tizen-sdk <command> [--options...]             # standalone launcher (bin/tizen-sdk.js)
 ```
 
-## Commands (flat, 34)
+## Commands (flat, 35)
 
 | Command            | Purpose                                                                        |
 | ------------------ | ------------------------------------------------------------------------------ |
@@ -33,6 +33,7 @@ tizen-sdk <command> [--options...]             # standalone launcher (bin/tizen-
 | `create-project`   | Scaffold a Native/DotNET/WebApp/TV/Platform project from SDK templates (Platform produces .rpm via GBS) |
 | `project-delete`   | Delete a Tizen project directory on the SDK host                               |
 | `list-templates`   | List available project templates                                               |
+| `import-wgt`       | Import an existing .wgt archive as an SDK-generated Web project (`tz import-wgt`) |
 | `build-project`    | Build + package a project (.tpk/.wgt/.rpm)                                     |
 | `create-emulator`  | Create a custom Tizen emulator VM (also list/delete platforms, templates, VMs) |
 | `launch-emulator`  | Launch an existing Tizen emulator VM via em-cli                                |
@@ -78,6 +79,7 @@ the Commander program at build time (`--schema`). Below is the full reference.
 | `create-project`   | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`), `--template`, `--parent-path`, `--name` | `--force` (replace existing target folder)                                                                                                                                         |
 | `project-delete`   | `--project`                                                                      | — (server-side delete; refuses non-Tizen-project paths)                                                                                                                            |
 | `list-templates`   | —                                                                                | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`)                                                                                                                          |
+| `import-wgt`       | `--wgt-path` (file name must be `[A-Za-z0-9]`), `--profile` (`tizen`\|`tv-samsung`), `--platform-version` (`X.Y`, an installed profile), `--working-dir` | —                                                                                                                                                                                  |
 | `build-project`    | `--project`                                                                      | `--build-type` (default: `Debug`, enum: `Debug`\|`Release`\|`Test`), `--sign-profile`, `--arch` (default: `x86_64`, enum: `armv7l`\|`aarch64`\|`i586`\|`x86_64`), `--clean` (full rebuild) |
 | `create-emulator`  | —                                                                                | `--action` (default: `create`, enum: `create`\|`list-platform`\|`list-template`\|`list-vm`\|`delete`), `--vm-name`, `--platform`, `--size`, `--assume-defaults`, `--template`, `--profile` (default: `tizen`), `--launch`, `--timeout`, `--raw-image-path` |
 | `launch-emulator`  | —                                                                                | `--vm-name` (default: first VM), `--timeout` (default: `300`)                                                                                                                       |

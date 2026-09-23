@@ -3,17 +3,25 @@ id: tizen-sdk.gdb-debug.serial
 plugin: tizen-sdk
 command: gdb-debug
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "gdb-debug --app-id --binary --serial returns success with gdb_command"
 
 lanes:
   cli:
     # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs org.tizen.myapp installed on the device and the host binary /tmp/MyApp/bin/MyApp.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "gdb-debug", "--app-id", "org.tizen.myapp", "--binary", "/tmp/MyApp/bin/MyApp", "--serial", "emulator-26101"]
+    # NOTE (2026-09-22): app id / binary replaced by ${FIXTURE_NATIVE_APP_ID} / ${FIXTURE_NATIVE_BIN}
+    # (built by scripts/prepare-device-fixtures.mjs).
+    # NOTE (2026-09-23): gdb-debug had no --serial option (the gdb scripts used sdb's default
+    # target); added on 2026-09-23 — command-specs/debug.ts, debug.js setupGdbDebug, the .ps1/.sh
+    # pin every sdb call to -s <serial> (or the first connected device) and the envelope reports
+    # device_serial, asserted here. Own device phase c5d-gdb-serial (hook debugCleanup first).
+    # Executed on Windows via run-device-tier.mjs --include-drafts on 2026-09-23 — passed;
+    # promoted draft → approved.
+    argv: ["tizen-sdk", "gdb-debug", "--app-id", "${FIXTURE_NATIVE_APP_ID}", "--binary", "${FIXTURE_NATIVE_BIN}", "--serial", "emulator-26101"]
     timeout_sec: 120
     expect:
       status: success
       jsonpath:
         - { path: "$.result.gdb_command", min_length: 1 }
+        - { path: "$.result.device_serial", equals: "emulator-26101" }

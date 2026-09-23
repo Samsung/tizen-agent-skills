@@ -2,15 +2,16 @@ id: tizen-sdk.file-transfer.pull-missing-remote
 plugin: tizen-sdk
 command: file-transfer
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "file-transfer --direction pull of a remote path that does not exist on the device fails with remote_path_not_found (issue #95) — not a bare io_error, so the agent stops instead of retrying"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture directory /tmp/logs/ (and /tmp/log.txt on the device for pull).
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "file-transfer", "--direction", "pull", "--remote", "/tmp/tizen-sdk-skills-definitely-missing-95.txt", "--local", "/tmp/logs/"]
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "file-transfer", "--direction", "pull", "--remote", "/tmp/tizen-sdk-skills-definitely-missing-95.txt", "--local", "${FIXTURE_TMP_DIR}/logs/"]
     timeout_sec: 60
     expect:
       status: failure

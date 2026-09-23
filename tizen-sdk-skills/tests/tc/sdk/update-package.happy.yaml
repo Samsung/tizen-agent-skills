@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "update-package returns success with packages array and summary"
 
+requires:
+  capabilities: [sdk, net]
+
 # NOTE (2026-09-01): result.packages was hardcoded to always be an empty
 # array in common/lib/core/sdk.js's updatePackage() ('const packages = [];',
 # never populated) even though the bash script prints exactly the per-package
@@ -17,6 +20,12 @@ description: "update-package returns success with packages array and summary"
 # without either a genuinely stale package or a full --force reinstall of
 # every installed package, which is out of scope here (same risk class as
 # sdk-install --force).
+# NOTE (2026-09-23): stays draft. In the test harness the CLI runs as `node tizen-sdk.js`, and the
+# installer branch of this command only executes under the packaged CLI (process.pkg;
+# common/lib/core/sdk.js) — without the already-installed short-circuit the command returns
+# execution_error here. It also downloads into / reinstalls the host's real SDK. Needs a
+# host running the packaged CLI with network (capabilities sdk, net); not run in this pass.
+# update-package has no short-circuit: non-pkg it only succeeds from a fresh .package-update-result marker.
 lanes:
   cli:
     argv: ["tizen-sdk", "update-package"]

@@ -421,34 +421,72 @@ if ($Action -eq "stop") {
         }
     }
 
-    # Method 4: Final fallback - try sdb shell poweroff
+    # Method 4: Final fallback - try sdb shell poweroff.
+    # `sdb shell` never returns when the guest's sdbd accepts the connection
+    # but does not answer (seen with a TV emulator whose guest had frozen, and
+    # with a row sdb kept after the emulator process was already killed). The
+    # call is therefore bounded to 15 s per device; without the bound this
+    # action hung past every caller's timeout.
     Write-Info "Method 4: Trying sdb shell poweroff as final fallback..."
     $devRaw = & $sdb devices 2>&1
     $devLines = $devRaw | Where-Object { $_ -notmatch '^List' -and $_.Trim() -ne '' -and $_ -match '\sdevice(\s|$)' }
-    
+
     foreach ($line in $devLines) {
         $parts = $line -split '\s+'
         if ($parts.Count -ge 3) {
             $serial = $parts[0]
             $vm = $parts[2]
-            
+
             Write-Info "Trying sdb shell poweroff for device $serial (VM: $vm)..."
-            & $sdb -s $serial shell poweroff 2>&1 | Out-Null
+            $poOut = [System.IO.Path]::GetTempFileName()
+            $poErr = [System.IO.Path]::GetTempFileName()
+            $po = Start-Process -FilePath $sdb -ArgumentList @('-s', $serial, 'shell', 'poweroff') -PassThru -WindowStyle Hidden -RedirectStandardOutput $poOut -RedirectStandardError $poErr
+            if (-not $po.WaitForExit(15000)) {
+                try { $po.Kill() } catch { }
+                Write-Warn "sdb shell poweroff did not return within 15 s for $serial - the guest's sdbd is not answering; killed the sdb client."
+            }
+            Remove-Item $poOut, $poErr -ErrorAction SilentlyContinue
             Start-Sleep -Seconds 2
-            
+
             $remainingRaw = & $sdb devices 2>&1
             $remainingLines = $remainingRaw | Where-Object { $_ -notmatch '^List' -and $_.Trim() -ne '' -and $_ -match '\sdevice(\s|$)' }
             $stillThere = $false
             foreach ($rLine in $remainingLines) {
                 if ($rLine -match $serial) { $stillThere = $true; break }
             }
-            
+
             if (-not $stillThere) {
                 Write-Success "Device $serial (VM: $vm) stopped via sdb shell poweroff."
                 $stoppedCount++
             } else {
                 Write-Warn "sdb shell poweroff failed for $serial."
             }
+        }
+    }
+
+    # Method 5: rows sdb still lists after everything above are phantoms of a
+    # dead or unreachable emulator (methods 1-2 found no process to kill, the
+    # guest does not answer). Restart the sdb server so it drops them; a row
+    # that comes back belongs to something still listening on the emulator
+    # port, which this script cannot reach - say so instead of hanging.
+    $leftRaw = & $sdb devices 2>&1
+    $leftLines = @($leftRaw | Where-Object { $_ -notmatch '^List' -and $_.Trim() -ne '' -and $_ -match '\sdevice(\s|$)' })
+    if ($leftLines.Count -gt 0) {
+        Write-Info "Method 5: sdb still lists $($leftLines.Count) device(s) - restarting the sdb server to drop stale rows..."
+        & $sdb kill-server 2>&1 | Out-Null
+        Start-Sleep -Seconds 2
+        & $sdb start-server 2>&1 | Out-Null
+        Start-Sleep -Seconds 3
+        $afterRaw = & $sdb devices 2>&1
+        $afterLines = @($afterRaw | Where-Object { $_ -notmatch '^List' -and $_.Trim() -ne '' -and $_ -match '\sdevice(\s|$)' })
+        $dropped = $leftLines.Count - $afterLines.Count
+        if ($dropped -gt 0) {
+            Write-Success "Dropped $dropped stale sdb row(s) by restarting the sdb server."
+            $stoppedCount += $dropped
+        }
+        foreach ($rLine in $afterLines) {
+            $p = $rLine -split '\s+'
+            Write-Warn "Device $($p[0]) (VM: $(if ($p.Count -ge 3) { $p[2] } else { '?' })) is still listed: its emulator process could not be found and its shell does not answer. Close the emulator window or end its process by hand."
         }
     }
 

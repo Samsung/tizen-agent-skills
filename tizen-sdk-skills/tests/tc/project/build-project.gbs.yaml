@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "build-project against a platform-type project auto-detects GBS and returns .rpm artifacts"
 
+requires:
+  capabilities: [sdk, gbs]
+
 # NOTE (2026-09-01): build-project has no --gbs flag at all (see
 # command-specs/project.ts — only --project/--build-type/--sign-profile/
 # --arch/--clean exist); passing it fails with commander.unknownOption
@@ -16,6 +19,7 @@ description: "build-project against a platform-type project auto-detects GBS and
 # ~/GBS-ROOT for artifacts). Repointed at a real `platform` project
 # (create-project --type platform --template dali-demo) — verified this
 # produces GBS-ROOT/.../x86_64/RPMS/*.rpm.
+# NOTE (2026-09-23): capability gbs declared (see build-project.arch) — stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyPlatformApp01"]

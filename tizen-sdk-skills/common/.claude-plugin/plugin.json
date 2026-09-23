@@ -1,7 +1,7 @@
 {
   "name": "tizen-sdk-skills",
   "displayName": "TIZEN SDK SKILLS",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "description": "Claude Code plugin for Tizen SDK installation, project creation, build, and debugging automation",
   "author": {
     "name": "Samsung Electronics"

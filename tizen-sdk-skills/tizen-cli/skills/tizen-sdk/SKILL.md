@@ -1,6 +1,6 @@
 ---
 name: tizen-sdk
-description: Tizen CLI agent workflows umbrella — 타이젠, Tizen 개발, 타이젠 개발 환경, Tizen SDK, 타이젠 앱, tizen-cli 사용법. Use this skill as the router for any Tizen development request that doesn't match a more specific tizen-* skill. It documents the tizen-sdk plugin for tizen-cli — 34 commands covering SDK/platform install and package update, project create/delete/build, emulator and device management, app install, certificates, remote debugging, Playwright web app testing, and dlog analysis — all returning a Standard JSON Envelope.
+description: Tizen CLI agent workflows umbrella — 타이젠, Tizen 개발, 타이젠 개발 환경, Tizen SDK, 타이젠 앱, tizen-cli 사용법. Use this skill as the router for any Tizen development request that doesn't match a more specific tizen-* skill. It documents the tizen-sdk plugin for tizen-cli — 35 commands covering SDK/platform install and package update, project create/delete/import/build, emulator and device management, app install, certificates, remote debugging, Playwright web app testing, and dlog analysis — all returning a Standard JSON Envelope.
 
 metadata:
   author: Samsung Electronics
@@ -31,9 +31,9 @@ Exit code is 0 on success, 1 on failure. Diagnostics go to stderr only — parse
 
 ## Command routing table
 
-All 34 commands. Several commands share one skill — a skill can own more than one
+All 35 commands. Several commands share one skill — a skill can own more than one
 command (e.g. `create-project` / `project-delete`), so the counts differ by design:
-34 commands map onto 29 core skills (the `common/skills/` set). This directory adds
+35 commands map onto 29 core skills (the `common/skills/` set). This directory adds
 two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router and
 `tizen-list-templates` — for 31 total. See
 `docs/SKILLS_COMMANDS_MAPPING.md` for the full mapping.
@@ -59,17 +59,18 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 
 | User intent (ko/en) | Command | Skill |
 |---|---|---|
-| node 확인 | `check-node` | tizen-check-node |
+| node 확인 / Node.js 설치 여부·버전 ("Node.js가 설치되어 있는지 확인해줘", "Do I have Node.js installed?") — NOT `--doctor` | `check-node` | tizen-check-node |
 | 디스크 공간 확인 | `check-disk-space` | tizen-check-disk-space |
 | 닷넷 워크로드 설치 / .NET setup | `dotnet-setup` | tizen-dotnet-setup |
 
-### Project (4)
+### Project (5)
 
 | User intent (ko/en) | Command | Skill |
 |---|---|---|
 | 템플릿 목록 / list templates | `list-templates` | tizen-list-templates (tizen-cli 전용; common에서는 tizen-create-project의 list-templates 액션) |
 | 앱/프로젝트 생성 / create app | `create-project` | tizen-create-project |
 | 프로젝트 삭제 / delete project | `project-delete` | tizen-create-project (delete 액션) |
+| WGT 가져오기 / import a .wgt as a project | `import-wgt` | tizen-create-project (import-wgt 액션) |
 | 빌드 / build | `build-project` | tizen-build-project |
 
 ### Emulator and device (7)
@@ -105,8 +106,8 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 ## Discovering state
 
 - `tizen-cli tizen-sdk --capabilities` — which commands are currently runnable (SDK-dependent commands are unavailable until `sdk-install` succeeds).
-- `tizen-cli tizen-sdk --doctor` — environment checks (Node, scripts, shell, SDK, sdb, em-cli). The em-cli check probes `em-cli list-vm`, so a broken emulator Java/JNA runtime is reported here before any create/launch-emulator call fails.
-- `tizen-cli tizen-sdk --schema` — full option schema (required/enum/default) for all 34 commands.
+- `tizen-cli tizen-sdk --doctor` — environment checks (Node, scripts, shell, SDK, sdb, em-cli). The em-cli check probes `em-cli list-vm`, so a broken emulator Java/JNA runtime is reported here before any create/launch-emulator call fails. It is a whole-setup sweep: a question about Node.js alone ("is Node.js installed?", "which node version?") is answered by `check-node`, not by doctor.
+- `tizen-cli tizen-sdk --schema` — full option schema (required/enum/default) for all 35 commands.
 - `tizen-cli --schema` — full option schema for every installed plugin.
 
 ## Typical pipeline

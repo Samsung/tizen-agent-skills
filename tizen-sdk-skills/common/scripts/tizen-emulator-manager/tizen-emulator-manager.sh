@@ -1073,6 +1073,16 @@ launch_vm() {
   launch_out=$("$EMCLI" launch -n "$vm" "$@" </dev/null 2>&1) || rc=$?
   [ -n "$launch_out" ] && printf '%s\n' "$launch_out" >&2
   if [ "$rc" -ne 0 ] || emcli_failed "$launch_out"; then
+    # em-cli refuses to start a VM that is already running. If sdb now shows
+    # that VM online (its name resolved while em-cli was failing), that is the
+    # outcome the caller wanted — report it as success.
+    local running_serial
+    running_serial=$("$SDB" devices 2>/dev/null | grep -E '[[:space:]]device([[:space:]]|$)' | awk -v vm="$vm" '$3 == vm {print $1; exit}' || true)
+    if [ -n "$running_serial" ]; then
+      log_warn "em-cli refused the launch, but VM '$vm' is already running and connected: $running_serial"
+      echo "DEVICE_SERIAL=$running_serial"
+      exit 0
+    fi
     log_error "Failed to launch emulator VM '$vm'."
     log_error "Check if the VM is already running, or launch it manually via Tizen Studio."
     # em-cli dying inside Java (missing JNA bridge, broken JVM) is a host
@@ -1544,18 +1554,37 @@ if [ "$ACTION" = "launch" ]; then
     exit 0
   }
 
+  # Online rows of `sdb devices` (state "device").
+  online_device_rows() {
+    "$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' || true
+  }
+
   # Already running and connected? Report it rather than launching a second time.
   # Check EVERY connected device row (3rd column is the VM name), not just the
   # first one — the target VM may not be the first entry in `sdb devices`.
-  while IFS= read -r device_row; do
-    [ -n "$device_row" ] || continue
-    EXISTING_SERIAL=$(echo "$device_row" | awk '{print $1}')
-    VM_NAME_OF_DEVICE=$(echo "$device_row" | awk '{print $3}')
-    if [ "$VM_NAME_OF_DEVICE" = "$VM_NAME" ]; then
-      log_ok "VM '$VM_NAME' is already running and connected: $EXISTING_SERIAL"
-      report_launch_success "$EXISTING_SERIAL"
-    fi
-  done < <("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' || true)
+  # Right after a boot the row can still carry "<unknown>" as the name for a
+  # few seconds; a check at that instant misses and em-cli then refuses to
+  # launch the running VM, so poll while any emulator row is unresolved (≤15 s).
+  name_wait=0
+  while :; do
+    unresolved=0
+    while IFS= read -r device_row; do
+      [ -n "$device_row" ] || continue
+      EXISTING_SERIAL=$(echo "$device_row" | awk '{print $1}')
+      VM_NAME_OF_DEVICE=$(echo "$device_row" | awk '{print $3}')
+      if [ "$VM_NAME_OF_DEVICE" = "$VM_NAME" ]; then
+        log_ok "VM '$VM_NAME' is already running and connected: $EXISTING_SERIAL"
+        report_launch_success "$EXISTING_SERIAL"
+      fi
+      case "$EXISTING_SERIAL" in
+        emulator-*) if [ -z "$VM_NAME_OF_DEVICE" ] || [ "$VM_NAME_OF_DEVICE" = "<unknown>" ]; then unresolved=1; fi ;;
+      esac
+    done < <(online_device_rows)
+    if [ "$unresolved" -eq 0 ] || [ "$name_wait" -ge 15 ]; then break; fi
+    [ "$name_wait" -eq 0 ] && log_info "An emulator is online but its VM name is not resolved yet — waiting for sdb before launching..."
+    sleep 1
+    name_wait=$((name_wait + 1))
+  done
 
   # Record currently connected serials so we can detect the NEW emulator
   PREVIOUS_SERIALS=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' | awk '{print $1}' | sort | tr '\n' ' ' || true)

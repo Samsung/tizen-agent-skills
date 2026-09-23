@@ -11,7 +11,7 @@ tizen-cli tizen-sdk <command> [--options...]   # tizen-cli 호스트 안에서
 tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js)
 ```
 
-## 명령어 (flat, 34개)
+## 명령어 (flat, 35개)
 
 | 명령어 | 용도 |
 |---|---|
@@ -33,6 +33,7 @@ tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js
 | `create-project` | SDK 템플릿으로 Native/DotNET/WebApp/TV/Platform 프로젝트 생성 (Platform은 GBS로 .rpm 생성) |
 | `project-delete` | SDK 호스트의 Tizen 프로젝트 디렉터리 삭제 |
 | `list-templates` | 사용 가능한 프로젝트 템플릿 목록 조회 |
+| `import-wgt` | 기존 .wgt 아카이브를 SDK가 생성한 Web 프로젝트로 가져오기 (`tz import-wgt`) |
 | `build-project` | 프로젝트 빌드 + 패키징 (.tpk/.wgt/.rpm) |
 | `create-emulator` | 커스텀 Tizen 에뮬레이터 VM 생성 (플랫폼/템플릿/VM 조회 및 삭제도 지원) |
 | `launch-emulator` | em-cli로 기존 Tizen 에뮬레이터 VM 실행 |
@@ -78,6 +79,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `create-project` | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`), `--template`, `--parent-path`, `--name` | `--force` (기존 대상 폴더 대체) |
 | `project-delete` | `--project` | — (서버 측 삭제; Tizen 프로젝트가 아닌 경로는 거부) |
 | `list-templates` | — | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`) |
+| `import-wgt` | `--wgt-path` (파일명은 `[A-Za-z0-9]`만), `--profile` (`tizen`\|`tv-samsung`), `--platform-version` (`X.Y`, 설치된 프로필), `--working-dir` | — |
 | `build-project` | `--project` | `--build-type` (기본: `Debug`, enum: `Debug`\|`Release`\|`Test`), `--sign-profile`, `--arch` (기본: `x86_64`, enum: `armv7l`\|`aarch64`\|`i586`\|`x86_64`), `--clean` (전체 재빌드) |
 | `create-emulator` | — | `--action` (기본: `create`, enum: `create`\|`list-platform`\|`list-template`\|`list-vm`\|`delete`), `--vm-name`, `--platform`, `--size`, `--assume-defaults`, `--template`, `--profile` (기본: `tizen`), `--launch`, `--timeout`, `--raw-image-path` |
 | `launch-emulator` | — | `--vm-name` (기본: 첫 번째 VM), `--timeout` (기본: `300`) |

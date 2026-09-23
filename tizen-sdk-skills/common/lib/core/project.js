@@ -2,7 +2,7 @@
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
 /**
- * Project domain: create / build / list templates / install app
+ * Project domain: create / import / build / list templates / install app
  *
  * Each function executes its corresponding script under scripts/, and instead of
  * extensive toolchain output, summarizes key lines and returns as Standard JSON Envelope.
@@ -24,7 +24,12 @@ const {
   extractBuildDiagnostics,
 } = require("./output-summary");
 const { preflightSigningProfile } = require("./certificate");
-const { readSdkPath, repairSdkInfo, describeSdkInfoRepair } = require("./sdk");
+const {
+  readSdkPath,
+  repairSdkInfo,
+  describeSdkInfoRepair,
+  describeChildExit,
+} = require("./sdk");
 const { resolveSdbBinary, resolveSerial, ensureSdbServer } = require("./sdb");
 const {
   detectAppType,
@@ -566,6 +571,257 @@ async function createProject(
       command,
       "io_error",
       `Failed to create project: ${error.message}`,
+      null,
+      startTime,
+    );
+  }
+}
+
+/**
+ * Build the paired argument strings required by execPluginScript().
+ *
+ * Keep the Windows and Bash mappings in one tested helper: the platform
+ * scripts intentionally use different parameter spellings.
+ *
+ * @param {string} normalizedWgtPath - resolved WGT archive path
+ * @param {string} normalizedProfile - tizen | tv-samsung
+ * @param {string} normalizedVersion - SDK profile version, e.g. 10.0
+ * @param {string} normalizedWorkingDir - resolved workspace path
+ * @returns {{winArgs: string, unixArgs: string}} Platform-specific script arguments
+ */
+function buildImportWgtScriptArgs(
+  normalizedWgtPath,
+  normalizedProfile,
+  normalizedVersion,
+  normalizedWorkingDir,
+) {
+  const windowsWgtPath = normalizedWgtPath.replace(/\\/g, "/");
+  const windowsWorkingDir = normalizedWorkingDir.replace(/\\/g, "/");
+  return {
+    winArgs: [
+      `-WgtPath "${windowsWgtPath}"`,
+      `-Profile "${normalizedProfile}"`,
+      `-PlatformVersion "${normalizedVersion}"`,
+      `-WorkingDir "${windowsWorkingDir}"`,
+    ].join(" "),
+    unixArgs: [
+      `--wgt-path="${normalizedWgtPath}"`,
+      `--profile="${normalizedProfile}"`,
+      `--platform-version="${normalizedVersion}"`,
+      `--working-dir="${normalizedWorkingDir}"`,
+    ].join(" "),
+  };
+}
+
+/**
+ * Import a WGT archive as a Tizen Web project.
+ *
+ * `tz import-wgt` owns archive extraction and project generation.  The runner
+ * deliberately mirrors its output-directory convention rather than attempting
+ * to inspect or rewrite the widget archive itself.
+ *
+ * @param {string} wgtPath - existing .wgt archive; its file name (without
+ *   .wgt) becomes the project name, so tz only accepts [A-Za-z0-9] there
+ * @param {string} profile - tizen | tv-samsung
+ * @param {string} platformVersion - SDK platform version, e.g. 10.0 — the
+ *   script refuses a `<profile>-<version>` that `tz list templates` does not
+ *   list (tz itself would accept it and silently ignore it)
+ * @param {string} workingDir - existing SDK-host workspace directory;
+ *   `<workingDir>/<project name>` must not exist yet
+ * @param {string} command - envelope command label
+ * @returns {object} Standard JSON Envelope
+ */
+async function importWgt(
+  wgtPath,
+  profile,
+  platformVersion,
+  workingDir,
+  command = "tizen-sdk import-wgt",
+) {
+  const startTime = Date.now();
+  try {
+    if (!wgtPath || !profile || !platformVersion || !workingDir) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        "Missing required parameters: wgtPath, profile, platformVersion, workingDir",
+        "importWgt('/path/to/MyWidget.wgt', 'tizen', '10.0', '/path/to/workspace')",
+        startTime,
+      );
+    }
+
+    const normalizedWgtPath = path.resolve(wgtPath);
+    const normalizedWorkingDir = path.resolve(workingDir);
+    const normalizedProfile = String(profile).trim().toLowerCase();
+    const normalizedVersion = String(platformVersion).trim();
+
+    if (
+      !fs.existsSync(normalizedWgtPath) ||
+      !fs.statSync(normalizedWgtPath).isFile()
+    ) {
+      return formatError(
+        command,
+        "io_error",
+        `WGT file does not exist: ${normalizedWgtPath}`,
+        null,
+        startTime,
+      );
+    }
+    if (path.extname(normalizedWgtPath).toLowerCase() !== ".wgt") {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid WGT file: ${normalizedWgtPath}. Expected a .wgt archive.`,
+        null,
+        startTime,
+      );
+    }
+    if (!["tizen", "tv-samsung"].includes(normalizedProfile)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid profile: ${profile}. Must be tizen or tv-samsung.`,
+        null,
+        startTime,
+      );
+    }
+    if (!/^\d+\.\d+$/.test(normalizedVersion)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid platform version: ${platformVersion}. Use <major>.<minor>, such as 10.0.`,
+        null,
+        startTime,
+      );
+    }
+    if (
+      !fs.existsSync(normalizedWorkingDir) ||
+      !fs.statSync(normalizedWorkingDir).isDirectory()
+    ) {
+      return formatError(
+        command,
+        "io_error",
+        `Working directory does not exist: ${normalizedWorkingDir}`,
+        null,
+        startTime,
+      );
+    }
+
+    for (const [value, label] of [
+      [normalizedWgtPath, "WGT path"],
+      [normalizedWorkingDir, "working directory"],
+    ]) {
+      const unsafe = checkShellSafe(value, label, command, startTime);
+      if (unsafe) return unsafe;
+    }
+
+    // `tz import-wgt` names the project after the archive file name and only
+    // accepts [a-zA-Z0-9] there — `my-app.wgt` or `Weather.Widget.wgt` die
+    // inside tz with "tz: error: can only have [a-zA-Z0-9]" and no hint that
+    // renaming the file is the fix. Say so before running anything.
+    const wgtFileName = path.basename(normalizedWgtPath);
+    const projectName = path.basename(
+      normalizedWgtPath,
+      path.extname(normalizedWgtPath),
+    );
+    if (!/^[A-Za-z0-9]+$/.test(projectName)) {
+      const suggested = projectName.replace(/[^A-Za-z0-9]/g, "") || "MyWidget";
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid WGT file name "${wgtFileName}": tz import-wgt names the project after the file and allows only letters and digits [A-Za-z0-9] (no '.', '-', '_' or spaces). Rename the archive (for example ${suggested}.wgt) and retry.`,
+        null,
+        startTime,
+      );
+    }
+
+    // Pre-check the target folder like createProject does: tz refuses to
+    // import over an existing directory ("tz: error: <name> already exists")
+    // and a remote MCP client cannot clean it up with a local rm -rf.
+    const projectPath = path.join(normalizedWorkingDir, projectName);
+    if (fs.existsSync(projectPath)) {
+      return formatError(
+        command,
+        "project_creation_failed",
+        `Target folder already exists: ${projectPath}. Delete it first with the delete action (project-delete), or import into a different --working-dir.`,
+        null,
+        startTime,
+      );
+    }
+
+    const resolved = resolveScript("tizen-import-wgt");
+    if (resolved.error)
+      return formatError(command, "io_error", resolved.error, null, startTime);
+
+    let output;
+    try {
+      const args = buildImportWgtScriptArgs(
+        normalizedWgtPath,
+        normalizedProfile,
+        normalizedVersion,
+        normalizedWorkingDir,
+      );
+      output = execPluginScript(
+        resolved.scriptPath,
+        args.winArgs,
+        args.unixArgs,
+      );
+    } catch (error) {
+      // execSync's message is "Command failed: <cmd line>" — the script's real
+      // diagnostic ([ERROR] ..., "tz: error: ...") is on stderr. Surface it.
+      // Colour codes are stripped (log_error may emit them) and the fallback
+      // is the FIRST line: PowerShell wraps unstructured stderr at console
+      // width, so the last line can be a fragment.
+      const scriptOutput = `${error.stderr || ""}\n${error.stdout || ""}`;
+      const lines = scriptOutput
+        // eslint-disable-next-line no-control-regex
+        .replace(/\x1b\[[0-9;]*m/g, "")
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      const diag =
+        lines.find((line) => /^(\[ERROR\]|Error:|tz: error:)/i.test(line)) ||
+        lines[0] ||
+        error.message;
+      return formatError(
+        command,
+        "project_creation_failed",
+        `WGT import failed: ${diag}`,
+        null,
+        startTime,
+      );
+    }
+
+    if (
+      !fs.existsSync(projectPath) ||
+      !fs.statSync(projectPath).isDirectory()
+    ) {
+      return formatError(
+        command,
+        "project_creation_failed",
+        `WGT import completed but the expected project folder was not created: ${projectPath}`,
+        null,
+        startTime,
+      );
+    }
+
+    const envelope = new Envelope(command);
+    envelope.startTime = startTime;
+    return envelope.success(
+      {
+        wgt_path: normalizedWgtPath,
+        project_path: projectPath,
+        profile: normalizedProfile,
+        platform_version: normalizedVersion,
+        status: "imported",
+      },
+      { warnings: summarizeCreateProjectOutput(output) },
+    );
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `Failed to import WGT: ${error.message}`,
       null,
       startTime,
     );
@@ -1342,26 +1598,140 @@ function resolveProjectDirFromPackage(resolvedPath) {
 }
 
 /**
- * Resolve the device serial RDS should target, without disturbing the
- * install script's own device handling.
+ * Resolve the device install-app should target when no serial was given:
+ * `sdb devices`, auto-select when exactly one device is online.
  *
- * This queries `sdb devices` itself so RDS and the install script always
- * agree on the same device — ambiguous (0 or >1 device) cases resolve
- * to `null` and the script falls through to its existing
- * auto-provision / "specify a serial" behavior.
+ * Returns resolveSerial()'s shape so the caller can map its errorCategory
+ * (device_not_found / multiple_devices / io_error) straight onto the
+ * envelope — the same categories the sibling device commands return — instead
+ * of leaving the ambiguous cases to the install script's exit 1.
  *
- * @returns {string|null}
+ * @returns {{serial: string, devices?: Array}|{errorCategory: string, message: string, devices?: Array}}
  */
-function resolveSingleDeviceSerial() {
+function resolveInstallTargetDevice() {
   const sdbResolved = resolveSdbBinary();
-  if (sdbResolved.error) return null;
+  if (sdbResolved.error) {
+    return { errorCategory: "io_error", message: sdbResolved.error };
+  }
   // viaTempFile: this may be the very first sdb call of the session, which
   // has to start the sdb server daemon — a plain pipe would then hang
   // forever (the daemon inherits the pipe write handle; see runSdb()).
-  const result = resolveSerial(sdbResolved.sdbPath, null, {
-    viaTempFile: true,
-  });
-  return result.serial || null;
+  return resolveSerial(sdbResolved.sdbPath, null, { viaTempFile: true });
+}
+
+/** device_not_found text shared by the pre-check and the script-output fallback. */
+const NO_DEVICE_MESSAGE =
+  "No connected device or emulator. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it, then retry the install with its device_serial.";
+
+/**
+ * Turn a non-zero exit of the install script into the right failure envelope.
+ *
+ * Every branch classifies on the script's OUTPUT only. The generic fallback
+ * used to embed `error.message`, which for execSync is
+ * "Command failed: <the full shell command line>" — a line that names the
+ * script path, the package path and the device serial, and diagnoses nothing.
+ * It now reports the exit code and the key output lines instead.
+ *
+ * @param {string} command - envelope command name
+ * @param {string} combined - script stdout + stderr
+ * @param {Error & {status?: number, signal?: string}} error - execSync error
+ * @param {number} startTime
+ * @returns {object} failure envelope
+ */
+function classifyInstallFailure(command, combined, error, startTime) {
+  // exit 1 + "No devices found" = no device signal (script convention)
+  if (/No devices found/i.test(combined)) {
+    return formatError(
+      command,
+      "device_not_found",
+      NO_DEVICE_MESSAGE,
+      null,
+      startTime,
+    );
+  }
+  // The script auto-selects only when exactly one device is online. Normally
+  // the JS pre-check has already answered this; a device that appeared in
+  // between still has to come back as multiple_devices, not io_error.
+  if (/Multiple devices found/i.test(combined)) {
+    const listed = [];
+    const listRe = /^\s*\d+\.\s+(\S+)\s*$/gm;
+    let m;
+    while ((m = listRe.exec(combined)) !== null) listed.push(m[1]);
+    return formatError(
+      command,
+      "multiple_devices",
+      `Multiple devices connected${listed.length ? ` (${listed.join(", ")})` : ""}. Pick one and re-run with its serial ` +
+        "(--serial <serial> in tizen-cli, --device-serial <serial> in the plugin runner).",
+      null,
+      startTime,
+    );
+  }
+  // Certificate/signing errors — the device does not trust the certificate
+  // the package was signed with. Since builds without a profile are signed
+  // with the SDK's default developer certificates (emulator-only), this is
+  // most often a default-signed package pushed to a real device, or a
+  // profile whose distributor certificate does not match the device.
+  if (
+    /Invalid certificate chain|Check certificate error|certificate.*signature/i.test(
+      combined,
+    )
+  ) {
+    const detail = summarizeInstallOutput(combined).join(" | ");
+    return formatError(
+      command,
+      "certificate_error",
+      `App installation failed due to a certificate/signing error${detail ? ` — ${detail}` : ""}. The device does not trust the package's signing certificate — typically the package was signed with the SDK default developer certificates (no signing profile), which only the emulator accepts, or the profile's distributor certificate does not cover this device. Use tizen-certificate-manager to create a signing profile for this device (Samsung certificate for Samsung devices), then rebuild with tizen-build-project passing the profile name, and retry install.`,
+      null,
+      startTime,
+    );
+  }
+  // Package ID too short — Tizen requires exactly 10 alphanumeric characters.
+  // Shorter IDs cause "Load archive info fail" / "Operation not allowed [-4]".
+  if (/Load archive info fail|Operation not allowed \[-4\]/i.test(combined)) {
+    return formatError(
+      command,
+      "invalid_package_id",
+      'App installation failed with "Load archive info fail" / "Operation not allowed [-4]". ' +
+        "This typically means the package ID is shorter than 10 characters. " +
+        "Tizen requires exactly 10 alphanumeric characters for the package ID. " +
+        'Recreate the project with an app name containing at least 10 alphanumeric characters (e.g., "MyTizenApp01"), then rebuild and retry install.',
+      null,
+      startTime,
+    );
+  }
+  // RPK registration conflict — error -21. The device package-manager's
+  // package_res_info table has PRIMARY KEY(res_type, res_version). The SDK
+  // template hardcodes res-type="tizen.sample.resource" and res-version="1.5.0"
+  // for all RPK projects, so a second RPK with the same values collides.
+  // This is now fixed at project creation time (patchRpkManifestResType),
+  // but older projects created before the fix may still hit this.
+  if (
+    /Register application error \[-21\]|key\[error\] val\[-21\]/i.test(combined)
+  ) {
+    return formatError(
+      command,
+      "rpk_res_type_conflict",
+      "RPK installation failed with error -21 (Register application error). " +
+        "The device package-manager rejected the package because another RPK with the same res-type/res-version is already installed. " +
+        'The SDK template hardcodes res-type="tizen.sample.resource" and res-version="1.5.0" for all RPK projects, ' +
+        "and the device's package_res_info table has PRIMARY KEY(res_type, res_version). " +
+        "Fix: uninstall the conflicting RPK (sdb shell pkgcmd -u -n <pkgid>), or recreate this project with the tizen-create-project skill " +
+        "(which now patches res-type to the package ID, making each RPK unique), then rebuild and retry install.",
+      null,
+      startTime,
+    );
+  }
+
+  const detail = summarizeInstallOutput(combined).join(" | ");
+  // Timeout = code ETIMEDOUT (status null, SIGTERM), not `killed`.
+  const exitInfo = describeChildExit(error, "install script").text;
+  return formatError(
+    command,
+    "io_error",
+    `App installation failed (${exitInfo})${detail ? `: ${detail}` : ". The script printed no diagnostic line."}`,
+    null,
+    startTime,
+  );
 }
 
 /**
@@ -1546,17 +1916,52 @@ async function installApp(
     const unsafePackage = checkShellSafe(resolvedPath, "package path", command);
     if (unsafePackage) return unsafePackage;
 
-    // RDS: resolve project dir + device serial once, in JS, so both the RDS
-    // attempt below and the install script (via -s/-DeviceSerial) target the
-    // same device (§2a). Gated behind rdsEnabled() so the kill switch reverts
-    // this to exactly today's behavior — no extra `sdb devices` call, no
-    // RDS attempt.
+    // Resolve the target device once, in JS, before anything runs: an explicit
+    // serial is taken as is; otherwise exactly one online device must be
+    // connected. "No device" and "more than one device" are decided HERE, with
+    // the same categories every sibling command (screenshot, file-transfer,
+    // sdb-helper) returns — device_not_found (DEVICE_E001) and
+    // multiple_devices (DEVICE_E002). Before, the install script exited 1 with
+    // "Multiple devices found" and the caller filed that under io_error
+    // (IO_E001) with the full shell command line in the message.
+    //
+    // The serial is also what the RDS attempt below and the install script
+    // (via -s/-DeviceSerial) both target, so they cannot disagree.
+    let resolvedSerial = deviceSerial || null;
+    if (!resolvedSerial) {
+      const deviceResolution = resolveInstallTargetDevice();
+      if (deviceResolution.errorCategory === "device_not_found") {
+        return formatError(
+          command,
+          "device_not_found",
+          NO_DEVICE_MESSAGE,
+          null,
+          startTime,
+        );
+      }
+      if (deviceResolution.errorCategory === "multiple_devices") {
+        const serials = (deviceResolution.devices || [])
+          .filter((d) => d.state === "device")
+          .map((d) => d.serial);
+        return formatError(
+          command,
+          "multiple_devices",
+          `Multiple devices connected (${serials.join(", ")}). Pick one and re-run with its serial ` +
+            "(--serial <serial> in tizen-cli, --device-serial <serial> in the plugin runner).",
+          null,
+          startTime,
+        );
+      }
+      // io_error (sdb itself failed) or no sdb binary: fall through and let the
+      // install script report the SDK/tool problem it will hit first.
+      resolvedSerial = deviceResolution.serial || null;
+    }
+
+    // RDS: the project dir is only needed for the RDS attempt below. Gated
+    // behind rdsEnabled() so the kill switch disables the RDS path entirely.
     const projectDir = rdsEnabled()
       ? resolveProjectDirFromPackage(resolvedPath)
       : null;
-    const resolvedSerial = rdsEnabled()
-      ? (deviceSerial ?? resolveSingleDeviceSerial())
-      : deviceSerial;
 
     let rdsResult = null;
     if (
@@ -1604,6 +2009,9 @@ async function installApp(
           app_launched: Boolean(runAfterInstall),
           app_running: null, // no app_launcher -S check on this path
           deploy_type: rdsResult.type, // "rds" | "fast-deploy"
+          ...(rdsResult.rdsTimings
+            ? { rds_timings: rdsResult.rdsTimings }
+            : {}),
         },
         { warnings: [] },
       );
@@ -1638,84 +2046,7 @@ async function installApp(
       });
     } catch (error) {
       const combined = `${error.stdout || ""}\n${error.stderr || ""}`;
-      // exit 1 + "No devices found" = no device signal (script convention)
-      if (/No devices found/i.test(combined)) {
-        return formatError(
-          command,
-          "device_not_found",
-          "No connected device or emulator. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it, then retry the install with its device_serial.",
-          null,
-          startTime,
-        );
-      }
-      // Certificate/signing errors — the device does not trust the certificate
-      // the package was signed with. Since builds without a profile are signed
-      // with the SDK's default developer certificates (emulator-only), this is
-      // most often a default-signed package pushed to a real device, or a
-      // profile whose distributor certificate does not match the device.
-      if (
-        /Invalid certificate chain|Check certificate error|certificate.*signature/i.test(
-          combined,
-        )
-      ) {
-        const detail = summarizeInstallOutput(combined).join(" | ");
-        return formatError(
-          command,
-          "certificate_error",
-          `App installation failed due to a certificate/signing error${detail ? ` — ${detail}` : ""}. The device does not trust the package's signing certificate — typically the package was signed with the SDK default developer certificates (no signing profile), which only the emulator accepts, or the profile's distributor certificate does not cover this device. Use tizen-certificate-manager to create a signing profile for this device (Samsung certificate for Samsung devices), then rebuild with tizen-build-project passing the profile name, and retry install.`,
-          null,
-          startTime,
-        );
-      }
-      // Package ID too short — Tizen requires exactly 10 alphanumeric characters.
-      // Shorter IDs cause "Load archive info fail" / "Operation not allowed [-4]".
-      if (
-        /Load archive info fail|Operation not allowed \[-4\]/i.test(combined)
-      ) {
-        return formatError(
-          command,
-          "invalid_package_id",
-          'App installation failed with "Load archive info fail" / "Operation not allowed [-4]". ' +
-            "This typically means the package ID is shorter than 10 characters. " +
-            "Tizen requires exactly 10 alphanumeric characters for the package ID. " +
-            'Recreate the project with an app name containing at least 10 alphanumeric characters (e.g., "MyTizenApp01"), then rebuild and retry install.',
-          null,
-          startTime,
-        );
-      }
-      // RPK registration conflict — error -21. The device package-manager's
-      // package_res_info table has PRIMARY KEY(res_type, res_version). The SDK
-      // template hardcodes res-type="tizen.sample.resource" and res-version="1.5.0"
-      // for all RPK projects, so a second RPK with the same values collides.
-      // This is now fixed at project creation time (patchRpkManifestResType),
-      // but older projects created before the fix may still hit this.
-      if (
-        /Register application error \[-21\]|key\[error\] val\[-21\]/i.test(
-          combined,
-        )
-      ) {
-        return formatError(
-          command,
-          "rpk_res_type_conflict",
-          "RPK installation failed with error -21 (Register application error). " +
-            "The device package-manager rejected the package because another RPK with the same res-type/res-version is already installed. " +
-            'The SDK template hardcodes res-type="tizen.sample.resource" and res-version="1.5.0" for all RPK projects, ' +
-            "and the device's package_res_info table has PRIMARY KEY(res_type, res_version). " +
-            "Fix: uninstall the conflicting RPK (sdb shell pkgcmd -u -n <pkgid>), or recreate this project with the tizen-create-project skill " +
-            "(which now patches res-type to the package ID, making each RPK unique), then rebuild and retry install.",
-          null,
-          startTime,
-        );
-      }
-      const detail = summarizeInstallOutput(combined).join(" | ");
-
-      return formatError(
-        command,
-        "io_error",
-        `App installation failed: ${error.message}${detail ? ` — ${detail}` : ""}`,
-        null,
-        startTime,
-      );
+      return classifyInstallFailure(command, combined, error, startTime);
     }
 
     // The script prints this marker only on the exit-0 path — if it is missing
@@ -1765,8 +2096,16 @@ async function installApp(
     const installedSerial = serialMatch
       ? serialMatch[1].trim()
       : resolvedSerial || null;
+    let rdsTimings = null;
     if (installedSerial && rdsEligible(projectDir, resolvedPath)) {
-      await updateRdsState(projectDir, installedSerial, "full").catch(() => {});
+      const rdsResult = await updateRdsState(
+        projectDir,
+        installedSerial,
+        "full",
+      ).catch(() => {});
+      if (rdsResult && rdsResult.rdsTimings) {
+        rdsTimings = rdsResult.rdsTimings;
+      }
     }
 
     const envelope = new Envelope(command);
@@ -1780,6 +2119,7 @@ async function installApp(
         app_launched: launched,
         app_running: appRunning,
         deploy_type: "full",
+        ...(rdsTimings ? { rds_timings: rdsTimings } : {}),
       },
       {
         // Key lines only (warnings/errors) instead of full installation log
@@ -1799,13 +2139,16 @@ async function installApp(
 
 module.exports = {
   VALID_PROJECT_TYPES,
+  classifyInstallFailure,
   validatePackageId,
   isPlatformProject,
   createProject,
+  importWgt,
   deleteProject,
   buildProject,
   listTemplates,
   installApp,
+  buildImportWgtScriptArgs,
   // Exported for tests — the safety gate for deleteProject / createProject --force.
   isTizenProjectDir,
   // Exported for tests — the APP_RUNNING contract with the install scripts.

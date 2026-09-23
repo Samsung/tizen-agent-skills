@@ -151,6 +151,12 @@ The runner performs device discovery, debug-mode launch and port forwarding inte
   `test-failure.png` in the project dir if the output references it.
 - **Playwright missing (failure, `dependency_missing`):** Run `npm install playwright` in the
   test project directory (NEVER in the plugin cache), then retry.
+- **Node.js runtime problem (failure):** the test child is an external `node`, probed with
+  `node --version` first. Two different envelopes, do not confuse them: `node_not_found` — no
+  `node` on PATH at all → install Node.js 20+ / fix PATH; `execution_error` saying node "is on
+  PATH but ... exited abnormally" (exit code + stderr quoted) or "did not answer" → Node.js IS
+  installed but broken/hung (missing DLL, wrong architecture, corrupted install) → repair or
+  reinstall it; do NOT tell the user to install Node.js.
 - **Endpoint dead (failure, `inspector_not_available`):** The app was restarted (RWI port
   invalidated) or the image does not support RWI — re-run WITHOUT `--no-setup`; if it
   persists, the image may not support the Remote Web Inspector (emulator/dev images do).

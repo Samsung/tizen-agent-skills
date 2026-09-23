@@ -91,7 +91,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js launcher
 
 node bin/tizen-sdk.js --doctor           # SDK path, cache and runner status
-node bin/tizen-sdk.js --capabilities     # which of the 34 commands are usable right now
+node bin/tizen-sdk.js --capabilities     # which of the 35 commands are usable right now
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -130,7 +130,7 @@ returns the result as a Standard JSON Envelope. See the
 [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) for end-to-end examples and the
 [Skills Reference](docs/SKILLS_REFERENCE.en.md) for the full list of trigger phrases.
 
-## Commands (34)
+## Commands (35)
 
 Every command below is exposed as a skill named `tizen-<command>` in the AI hosts
 (for example `tizen-build-project`) and as `tizen-sdk <command>` in the standalone CLI.
@@ -157,6 +157,7 @@ correspondence.
 | `create-project` | Project | Scaffold a Native/DotNET/WebApp/TV/Platform project (Platform produces .rpm via GBS) |
 | `project-delete` | Project | Delete a Tizen project directory |
 | `list-templates` | Project | List available project templates |
+| `import-wgt` | Project | Import a `.wgt` archive as an SDK-generated Web project |
 | `build-project` | Project | Build + package a project (.tpk/.wgt/.rpm) |
 | `create-emulator` | Device | Create a custom Tizen emulator VM |
 | `launch-emulator` | Device | Launch an existing emulator VM |
@@ -210,7 +211,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │   ├── hooks/              #   BeforeTool adapter (Gemini hook protocol -> shared guards)
 │   └── setup/              #   wrappers
 ├── tizen-cli/              # standalone tizen-sdk CLI (canonical source)
-│   ├── src/                #   TypeScript shell (34 flat commands, envelope adapter, --schema/--doctor)
+│   ├── src/                #   TypeScript shell (35 flat commands, envelope adapter, --schema/--doctor)
 │   │   └── command-specs/  #   Per-domain declarative specs (sdk, check, project, device, debug, test, certificate)
 │   ├── skills/             #   31 SKILL.md files for agents driving the CLI (29 + umbrella router + tizen-list-templates)
 │   ├── esbuild.config.js   #   Build config
@@ -283,7 +284,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-09-18 against v1.3.0. Every row can be re-measured with the
+Measured on 2026-09-23 against v1.3.1. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -292,14 +293,14 @@ or test suite is added.
 | Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
 | Skills (`common/skills/`) | 29 (+2 CLI-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI commands | 34 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI commands | 35 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Guard hooks | 3 PreToolUse scripts, 12 guard rules | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 66 files, ≈2,280 assertions | `node common/lib/tests/run-all.js` |
+| Unit tests (`common/lib/tests/`) | 72 files, ≈2,430 assertions | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 118 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 66 cases | `bash common/hooks/hooks.test.sh` |
-| Integration TCs (`tests/tc/`) | 286 TCs in 279 YAML files — safe 66 / mutating 79 / device 141; approved 199 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 210 Markdown files (`docs/` 89 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Integration TCs (`tests/tc/`) | 286 TCs in 279 YAML files — safe 66 / mutating 79 / device 141; approved 264 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| Documentation | 212 Markdown files (`docs/` 91 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 

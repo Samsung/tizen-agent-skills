@@ -3,15 +3,27 @@ id: tizen-sdk.certificate-manager.create-profile
 plugin: tizen-sdk
 command: certificate-manager
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "certificate-manager --action create-profile returns success"
 
+requires:
+  capabilities: [sdk]
+
 # NOTE (2026-09-01): --author-cert pointed at a nonexistent /tmp/author.p12.
 # Swapped for a real, committed fixture cert (tests/fixtures/certs/).
+# NOTE (2026-09-23): --profiles-xml added, pointing at a scratch file under ${FIXTURE_TMP_DIR}
+# (deleted by the mutating driver's resetProfileFixtures hook before phase k3): the SDK's
+# real profiles.xml already holds the myProfile that scripts/prepare-device-fixtures.mjs
+# creates and build-project.release / the device tier sign with, and createSigningProfile()
+# runs `tz security-profiles add` without a duplicate check (common/lib/core/certificate.js).
+# executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase k3-cert-profiles) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
-    argv: ["tizen-sdk", "certificate-manager", "--action", "create-profile", "--profile-name", "myProfile", "--author-cert", "fixtures/certs/test-fixture-author.p12", "--author-password", "${FIXTURE_CERT_UNLOCK}", "--distributor-type", "public", "--distributor-version", "new", "--active"]
+    argv: ["tizen-sdk", "certificate-manager", "--action", "create-profile", "--profile-name", "myProfile", "--author-cert", "fixtures/certs/test-fixture-author.p12", "--author-password", "${FIXTURE_CERT_UNLOCK}", "--distributor-type", "public", "--distributor-version", "new", "--active", "--profiles-xml", "${FIXTURE_TMP_DIR}/profiles/created-profiles.xml"]
     timeout_sec: 30
     expect:
       status: success
+      jsonpath:
+        - { path: "$.result.profile_name", equals: "myProfile" }
+        - { path: "$.result.active", equals: true }

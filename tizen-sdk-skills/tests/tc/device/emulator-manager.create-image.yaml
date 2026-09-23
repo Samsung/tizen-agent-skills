@@ -3,17 +3,18 @@ id: tizen-sdk.emulator-manager.create-image
 plugin: tizen-sdk
 command: emulator-manager
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "emulator-manager --action create-image --vm-name --output-dir --compress returns success"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): executed on Windows — environment failure (io_error): the
-    # command refuses to create --output-dir ("em-cli will not create it — make
-    # the directory first"), and /tmp/emulator-images is a Linux fixture path.
-    # Kept draft; needs a pre-created output directory as a fixture.
-    argv: ["tizen-sdk", "emulator-manager", "--action", "create-image", "--vm-name", "test-vm", "--output-dir", "/tmp/emulator-images", "--compress"]
-    timeout_sec: 120
+    # NOTE (2026-09-22): /tmp/emulator-images replaced by ${FIXTURE_TMP_DIR}/emulator-images
+    # (created by scripts/prepare-device-fixtures.mjs, emptied by the driver's resetImageDir
+    # hook — em-cli will not create the directory), timeout 120 → 600 s (the base image is
+    # copied and compressed); executed on Windows via run-device-tier.mjs --include-drafts —
+    # passed; promoted draft → approved.
+    argv: ["tizen-sdk", "emulator-manager", "--action", "create-image", "--vm-name", "test-vm", "--output-dir", "${FIXTURE_TMP_DIR}/emulator-images", "--compress"]
+    timeout_sec: 600
     expect:
       status: success

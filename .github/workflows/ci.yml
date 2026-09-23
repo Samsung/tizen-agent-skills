@@ -197,6 +197,33 @@ jobs:
           which tizen-sdk
           tizen-sdk --capabilities > /dev/null
 
-      # Next gate to add once the SDK-dependent safe TCs are classified:
-      #   working-directory: tizen-sdk-skills/tests
-      #   run: node runner.mjs --tier=safe --status=approved
+      # ── Safe-tier regression gate ──────────────────────────────────────────
+      # `approved` = every lane already verified, so a failure here is a real
+      # regression, not an unproven assertion. The runner has no Tizen SDK and
+      # no guaranteed route to download.tizen.org, so TCs that declare
+      # `requires.capabilities: [sdk]` / `[net]` are skipped (--skip-requires)
+      # instead of failing; the run log lists each one as ⊘ so a skip that
+      # hides a regression is visible in the job output.
+      #
+      # HOME is redirected to a throwaway directory: sdk-init.explicit-path
+      # writes ~/.tizen.sdk.path.config, which must not land in the runner's
+      # real home, and an SDK config left there must not leak into this run.
+      #
+      # --skip-requires is a declaration, not a probe, so the step first
+      # checks that the declaration is true here. The plugin finds an SDK only
+      # through ~/.tizen.sdk.path.config, the default ~/tizen-sdk (both under
+      # the fresh HOME) or an `sdb` on PATH; if any of those exists the sdk
+      # TCs could run and skipping them would hide a regression — fail loudly
+      # so `sdk` gets dropped from --skip-requires instead.
+      - name: Run safe-tier approved TCs
+        working-directory: tizen-sdk-skills/tests
+        env:
+          HOME: ${{ runner.temp }}/tc-home
+        run: |
+          set -euo pipefail
+          mkdir -p "${HOME:?HOME must be set to the throwaway directory}"
+          if [ -e "${HOME}/.tizen.sdk.path.config" ] || [ -e "${HOME}/tizen-sdk" ] || command -v sdb >/dev/null 2>&1; then
+            echo "::error::a Tizen SDK is reachable on this runner; drop 'sdk' from --skip-requires so those TCs run"
+            exit 1
+          fi
+          node runner.mjs --tier=safe --status=approved --skip-requires=sdk,net

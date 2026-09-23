@@ -3,15 +3,16 @@ id: tizen-sdk.playwright-test.scaffold-force
 plugin: tizen-sdk
 command: playwright-test
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "playwright-test --scaffold --force returns success with created[]"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — writes into the Linux fixture path /tmp/test-project.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "playwright-test", "--scaffold", "--project-dir", "/tmp/test-project", "--app-id", "abcDEF1234.MyWebApp", "--force"]
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "playwright-test", "--scaffold", "--project-dir", "${FIXTURE_TMP_DIR}/test-project", "--app-id", "${FIXTURE_WEB_APP_ID}", "--force"]
     timeout_sec: 60
     expect:
       status: success

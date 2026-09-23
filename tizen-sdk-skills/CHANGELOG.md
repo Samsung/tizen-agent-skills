@@ -9,15 +9,207 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-09-23
+
+The integration suite's device and mutating tiers run end to end (ordered phases, host-built
+fixture apps; approved TCs 199 → 264 of 286), its safe tier gates CI, and `gdb-debug` gains
+`--serial`. Ten fixes from the TC-report follow-ups, among them `gdb-debug` on emulator images that ship no gdbserver, a `sdk-install`
+that reported success for a platform it never installed, a `device-manager stop` that could
+hang forever, and a Windows `launch-emulator` that tried to boot a VM named `t`.
+
+### Added
+
+- **`gdb-debug --serial <serial>`** (`tizen-cli/src/command-specs/debug.ts`, `common/lib/core/debug.js`,
+  `common/lib/cli/gdb-debug-cli.js` 6th positional, `tizen-native-gdb-debug.ps1` `-Serial` / `.sh` `-s`).
+  The gdb scripts used sdb's default target for every call; they now pin every `sdb` invocation to
+  `--serial` when given (and refuse a serial that is not connected) or to the first connected device,
+  the way `tizen-dotnet-debug` already does, and the envelope reports `result.device_serial`.
+  `gdb-debug.serial` (draft since the TC was authored) runs and is approved. Both `gdb-debug` and
+  `dotnet-debug` (which previously spliced `--serial` into the script arguments unchecked) now
+  screen it with the shared `SERIAL_PATTERN`, tightened to forbid a leading `-` and cap the length
+  at 64 (`common/lib/tests/debug-serial-validation.test.js`).
+- **Ordered mutating-tier test run** (`tests/scripts/run-mutating-tier.mjs`,
+  `tests/policy/mutating-run-order.yaml`, `npm run test:mutating` / `prepare:mutating`). A bare
+  `node runner.mjs --tier=mutating` could never pass: readdir order builds a project before the TC that
+  creates it and deletes it before the later builds, `remove-profile` consumes its fixture, and
+  `generate-author` / `import-certificate` refuse to overwrite the previous run's certificates. The
+  driver runs five phases with cwd = `tests/`, gates on `fixtures.generated.env` per phase (shared
+  `FIXTURE_NEEDS`), and adds the hooks `cleanKeystore` (only the fixture-named certificates under
+  `<sdk-data>/keystore`), `resetProfileFixtures` (backup/restore of `fixtures/profiles/*.xml`, scratch
+  `profiles.xml` for `create-profile`) and `resetProjectsDir` (`${FIXTURE_PROJECTS_DIR}`), refusing to
+  start while `fixtures/profiles` has uncommitted changes. It never installs or removes SDK packages:
+  only the SDK-installer TCs whose already-installed short-circuit is idempotent are listed. Every
+  directory a hook empties (both drivers) passes `guardedScratchDir()`: real path strictly inside
+  `tests/fixtures/apps`, no symlink/junction, no other drive; a second Ctrl+C during a teardown is
+  ignored and a failed teardown step (including the final `git status` self-check of the profile
+  fixtures) fails the run.
+  First run on Windows: 5/5 phases in 4 min; 27 mutating cli-lane TCs promoted draft → approved
+  (`sdk-install` ×3, `sdk-install-custom-repo` ×2, `tv-sdk-install.happy`, `dotnet-setup` ×2,
+  `certificate-manager` ×11, `create-project` ×4, `build-project` ×3, `project-delete.happy`).
+- **`requires.capabilities` gains `samsung-account` and `gbs`** (`tests/schema/tc-schema.json`); the 22
+  cli-lane TCs that stay `draft` now declare why (`[sdk, net]` for the installers that only execute under
+  the packaged CLI or reinstall the SDK, `[sdk, samsung-account]` for the online-CA actions,
+  `[net-device]` for `remote-device.connect*`, `[sdk, gbs]` for the GBS builds) and say so in a `NOTE`.
+- **Ordered device-tier test run** (`tests/scripts/run-device-tier.mjs`,
+  `tests/policy/device-run-order.yaml`, `tests/runner.mjs --order=<yaml> [--phase=<name>]`).
+  A bare `node runner.mjs --tier=device` could never pass: readdir order ran the debug TCs
+  before any emulator existed, created `test-vm` three times, and deleted it (and stopped every
+  emulator) before the TCs that need it. The runner now accepts an explicit, phased run order
+  (repeats allowed; misspelled, ambiguous or non-`approved` ids abort with exit 2), the order
+  file encodes the sequence that works for the approved device TCs (44 at the time; 69 after the
+  fixture entry below), and the driver adds the
+  preflight (fresh `dist` bundle, `--doctor`, hypervisor probes, no emulator online), the
+  Device Manager bookmark-list backup/restore, the `test-vm`/`tv-vm` pre-clean, the `tv-vm`
+  boot needed by `device-manager --profile tv`, and a teardown that runs even after a failed
+  phase. `npm run test:device` now prints that plan; `--yes` executes it. Documented in
+  `tests/README.md` ("Device tier") and `tests/skills/run-test-suite.md`.
+- **Safe-tier TC regression gate in CI** (`.github/workflows/ci.yml`, `_repo-root/.github/workflows/ci.yml`).
+  The test job now runs `node runner.mjs --tier=safe --status=approved --skip-requires=sdk,net`
+  against the freshly built `tizen-sdk` launcher, with `HOME` redirected to a throwaway
+  directory so `sdk-init.explicit-path` cannot touch the runner's real
+  `~/.tizen.sdk.path.config`. The TC schema's `requires.capabilities` gains `sdk` (installed
+  Tizen SDK) and `net` (outbound access to `download.tizen.org`); the seven safe TCs that
+  need one of them (`list-templates.*`, `sdk-init.happy`, `sdk-install.unavailable-version`,
+  `certificate-manager.get-sdk-data-path.happy` / `list-profiles.happy`,
+  `validate-repo-url.happy`) declare it and are reported as skipped instead of failing.
+  Because `--skip-requires` is a declaration rather than a probe, the CI step first fails if an
+  SDK is actually reachable (`~/.tizen.sdk.path.config`, `~/tizen-sdk` or `sdb` on PATH), and
+  the runner's summary line breaks skips down by reason.
+  `tests/runner.mjs` gains `--skip-requires=<cap,...>` and `--help`, and now rejects unknown
+  options (exit 2) instead of silently running every mutating and device TC. Documented in
+  `tests/README.md` ("CI gate") and `tests/skills/run-test-suite.md`.
+- **Device-tier fixtures and the promotion of the fixture-bound draft TCs**
+  (`tests/scripts/prepare-device-fixtures.mjs`, `tests/scripts/run-device-tier.mjs --include-drafts`,
+  `tests/policy/device-run-order.yaml`, `tests/scripts/lib/driver-common.mjs`). The 31 cli-lane device
+  drafts pointed at Linux `/tmp/...` files and at apps (`org.tizen.myapp`, `org.tizen.example.MyApp`,
+  `abcDEF1234.MyWebApp`) that no host had and that the plugin cannot create with a chosen id. Their argv
+  now use `${FIXTURE_*}` placeholders; the new prepare script builds and signs a native, a .NET and a web
+  fixture app under `tests/fixtures/apps/` (signing profile `myProfile` is created from the fixture
+  cert, kept when it already uses it, and only replaced with `--replace-profile`), lays out the
+  `tmp/` tree the push/pull/screenshot/`create-image` TCs use, installs Playwright in a test
+  project, and writes `fixtures.generated.env`, which the driver merges into the runner's
+  environment and gates per phase (`FIXTURE_NEEDS`, checked against the TC placeholders by
+  `runner-helpers.test.mjs`). The order file gains the phases `c2-fixture-apps`, `c3-web-debug`,
+  `c4-dotnet-debug`, `c5a/b/c-gdb-*` and `c6-stop` (test-vm now stays booted from `c-boot-1` to `c6`),
+  `emulator-manager.create-image` joins `b-vm-lifecycle`, and the driver's inline hooks became a
+  `PHASE_HOOKS` table with `resetImageDir`, `deviceFixtures` (installs the apps, writes `/tmp/log.txt`),
+  `debugCleanup` (`sdb forward --remove-all`, kills netcoredbg/gdbserver/the fixture apps before every
+  debug phase) and `resetTestProject`; a hook that cannot establish its precondition is listed in the
+  summary and fails the run. The first promotion run passed all 14 phases (18 min) and promoted the 25
+  fixture-bound drafts — file-transfer ×5, `screenshot.output-path`, `create-image`, webapp-debug ×4,
+  playwright-test ×6, dotnet-debug ×5, gdb-debug ×3 — from `draft` to `approved` (suite: draft 79 → 54,
+  approved 199 → 224; approved device TCs 44 → 69). Six drafts stay draft with the reason in their
+  `NOTE`: `install-app.happy/.run/.serial` assert envelope fields that do not exist (`device_id`,
+  `process_id`), `gdb-debug.serial` passes an option `gdb-debug` does not have, and
+  `remote-device.connect*` need a network-reachable device. Documented in `tests/README.md`
+  ("Device tier"), `tests/fixtures/README.md` and `tests/skills/run-test-suite.md`.
+
+### Changed
+
+- **Suite status after the second promotion pass: draft 22 / candidate 0 / approved 264 of 286.**
+  The 8 guard-rule TCs (`tc/meta/guard-rules.prompt.yaml`) dropped their never-run cli lanes — they
+  duplicated approved cli TCs, pointed at `/tmp` fixtures and were mis-tiered `safe` — and are approved
+  on their recorded 41/41 prompt-lane run. `install-app.happy/.run/.serial` assert the fields the
+  envelope really has (`device_serial`, `app_launched`) and run in device phase `c2-fixture-apps`
+  (the driver's `deviceFixtures` hook now installs only the .NET and web packages);
+  `gdb-debug.serial` runs in the new phase `c5d-gdb-serial`; `file-transfer.prompt-pull-missing` was
+  run in an agent session. `build-project.compiler-flags` stays draft on purpose: the plugin has no
+  compiler-flag passthrough and Commander 12 drops the trailing token silently.
+
 ### Fixed
 
+- **`gdb-debug` failed on every emulator image with `gdbserver not found at /usr/bin/gdbserver`**
+  (`common/scripts/tizen-gdb-debug/tizen-native-gdb-debug.ps1` / `.sh`). Emulator images since Tizen 8
+  ship no gdbserver, but the SDK carries it as `<sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar`.
+  Step 2 now looks for `which gdbserver`, `/usr/bin/gdbserver` or a previous on-demand copy and
+  otherwise pushes and extracts that tar to `/home/owner/share/tmp/sdk_tools/` — the mechanism
+  `tizen-dotnet-debug` already uses for netcoredbg — picking the tar by device arch (`armv7l` →
+  `armel`) and newest version, and verifying with a `test -x … && echo ok` probe because sdb shell
+  drops the remote exit code. Source guards in `common/lib/tests/gdb-ondemand-guards.test.js`;
+  `SKILL.md`, the agent file and the native-debug walkthroughs mention the on-demand install.
+- **`sdk-install --tizen-version 99.99` reported `success` / `installation_status: completed` for a
+  platform that was never installed** (`common/lib/core/sdk.js`, `tizen-sdk-install.ps1` / `.sh`).
+  The already-installed pre-check had been fixed earlier, but the branch where the packaged CLI runs the
+  installer itself only checked that `sdk.info` existed afterwards, and the installer's own
+  "already installed" short-circuit exits 0 before it looks at `-Platform`. Both `installSdk()` and
+  `installSdkFromRepo()` now verify `platforms/tizen-<X.Y>` after the installer and return
+  `platform_version_not_found` (with the `platform-install` suggested fix) when the requested platform is
+  absent; both installer scripts exit 1 with the same hint when given a `--platform` the installed SDK
+  lacks. Report follow-up (§4.2).
+- **A failed `sdk-install` left nothing to diagnose** — the envelope said
+  `SDK installation failed: \n\n\n\n\n\n\n` after 763 s, no log existed anywhere, and the same command
+  passed 15 s later (§8.3). The message was `stdout || stderr || message`: a whitespace-only stdout is
+  truthy, so stderr and the exit code were dropped. New `describeInstallerFailure()` (used by all eight
+  installer runners) reports exit code / signal — a timeout is named as such (Node reports it as
+  `code ETIMEDOUT`, never `killed`) and a leftover `.install-running` marker is explained — the last
+  output lines of BOTH streams (each capped at 200 chars in the message, whole in `details`), says so when
+  nothing was captured, writes the full captured output to `$TIZEN_LOGS_DIR` (default
+  `<tmp>/tizen-sdk-skills-logs/<runner>-<timestamp>.log`) and names it, and points at the installer's
+  `.install.log` / `.install-result`; `errors[0].details` carries the same lines. The installer scripts
+  now keep their own log — `tizen-sdk-install.ps1` writes a transcript to `<install>\.install.log` and
+  repeats the failure verdict on stderr, `tizen-sdk-install.sh` mirrors its stderr into
+  `<install>/.install.log` — and print the path on success and failure.
+- **`install-app` with several devices connected was classified as `io_error` (`TIZEN_SDK_IO_E001`) and
+  exposed the shell command line** (`common/lib/core/project.js`, §4.2). Sibling commands return
+  `multiple_devices` (`TIZEN_SDK_DEVICE_E002`). `installApp()` now resolves the target device in JS
+  before the script runs (explicit serial, else exactly one online device) and returns
+  `device_not_found` / `multiple_devices` with the serial list itself; a "Multiple devices found" script
+  exit is mapped to `multiple_devices` too, and the generic install failure reports the script exit code
+  and its key output lines instead of Node's `Command failed: <full command line>`. New
+  `classifyInstallFailure()` holds the output→envelope mapping. Docs
+  (`common/agents/tizen-install-app.md`, `tizen-cli/skills/tizen-install-app/SKILL.md`) updated.
+- **"Is Node.js installed?" was routed to the generic `doctor` sweep in 1 of 3 prompt runs**
+  (`tizen-sdk.check-node.prompt-*`, §4.2). Neither `check-node` description mentioned doctor, so the
+  broader command won the tie. The `tizen-check-node` skill descriptions (common + tizen-cli), the
+  `check-node` command description (`check.ts`) and the `tizen-sdk` routing table now carry the exact
+  prompt phrasings, state that a Node.js-only question is answered by `check-node`, and say explicitly
+  that `--doctor` / core `doctor` is a whole-setup sweep and not that answer.
+- **`playwright-test` said "Node.js executable was not found on PATH" for two different failures**
+  (`common/lib/core/playwright-test.js`, §4.2). `resolveNodeRuntime()` returned one string for a
+  missing `node` (spawn ENOENT) and for a present `node` whose `--version` exited abnormally; only the
+  parenthesised `exit N` told them apart, which led to a wrong diagnosis. It now returns a `reason`
+  (`not_found` / `spawn_failed` / `timeout` / `exited`) with exit code, signal and stderr tail, and the
+  new `describeNodeRuntimeFailure()` produces distinct envelopes: `node_not_found` ("install Node.js /
+  fix PATH") for a missing executable, `execution_error` quoting the exit code and stderr ("Node.js is
+  on PATH but does not run — repair/reinstall, do not install a second copy") for a broken one, and a
+  timeout variant. Skill/agent docs list the two categories.
+  Regression tests for all five in `common/lib/tests/tc-report-followups.test.js`.
+- **`device-manager --action stop` could hang forever** (`tizen-device-manager.ps1` / `.sh`).
+  Its last-resort `sdb shell poweroff` never returns when the guest's sdbd accepts the
+  connection but does not answer — seen with a TV emulator whose guest had frozen, and with a
+  row sdb kept after the emulator process was gone — so the action blocked past every caller's
+  timeout (the device-tier TC, the run driver's teardown). The call is now bounded to 15 s per
+  device, and a new Method 5 restarts the sdb server to drop phantom rows, naming any row that
+  comes back instead of waiting on it. Worst case on Windows is now ~50 s; the
+  `device-manager.stop` TC's `timeout_sec` goes 60 → 120 to leave margin.
+- **`launch-emulator` without `--vm-name` tried to launch a VM named `t` on Windows**
+  (`tizen-emulator-manager.ps1`). With exactly one VM, PowerShell unrolled the one-element array
+  returned by the list helpers into a bare string, and `$vms[0]` returned its first character
+  (`No emulator VM named 't' exists`). `ConvertTo-VmNames` / `Get-VmList` now return a real
+  array and the call site wraps it in `@()`. Hardening added alongside in both `.ps1` and `.sh`:
+  the already-running check waits (≤15 s) while an online emulator row still shows `<unknown>`
+  as its name right after a boot, and when em-cli refuses a launch but sdb shows the VM online
+  the action reports that serial as success. Source guards for both fixes in
+  `common/lib/tests/emulator-stop-launch-guards.test.js`.
 - **`pnpm link --global` fails on current pnpm** (`ERR_PNPM_LINK_BAD_PARAMS: You must provide a
-  parameter`). pnpm 10 removed the `--global` flag and pnpm 11 removed the no-argument
+parameter`). pnpm 10 removed the `--global` flag and pnpm 11 removed the no-argument
   `pnpm link` too; the documented way to put the standalone `tizen-sdk` launcher on PATH is now
   `pnpm add -g .` from `tizen-cli/` (undo with `pnpm remove -g tizen-cli-plugin-tizen-sdk`).
   Updated `tizen-cli/README*.md`, `docs/tizen-cli/build-and-install*.md` (troubleshooting rows
   for `ERR_PNPM_LINK_BAD_PARAMS`, `ERR_PNPM_NO_GLOBAL_BIN_DIR` and `command not found`),
   `tests/README.md`, the launcher header comment, and the CI workflow comment.
+- **RDS benchmark script and docs** (`common/lib/tests/manual/benchmark-rds.js`,
+  `docs/rds/RDS_BENCHMARK*.md`, follow-up to the timing instrumentation). Phase C now restores
+  every source file it modified (also on Ctrl+C), never creates a marker file in the project,
+  covers `.cs` / `.css` / `.html` / `.xaml` and keeps a UTF-8 BOM and shebang / XML declaration /
+  doctype lines first; its baseline install no longer disappears with `--build false`, and the results table
+  looks rows up by iteration number. A failed `install --reset-rds` aborts the run instead of
+  being reported as complete; the package path comes from `--package` or the build envelope
+  instead of a guessed `Debug/<dir>-1.0.0.tpk`; bare `--build` no longer swallows the next
+  option (`--no-build` added); the plugin-cache fallback uses `plugin-cache.js`. The CI test
+  runs on Windows too and measures the instrumentation overhead on an empty phase; the docs
+  describe Phase C, the real env vars, the optional `--device-serial`, the quoted cmd.exe
+  `set "TIZEN_BENCHMARK=1"` form, and what `rds_timings` on a full install covers.
 
 ## [1.3.0] — 2026-09-18
 
@@ -193,7 +385,7 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
     before the group is promoted so a crash cannot reuse a `deployId`; and state writes are
     atomic (tmp + rename), so a truncated `deploy-state.json` no longer reads back as `null`,
     re-initialises the project and wipes every other device's groups.
-  - A device marker *behind* host state (emulator snapshot restore, re-flash, shared serial) is
+  - A device marker _behind_ host state (emulator snapshot restore, re-flash, shared serial) is
     rejected like one ahead of it (`marker-behind`) instead of skipping every group the device
     never received. `getAppInstallPath` tiers 3/4 relied on `sdb shell test -d` failing, but
     sdb exits 0 regardless of the remote status, so tier 3 always "succeeded"; the probe is
@@ -202,7 +394,7 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
     installing a Release/Test package previously short-circuited to `fast-deploy` without
     installing it. A delta touching `tizen-manifest.xml` / `config.xml` is always `full`
     (pushing the file cannot re-register privileges, app-controls or app IDs).
-  - `app_id` in the RDS success envelope was the manifest *package* ID while the full-install
+  - `app_id` in the RDS success envelope was the manifest _package_ ID while the full-install
     path reports the launchable app ID; both now read `<tizen:application id>` /
     `<ui-application appid>` (`parseWebAppId()` / `parseManifestAppId()`). With an explicit
     `--device-serial` the RDS primitives could be the first sdb call of the session and hang on
@@ -480,7 +672,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...HEAD
+[1.3.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...tizen-sdk-skills-v1.3.1
 [1.3.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.2.0...tizen-sdk-skills-v1.3.0
 [1.2.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.1.2...tizen-sdk-skills-v1.2.0
 [1.1.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.1.1...tizen-sdk-skills-v1.1.2

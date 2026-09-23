@@ -368,6 +368,15 @@ if ((Test-Path $sdkInfoPath) -and -not $Force) {
     $sdbExists = Test-Path (Join-Path $Path "tools\sdb.exe")
     $tzExists  = Test-Path (Join-Path $Path "tools\tizen-core\tz.exe")
     if ($sdbExists -and $tzExists) {
+        # An explicit -Platform that this SDK does not have is NOT "already
+        # installed": exiting 0 here made `-Platform 99.99` look like a
+        # completed install to the caller (it only checks sdk.info afterwards).
+        if ($Platform -ne "" -and -not (Test-Path (Join-Path $Path "platforms\tizen-$Platform"))) {
+            Write-Err "Tizen SDK is already installed at $Path, but platform TIZEN-$Platform is not part of it."
+            Write-Err "Add it with: tizen-cli tizen-sdk platform-install --platform-version $Platform"
+            Write-Err "or re-run with -Force to reinstall the whole SDK with that platform (the repository must offer TIZEN-$Platform)."
+            exit 1
+        }
         Write-Success "Tizen SDK is already installed: $Path"
         Write-Info "sdk.info and core tools (sdb/tz) found (a previous installation completed successfully)"
         Write-Info "To reinstall, run again with -Force"
@@ -744,10 +753,31 @@ Write-Info "Ready to install Tizen SDK"
 # Just before the real install: write the 'running' marker and clear any stale
 # 'result' marker, so the outcome is recoverable via -Status even if the
 # completion notification is lost. (Dry-run is not a real install - no markers.)
+#
+# The run also keeps its own log at <install>\.install.log: a failed install
+# reported as "SDK installation failed: \n\n\n" (the caller had captured only
+# blank stdout) could not be diagnosed afterwards because no log existed
+# anywhere. Write-Host output is part of a PowerShell 5+ transcript, so every
+# [INFO]/[WARN]/[ERROR] line above lands in the file. Overwritten per run.
+$InstallLog = Join-Path $Path ".install.log"
+$script:InstallLogActive = $false
+function Stop-InstallLog {
+    if ($script:InstallLogActive) {
+        try { Stop-Transcript | Out-Null } catch { }
+        $script:InstallLogActive = $false
+    }
+}
 if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
     Remove-Item $ResultMarker -Force -ErrorAction SilentlyContinue
     Set-Content -Path $RunningMarker -Value "running" -ErrorAction SilentlyContinue
+    try {
+        Start-Transcript -Path $InstallLog -Force -ErrorAction Stop | Out-Null
+        $script:InstallLogActive = $true
+        Write-Info "Installer log: $InstallLog"
+    } catch {
+        Write-Warn "Could not start the installer log at ${InstallLog}: $_"
+    }
 }
 
 # Platform package installation (core)
@@ -774,7 +804,12 @@ if (-not $pkgOk) {
     Write-Err "Tizen SDK installation did not complete (some packages failed)."
     Write-Err "Not creating sdk.info. Check the network and run again"
     Write-Err "(already-downloaded packages are skipped and the install resumes)."
+    if ($script:InstallLogActive) { Write-Err "Full installer log: $InstallLog" }
     Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
+    # The [ERROR] lines above go to stdout (Write-Host); repeat the verdict on
+    # stderr so a caller that keeps only one stream still sees why it failed.
+    [Console]::Error.WriteLine("[ERROR] Tizen SDK installation did not complete (some packages failed). Log: $InstallLog")
+    Stop-InstallLog
     exit 1
 }
 
@@ -903,8 +938,10 @@ Set-Content -Path $ResultMarker -Value "EXIT=0" -ErrorAction SilentlyContinue
 
 Write-Success "Tizen SDK platform packages installation completed!"
 Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
+if ($script:InstallLogActive) { Write-Info "Installer log: $InstallLog" }
 Write-Info "Next steps:"
 Write-Info "1. Verify: tz --version"
 Write-Info "2. Open a new PowerShell window later to keep it across sessions"
 
+Stop-InstallLog
 exit 0

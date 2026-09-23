@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "update-package --dry-run returns success with packages array and summary"
 
+requires:
+  capabilities: [sdk, net]
+
 # NOTE (2026-09-01): result.packages was hardcoded to always be an empty
 # array in common/lib/core/sdk.js's updatePackage() ('const packages = [];',
 # never populated) even though the bash script prints exactly the per-package
@@ -17,6 +20,9 @@ description: "update-package --dry-run returns success with packages array and s
 # without either a genuinely stale package or a full --force reinstall of
 # every installed package, which is out of scope here (same risk class as
 # sdk-install --force).
+# NOTE (2026-09-23): stays draft — even --dry-run has no short-circuit: outside the packaged CLI it
+# only succeeds when a ≤30-min-old <sdk>/.package-update-result marker written by the
+# updater script exists (sdk.js updatePackage), which no host step produces yet.
 lanes:
   cli:
     argv: ["tizen-sdk", "update-package", "--dry-run"]

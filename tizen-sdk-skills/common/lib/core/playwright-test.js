@@ -77,24 +77,127 @@ function outputTail(output, maxLines = 30) {
   return lines.slice(-maxLines);
 }
 
+const NODE_PROBE_TIMEOUT_MS = 15000;
+
 /**
  * Resolve the external Node.js runtime used for project-local Playwright work.
  *
  * The tizen-cli distribution may be a standalone executable, where
  * process.execPath is tizen-cli.exe rather than node.exe. Never use that host
  * executable to evaluate JavaScript or launch a project test file.
+ *
+ * A failure carries a `reason` that tells the two very different situations
+ * apart — they used to share one "not found on PATH (exit N)" message, and the
+ * parenthesised exit code was the only clue that the executable HAD been found:
+ *   not_found     - no `node` executable on PATH (spawn ENOENT)
+ *   spawn_failed  - the executable exists but could not be started (EACCES,
+ *                   EPERM, sandbox refusal, …)
+ *   timeout       - `node --version` did not answer within NODE_PROBE_TIMEOUT_MS
+ *   exited        - `node --version` ran but exited non-zero / on a signal —
+ *                   a broken installation (missing DLL, wrong architecture,
+ *                   corrupted files), not a missing one
+ *
+ * @param {{executable?: string, spawn?: typeof spawnSync}} [deps] - test seams
+ * @returns {{executable: string, version: string}|{error: string, reason: string, detail: string|null, exit_code: number|null, signal: string|null}}
  */
-function resolveNodeRuntime() {
-  const executable = process.platform === "win32" ? "node.exe" : "node";
-  const probe = spawnSync(executable, ["--version"], {
+function resolveNodeRuntime(deps = {}) {
+  const executable =
+    deps.executable || (process.platform === "win32" ? "node.exe" : "node");
+  const spawn = deps.spawn || spawnSync;
+  const probe = spawn(executable, ["--version"], {
     encoding: "utf8",
-    timeout: 15000,
+    timeout: NODE_PROBE_TIMEOUT_MS,
     windowsHide: true,
   });
-  if (probe.error || probe.status !== 0) {
-    return { error: probe.error?.message || `exit ${probe.status}` };
+
+  if (probe.error) {
+    const code = probe.error.code || "";
+    const reason =
+      code === "ENOENT"
+        ? "not_found"
+        : code === "ETIMEDOUT"
+          ? "timeout"
+          : "spawn_failed";
+    return {
+      error: probe.error.message || code || "spawn failed",
+      reason,
+      detail: null,
+      exit_code: null,
+      signal: null,
+    };
+  }
+  if (probe.status !== 0) {
+    // A killed child has status null and a signal; a timeout kill is SIGTERM.
+    const timedOut = probe.status === null && probe.signal === "SIGTERM";
+    const stderrTail = String(probe.stderr || "")
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-5)
+      .join(" | ");
+    return {
+      error:
+        probe.status !== null
+          ? `exit ${probe.status}`
+          : `signal ${probe.signal || "unknown"}`,
+      reason: timedOut ? "timeout" : "exited",
+      detail: stderrTail || null,
+      exit_code: probe.status,
+      signal: probe.signal || null,
+    };
   }
   return { executable, version: String(probe.stdout || "").trim() };
+}
+
+/**
+ * Envelope fields for a resolveNodeRuntime() failure — one message per reason,
+ * so "install Node" is only ever the advice when Node is actually missing.
+ *
+ * @param {{error: string, reason: string, detail?: string|null, exit_code?: number|null, signal?: string|null}} rt
+ * @param {string} [executable] - the probed executable name
+ * @returns {{category: string, message: string, suggestedFix: string}}
+ */
+function describeNodeRuntimeFailure(rt, executable) {
+  const exe =
+    executable || (process.platform === "win32" ? "node.exe" : "node");
+  const detail = rt.detail ? ` stderr: ${rt.detail}.` : "";
+  switch (rt.reason) {
+    case "not_found":
+      return {
+        category: "node_not_found",
+        message:
+          `Node.js executable "${exe}" was not found on PATH (${rt.error}). ` +
+          "Playwright tests run in an external Node.js process, not in this CLI. " +
+          "Install Node.js 20 or newer, or add its bin directory to PATH, then retry.",
+        suggestedFix:
+          "Install Node.js 20 or newer (https://nodejs.org/) and ensure node is on PATH.",
+      };
+    case "timeout":
+      return {
+        category: "execution_error",
+        message:
+          `Node.js executable "${exe}" is on PATH but "${exe} --version" did not answer within ${NODE_PROBE_TIMEOUT_MS / 1000} s (${rt.error}).${detail} ` +
+          "The runtime is present but hangs on start — check for a stuck antivirus/EDR scan, a broken PATH shim, or a corrupted installation, then retry.",
+        suggestedFix: `Run "${exe} --version" in a terminal; if it hangs there too, reinstall Node.js 20 or newer.`,
+      };
+    case "exited":
+      return {
+        category: "execution_error",
+        message:
+          `Node.js executable "${exe}" is on PATH but "${exe} --version" exited abnormally (${rt.error}).${detail} ` +
+          "Node.js is installed but this installation does not run — typically a missing DLL/shared library, an architecture mismatch (x64 vs arm64), or corrupted files. " +
+          "Repair or reinstall Node.js 20 or newer, then retry. Do not install a second copy first.",
+        suggestedFix: `Run "${exe} --version" in a terminal to see the error, then repair/reinstall Node.js 20 or newer.`,
+      };
+    default:
+      return {
+        category: "execution_error",
+        message:
+          `Node.js executable "${exe}" is on PATH but could not be started (${rt.error}).${detail} ` +
+          "The file exists but the OS refused to run it (permissions, a sandbox policy, or a corrupted binary). Fix that, then retry.",
+        suggestedFix: `Check that "${exe}" is executable and allowed to run, then retry.`,
+      };
+  }
 }
 
 /**
@@ -247,11 +350,12 @@ async function runPlaywrightTest(
 
     const nodeRuntime = resolveNodeRuntime();
     if (nodeRuntime.error) {
+      const failure = describeNodeRuntimeFailure(nodeRuntime);
       return formatError(
         command,
-        "io_error",
-        `Node.js executable was not found on PATH (${nodeRuntime.error}). Install Node.js 20 or newer, then retry.`,
-        "Install Node.js 20 or newer and ensure node is on PATH.",
+        failure.category,
+        failure.message,
+        failure.suggestedFix,
         startTime,
       );
     }
@@ -546,4 +650,6 @@ module.exports = {
   scaffoldPlaywrightTest,
   parseTestSummary,
   resolveNodeRuntime,
+  describeNodeRuntimeFailure,
+  NODE_PROBE_TIMEOUT_MS,
 };

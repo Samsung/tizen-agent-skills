@@ -377,6 +377,12 @@ function Get-EmCliReason {
     return ($text -join ' | ')
 }
 
+# CALLERS MUST WRAP THE RESULT IN @(): a function's output goes through the
+# pipeline, which unrolls a one-element array into a bare string, and
+# `$vms[0]` on a string is its first CHARACTER. With exactly one VM the
+# no-name launch tried to start a VM called "t" (2026-09-22,
+# launch-emulator.first-available). `@(Get-VmList)` re-collects the emitted
+# names into a proper array for 0, 1 or many VMs.
 function ConvertTo-VmNames {
     param($Raw)
     $lines = $Raw | Where-Object {
@@ -425,7 +431,7 @@ function Wait-VmGone {
     while ($true) {
         $raw = Invoke-EmCli "list-vm" 2>$null
         $listOk = ($LASTEXITCODE -eq 0)
-        if ($listOk -and ((ConvertTo-VmNames $raw) -notcontains $Target)) {
+        if ($listOk -and (@(ConvertTo-VmNames $raw) -notcontains $Target)) {
             return 0
         }
         $attempt++
@@ -512,7 +518,7 @@ function Assert-VmName {
 }
 
 function Assert-VmExists {
-    $vms = Get-VmList
+    $vms = @(Get-VmList)
     if ($vms -notcontains $VmName) {
         Write-Err "VM '$VmName' not found."
         Write-Err "Available VMs: $($vms -join ' ')"
@@ -663,7 +669,7 @@ if ($Action -eq "list-vm") {
         Report-EmCliFailure "list-vm" ($listRaw | Out-String)
         exit 1
     }
-    $vmNames = ConvertTo-VmNames $listRaw
+    $vmNames = @(ConvertTo-VmNames $listRaw)
     if ($vmNames.Count -eq 0) {
         Write-Info "No emulator VMs found."
         Write-Host "VM_LIST="
@@ -849,7 +855,9 @@ if ($Action -eq "create-image") {
 if ($Action -eq "launch") {
     if (-not $VmName) {
         Write-Info "No VM name specified. Listing available VMs..."
-        $vms = Get-VmList
+        # @() again at the call site: with one VM, `$vms[0]` on an unrolled
+        # string would be "t", not "test-vm".
+        $vms = @(Get-VmList)
         if ($vms.Count -eq 0) {
             Write-Err "No emulator VMs found. Create one first with the create action."
             Write-Err "Or open Tizen Studio -> Emulator Manager to create one manually."
@@ -866,23 +874,46 @@ if ($Action -eq "launch") {
     }
     Write-Info "Found sdb: $sdb"
 
-    # Record previous serials so we can detect the NEW emulator
-    $previousSerials = @()
-    $devRawPre = & $sdb devices 2>&1
-    $preLines = $devRawPre | Where-Object { $_ -notmatch '^List' -and $_.Trim() -ne '' -and $_ -match '\sdevice(\s|$)' }
-    foreach ($line in $preLines) {
-        $s = ($line -split '\s+')[0]
-        if ($s) { $previousSerials += $s }
+    # Online rows of `sdb devices` (state "device"), split into columns.
+    # Returns an ArrayList of string[] so a single row is not flattened into
+    # its columns by PowerShell's pipeline unrolling.
+    function Get-OnlineDeviceRows {
+        $raw = & $sdb devices 2>&1
+        $result = New-Object System.Collections.ArrayList
+        foreach ($line in @($raw)) {
+            if ($line -is [string] -and $line -notmatch '^List' -and $line.Trim() -ne '' -and $line -match '\sdevice(\s|$)') {
+                [void]$result.Add(@($line -split '\s+'))
+            }
+        }
+        return ,$result
     }
 
-    # Already running and connected? Report it rather than launching a second time.
-    foreach ($line in $preLines) {
-        $parts = $line -split '\s+'
-        if ($parts.Count -ge 3 -and $parts[2] -eq $VmName) {
-            Write-Success "VM '$VmName' is already running and connected: $($parts[0])"
-            Write-Host "DEVICE_SERIAL=$($parts[0])"
-            exit 0
+    # Already running and connected? Report it rather than launching a second
+    # time. Right after a boot `sdb devices` can list the emulator with its
+    # name still "<unknown>" for a few seconds; a name check at that instant
+    # misses, and em-cli then refuses to launch the running VM. So poll while
+    # any online emulator row has no resolved name (up to 15 s).
+    $preRows = @()
+    for ($nameWait = 0; $nameWait -le 15; $nameWait++) {
+        $preRows = Get-OnlineDeviceRows
+        $unresolved = $false
+        foreach ($parts in $preRows) {
+            if ($parts.Count -ge 3 -and $parts[2] -eq $VmName) {
+                Write-Success "VM '$VmName' is already running and connected: $($parts[0])"
+                Write-Host "DEVICE_SERIAL=$($parts[0])"
+                exit 0
+            }
+            if ($parts[0] -like 'emulator-*' -and ($parts.Count -lt 3 -or $parts[2] -eq '<unknown>')) { $unresolved = $true }
         }
+        if (-not $unresolved -or $nameWait -eq 15) { break }
+        if ($nameWait -eq 0) { Write-Info "An emulator is online but its VM name is not resolved yet - waiting for sdb before launching..." }
+        Start-Sleep -Seconds 1
+    }
+
+    # Record previous serials so we can detect the NEW emulator
+    $previousSerials = @()
+    foreach ($parts in $preRows) {
+        if ($parts[0]) { $previousSerials += $parts[0] }
     }
 
     $launchArgs = @("launch", "-n", $VmName)
@@ -910,6 +941,16 @@ if ($Action -eq "launch") {
     $launchOut = Invoke-EmCli $launchArgs 2>&1
     if ($launchOut) { $launchOut | ForEach-Object { Write-Host $_ } }
     if ($LASTEXITCODE -ne 0 -or (Test-EmCliFailed $launchOut)) {
+        # em-cli refuses to start a VM that is already running. If sdb now
+        # shows that VM online (its name resolved while em-cli was failing),
+        # that is the outcome the caller wanted - report it as success.
+        foreach ($parts in (Get-OnlineDeviceRows)) {
+            if ($parts.Count -ge 3 -and $parts[2] -eq $VmName) {
+                Write-Warn "em-cli refused the launch, but VM '$VmName' is already running and connected: $($parts[0])"
+                Write-Host "DEVICE_SERIAL=$($parts[0])"
+                exit 0
+            }
+        }
         Write-Err "Failed to launch emulator VM '$VmName'."
         Write-Err "Check if the VM is already running, or launch it manually via Tizen Studio."
         exit 1
@@ -1060,7 +1101,7 @@ if ($Action -eq "create") {
     Assert-VmName
 
     # Check if VM already exists
-    $existingVms = Get-VmList
+    $existingVms = @(Get-VmList)
     if ($existingVms -contains $VmName) {
         Write-Err "VM '$VmName' already exists. Use a different name or delete it first:"
         Write-Err "  em-cli delete -n $VmName"

@@ -1,6 +1,6 @@
 ---
 name: tizen-check-node
-description: Check Node.js, node check, node 설치 확인, Node.js installed, node version, 노드 확인. Use this skill to verify Node.js is installed and on PATH before installing the Tizen SDK. Returns a Standard JSON Envelope with version/path info. Required before tizen-sdk-install.
+description: Check Node.js, node check, node 설치 확인, Node.js installed, node version, 노드 확인, "Node.js가 설치되어 있는지 확인해줘", "Do I have Node.js installed? Check the version.", 노드 버전, node 있어?, is node installed. Use this skill for ANY question about whether Node.js is installed or which Node.js version is present — `tizen-cli tizen-sdk check-node` is the dedicated command for that question and answers with version/path info in a Standard JSON Envelope. Do NOT route a Node.js question to the generic environment health check (`tizen-cli tizen-sdk --doctor` / core `doctor`) — doctor is a broad multi-component sweep (shell, scripts, SDK, sdb, em-cli) for "is my whole setup healthy?", not the answer to "is Node.js installed?". Also the pre-check before tizen-sdk-install.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-07-16"
@@ -16,7 +16,12 @@ metadata:
 # Check Node.js
 
 ## When to use
-Pre-check before `tizen-cli tizen-sdk sdk-install`, or whenever the user asks whether Node.js is installed.
+Whenever the user asks whether Node.js is installed or which version it is ("Node.js가 설치되어 있는지 확인해줘",
+"Do I have Node.js installed? Check the version."), and as the pre-check before `tizen-cli tizen-sdk sdk-install`.
+
+This is the dedicated command for that question. Do **not** answer it with `tizen-cli tizen-sdk --doctor`
+(or the core `doctor` command): doctor is a multi-component health sweep — shell, scripts dir, SDK, sdb,
+em-cli — for "is my whole setup healthy?". A Node.js-only question routes here, every time.
 
 ## Command
 

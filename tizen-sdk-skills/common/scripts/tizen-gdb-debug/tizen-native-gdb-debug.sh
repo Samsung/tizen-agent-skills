@@ -26,6 +26,7 @@ PORT="5039"
 GDB="gdb"
 BREAKPOINTS=""
 TIMEOUT="30"
+SERIAL=""
 LAUNCH_MODE=false
 SETUP_ONLY=false
 
@@ -47,7 +48,8 @@ cleanup() {
     [ -n "$GDB_INIT" ] && [ -f "$GDB_INIT" ] && rm -f "$GDB_INIT"
     if [ "$GDBSERVER_STARTED" = true ]; then
       log_warn "Terminating gdbserver on device..."
-      "$SDB" shell "pkill -9 gdbserver 2>/dev/null" || true
+      # shellcheck disable=SC2086  # SERIAL may still be empty on an early exit
+      "$SDB" ${SERIAL:+-s "$SERIAL"} shell "pkill -9 gdbserver 2>/dev/null" || true
     fi
   fi
   [ "$exit_code" -ne 0 ] && log_error "Script exited with code $exit_code"
@@ -65,7 +67,8 @@ Required:
 
 Optional:
   -p PORT          Debug port (default: 5039)
-  -g GDB           GDB executable (default: auto-detect SDK gdb for the device arch, else PATH gdb)
+  -s SERIAL        Device serial (default: first connected device)
+  -g GDB          GDB executable (default: auto-detect SDK gdb for the device arch, else PATH gdb)
   -x BREAKPOINTS   Comma-separated breakpoints (e.g. "main,service_app_create")
   -t TIMEOUT       PID lookup timeout in seconds (default: 30, attach mode only)
   -l               Launch mode: gdbserver launches the binary directly (catches main).
@@ -88,11 +91,12 @@ EOF
 # ---------------------------------------------------------------------------
 # Argument parsing
 # ---------------------------------------------------------------------------
-while getopts "a:b:p:g:x:t:lNh" opt; do
+while getopts "a:b:p:s:g:x:t:lNh" opt; do
   case "$opt" in
     a) APP_ID="$OPTARG" ;;
     b) HOST_BIN="$OPTARG" ;;
     p) PORT="$OPTARG" ;;
+    s) SERIAL="$OPTARG" ;;
     g) GDB="$OPTARG" ;;
     x) BREAKPOINTS="$OPTARG" ;;
     t) TIMEOUT="$OPTARG" ;;
@@ -130,10 +134,10 @@ find_device_binary() {
   local bin_name app_bin
   bin_name="$(basename "$HOST_BIN")"
   local bases="/opt/usr/globalapps/$APP_ID/bin /opt/usr/apps/$APP_ID/bin"
-  app_bin="$("$SDB" shell "find $bases -name '$bin_name' -type f 2>/dev/null | head -1" | tr -d '\r')"
+  app_bin="$("$SDB" -s "$SERIAL" shell "find $bases -name '$bin_name' -type f 2>/dev/null | head -1" | tr -d '\r')"
   if [ -z "$app_bin" ]; then
     # Fallback: first executable in the app's bin directory
-    app_bin="$("$SDB" shell "find $bases -type f 2>/dev/null | head -1" | tr -d '\r')"
+    app_bin="$("$SDB" -s "$SERIAL" shell "find $bases -type f 2>/dev/null | head -1" | tr -d '\r')"
   fi
   echo "$app_bin"
 }
@@ -145,7 +149,7 @@ wait_for_pid() {
   local elapsed=0 pid="" proc_name
   proc_name="$(basename "$HOST_BIN")"
   while [ "$elapsed" -lt "$TIMEOUT" ]; do
-    pid="$("$SDB" shell "pidof $proc_name" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
+    pid="$("$SDB" -s "$SERIAL" shell "pidof $proc_name" 2>/dev/null | tr -d '\r' | awk '{print $1}')"
     [ -n "$pid" ] && { echo "$pid"; return 0; }
     sleep 1
     elapsed=$((elapsed + 1))
@@ -172,7 +176,7 @@ resolve_gdb() {
   if [ "$GDB" != "gdb" ]; then echo "$GDB"; return 0; fi
 
   local arch prefix found root
-  arch="$("$SDB" shell 'uname -m' 2>/dev/null | tr -d '\r' | tr -d '[:space:]')"
+  arch="$("$SDB" -s "$SERIAL" shell 'uname -m' 2>/dev/null | tr -d '\r' | tr -d '[:space:]')"
   case "$arch" in
     x86_64)         prefix="x86_64" ;;
     i686|i386|x86)  prefix="i686" ;;
@@ -212,6 +216,15 @@ if [ "$("$SDB" devices | grep -cE '[[:space:]]device([[:space:]]|$)' || true)" -
   exit 1
 fi
 "$SDB" devices
+# Pin every sdb call below to one device: -s when given (and connected), else
+# the first online device — the same rule tizen-dotnet-debug.sh uses.
+if [ -z "$SERIAL" ]; then
+  SERIAL="$(get_device_serial "$SDB")"
+elif ! get_connected_devices "$SDB" | grep -qx "$SERIAL"; then
+  log_error "Device '$SERIAL' is not connected (see the sdb devices list above)"
+  exit 1
+fi
+log_info "Target device: $SERIAL"
 
 # ---------------------------------------------------------------------------
 # Refuse Web apps: a .wgt runs inside the web runtime (no native binary of its
@@ -219,7 +232,7 @@ fi
 # look the pkgid up in the device package list and bail out if its type is wgt.
 # ---------------------------------------------------------------------------
 PKG_ID_CANDIDATE="${APP_ID%%.*}"
-if "$SDB" shell "pkgcmd -l" 2>/dev/null | grep '\[wgt\]' | grep -qF "[$PKG_ID_CANDIDATE]"; then
+if "$SDB" -s "$SERIAL" shell "pkgcmd -l" 2>/dev/null | grep '\[wgt\]' | grep -qF "[$PKG_ID_CANDIDATE]"; then
   log_error "'$APP_ID' is a Web app (wgt) — GDB debugging is not supported for Web apps."
   log_info "Web apps run inside the web runtime and have no native binary to attach to."
   log_info "Use the tizen-webapp-debug skill instead — it sets up RWI/CDP (Chrome DevTools) debugging."
@@ -263,14 +276,71 @@ log_info "Using GDB: $GDB"
 
 # Enable root so gdbserver can ptrace/launch and read the app's bin/ (emulator/dev
 # images). Best-effort: production devices may refuse, in which case we continue.
-"$SDB" root on >/dev/null 2>&1 || true
+"$SDB" -s "$SERIAL" root on >/dev/null 2>&1 || true
 
 # ---------------------------------------------------------------------------
-# Step 2: Locate gdbserver on device
+# Step 2: Locate gdbserver on device — or install it on demand from the SDK.
+# Emulator images (Tizen 8+) ship no gdbserver; the SDK carries it as
+# <sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar (gdbserver/gdbserver inside).
+# Same mechanism as netcoredbg in tizen-dotnet-debug.sh: push the tar, extract
+# under /home/owner/share/tmp/sdk_tools/ (owner-writable, no smack fights) and
+# reuse it on the next run.
 # ---------------------------------------------------------------------------
+GDBSERVER_ONDEMAND_BIN="/home/owner/share/tmp/sdk_tools/gdbserver/gdbserver"
+
+# Map `uname -m` to the on-demand tar's arch token (armv7l images use "armel").
+gdbserver_tar_arch() {
+  local raw
+  raw="$("$SDB" -s "$SERIAL" shell 'uname -m' 2>/dev/null | tr -d '\r' | tr -d '[:space:]')"
+  case "$raw" in
+    x86_64)  echo "x86_64" ;;
+    aarch64) echo "aarch64" ;;
+    arm*)    echo "armel" ;;
+    riscv64) echo "riscv64" ;;
+    *)       log_error "Unsupported device architecture for the on-demand gdbserver: '$raw'"; return 1 ;;
+  esac
+}
+
+# Newest gdbserver_<ver>_<arch>.tar under <sdk>/tools/on-demand. Do NOT hardcode
+# a version — it moves with the SDK's gdb package.
+find_gdbserver_tar() {
+  ls "$(get_sdk_path)"/tools/on-demand/gdbserver_*_"$1".tar 2>/dev/null | sort -V | tail -1 || true
+}
+
+# Push the tar and extract it into the sdk_tools dir (plain tar, not gzipped).
+install_gdbserver() {
+  local tar_path="$1" device_tar="/home/owner/share/tmp/gdbserver.tar"
+  log_info "Installing gdbserver from: $tar_path"
+  "$SDB" -s "$SERIAL" shell "mkdir -p /home/owner/share/tmp/sdk_tools" >/dev/null 2>&1 || true
+  if ! "$SDB" -s "$SERIAL" push "$tar_path" "$device_tar"; then
+    log_error "Failed to push the gdbserver package to the device"
+    exit 1
+  fi
+  "$SDB" -s "$SERIAL" shell "cd /home/owner/share/tmp/sdk_tools && tar -xf $device_tar" >/dev/null 2>&1 || true
+  "$SDB" -s "$SERIAL" shell "chmod +x $GDBSERVER_ONDEMAND_BIN 2>/dev/null; rm -f $device_tar" >/dev/null 2>&1 || true
+  # sdb shell never propagates the remote exit code — probe with an echo.
+  if [ "$("$SDB" -s "$SERIAL" shell "test -x $GDBSERVER_ONDEMAND_BIN && echo ok" 2>/dev/null | tr -d '\r[:space:]')" != "ok" ]; then
+    log_error "gdbserver extraction failed on device (expected $GDBSERVER_ONDEMAND_BIN)"
+    exit 1
+  fi
+  log_ok "gdbserver installed at $GDBSERVER_ONDEMAND_BIN"
+}
+
 log_step "2/6 Locating gdbserver on device..."
-GDBSERVER_PATH="$("$SDB" shell 'which gdbserver 2>/dev/null || echo /usr/bin/gdbserver' | tr -d '\r')"
-if ! "$SDB" shell "test -f '$GDBSERVER_PATH'" 2>/dev/null; then
+GDBSERVER_PATH="$("$SDB" -s "$SERIAL" shell "which gdbserver 2>/dev/null || (test -x /usr/bin/gdbserver && echo /usr/bin/gdbserver) || (test -x $GDBSERVER_ONDEMAND_BIN && echo $GDBSERVER_ONDEMAND_BIN)" 2>/dev/null | tr -d '\r' | awk 'NF {print; exit}' || true)"
+if [ -z "$GDBSERVER_PATH" ]; then
+  log_info "gdbserver is not on the device image — installing it from the SDK on demand"
+  ARCH="$(gdbserver_tar_arch)" || exit 1
+  TAR_PATH="$(find_gdbserver_tar "$ARCH")"
+  if [ -z "$TAR_PATH" ]; then
+    log_error "gdbserver package for '$ARCH' not found under $(get_sdk_path)/tools/on-demand/ (gdbserver_<ver>_$ARCH.tar)"
+    log_info "Install the SDK's on-demand tools with Package Manager (or the tizen-sdk-install skill), then retry."
+    exit 1
+  fi
+  install_gdbserver "$TAR_PATH"
+  GDBSERVER_PATH="$GDBSERVER_ONDEMAND_BIN"
+fi
+if [ "$("$SDB" -s "$SERIAL" shell "test -x '$GDBSERVER_PATH' && echo ok" 2>/dev/null | tr -d '\r[:space:]')" != "ok" ]; then
   log_error "gdbserver not found at $GDBSERVER_PATH"
   exit 1
 fi
@@ -296,12 +366,12 @@ if [ "$LAUNCH_MODE" = true ]; then
   fi
 else
   log_step "3/6 Launching app and resolving PID (attach mode)..."
-  "$SDB" shell "app_launcher -s $APP_ID" 2>/dev/null || log_info "app_launcher may have failed (app might still be starting)"
+  "$SDB" -s "$SERIAL" shell "app_launcher -s $APP_ID" 2>/dev/null || log_info "app_launcher may have failed (app might still be starting)"
   sleep 2
   APP_PID="$(wait_for_pid || true)"
   if [ -z "$APP_PID" ]; then
     log_error "Could not find PID for $APP_ID after ${TIMEOUT}s"
-    "$SDB" shell "ps -ef | grep $APP_ID" >&2 || true
+    "$SDB" -s "$SERIAL" shell "ps -ef | grep $APP_ID" >&2 || true
     exit 1
   fi
   log_info "App PID: $APP_PID"
@@ -312,18 +382,18 @@ fi
 # Step 4: Start gdbserver
 # ---------------------------------------------------------------------------
 log_step "4/6 Starting gdbserver on port $PORT..."
-"$SDB" shell "pkill gdbserver 2>/dev/null" || true
+"$SDB" -s "$SERIAL" shell "pkill gdbserver 2>/dev/null" || true
 sleep 1
 if [ "$SETUP_ONLY" = true ]; then
   # setup-only: the script exits before the user attaches gdb, so gdbserver must
   # outlive it. A device-side nohup is NOT enough (sdb kills the session's processes
   # when the client disconnects). Instead keep the HOST-side sdb client alive in a
   # detached process — it holds the device shell (and gdbserver) open.
-  nohup "$SDB" shell "$GDBSERVER_PATH $GDBSERVER_ARGS" >"${TMPDIR:-/tmp}/tizen-gdbserver-$PORT.log" 2>&1 &
+  nohup "$SDB" -s "$SERIAL" shell "$GDBSERVER_PATH $GDBSERVER_ARGS" >"${TMPDIR:-/tmp}/tizen-gdbserver-$PORT.log" 2>&1 &
   disown 2>/dev/null || true
 else
   # interactive: this script stays alive running gdb, so its sdb client persists.
-  "$SDB" shell "$GDBSERVER_PATH $GDBSERVER_ARGS" &
+  "$SDB" -s "$SERIAL" shell "$GDBSERVER_PATH $GDBSERVER_ARGS" &
 fi
 GDBSERVER_STARTED=true
 log_info "gdbserver started ($([ "$LAUNCH_MODE" = true ] && echo "launch" || echo "attach") mode)"
@@ -333,7 +403,7 @@ sleep 2
 # Step 5: Forward port
 # ---------------------------------------------------------------------------
 log_step "5/6 Forwarding port $PORT..."
-"$SDB" forward "tcp:$PORT" "tcp:$PORT"
+"$SDB" -s "$SERIAL" forward "tcp:$PORT" "tcp:$PORT"
 log_info "Port $PORT forwarded (host → device)"
 wait_for_port || log_warn "gdbserver readiness check inconclusive — proceeding"
 

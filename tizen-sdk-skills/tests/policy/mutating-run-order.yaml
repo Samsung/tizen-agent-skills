@@ -1,0 +1,100 @@
+# Hand-ordered run for the cli-lane mutating-tier TCs that a provisioned host
+# can execute without reinstalling anything.
+#
+# Why this file exists: runner.mjs executes TCs in readdir (alphabetical) order
+# with no setup/teardown, and for the mutating tier that order cannot pass —
+# `build-project.*` sorts before the `create-project.*` TC that makes the
+# project it builds, `project-delete.happy` would delete that project before
+# the later builds, `certificate-manager.remove-profile` consumes its fixture
+# profiles.xml, and `generate-author` / `import-certificate` refuse to
+# overwrite the certificates a previous run left in <sdk-data>/keystore/.
+#
+# Usage (normally via scripts/run-mutating-tier.mjs, which adds the preflight,
+# the profile-fixture backup/restore, the keystore cleanup, the projects-dir
+# reset and the teardown; the runner MUST run with cwd = tests/, because the
+# certificate TCs use `fixtures/...` relative paths):
+#   node runner.mjs --tier=mutating --status=approved --order=policy/mutating-run-order.yaml [--phase=<name>]
+#   node runner.mjs --dry-run   --tier=mutating --order=policy/mutating-run-order.yaml
+#
+# Ids are matched against the TCs that survive --tier/--status, so with
+# --status=approved a draft id listed here fails loudly (exit 2); the driver's
+# --include-drafts drops that filter for promotion runs. Phase names must not
+# collide with policy/device-run-order.yaml (both share FIXTURE_NEEDS in
+# scripts/lib/driver-common.mjs; runner-helpers.test.mjs checks).
+#
+# NOT listed on purpose (draft, reason in each TC's NOTE): the SDK-installing
+# TCs that only execute under the packaged CLI or reinstall the host's SDK
+# (sdk-install.force, *-custom-repo.force, tv-sdk-install.force, dotnet-setup.force,
+# update-package.*, platform-install.happy, download-emulator-package.*,
+# download-mobile-platform.*, install-rootstrap.happy), the Samsung online-CA
+# actions (samsung-login, generate-samsung-*), the GBS builds
+# (build-project.arch / .gbs — Linux only) and build-project.compiler-flags
+# (no flag passthrough exists).
+#
+# Invariants the order relies on:
+#   * s1 needs an installed SDK with platforms/tizen-10.0, <sdk>/.tv-sdk-installed
+#     and the Tizen .NET workload: every command there takes its
+#     already-installed short-circuit and downloads nothing. The three
+#     --repo-url TCs still validate the URL over the network (capability net).
+#   * k2 needs <sdk-data>/keystore free of TestDev / Jane-Dev / TestDev-v2 and
+#     of the two imported copies of test-fixture-author.p12 — hook cleanKeystore.
+#   * k3: create-profile writes a scratch profiles.xml under
+#     ${FIXTURE_TMP_DIR}/profiles (never the SDK's real one, whose myProfile the
+#     builds sign with); set-active-profile / remove-profile edit the committed
+#     fixtures under fixtures/profiles/ — hook resetProfileFixtures restores the
+#     backup first, the teardown restores it again.
+#   * p1: create-project.native-happy runs first because build-project.* and
+#     project-delete.happy target the MyNativeApp it creates under
+#     ${FIXTURE_PROJECTS_DIR} (emptied by hook resetProjectsDir);
+#     create-project.force is listed twice so the second run is a real
+#     overwrite; build-project.release signs with the active myProfile that
+#     scripts/prepare-device-fixtures.mjs creates; project-delete is last.
+
+phases:
+  # Already-installed short-circuits of the SDK installers. ~1 min.
+  - name: s1-sdk-idempotent
+    tcs:
+      - tizen-sdk.sdk-install.happy
+      - tizen-sdk.sdk-install.specific-version
+      - tizen-sdk.sdk-install.custom-repo # validates ${TC_CUSTOM_REPO_URL} over the network first
+      - tizen-sdk.sdk-install-custom-repo.happy
+      - tizen-sdk.sdk-install-custom-repo.specific-version
+      - tizen-sdk.tv-sdk-install.happy
+      - tizen-sdk.dotnet-setup.happy
+      - tizen-sdk.dotnet-setup.specific-version
+
+  # Read-only certificate actions. ~10 s.
+  - name: k1-cert-readonly
+    tcs:
+      - tizen-sdk.certificate-manager.list-profiles
+      - tizen-sdk.certificate-manager.list-distributors
+      - tizen-sdk.certificate-manager.inspect-certificate
+
+  # Hook cleanKeystore. Writes under <sdk-data>/keystore/{author,distributor}. ~30 s.
+  - name: k2-cert-keystore
+    tcs:
+      - tizen-sdk.certificate-manager.generate-author # TestDev.p12
+      - tizen-sdk.certificate-manager.generate-author-full # Jane-Dev.p12
+      - tizen-sdk.certificate-manager.generate-author-overwrite # TestDev-v2.p12 (same --name, new --file)
+      - tizen-sdk.certificate-manager.import-certificate # author/test-fixture-author.p12
+      - tizen-sdk.certificate-manager.import-certificate-from-file # distributor/test-fixture-author.p12
+
+  # Hook resetProfileFixtures. profiles.xml files only. ~10 s.
+  - name: k3-cert-profiles
+    tcs:
+      - tizen-sdk.certificate-manager.create-profile # scratch ${FIXTURE_TMP_DIR}/profiles/created-profiles.xml
+      - tizen-sdk.certificate-manager.set-active-profile # fixtures/profiles/with-profile.xml
+      - tizen-sdk.certificate-manager.remove-profile # fixtures/profiles/with-profile-for-removal.xml (consumed)
+
+  # Hook resetProjectsDir. create → build → delete under ${FIXTURE_PROJECTS_DIR}. ~3 min.
+  - name: p1-projects
+    tcs:
+      - tizen-sdk.create-project.native-happy # MyNativeApp — the build/delete target
+      - tizen-sdk.create-project.webapp-happy # MyWebApp01
+      - tizen-sdk.create-project.dotnet-happy # MyDotNetApp
+      - tizen-sdk.create-project.force # MyForceApp01 (fresh)
+      - tizen-sdk.create-project.force # MyForceApp01 again — the real overwrite path
+      - tizen-sdk.build-project.happy # Debug, active profile
+      - tizen-sdk.build-project.clean
+      - tizen-sdk.build-project.release # --sign-profile myProfile
+      - tizen-sdk.project-delete.happy # MyNativeApp gone

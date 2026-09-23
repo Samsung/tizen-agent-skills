@@ -341,10 +341,11 @@ node <plugin>/lib/cli/dotnet-setup-cli.js [--force] [version]
 
 ### 6. tizen-create-project
 
-**설명:** 템플릿에서 Tizen 프로젝트 생성 (Native, DotNET, WebApp, TV, Platform) 및 프로젝트 디렉터리 삭제.
+**설명:** 템플릿에서 Tizen 프로젝트 생성 (Native, DotNET, WebApp, TV, Platform), 기존 `.wgt` 아카이브를 Web 프로젝트로 가져오기, 프로젝트 디렉터리 삭제.
 
-**사용 시점:** 대화형 UI로 새 Tizen 프로젝트 생성. 프로젝트 삭제 요청("프로젝트
-삭제해줘", "앱 지워줘")도 이 스킬의 `delete` 액션이 담당합니다.
+**사용 시점:** 대화형 UI로 새 Tizen 프로젝트 생성. 기존 `.wgt`를 프로젝트로 가져오는
+요청("WGT 프로젝트 가져오기", "import this WGT")은 `import-wgt` 액션이, 프로젝트 삭제
+요청("프로젝트 삭제해줘", "앱 지워줘")은 `delete` 액션이 담당합니다.
 
 **파라미터:**
 
@@ -361,8 +362,24 @@ node <plugin>/lib/cli/dotnet-setup-cli.js [--force] [version]
 ```
 node <plugin>/lib/cli/project-manager-cli.js create --type <type> --template <template> --parent-path <parentPath> --name <appName> [--force]
 node <plugin>/lib/cli/project-manager-cli.js list-templates [--type <type>]
+node <plugin>/lib/cli/project-manager-cli.js import-wgt --wgt-path <file.wgt> --profile <tizen|tv-samsung> --platform-version <X.Y> --working-dir <dir>
 node <plugin>/lib/cli/project-manager-cli.js delete --project <projectPath>
 ```
+
+**WGT 가져오기 (`import-wgt` 액션 / `import-wgt` 커맨드):** 기존 `.wgt` 아카이브를
+SDK의 `tz import-wgt`로 풀어 `<working-dir>/<WGT 파일명(.wgt 제외)>`에 Web 프로젝트를
+생성합니다. 아카이브를 직접 풀거나 `config.xml`을 손으로 쓰지 마세요. 러너가 다음을
+검증하고 실패 시 Envelope로 알립니다:
+
+- 파일명(.wgt 제외)이 프로젝트 이름이 되므로 `[A-Za-z0-9]`만 허용 — `my-app.wgt`,
+  `Weather.Widget.wgt`는 `invalid_parameters`(정제된 이름 제안 포함).
+- `<profile>-<version>`(예: `tizen-10.0`, `tv-samsung-10.0`)은 **설치된** tz 프로필이어야
+  함 — 없으면 tz가 아는 프로필 목록과 함께 `project_creation_failed`. `tz` 자체는 미설치
+  버전도 exit 0으로 받아들이고 무시하므로 러너가 대신 막습니다.
+- `<working-dir>/<프로젝트 이름>`이 이미 있으면 `project_creation_failed` — `delete`
+  액션으로 지운 뒤 재시도.
+
+성공 `result`: `{wgt_path, project_path, profile, platform_version, status: "imported"}`.
 
 **프로젝트 삭제 (`delete` 액션 / `project-delete` 커맨드):** SDK 호스트에서
 프로젝트 디렉터리를 삭제합니다. Tizen 프로젝트 마커(`tizen_*_project.yaml`,
@@ -1581,6 +1598,7 @@ Standard JSON Envelope 반환 → 에이전트가 사용자에게 결과 전달
 | `project-manager-cli.js` | `createProject()`    | `tizen-create-project` |
 | `project-manager-cli.js` | `deleteProject()`    | `tizen-create-project` (delete 액션) |
 | `project-manager-cli.js` | `listTemplates()`    | `tizen-create-project` |
+| `project-manager-cli.js` | `importWgt()`        | `tizen-create-project` (import-wgt 액션) |
 | `project-manager-cli.js`  | `buildProject()`     | `tizen-build-project`  |
 | `device-manager-cli.js` | `manageDevice()`     | `tizen-device-manager` |
 | `emulator-manager-cli.js` | `manageEmulator()` / `createEmulator()` / `launchEmulator()` | `tizen-create-emulator`, `tizen-launch-emulator` |

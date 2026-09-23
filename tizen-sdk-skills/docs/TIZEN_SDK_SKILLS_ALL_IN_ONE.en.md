@@ -355,10 +355,12 @@ node <plugin>/lib/cli/dotnet-setup-cli.js [--force] [version]
 
 ### 6. tizen-create-project
 
-**Description:** Create Tizen projects from templates (Native, DotNET, WebApp, TV, Platform), and delete project directories.
+**Description:** Create Tizen projects from templates (Native, DotNET, WebApp, TV, Platform), import an existing `.wgt` archive as a Web project, and delete project directories.
 
-**Use Case:** Create new Tizen projects via interactive UI. Deletion requests
-("delete that project", "remove MyApp") are also served by this skill's `delete` action.
+**Use Case:** Create new Tizen projects via interactive UI. Requests to import an
+existing `.wgt` as a project ("import this WGT", "WGT 프로젝트 가져오기") are served by
+the `import-wgt` action; deletion requests ("delete that project", "remove MyApp") by
+the `delete` action.
 
 **Parameters:**
 
@@ -375,8 +377,26 @@ node <plugin>/lib/cli/dotnet-setup-cli.js [--force] [version]
 ```
 node <plugin>/lib/cli/project-manager-cli.js create --type <type> --template <template> --parent-path <parentPath> --name <appName> [--force]
 node <plugin>/lib/cli/project-manager-cli.js list-templates [--type <type>]
+node <plugin>/lib/cli/project-manager-cli.js import-wgt --wgt-path <file.wgt> --profile <tizen|tv-samsung> --platform-version <X.Y> --working-dir <dir>
 node <plugin>/lib/cli/project-manager-cli.js delete --project <projectPath>
 ```
+
+**Importing a WGT (`import-wgt` action / `import-wgt` command):** unpacks an existing
+`.wgt` archive with the SDK's `tz import-wgt` and generates a Web project at
+`<working-dir>/<WGT file name without .wgt>`. Never unzip the archive or hand-write
+`config.xml`. The runner enforces the following and reports failures in the envelope:
+
+- The file name (without `.wgt`) becomes the project name, so only `[A-Za-z0-9]` is
+  accepted — `my-app.wgt` or `Weather.Widget.wgt` returns `invalid_parameters` with a
+  suggested name.
+- `<profile>-<version>` (e.g. `tizen-10.0`, `tv-samsung-10.0`) must be an **installed** tz
+  profile — otherwise `project_creation_failed` listing the profiles tz knows. `tz` itself
+  accepts an uninstalled version with exit 0 and silently ignores it, so the runner refuses
+  it instead.
+- `<working-dir>/<project name>` must not exist yet — otherwise `project_creation_failed`;
+  remove it with the `delete` action and retry.
+
+Success `result`: `{wgt_path, project_path, profile, platform_version, status: "imported"}`.
 
 **Deleting a project (`delete` action / `project-delete` command):** removes a
 project directory on the SDK host. Paths without a Tizen project marker
@@ -1597,6 +1617,7 @@ Each CLI runner `require`s a specific function from `sdk-commands.js`:
 | `project-manager-cli.js` | `createProject()`        | `tizen-create-project` |
 | `project-manager-cli.js` | `deleteProject()`        | `tizen-create-project` (delete action) |
 | `project-manager-cli.js` | `listTemplates()`        | `tizen-create-project` |
+| `project-manager-cli.js` | `importWgt()`            | `tizen-create-project` (import-wgt action) |
 | `project-manager-cli.js`  | `buildProject()`         | `tizen-build-project`  |
 | `device-manager-cli.js` | `manageDevice()`         | `tizen-device-manager` |
 | `emulator-manager-cli.js` | `manageEmulator()` / `createEmulator()` / `launchEmulator()` | `tizen-create-emulator`, `tizen-launch-emulator` |

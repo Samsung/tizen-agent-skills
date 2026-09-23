@@ -8,6 +8,12 @@ status: approved
 since_cli: 1.0.0
 description: "certificate-manager get-sdk-data-path returns success with SDK data path"
 
+# resolveSdkDataPath() needs a configured SDK root (or an sdb inside an SDK on
+# PATH); otherwise the action fails with sdk_path_not_set. The CI safe-tier
+# gate skips this TC (--skip-requires=sdk).
+requires:
+  capabilities: [sdk]
+
 lanes:
   cli:
     argv:
