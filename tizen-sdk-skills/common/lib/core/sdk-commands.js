@@ -74,6 +74,7 @@ module.exports = {
 
   // project
   createProject: project.createProject,
+  importWgt: project.importWgt,
   deleteProject: project.deleteProject,
   buildProject: project.buildProject,
   listTemplates: project.listTemplates,

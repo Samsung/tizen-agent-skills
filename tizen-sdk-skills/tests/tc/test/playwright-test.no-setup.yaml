@@ -3,15 +3,16 @@ id: tizen-sdk.playwright-test.no-setup
 plugin: tizen-sdk
 command: playwright-test
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "playwright-test --app-id --test-file --no-setup returns success"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs abcDEF1234.MyWebApp on the device and the Linux fixture project /tmp/test-project.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "playwright-test", "--app-id", "abcDEF1234.MyWebApp", "--test-file", "/tmp/test-project/tizen-playwright.test.js", "--no-setup"]
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "playwright-test", "--app-id", "${FIXTURE_WEB_APP_ID}", "--test-file", "${FIXTURE_TMP_DIR}/test-project/tizen-playwright.test.js", "--no-setup"]
     timeout_sec: 120
     expect:
       status: success

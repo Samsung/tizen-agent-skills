@@ -1,6 +1,9 @@
 # Temp/scratch files
 _tmp_*.ps1
 
+# Benchmark results
+benchmark-results.json
+
 # tizen-cli harness build outputs (tizen-cli)
 node_modules/
 tizen-cli/dist/
@@ -22,6 +25,10 @@ code2spec/
 settings.local.json
 # Allow the documented throwaway test fixture (see tests/fixtures/README.md)
 !tests/fixtures/certs/test-fixture-author.p12
+# ...but not the .pwd sidecar tz reads next to it, nor the device-tier fixture
+# apps built by tests/scripts/prepare-device-fixtures.mjs
+tests/fixtures/certs/*.pwd
+tests/fixtures/apps/
 
 # AI extension related directories and files
 .claude/

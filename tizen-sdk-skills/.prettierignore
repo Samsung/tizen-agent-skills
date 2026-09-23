@@ -6,3 +6,5 @@ vscode/assets/
 # Build outputs (esbuild); CI checks a clean checkout, local runs should match
 tizen-cli/dist/
 vscode/dist/
+# Device-tier fixture apps built by tests/scripts/prepare-device-fixtures.mjs (gitignored)
+tests/fixtures/apps/

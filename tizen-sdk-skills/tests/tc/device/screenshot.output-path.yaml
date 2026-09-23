@@ -3,20 +3,21 @@ id: tizen-sdk.screenshot.output-path
 plugin: tizen-sdk
 command: screenshot
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "screenshot --output returns success with output_path at the specified location"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — writes to the Linux fixture path /tmp/shots/.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "screenshot", "--output", "/tmp/shots/screen.png"]
-    timeout_sec: 30
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "screenshot", "--output", "${FIXTURE_TMP_DIR}/shots/screen.png"]
+    # NOTE (2026-09-23): 30 s was marginal (21-29 s measured; see screenshot.happy). Raised to 60 s.
+    timeout_sec: 60
     expect:
       status: success
       jsonpath:
         # Result key is `output_path`, not `screenshot_path` (fixed 2026-09-17 while
-        # correcting screenshot.happy; this TC itself was NOT executed — the /tmp/shots
-        # path is a Linux fixture, environment-skip on Windows).
+        # correcting screenshot.happy; verified by this TC's own run on 2026-09-22).
         - { path: "$.result.output_path", matches: 'shots[\\/]screen\.png$' }

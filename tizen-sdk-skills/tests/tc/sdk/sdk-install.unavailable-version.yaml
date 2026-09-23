@@ -7,6 +7,12 @@ status: approved
 since_cli: 1.0.0
 description: "sdk-install with an X.Y version that is not installed fails instead of reporting 'already installed'"
 
+# Only the SDK-installed branch below yields platform_version_not_found; with
+# no SDK the pre-check returns execution_error instead, so the CI safe-tier
+# gate skips this TC (--skip-requires=sdk).
+requires:
+  capabilities: [sdk]
+
 lanes:
   cli:
     # 99.0 passes the X.Y syntax check, so the pre-check reaches the host:

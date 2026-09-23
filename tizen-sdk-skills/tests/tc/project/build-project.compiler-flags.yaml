@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "build-project with extra compiler flags returns success"
 
+requires:
+  capabilities: [sdk]
+
 # NOTE (2026-09-01): --project pointed at /tmp/tizen-apps/MyApp, a path
 # create-project can never produce (package IDs must be exactly 10
 # alphanumeric characters; "myapp" is 5). Renamed to a valid target and
@@ -15,9 +18,14 @@ description: "build-project with extra compiler flags returns success"
 # rootstrap installed — all separately fixed elsewhere in this session
 # (create-project.*, certificate-manager profile fixtures,
 # download-emulator-package/platform-install auto-detect bug).
+# NOTE (2026-09-23): stays draft (product gap, not a fixture problem). build-project has no
+# compiler-flag passthrough (command-specs/project.ts: --project/--build-type/--sign-profile/
+# --arch/--clean only) and tizen-cli's Commander 12 drops the trailing `CFLAGS=-O2` token
+# silently (default allowExcessArguments), so a run would only prove an ordinary Debug build.
+# Promote once the option exists (or the TC is rewritten to what it can assert).
 lanes:
   cli:
-    argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyTizenApp01", "--", "CFLAGS=-O2"]
+    argv: ["tizen-sdk", "build-project", "--project", "${FIXTURE_PROJECTS_DIR}/MyNativeApp", "--", "CFLAGS=-O2"]
     timeout_sec: 300
     expect:
       status: success

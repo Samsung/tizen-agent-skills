@@ -12,8 +12,26 @@
  *   node runner.mjs --tc=check-node    # filter by TC id substring
  *   node runner.mjs --domain=sdk       # filter by domain directory
  *   node runner.mjs --status=approved  # only approved TCs (see schema for the lifecycle)
+ *   node runner.mjs --skip-requires=sdk,net
+ *                                      # skip TCs whose requires.capabilities need
+ *                                      # something this host lacks (CI: no SDK, no network)
+ *   node runner.mjs --order=policy/device-run-order.yaml [--phase=<name>]
+ *                                      # run the ids listed in that file, in that order
+ *                                      # (repeats allowed) instead of readdir order
+ *   node runner.mjs --help             # usage; any unknown option aborts with exit 2
  *
  * `quarantined` TCs are excluded unless selected explicitly with --status=quarantined.
+ *
+ * Without --order the run order is readdir order (alphabetical by directory,
+ * then file). For the device tier that order is self-destructive (emulator
+ * deleted before the TCs that use it) — see policy/device-run-order.yaml and
+ * scripts/run-device-tier.mjs.
+ *
+ * The CI safe-tier gate is
+ *   node runner.mjs --tier=safe --status=approved --skip-requires=sdk,net
+ * (.github/workflows/ci.yml) — run it locally with a throwaway HOME before
+ * promoting a safe TC to `approved`, since sdk-init.explicit-path writes
+ * ~/.tizen.sdk.path.config.
  *
  * The runner:
  *   1. Loads and schema-validates every TC YAML in tc/
@@ -27,7 +45,7 @@
  */
 
 import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, dirname, relative } from "node:path";
+import { join, dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
 import { parseAllDocuments } from "yaml";
@@ -101,24 +119,192 @@ export function expandArgv(argv, env) {
   return { expanded, missing };
 }
 
+// ── Capability requirements ───────────────────────────────────────────────
+//
+// A TC's `requires.capabilities` names what the host must provide beyond the
+// plugin itself (schema enum: kvm, dind, chroot, net-device, sdk, net,
+// samsung-account, gbs). The
+// runner does not probe the host — `--skip-requires=sdk,net` declares what
+// the host LACKS, and every TC that requires one of those is reported as
+// skipped instead of failing. CI uses this to run the safe tier on a runner
+// with no Tizen SDK and no guaranteed route to download.tizen.org.
+
+export function parseSkipRequires(value) {
+  return value
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/** Capabilities the TC requires that the host declared missing. */
+export function missingCapabilities(tc, skipRequires) {
+  if (!skipRequires.length) return [];
+  const needed = tc.requires?.capabilities || [];
+  return needed.filter((c) => skipRequires.includes(c));
+}
+
 // ── CLI args ─────────────────────────────────────────────────────────────
 
-function parseArgs() {
+const USAGE = `usage: node runner.mjs [options]
+
+  --dry-run                  validate TC YAMLs against the schema, execute nothing
+  --tier=<tier>              safe | mutating | device | skip
+  --status=<status>          draft | candidate | approved | quarantined
+  --tc=<substring>           only TCs whose id contains <substring>
+  --domain=<dir>             only TCs under tc/<dir>/
+  --skip-requires=<cap,...>  skip TCs whose requires.capabilities include one of
+                             these (the host lacks them), e.g. sdk,net
+  --order=<yaml>             run the TC ids listed in <yaml> ({ phases: [{ name,
+                             tcs: [id, ...] }] }) in that order, repeats allowed,
+                             instead of readdir order; ids must match a loaded TC
+  --phase=<name>             with --order: run only that phase
+  -h, --help                 show this help
+
+With no filter EVERY TC runs, including the mutating (install, certificate
+profiles) and device (create/launch emulator) tiers. Unknown options abort
+with exit 2 instead of widening the run.
+
+CI gate:     node runner.mjs --tier=safe --status=approved --skip-requires=sdk,net
+Device tier: node scripts/run-device-tier.mjs   (ordered, self-cleaning; see tests/README.md)`;
+
+/**
+ * Parse argv into runner options. Pure — no output, no process.exit — so the
+ * unit tests can assert on it directly and main() decides how to exit.
+ *
+ * Returns { args, exitCode: null } when every option is recognised, otherwise
+ * { args: null, exitCode, message }: 0 with the usage for --help / -h, 2 with
+ * "unknown option" + usage for anything else. An unknown flag must never
+ * silently widen the run: `--help` once fell through the old parser and
+ * executed every mutating and device TC on a developer machine.
+ */
+export function parseArgs(argv) {
   const args = {
     tier: null,
     dryRun: false,
     tcFilter: null,
     domain: null,
     status: null,
+    skipRequires: [],
+    order: null,
+    phase: null,
   };
-  for (const arg of process.argv.slice(2)) {
-    if (arg === "--dry-run") args.dryRun = true;
+  for (const arg of argv) {
+    if (arg === "--help" || arg === "-h") {
+      return { args: null, exitCode: 0, message: USAGE };
+    } else if (arg === "--dry-run") args.dryRun = true;
     else if (arg.startsWith("--tier=")) args.tier = arg.slice(7);
     else if (arg.startsWith("--tc=")) args.tcFilter = arg.slice(5);
     else if (arg.startsWith("--domain=")) args.domain = arg.slice(9);
     else if (arg.startsWith("--status=")) args.status = arg.slice(9);
+    else if (arg.startsWith("--skip-requires="))
+      args.skipRequires = parseSkipRequires(arg.slice(16));
+    else if (arg.startsWith("--order=")) {
+      const file = arg.slice(8);
+      if (!file) {
+        return {
+          args: null,
+          exitCode: 2,
+          message: `--order needs a file\n${USAGE}`,
+        };
+      }
+      args.order = resolve(file);
+    } else if (arg.startsWith("--phase=")) args.phase = arg.slice(8);
+    else {
+      return {
+        args: null,
+        exitCode: 2,
+        message: `unknown option: ${arg}\n${USAGE}`,
+      };
+    }
   }
-  return args;
+  if (args.phase !== null && !args.order) {
+    return {
+      args: null,
+      exitCode: 2,
+      message: `--phase requires --order\n${USAGE}`,
+    };
+  }
+  return { args, exitCode: null, message: null };
+}
+
+// ── Explicit run order ────────────────────────────────────────────────────
+//
+// An order file names TC ids in the sequence they must execute, grouped in
+// phases: { phases: [{ name, description?, tcs: [id, ...] }] }. The same id
+// may appear more than once (e.g. `emulator-manager.delete` between the three
+// create-emulator TCs that all create `test-vm`). Ids are matched against the
+// TCs that survived the other filters, so `--tier=device --status=approved
+// --order=...` fails loudly when the file names a draft TC.
+
+/**
+ * Resolve an order document against the loaded TCs. Pure.
+ * @returns {{ ordered: Array<{file: string, tc: object, phase: string}>, errors: string[] }}
+ */
+export function applyOrder(tcs, orderDoc, phase = null) {
+  const errors = [];
+  const phases = Array.isArray(orderDoc?.phases) ? orderDoc.phases : null;
+  if (!phases) {
+    return { ordered: [], errors: ["order file: expected { phases: [...] }"] };
+  }
+  const byId = new Map();
+  for (const entry of tcs) {
+    const list = byId.get(entry.tc.id) || [];
+    list.push(entry);
+    byId.set(entry.tc.id, list);
+  }
+  const selected =
+    phase === null ? phases : phases.filter((p) => p?.name === phase);
+  if (phase !== null && selected.length === 0) {
+    errors.push(
+      `--phase=${phase}: no such phase (have: ${phases.map((p) => p?.name).join(", ")})`,
+    );
+  }
+  // Phase names are addresses (--phase=<name>): a duplicate would silently
+  // run twice, an empty phase would silently run nothing.
+  const seenNames = new Set();
+  for (const p of phases) {
+    if (p && typeof p.name === "string") {
+      if (seenNames.has(p.name))
+        errors.push(
+          `order file: phase name "${p.name}" appears more than once`,
+        );
+      seenNames.add(p.name);
+    }
+  }
+  const ordered = [];
+  for (const p of selected) {
+    if (!p || typeof p.name !== "string" || !Array.isArray(p.tcs)) {
+      errors.push(`order file: every phase needs { name, tcs: [...] }`);
+      continue;
+    }
+    if (p.tcs.length === 0) {
+      errors.push(`${p.name}: phase lists no TCs`);
+      continue;
+    }
+    for (const id of p.tcs) {
+      const matches = byId.get(id) || [];
+      if (matches.length === 0) {
+        errors.push(
+          `${p.name}: ${id} matches no loaded TC (check --tier/--status filters and the id)`,
+        );
+      } else if (matches.length > 1) {
+        errors.push(
+          `${p.name}: ${id} is ambiguous (${matches.map((m) => m.file).join(", ")})`,
+        );
+      } else {
+        ordered.push({ ...matches[0], phase: p.name });
+      }
+    }
+  }
+  return { ordered, errors };
+}
+
+function loadOrderDoc(orderPath) {
+  const docs = parseAllDocuments(readFileSync(orderPath, "utf-8"));
+  if (docs[0]?.errors?.length) {
+    throw new Error(`${orderPath}: ${docs[0].errors[0].message}`);
+  }
+  return docs[0]?.toJS() ?? null;
 }
 
 // ── TC discovery ──────────────────────────────────────────────────────────
@@ -447,14 +633,47 @@ const GREEN = "32",
   GRAY = "90";
 
 async function main() {
-  const args = parseArgs();
-  const { tcs, errors } = loadTCs(args);
+  const parsed = parseArgs(process.argv.slice(2));
+  if (parsed.exitCode !== null) {
+    // process.exitCode + return (not process.exit) so a piped stdout is
+    // flushed before the process ends and the usage is never truncated.
+    if (parsed.exitCode === 0) console.log(parsed.message);
+    else console.error(color(RED, parsed.message));
+    process.exitCode = parsed.exitCode;
+    return;
+  }
+  const args = parsed.args;
+  let { tcs, errors } = loadTCs(args);
 
   // Schema errors are always fatal
   if (errors.length) {
     console.error(color(RED, `✗ ${errors.length} schema error(s):`));
     for (const e of errors) console.error(`  ${e}`);
     process.exit(1);
+  }
+
+  if (args.order) {
+    let orderDoc;
+    try {
+      orderDoc = loadOrderDoc(args.order);
+    } catch (e) {
+      console.error(color(RED, `✗ cannot read order file: ${e.message}`));
+      process.exitCode = 2;
+      return;
+    }
+    const resolved = applyOrder(tcs, orderDoc, args.phase);
+    if (resolved.errors.length) {
+      console.error(
+        color(
+          RED,
+          `✗ ${resolved.errors.length} order error(s) in ${args.order}:`,
+        ),
+      );
+      for (const e of resolved.errors) console.error(`  ${e}`);
+      process.exitCode = 2;
+      return;
+    }
+    tcs = resolved.ordered;
   }
 
   if (tcs.length === 0) {
@@ -464,33 +683,73 @@ async function main() {
 
   console.log(color(CYAN, `\n🧪 tizen-sdk test suite`));
   console.log(
-    color(GRAY, `   ${tcs.length} TC(s)${args.dryRun ? " (dry-run)" : ""}\n`),
+    color(
+      GRAY,
+      `   ${tcs.length} TC(s)${args.dryRun ? " (dry-run)" : ""}` +
+        (args.order
+          ? ` — ordered by ${relative(process.cwd(), args.order) || args.order}` +
+            (args.phase ? `, phase ${args.phase}` : "")
+          : "") +
+        "\n",
+    ),
   );
+
+  // Phase headers and "(#n)" suffixes for repeated ids, only under --order.
+  let currentPhase = null;
+  const seen = new Map();
+  const label = (entry) => {
+    if (!args.order) return entry.tc.id;
+    if (entry.phase !== currentPhase) {
+      currentPhase = entry.phase;
+      console.log(color(CYAN, `\n  ── phase ${currentPhase} ──`));
+    }
+    const n = (seen.get(entry.tc.id) || 0) + 1;
+    seen.set(entry.tc.id, n);
+    return n > 1 ? `${entry.tc.id} (#${n})` : entry.tc.id;
+  };
 
   let pass = 0,
     fail = 0,
     skip = 0;
   const failures = [];
+  // Skips broken down by reason for the summary line, so a `requires` skip
+  // (a declaration about the host, never probed) cannot hide in the total.
+  const skipReasons = new Map();
+  const countSkip = (reason) => {
+    skip++;
+    skipReasons.set(reason, (skipReasons.get(reason) || 0) + 1);
+  };
 
-  for (const { tc } of tcs) {
+  for (const entry of tcs) {
+    const { tc } = entry;
+    const id = label(entry);
     // --dry-run only validates, so prompt-only TCs count here too
     if (args.dryRun) {
-      console.log(color(GREEN, `  ✓ ${tc.id}`) + color(GRAY, `  [validated]`));
+      console.log(color(GREEN, `  ✓ ${id}`) + color(GRAY, `  [validated]`));
       pass++;
       continue;
     }
 
     const cli = tc.lanes?.cli;
     if (!cli) {
-      console.log(color(YELLOW, `  ⊘ ${tc.id}  (no cli lane — skip)`));
-      skip++;
+      console.log(color(YELLOW, `  ⊘ ${id}  (no cli lane — skip)`));
+      countSkip("no cli lane");
+      continue;
+    }
+
+    const missing = missingCapabilities(tc, args.skipRequires);
+    if (missing.length) {
+      console.log(
+        color(YELLOW, `  ⊘ ${id}  (requires ${missing.join(", ")} — skip)`),
+      );
+      countSkip(`requires ${missing.join("+")}`);
       continue;
     }
 
     const envelope = runCommand(cli.argv, cli.timeout_sec, cli.env || {});
     if (!envelope) {
-      console.log(color(RED, `  ✗ ${tc.id}`) + color(GRAY, `  (no envelope)`));
-      failures.push({ id: tc.id, reason: "no envelope returned" });
+      console.log(color(RED, `  ✗ ${id}`) + color(GRAY, `  (no envelope)`));
+      failures.push({ id, reason: "no envelope returned" });
       fail++;
       continue;
     }
@@ -498,14 +757,25 @@ async function main() {
     const result = evalExpect(envelope, cli.expect);
     if (result.pass) {
       console.log(
-        color(GREEN, `  ✓ ${tc.id}`) +
+        color(GREEN, `  ✓ ${id}`) +
           color(GRAY, `  (${envelope.duration_ms ?? "?"}ms)`),
       );
       pass++;
     } else {
-      console.log(color(RED, `  ✗ ${tc.id}`));
+      console.log(color(RED, `  ✗ ${id}`));
       console.log(color(GRAY, `      ${result.reason}`));
-      failures.push({ id: tc.id, reason: result.reason, envelope });
+      // The first plugin error, so a run log explains itself without a re-run.
+      const err = envelope.errors?.[0];
+      if (err && result.reason.startsWith("status:")) {
+        const msg = String(err.message || "").replace(/\s+/g, " ");
+        console.log(
+          color(
+            GRAY,
+            `      ${err.error_code || err.error_category || "error"}: ${msg.length > 300 ? msg.slice(0, 300) + "…" : msg}`,
+          ),
+        );
+      }
+      failures.push({ id, reason: result.reason, envelope });
       fail++;
     }
   }
@@ -513,16 +783,19 @@ async function main() {
   // Summary
   console.log();
   const total = pass + fail + skip;
+  const skipDetail = skipReasons.size
+    ? ` (${[...skipReasons].map(([r, n]) => `${r}: ${n}`).join(", ")})`
+    : "";
   if (fail === 0) {
     console.log(
       color(GREEN, `✓ ${pass} passed`) +
-        color(GRAY, `, ${skip} skipped, ${total} total`),
+        color(GRAY, `, ${skip} skipped${skipDetail}, ${total} total`),
     );
   } else {
     console.log(
       color(RED, `✗ ${fail} failed`) +
         color(GREEN, `, ${pass} passed`) +
-        color(GRAY, `, ${skip} skipped, ${total} total`),
+        color(GRAY, `, ${skip} skipped${skipDetail}, ${total} total`),
     );
     console.log(color(GRAY, `\nFailures:`));
     for (const f of failures) {

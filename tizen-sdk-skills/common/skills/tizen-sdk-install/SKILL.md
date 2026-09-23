@@ -212,6 +212,12 @@ version fails with `invalid_argument`; a valid one that is not installed fails w
 
 Exit code: `0` = success (SDK already installed), `1` = failure (SDK not installed — proceed to Phase 2).
 
+Every installer run writes its own log to `<sdk-path>/.install.log` (overwritten per run) and records
+`EXIT=<code>` in `<sdk-path>/.install-result`. When an install fails, name that log file to the user — the
+[ERROR] lines in it say which package/step failed; re-running resumes (installed packages are skipped).
+An installer given a `--platform` that the SDK does not have exits 1 with a `platform-install` hint instead of
+reporting "already installed".
+
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
 When the pre-check returns failure with `suggested_fix.command`, run that installer

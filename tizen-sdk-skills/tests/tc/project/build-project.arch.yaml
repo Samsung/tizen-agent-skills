@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "build-project --arch armv7l returns success with artifacts"
 
+requires:
+  capabilities: [sdk, gbs]
+
 # NOTE (2026-09-01): two problems. --project pointed at /tmp/tizen-apps/MyApp,
 # a path create-project can never produce (package IDs must be exactly 10
 # alphanumeric characters; "myapp" is 5). Separately — and this is why the
@@ -17,6 +20,9 @@ description: "build-project --arch armv7l returns success with artifacts"
 # type project (create-project --type platform --template dali-demo), where
 # --arch genuinely changes the output (verified: produces
 # GBS-ROOT/.../armv7l/RPMS/*.armv7l.rpm).
+# NOTE (2026-09-23): capability gbs declared — GBS/platform builds need a Linux host with gbs and
+# ~/GBS-ROOT; tizen-build-project.ps1 has no GBS path (fails 'Could not detect project type').
+# Not runnable on the Windows host of this pass; stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyPlatformApp01", "--arch", "armv7l"]

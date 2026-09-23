@@ -232,28 +232,75 @@ if [ "$ACTION" = "stop" ]; then
       fi
     fi
 
-    # Method 4: Final fallback - try sdb shell poweroff
+    # Method 4: Final fallback - try sdb shell poweroff.
+    # `sdb shell` never returns when the guest's sdbd accepts the connection
+    # but does not answer (a frozen TV guest, or a row sdb kept after the
+    # emulator process was already killed), so the call is bounded to 15 s per
+    # device — without the bound this action hung past every caller's timeout.
+    # Portable bound (macOS has no `timeout`): background + poll + kill.
+    poweroff_bounded() {
+      local serial="$1" waited=0 pid
+      "$SDB" -s "$serial" shell poweroff </dev/null >/dev/null 2>&1 &
+      pid=$!
+      while kill -0 "$pid" 2>/dev/null; do
+        if [ "$waited" -ge 15 ]; then
+          kill "$pid" 2>/dev/null || true
+          wait "$pid" 2>/dev/null || true
+          log_warn "sdb shell poweroff did not return within 15 s for $serial — the guest's sdbd is not answering; killed the sdb client."
+          return 1
+        fi
+        sleep 1
+        waited=$((waited + 1))
+      done
+      wait "$pid" 2>/dev/null || true
+      return 0
+    }
     log_info "Method 4: Trying sdb shell poweroff as final fallback..."
     DEVICES=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' || true)
-    
+
     while IFS= read -r line; do
       [ -z "$line" ] && continue
       serial=$(echo "$line" | awk '{print $1}')
       vm=$(echo "$line" | awk '{print $3}')
       [ -z "$serial" ] && continue
-      
+
       log_info "Trying sdb shell poweroff for device $serial (VM: $vm)..."
-      if "$SDB" -s "$serial" shell poweroff </dev/null 2>/dev/null; then
-        sleep 2
-        REMAINING=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' | awk '{print $1}' || true)
-        if ! echo "$REMAINING" | grep -q "$serial" 2>/dev/null; then
-          log_ok "Device $serial (VM: $vm) stopped via sdb shell poweroff."
-          STOPPED_COUNT=$((STOPPED_COUNT + 1))
-        else
-          log_warn "sdb shell poweroff failed for $serial."
-        fi
+      poweroff_bounded "$serial" || true
+      sleep 2
+      REMAINING=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' | awk '{print $1}' || true)
+      if ! echo "$REMAINING" | grep -q "$serial" 2>/dev/null; then
+        log_ok "Device $serial (VM: $vm) stopped via sdb shell poweroff."
+        STOPPED_COUNT=$((STOPPED_COUNT + 1))
+      else
+        log_warn "sdb shell poweroff failed for $serial."
       fi
     done <<< "$DEVICES"
+
+    # Method 5: rows sdb still lists are phantoms of a dead or unreachable
+    # emulator (no process found above, guest not answering). Restart the sdb
+    # server so it drops them; a row that comes back belongs to something still
+    # listening on the emulator port that this script cannot reach.
+    LEFT=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' || true)
+    if [ -n "$LEFT" ]; then
+      left_count=$(printf '%s\n' "$LEFT" | grep -c . || true)
+      log_info "Method 5: sdb still lists $left_count device(s) — restarting the sdb server to drop stale rows..."
+      "$SDB" kill-server >/dev/null 2>&1 || true
+      sleep 2
+      "$SDB" start-server >/dev/null 2>&1 || true
+      sleep 3
+      AFTER=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' || true)
+      after_count=0
+      [ -n "$AFTER" ] && after_count=$(printf '%s\n' "$AFTER" | grep -c . || true)
+      dropped=$((left_count - after_count))
+      if [ "$dropped" -gt 0 ]; then
+        log_ok "Dropped $dropped stale sdb row(s) by restarting the sdb server."
+        STOPPED_COUNT=$((STOPPED_COUNT + dropped))
+      fi
+      while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        log_warn "Device $(echo "$line" | awk '{print $1}') (VM: $(echo "$line" | awk '{print $3}')) is still listed: its emulator process could not be found and its shell does not answer. Close the emulator window or end its process by hand."
+      done <<< "$AFTER"
+    fi
   fi
 
   # Report results

@@ -3,10 +3,14 @@ id: tizen-sdk.certificate-manager.list-profiles
 plugin: tizen-sdk
 command: certificate-manager
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "certificate-manager --action list-profiles returns success"
 
+requires:
+  capabilities: [sdk]
+
+# NOTE (2026-09-23): executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase k1-cert-readonly) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
     argv: ["tizen-sdk", "certificate-manager", "--action", "list-profiles"]

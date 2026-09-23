@@ -7,9 +7,13 @@ status: approved
 since_cli: 1.0.0
 description: "device-manager --action stop returns success"
 
+# 2026-09-22: the stop script's fallbacks are now time-bounded (15 s cap on
+# `sdb shell poweroff`, then an sdb server restart to drop phantom rows). When
+# every fallback runs — a TV emulator whose sdbd does not answer — the action
+# takes ~50 s on Windows, so 60 s left no margin; 120 s does.
 lanes:
   cli:
     argv: ["tizen-sdk", "device-manager", "--action", "stop"]
-    timeout_sec: 60
+    timeout_sec: 120
     expect:
       status: success

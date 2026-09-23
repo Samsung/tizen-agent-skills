@@ -1,0 +1,203 @@
+# Hand-ordered run for the cli-lane device-tier TCs.
+#
+# Why this file exists: runner.mjs executes TCs in readdir (alphabetical) order
+# with no setup/teardown, and for the device tier that order destroys its own
+# preconditions — the three create-emulator TCs all create `test-vm` (em-cli
+# refuses a duplicate name), `emulator-manager.delete` sorts before `.detail`,
+# `.modify-ram`, `.reset` and `launch-emulator.happy`, `device-manager.stop`
+# sorts before `device-manager.timeout`, and the whole debug/ directory (needs
+# a booted device plus installed apps) runs before any emulator exists. A bare
+# `node runner.mjs --tier=device` therefore cannot pass on any host.
+#
+# Usage (normally via scripts/run-device-tier.mjs, which adds the preflight,
+# the bookmark backup, the VM pre-clean, the per-phase hooks and the teardown):
+#   node runner.mjs --tier=device --status=approved --order=policy/device-run-order.yaml [--phase=<name>]
+#   node runner.mjs --dry-run   --tier=device --order=policy/device-run-order.yaml
+#
+# The same id may appear more than once. Ids are matched against the TCs that
+# survive --tier/--status, so with --status=approved a draft id listed here
+# fails loudly (exit 2); the driver's --include-drafts drops that filter for
+# promotion runs.
+#
+# Fixtures: the ${FIXTURE_*} placeholders in the c2–c5 TCs (and create-image)
+# resolve from fixtures/apps/fixtures.generated.env, written by
+# scripts/prepare-device-fixtures.mjs (native/.NET/web apps built and signed on
+# the host, a tmp/ tree for push/pull/screenshot/create-image, a Playwright
+# test project). The driver installs the three apps on test-vm before c2.
+#
+# Invariants the order relies on (all verified in the plugin sources):
+#   * At most ONE emulator online while device-bound TCs run: resolveSerial()
+#     returns multiple_devices for two, and screenshot.serial asserts the
+#     serial is emulator-26101 (the first emulator sdb assigns).
+#   * `tv-vm` must NOT exist before phase f1: launch-emulator.first-available
+#     boots whatever em-cli lists first, and that order is unspecified.
+#   * emulator-manager.reset / .delete / .modify-ram / .create-image need the
+#     VM stopped; create-image also needs an EXISTING, empty --output-dir
+#     (em-cli will not create it) — hook resetImageDir.
+#   * `sdb-helper "reboot the device"` is a gated intent — it returns the
+#     command for confirmation and does NOT reboot. `forward port 8080` does
+#     execute; the forward disappears with the emulator.
+#   * device-manager --profile tv only accepts an online VM whose platform is
+#     tv-*, so device-manager.tv needs tv-vm booted (the script boots it
+#     between f1 and f2; with --skip-tv-boot that TC is an expected failure).
+#   * remote-device edit-ip moves 192.168.1.50 → .51:26102; remove-bookmark and
+#     edit-rename look up .50, so the chain is add → rename → remove → add →
+#     edit-ip, and the script restores the bookmark file afterwards.
+#   * screenshot.happy / .serial write ./emulator_screenshot.png into the cwd —
+#     run from a scratch directory.
+#   * test-vm stays booted from c-boot-1 through c6-stop: the c2–c5 TCs need
+#     it AND the apps installed by hook deviceFixtures. A lone --phase=c-boot-1
+#     therefore leaves the emulator running (the driver warns).
+#   * Every debug TC forwards a host port (9222/9223 RWI, 4711 DAP, 5039 gdb)
+#     and leaves the app under a debugger. Hook debugCleanup runs
+#     `sdb forward --remove-all` and kills netcoredbg / gdbserver / the fixture
+#     apps before c3, c4, each c5 phase and c6. The gdb TCs get one phase each:
+#     attach mode resolves the PID with `pidof <exec>` BEFORE it kills a stale
+#     gdbserver, so a previous session's process would be picked up.
+#   * playwright-test.scaffold refuses an existing test file without --force —
+#     hook resetTestProject deletes it before c3; .scaffold-force then
+#     overwrites, .run scaffolds nothing (it needs the file .scaffold wrote).
+#     .no-setup must follow .run directly: it reuses the CDP forward on 9222.
+
+phases:
+  # Nothing booted, no VM state touched. ~1 min.
+  - name: a-no-device
+    tcs:
+      - tizen-sdk.create-emulator.missing-required
+      - tizen-sdk.emulator-manager.missing-required
+      - tizen-sdk.install-app.missing-required
+      - tizen-sdk.file-transfer.missing-required
+      - tizen-sdk.sdb-helper.missing-required
+      - tizen-sdk.gdb-debug.missing-required
+      - tizen-sdk.dotnet-debug.missing-required
+      - tizen-sdk.webapp-debug.missing-required
+      - tizen-sdk.playwright-test.missing-required
+      - tizen-sdk.dlog-analyzer.missing-required
+      - tizen-sdk.emulator-manager.list-template
+      - tizen-sdk.emulator-manager.list-vm
+      - tizen-sdk.sdb-helper.list-devices # handoff envelope, no device needed
+      - tizen-sdk.sdb-helper.screenshot # handoff envelope
+      - tizen-sdk.sdb-helper.serial # handoff envelope (log-stream)
+      - tizen-sdk.remote-device.list-bookmarks
+      - tizen-sdk.remote-device.list-saved
+      - tizen-sdk.remote-device.disconnect # idempotent when nothing is connected
+
+  # VM lifecycle without booting. The script has deleted test-vm and tv-vm.
+  # Hook resetImageDir empties ${FIXTURE_TMP_DIR}/emulator-images first. ~5-10 min
+  # (create-image copies and compresses the ~765 MB base image).
+  - name: b-vm-lifecycle
+    tcs:
+      - tizen-sdk.create-emulator.assume-defaults # test-vm, HD1080 template, RAM 1024
+      - tizen-sdk.emulator-manager.create-image # VM stopped; --output-dir must exist and be empty
+      - tizen-sdk.emulator-manager.detail
+      - tizen-sdk.emulator-manager.modify-ram # 768 is an allowed step and != 1024
+      - tizen-sdk.emulator-manager.reset # --confirm; VM is not running here
+      - tizen-sdk.emulator-manager.delete
+      - tizen-sdk.create-emulator.happy # test-vm again, --size 1080
+      - tizen-sdk.emulator-manager.delete
+
+  # Boot 1: create --launch boots test-vm and leaves it running for c2–c6. ~6 min.
+  - name: c-boot-1
+    tcs:
+      - tizen-sdk.create-emulator.launch
+      - tizen-sdk.device-manager.happy
+      - tizen-sdk.device-manager.timeout
+      - tizen-sdk.screenshot.happy # ./emulator_screenshot.png in cwd
+      - tizen-sdk.screenshot.serial # asserts emulator-26101
+      - tizen-sdk.sdb-helper.shell
+      - tizen-sdk.sdb-helper.forward # executes `sdb forward tcp:8080`
+      - tizen-sdk.sdb-helper.reboot # gated: preview only, no reboot
+
+  # Hook deviceFixtures: sdb root on; install-app the .NET/web fixture packages;
+  # write /tmp/log.txt on the device. The install-app TCs install the native
+  # package themselves (three times: the 2nd/3rd exercise the reinstall path);
+  # .run leaves the app running — c3's debugCleanup stops it. ~4 min.
+  - name: c2-fixture-apps
+    tcs:
+      - tizen-sdk.install-app.happy # ${FIXTURE_NATIVE_TPK}, asserts device_serial/app_id
+      - tizen-sdk.install-app.serial # --serial emulator-26101
+      - tizen-sdk.install-app.run # --run, asserts app_launched
+      - tizen-sdk.file-transfer.push # ${FIXTURE_TMP_DIR}/config.xml → /opt/usr/apps/
+      - tizen-sdk.file-transfer.serial
+      - tizen-sdk.file-transfer.utf8
+      - tizen-sdk.file-transfer.pull # /tmp/log.txt → ${FIXTURE_TMP_DIR}/logs/
+      - tizen-sdk.file-transfer.pull-missing-remote # remote_path_not_found, not io_error
+      - tizen-sdk.screenshot.output-path # ${FIXTURE_TMP_DIR}/shots/screen.png
+
+  # Hooks debugCleanup, resetTestProject. Web app RWI/CDP on 9222/9223. ~4 min.
+  - name: c3-web-debug
+    tcs:
+      - tizen-sdk.webapp-debug.happy # 9222
+      - tizen-sdk.playwright-test.scaffold # writes test-project/tizen-playwright.test.js
+      - tizen-sdk.playwright-test.scaffold-force # overwrites it
+      - tizen-sdk.playwright-test.run # setup on 9222, runs the scaffolded test
+      - tizen-sdk.playwright-test.no-setup # right after .run: reuses the 9222 forward
+      - tizen-sdk.playwright-test.custom-port-timeout # 9223
+      - tizen-sdk.playwright-test.serial
+      - tizen-sdk.webapp-debug.custom-port # 9223
+      - tizen-sdk.webapp-debug.serial
+      - tizen-sdk.webapp-debug.timeout
+
+  # Hook debugCleanup. netcoredbg DAP on 4711; each TC relaunches the app. ~4 min.
+  - name: c4-dotnet-debug
+    tcs:
+      - tizen-sdk.dotnet-debug.happy # launch mode by default, asserts 4711 + SUSPENDED note
+      - tizen-sdk.dotnet-debug.launch
+      - tizen-sdk.dotnet-debug.breakpoints
+      - tizen-sdk.dotnet-debug.serial
+      - tizen-sdk.dotnet-debug.force-install # redeploys netcoredbg (300 s cap)
+
+  # gdb: one phase per TC so debugCleanup runs between them (see invariants).
+  # gdbserver is installed on demand from <sdk>/tools/on-demand by the script. ~1 min each.
+  - name: c5a-gdb-launch
+    tcs:
+      - tizen-sdk.gdb-debug.launch # gdbserver runs the device binary, stops before main
+  - name: c5b-gdb-attach
+    tcs:
+      - tizen-sdk.gdb-debug.happy # app_launcher -s, pidof <exec>, gdbserver --attach
+  - name: c5c-gdb-attach-bp
+    tcs:
+      - tizen-sdk.gdb-debug.breakpoints
+  - name: c5d-gdb-serial
+    tcs:
+      - tizen-sdk.gdb-debug.serial # --serial emulator-26101 (attach mode), asserts device_serial
+
+  # Hook debugCleanup, then the emulator goes down. ~1 min.
+  - name: c6-stop
+    tcs:
+      - tizen-sdk.device-manager.stop
+
+  # Boot 2: a real launch, then the "already running" shortcut. first-available
+  # runs while test-vm is the ONLY VM on purpose: with one VM the Windows
+  # launch script used to unroll the VM list into a string and try to launch a
+  # VM named "t" (fixed 2026-09-22) — this pair is the regression check. ~2 min.
+  - name: d-boot-2
+    tcs:
+      - tizen-sdk.launch-emulator.happy # boots test-vm, 300 s connect cap
+      - tizen-sdk.launch-emulator.first-available # only test-vm exists and is running
+      - tizen-sdk.device-manager.stop
+      - tizen-sdk.emulator-manager.delete # test-vm gone
+
+  # Network / bookmark list. The script removed any .50/.51 bookmark first. ~1 min.
+  - name: e-network
+    tcs:
+      - tizen-sdk.remote-device.add-bookmark # Living Room TV / 192.168.1.50:26101
+      - tizen-sdk.remote-device.edit-rename # .50 → "Bedroom TV"
+      - tizen-sdk.remote-device.remove-bookmark # .50 removed
+      - tizen-sdk.remote-device.add-bookmark # .50 again
+      - tizen-sdk.remote-device.edit-ip # .50 → .51:26102 (left over; script restores the file)
+      - tizen-sdk.remote-device.scan-happy # TCP sweep of the local /24 on 26101
+      - tizen-sdk.remote-device.scan-subnet
+      - tizen-sdk.remote-device.scan-all
+      - tizen-sdk.remote-device.disconnect
+
+  # TV profile. tv-vm is created here, booted by the script, detected in f2.
+  - name: f1-tv-create
+    tcs:
+      - tizen-sdk.create-emulator.tv # tv-vm, 3840, --profile tv
+
+  # Script step between f1 and f2: launch-emulator --vm-name tv-vm --timeout 480
+  - name: f2-tv-detect
+    tcs:
+      - tizen-sdk.device-manager.tv # needs an online tv-* VM
+      - tizen-sdk.device-manager.stop

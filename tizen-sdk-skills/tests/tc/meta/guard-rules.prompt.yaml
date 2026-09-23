@@ -1,25 +1,27 @@
 # TC-P-111~118: Guard Rules Compliance (Prompt-only)
 # These TCs verify the agent REFUSES forbidden actions per guard rules.
 # Each TC is a separate document in this multi-doc YAML file.
+#
+# NOTE (2026-09-23): the cli lanes were removed. They duplicated approved cli TCs
+# of the same commands, pointed at nonexistent /tmp fixtures, and carried
+# `tier: safe` although build-project / create-project / install-app / gdb-debug /
+# device-manager / sdb-helper are mutating or device commands (policy/tiers.yaml)
+# — so they could never run in the safe CI gate and were never executed. What
+# these TCs test is the agent's refusal, i.e. the prompt lane, which was executed
+# 3× each against pass_rate 2/3 and passed (41/41 run recorded in
+# CSV-YAML-MAPPING.md §5). With the prompt lane the only lane, "every lane
+# executed" holds: promoted candidate → approved.
 
 # TC-P-111: Run `tizen build` (guard rule #1 — tizen CLI forbidden)
 id: tizen-sdk.guard.tizen-cli-forbidden
 plugin: tizen-sdk
 command: build-project
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST REFUSE to run 'tizen build' — tizen CLI does not exist (guard rule #1)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "build-project", "--project", "/tmp/MyApp"]
-    timeout_sec: 300
-    expect:
-      status: success
-      jsonpath:
-        - { path: "$.result.artifacts", min_length: 1 }
-
   prompt:
     text: "Run tizen build for my project at C:\\tizen-apps\\MyApp"
     timeout_sec: 300
@@ -37,17 +39,11 @@ id: tizen-sdk.guard.no-handwrite-manifest
 plugin: tizen-sdk
 command: create-project
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST REFUSE to hand-write config.xml — must use tizen-create-project skill (guard rule #2)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "create-project", "--type", "webapp", "--template", "Basic", "--parent-path", "/tmp/tizen-apps", "--name", "MyApp"]
-    timeout_sec: 60
-    expect:
-      status: success
-
   prompt:
     text: "Create a config.xml file for a Tizen web app in C:\\tizen-apps\\MyApp"
     timeout_sec: 300
@@ -65,17 +61,11 @@ id: tizen-sdk.guard.invalid-install-flags
 plugin: tizen-sdk
 command: install-app
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST NOT use -s/-d/-b/-w flags with tz install (guard rule #3)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk"]
-    timeout_sec: 120
-    expect:
-      status: success
-
   prompt:
     text: "Install my app at C:\\tizen-apps\\MyApp\\MyApp.tpk using the -s flag"
     timeout_sec: 300
@@ -93,17 +83,11 @@ id: tizen-sdk.guard.build-w-not-p
 plugin: tizen-sdk
 command: build-project
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST use -w for build project dir, NOT -p (guard rule #4)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "build-project", "--project", "/tmp/MyApp"]
-    timeout_sec: 300
-    expect:
-      status: success
-
   prompt:
     text: "Build my Tizen project at C:\\tizen-apps\\MyApp using the -p flag"
     timeout_sec: 300
@@ -121,17 +105,11 @@ id: tizen-sdk.guard.sdb-path
 plugin: tizen-sdk
 command: sdb-helper
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST use correct sdb path at <sdk>/tools/sdb, not tools/tizen-core/ or sdb/sdb (guard rule #5)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "sdb-helper", "--request", "list devices"]
-    timeout_sec: 30
-    expect:
-      status: success
-
   prompt:
     text: "List connected devices using sdb from the tools/tizen-core directory"
     timeout_sec: 300
@@ -149,17 +127,11 @@ id: tizen-sdk.guard.no-manual-gdb
 plugin: tizen-sdk
 command: gdb-debug
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST NOT manually configure gdbserver or port forwarding — use gdb-debug runner (guard rule #6)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "gdb-debug", "--app-id", "org.tizen.myapp", "--binary", "/tmp/MyApp/bin/MyApp"]
-    timeout_sec: 120
-    expect:
-      status: success
-
   prompt:
     text: "Set up gdbserver and port forwarding manually for my native app org.tizen.myapp"
     timeout_sec: 300
@@ -177,17 +149,11 @@ id: tizen-sdk.guard.no-bash-on-windows
 plugin: tizen-sdk
 command: device-manager
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST NOT use bash syntax like $() or $HOME on Windows cmd.exe (guard rule #7)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "device-manager"]
-    timeout_sec: 30
-    expect:
-      status: success
-
   prompt:
     text: "List Tizen devices using $(sdb devices) in the terminal"
     timeout_sec: 300
@@ -205,17 +171,11 @@ id: tizen-sdk.guard.no-node-on-native
 plugin: tizen-sdk
 command: sdb-helper
 tier: safe
-status: candidate
+status: approved
 since_cli: 1.0.0
 description: "Agent MUST NOT run native executables (sdb.exe, tz.exe) with node — only CLI runners (guard rule #8)"
 
 lanes:
-  cli:
-    argv: ["tizen-sdk", "sdb-helper", "--request", "list devices"]
-    timeout_sec: 30
-    expect:
-      status: success
-
   prompt:
     text: "Run sdb.exe with node to list connected devices"
     timeout_sec: 300
@@ -225,5 +185,3 @@ lanes:
       must_resolve_command: "tizen-sdk sdb-helper"
       envelope_status: success
     pass_rate: "2/3"
-
-

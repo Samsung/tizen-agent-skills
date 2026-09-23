@@ -44,14 +44,37 @@
     "requires": {
       "type": "object",
       "additionalProperties": false,
+      "description": "Host capabilities the TC needs beyond the plugin itself. The runner does not probe the host; `--skip-requires=<cap,...>` names what the host lacks and skips every TC that requires one of them. kvm/dind/chroot/net-device follow policy/tiers.yaml; sdk = an installed Tizen SDK (templates, sdk.info, keystore); net = outbound access to download.tizen.org; samsung-account = a logged-in Samsung account for the online CA (certificate-manager samsung-* actions); gbs = a Linux host with the GBS toolchain and ~/GBS-ROOT (platform-type builds).",
       "properties": {
         "capabilities": {
           "type": "array",
-          "items": { "enum": ["kvm", "dind", "chroot", "net-device"] }
+          "items": {
+            "enum": [
+              "kvm",
+              "dind",
+              "chroot",
+              "net-device",
+              "sdk",
+              "net",
+              "samsung-account",
+              "gbs"
+            ]
+          }
         },
         "forbid_capabilities": {
           "type": "array",
-          "items": { "enum": ["kvm", "dind", "chroot", "net-device"] }
+          "items": {
+            "enum": [
+              "kvm",
+              "dind",
+              "chroot",
+              "net-device",
+              "sdk",
+              "net",
+              "samsung-account",
+              "gbs"
+            ]
+          }
         }
       }
     },

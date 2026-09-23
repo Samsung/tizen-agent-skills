@@ -30,6 +30,9 @@ export default tseslint.config(
       ".claude/**",
       ".codex/**",
       ".wolf/**",
+      // Device-tier fixture apps + playwright project built by
+      // tests/scripts/prepare-device-fixtures.mjs (gitignored; SDK template code)
+      "tests/fixtures/apps/**",
     ],
   },
 

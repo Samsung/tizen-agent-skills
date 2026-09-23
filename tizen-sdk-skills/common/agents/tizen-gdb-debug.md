@@ -93,7 +93,8 @@ node "$CLI" <APP_ID> "<HOST_BINARY>" [attach|launch] ["fn1,fn2"|-] [port]
 #   arg 3 - attach (default: app runs first; good for service_app_control callbacks)
 #           or launch (gdbserver launches the binary; needed to break at main)
 #   arg 4 - comma-separated breakpoints ("-" = none; launch mode defaults to main)
-#   arg 5 - debug port (default 5039)
+#   arg 5 - debug port (default 5039; "-" keeps the default)
+#   arg 6 - device serial from `sdb devices` (default: the first connected device)
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
@@ -142,7 +143,8 @@ Failure (`exit 1`):
 
 ## Codex CLI — one exec call waits ≤ 30 s
 
-The setup (app start, PID poll up to `--timeout` 30 s, gdbserver push/start, port forward, fixed
+The setup (app start, PID poll up to `--timeout` 30 s, gdbserver start — installed on demand from
+`<sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar` when the image ships none — port forward, fixed
 waits) routinely passes Codex's 30 s per tool call. Run it with **`--background`** (job receipt
 within a second), then poll `node "<same lib/cli dir>/job-cli.js" wait --id <job_id>` (≤ 25 s per
 call; `progress_tail`/`log_file` show the live script output) until `job.state` is `done`; that

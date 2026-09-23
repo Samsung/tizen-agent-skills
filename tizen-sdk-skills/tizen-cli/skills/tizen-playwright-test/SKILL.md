@@ -50,7 +50,7 @@ Playwright resolves from the **test project's** `node_modules` — never from th
 
 ## Output
 - Success `result`: `passed`, `exit_code`, `summary` (assertion counts from the `TEST_RESULT:` marker), `output_tail`, `cdp_endpoint` + `note` (the RWI session/forward stay alive — rerun with `--no-setup` while the app runs).
-- Failure: `test_failed` → assertions failed, relay `output_tail` + `test-failure.png`, do NOT auto-retry; `dependency_missing` → `npm install playwright` in the project dir; `inspector_not_available` → app restarted or image lacks RWI, re-run without `--no-setup`; `test_timeout` → raise `--timeout` once; `invalid_parameters` mentioning `--scaffold` → no test file yet, scaffold one; `device_not_found` → run `device-manager`.
+- Failure: `test_failed` → assertions failed, relay `output_tail` + `test-failure.png`, do NOT auto-retry; `dependency_missing` → `npm install playwright` in the project dir; `inspector_not_available` → app restarted or image lacks RWI, re-run without `--no-setup`; `test_timeout` → raise `--timeout` once; `invalid_parameters` mentioning `--scaffold` → no test file yet, scaffold one; `device_not_found` → run `device-manager`; `node_not_found` → no external `node` on PATH, install Node.js 20+ / fix PATH; `execution_error` saying node "is on PATH but ... exited abnormally" or "did not answer" → Node.js IS installed but broken/hung (the message quotes the exit code and stderr) — advise repair/reinstall, do not say it is missing.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
 

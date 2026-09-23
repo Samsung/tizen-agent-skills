@@ -176,6 +176,11 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
      `test-failure.png` in the project dir if referenced.
    - **Playwright missing** (exit 1, `dependency_missing`): `npm install playwright` in the
      project dir, retry ONCE.
+   - **Node.js runtime problem** (exit 1): `node_not_found` = no `node` on PATH → install
+     Node.js 20+ / fix PATH. `execution_error` saying node "is on PATH but ... exited
+     abnormally" (exit code + stderr quoted) or "did not answer" = Node.js IS installed but
+     broken or hung → relay the quoted exit code/stderr and advise repair/reinstall; do NOT
+     say Node.js is missing.
    - **Endpoint dead** (exit 1, `inspector_not_available`): The app restarted (RWI port
      invalidated) — re-run WITHOUT `--no-setup`. If the fresh setup also fails, the image
      may not support RWI (emulator/dev images do).

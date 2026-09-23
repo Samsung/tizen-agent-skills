@@ -17,7 +17,7 @@ export const CHECK_SPECS: CommandSpec[] = [
   {
     name: "check-node",
     description:
-      "Verify Node.js is installed and on PATH (pre-check before SDK install)",
+      "Verify Node.js is installed and on PATH and report its version. The dedicated answer to ANY 'is Node.js installed?' / 'which node version?' question (Node.js가 설치되어 있는지 확인, node 버전) — use this, not --doctor (a broad multi-component health sweep). Also the pre-check before sdk-install.",
     requiresSdk: false,
     handler: () => sdkCommands.checkNode("tizen-sdk check-node"),
   },

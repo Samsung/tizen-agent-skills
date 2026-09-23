@@ -14,7 +14,7 @@ const path = require("path");
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { findLatestVersionDir, execPluginScript } = require("./plugin-cache");
-const { checkShellSafe } = require("./shell-safety");
+const { checkShellSafe, isValidSerial } = require("./shell-safety");
 const { summarizeOutput } = require("./output-summary");
 
 /**
@@ -53,6 +53,7 @@ function summarizeGdbSetupOutput(output) {
  * @param {string} [opts.breakpoints=''] - comma-separated breakpoint function names
  * @param {number|string} [opts.port=5039] - debug port
  * @param {number|string} [opts.timeout=30] - PID search wait time (seconds, attach mode)
+ * @param {string} [opts.serial] - device serial (default: the first connected device)
  * @returns {object} Standard JSON Envelope
  */
 async function setupGdbDebug(
@@ -111,6 +112,18 @@ async function setupGdbDebug(
       );
     }
     const launch = !!opts.launch;
+    // Serial is spliced into the script argument string (`-Serial "<s>"` /
+    // `-s "<s>"`) and ends up in `sdb -s <s>`: the shared SERIAL_PATTERN
+    // (letters, digits, . _ : -, no leading "-", ≤ 64 chars) is the same
+    // screen resolveSerial() applies for every other command.
+    const serial = opts.serial ? String(opts.serial).trim() : "";
+    if (serial && !isValidSerial(serial)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid device serial "${serial}": only letters, digits, '.', '_', ':' and '-' are allowed (no leading '-', at most 64 characters).`,
+      );
+    }
 
     // resolveScript() assumes <group>/<group>.ps1 filename, but this script has a different
     // base name (tizen-native-gdb-debug) — assemble directly from version directory.
@@ -145,11 +158,13 @@ async function setupGdbDebug(
     const winBin = binaryPath.replace(/\\/g, "/");
     const winArgs =
       `-App "${appId}" -Binary "${winBin}" -Port ${port} -Timeout ${timeout}` +
+      (serial ? ` -Serial "${serial}"` : "") +
       (breakpoints ? ` -Breakpoints "${breakpoints}"` : "") +
       (launch ? " -Launch" : "") +
       " -SetupOnly";
     const unixArgs =
       `-a "${appId}" -b "${binaryPath}" -p ${port} -t ${timeout}` +
+      (serial ? ` -s "${serial}"` : "") +
       (breakpoints ? ` -x "${breakpoints}"` : "") +
       (launch ? " -l" : "") +
       " -N";
@@ -195,6 +210,7 @@ async function setupGdbDebug(
     // Success marker parsing
     const initMatch = output.match(/GDB init file:\s*(.+)$/m);
     const pidMatch = output.match(/App PID:\s*(\d+)/);
+    const serialMatch = output.match(/Target device:\s*(\S+)/);
     const psMatch = output.match(/PowerShell:\s*(.+)$/m);
     const cmdMatch = output.match(/Command Prompt:\s*(.+)$/m);
     // Unix script outputs single line without label: "<gdb>" -x "<init>"
@@ -221,6 +237,9 @@ async function setupGdbDebug(
       {
         app_id: appId,
         binary_path: binaryPath,
+        // The device the scripts pinned every sdb call to (--serial, else the
+        // first connected device as the script reported it).
+        device_serial: serial || (serialMatch ? serialMatch[1].trim() : null),
         mode: launch ? "launch" : "attach",
         port,
         breakpoints: breakpoints
@@ -372,7 +391,16 @@ async function setupDotnetDebug(
     }
     const launch = !!opts.launch;
     const forceInstall = !!opts.forceInstall;
-    const serial = opts.serial || "";
+    // Same screen as setupGdbDebug: the serial is spliced into the script
+    // argument string, so it must be a plain identifier.
+    const serial = opts.serial ? String(opts.serial).trim() : "";
+    if (serial && !isValidSerial(serial)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid device serial "${serial}": only letters, digits, '.', '_', ':' and '-' are allowed (no leading '-', at most 64 characters).`,
+      );
+    }
 
     // resolveScript() assumes <group>/<group>.ps1 filename, but this script has a different
     // base name (tizen-dotnet-debug) — assemble directly from version directory.

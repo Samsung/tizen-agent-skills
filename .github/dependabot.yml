@@ -17,10 +17,32 @@ updates:
     directory: /tizen-sdk-skills/tizen-cli
     schedule:
       interval: monthly
+    ignore:
+      # TypeScript majors change compiler options (TS 7 dropped
+      # moduleResolution=node / baseUrl); migrate deliberately, not via a bump.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # @types/node majors must not run ahead of the runtime this code targets
+      # (Node 20 per .nvmrc / engines); bump by hand when that floor moves.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /tizen-sdk-skills/vscode
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      # The extension runs on the Node bundled with the VS Code named in
+      # engines.vscode, not on the newest Node; bump majors by hand with engines.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # @types/vscode must not exceed engines.vscode (vsce refuses to package
+      # otherwise). Its releases are 1.x minors, so a major-only ignore would
+      # be a no-op; ignore minors too and bump it by hand together with engines.
+      - dependency-name: "@types/vscode"
+        update-types:
+          ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: npm
     directory: /tizen-sdk-skills/tests
     schedule:

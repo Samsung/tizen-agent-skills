@@ -1,9 +1,9 @@
 ---
 name: tizen-create-project
-description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. DELETING a Tizen project directory is also THIS skill (its project-delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this command, which scaffolds from real SDK templates. Use this skill to create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — from the installed SDK templates, and to delete an existing project directory when the user asks to remove or clean one up.
+description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, import wgt, import WGT as a project, WGT 가져오기, WGT 프로젝트 가져오기, wgt 임포트, .wgt를 프로젝트로 변환, wgt to project, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. IMPORTING an existing .wgt archive as a Web project is also THIS skill (its import-wgt command) — NEVER unzip the archive or hand-write config.xml yourself; `tz import-wgt` does both on the SDK host. DELETING a Tizen project directory is also THIS skill (its project-delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this command, which scaffolds from real SDK templates. Use this skill to create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — from the installed SDK templates, to import an existing .wgt archive as an SDK-generated Web project, and to delete an existing project directory when the user asks to remove or clean one up.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-18"
+  last-updated: "2026-09-22"
   keywords:
     - Tizen project
     - create tizen project
@@ -16,6 +16,8 @@ metadata:
     - 타이젠 프로젝트 삭제
     - delete tizen project
     - remove tizen project
+    - import wgt
+    - WGT 가져오기
 ---
 
 # Create Tizen Project
@@ -24,7 +26,9 @@ metadata:
 
 Any request to create a Tizen app/project. NEVER hand-write project files (config.xml, tizen-manifest.xml, .csproj) — always scaffold with this command.
 
-Also any request to **delete** a Tizen project directory ("프로젝트 삭제해줘", "delete MyApp",
+Also any request to **import** an existing `.wgt` archive as a Web project ("import this
+WGT", "WGT 프로젝트 가져오기") — see [Importing a WGT](#importing-a-wgt-as-a-web-project) —
+and any request to **delete** a Tizen project directory ("프로젝트 삭제해줘", "delete MyApp",
 cleanup of accumulated create runs) — see [Deleting a project](#deleting-a-project). Build
 and install are OTHER skills; run them only when the user explicitly asked.
 
@@ -91,6 +95,44 @@ tizen-cli tizen-sdk create-project --type webapp --template Basic --parent-path 
 
 - Success `result`: created project path and metadata.
 - Failure: `invalid_parameters` (bad type/template), SDK not installed, or the target folder already exists (re-run with `--force`, or remove it first with `project-delete`) — surface the message to the user.
+
+## Importing a WGT as a Web project
+
+When the user supplies an existing `.wgt` archive and wants its SDK-generated Web project,
+run the `import-wgt` command. Do NOT unpack the archive or write `config.xml` by hand — the
+SDK's `tz import-wgt` performs both on the SDK host.
+
+```
+tizen-cli tizen-sdk import-wgt --wgt-path <file.wgt> --profile <tizen|tv-samsung> --platform-version <X.Y> --working-dir <dir>
+```
+
+| Option                     | Required | Description                                                                                                                                                   |
+| -------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--wgt-path <file>`        | **yes**  | Existing `.wgt` archive. **Its file name (without `.wgt`) becomes the project name**, and `tz` accepts only letters and digits there (`^[A-Za-z0-9]+$`).       |
+| `--profile <profile>`      | **yes**  | `tizen` \| `tv-samsung`                                                                                                                                       |
+| `--platform-version <X.Y>` | **yes**  | `<major>.<minor>` (e.g. `10.0`). `<profile>-<version>` must be an **installed** tz profile — check `list-templates` (`result.profile`, `result.tv.profile`). |
+| `--working-dir <dir>`      | **yes**  | Existing destination workspace. The project is created at `<dir>/<project name>`, which must not exist yet.                                                    |
+
+Example:
+
+```
+tizen-cli tizen-sdk import-wgt --wgt-path "C:/Downloads/WeatherWidget.wgt" --profile tizen --platform-version 10.0 --working-dir "C:/tizen-apps"
+```
+
+Success `result`: `{wgt_path, project_path, profile, platform_version, status: "imported"}`.
+Failures to surface as-is (never work around them):
+
+- `invalid_argument` — rejected by the CLI before the runner runs: one or more of the four
+  required options missing (all of them are listed in one envelope), or `--profile` outside
+  `tizen`/`tv-samsung`.
+- `invalid_parameters` — file name not `[A-Za-z0-9]` (message suggests a name; ask the user
+  to rename or copy the archive, do not do it silently), or a version that is not
+  `<major>.<minor>`.
+- `project_creation_failed` — `<profile>-<version>` is not an installed profile (message lists
+  the profiles `tz` knows; install the platform package or pick an installed version), or
+  `<working-dir>/<project name>` already exists (remove it with `project-delete` first).
+
+Import only. Build, signing, install, and opening an editor are separate requests.
 
 ## Deleting a project
 

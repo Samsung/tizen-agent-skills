@@ -1,6 +1,6 @@
 {
   "name": "tizen-sdk-skills-repo",
-  "version": "1.3.0",
+  "version": "1.3.1",
   "private": true,
   "description": "Repo-level lint/format tooling. The real packages (tests/, tizen-cli, vscode) stay independent.",
   "license": "Apache-2.0",

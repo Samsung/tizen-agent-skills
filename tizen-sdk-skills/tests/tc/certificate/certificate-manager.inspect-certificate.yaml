@@ -3,12 +3,16 @@ id: tizen-sdk.certificate-manager.inspect-certificate
 plugin: tizen-sdk
 command: certificate-manager
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "certificate-manager --action inspect-certificate returns success"
 
+requires:
+  capabilities: [sdk]
+
 # NOTE (2026-09-01): --certificate pointed at a nonexistent /tmp/author.p12.
 # Swapped for a real, committed fixture cert (tests/fixtures/certs/).
+# NOTE (2026-09-23): executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase k1-cert-readonly) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
     argv: ["tizen-sdk", "certificate-manager", "--action", "inspect-certificate", "--certificate", "fixtures/certs/test-fixture-author.p12", "--password", "${FIXTURE_CERT_UNLOCK}"]

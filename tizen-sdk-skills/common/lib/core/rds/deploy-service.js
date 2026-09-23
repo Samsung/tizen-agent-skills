@@ -30,8 +30,8 @@
  *   tracker exists on the CLI).
  * - No `rdsInfoPathCache` — dropped module-wide (see app-install-path.js); every call
  *   re-queries the device. `updateRdsState()` therefore has nothing to invalidate.
- * - No benchmark timing instrumentation (`isBenchmarkMode()` / `RdsDeployTimings`) —
- *   deferred; the plan calls this out as a separate follow-up, not part of this port.
+ * - Benchmark timing instrumentation via `TIZEN_BENCHMARK=1` — measures reconcile, delta
+ *   computation, push, launch, and state sync phases; zero overhead when disabled.
  *
  * @module core/rds/deploy-service
  */
@@ -81,6 +81,93 @@ const DEVICE_SNAPSHOT_FILE = ".rds_snapshot.json";
 
 /** Chunk size for batched `rm -f` / `chmod` — keeps the shell command line under typical limits */
 const MAX_CMD_LEN = 4000;
+
+// ─── Benchmark Timing Instrumentation ──────────────────────────────────────────────
+
+/**
+ * Whether benchmark timing mode is enabled.
+ *
+ * Zero overhead when disabled — a single env check, no allocations.
+ *
+ * @returns {boolean}
+ */
+function isBenchmarkMode() {
+  return process.env.TIZEN_BENCHMARK === "1";
+}
+
+/**
+ * Lightweight timing collector for RDS deploy phases.
+ *
+ * Uses `performance.now()` for sub-millisecond precision. Only instantiated
+ * when `isBenchmarkMode()` returns true.
+ */
+class RdsDeployTimings {
+  constructor() {
+    this.startTime = performance.now();
+    /** @type {Record<string, number>} */
+    this.phases = {};
+    /** @type {Record<string, number>} */
+    this.durations = {};
+  }
+
+  /**
+   * Mark the start of a phase.
+   * @param {string} phaseName
+   */
+  startPhase(phaseName) {
+    if (!isBenchmarkMode()) return;
+    this.phases[phaseName] = performance.now();
+  }
+
+  /**
+   * Mark the end of a phase and record its duration.
+   * @param {string} phaseName
+   */
+  endPhase(phaseName) {
+    if (!isBenchmarkMode()) return;
+    const start = this.phases[phaseName];
+    if (start !== undefined) {
+      this.durations[phaseName] = performance.now() - start;
+    }
+  }
+
+  /**
+   * Get the total elapsed time since construction.
+   * @returns {number} milliseconds
+   */
+  total() {
+    return performance.now() - this.startTime;
+  }
+
+  /**
+   * Get a plain object with all phase durations and total.
+   * @returns {{total: number, phases: Record<string, number>}}
+   */
+  toJSON() {
+    return {
+      total: Math.round(this.total() * 100) / 100,
+      phases: Object.fromEntries(
+        Object.entries(this.durations).map(([k, v]) => [
+          k,
+          Math.round(v * 100) / 100,
+        ]),
+      ),
+    };
+  }
+
+  /**
+   * Print timings to stderr in a readable format.
+   * @param {string} prefix - label for the log output
+   */
+  print(prefix = "[RDS Benchmark]") {
+    if (!isBenchmarkMode()) return;
+    const json = this.toJSON();
+    console.error(`${prefix} Total: ${json.total.toFixed(2)}ms`);
+    for (const [phase, duration] of Object.entries(json.phases)) {
+      console.error(`${prefix}   ${phase}: ${duration.toFixed(2)}ms`);
+    }
+  }
+}
 
 /**
  * Split already-quoted device arguments into groups whose joined length stays
@@ -462,6 +549,7 @@ async function tryRdsDeployInternal(
 ) {
   // All progress logging goes to stderr: the CLI runner owns stdout for the
   // JSON envelope, and a stray line in front of it breaks every consumer.
+  const timings = isBenchmarkMode() ? new RdsDeployTimings() : null;
   const state = loadState(projectDir);
   if (!state) {
     console.error(
@@ -483,17 +571,21 @@ async function tryRdsDeployInternal(
     return { deployed: false, reason: "no-app-type" };
   }
 
+  timings?.startPhase("getRdsInfoPath");
   const rdsInfoPath = await getRdsInfoPath(
     projectDir,
     deviceSerial,
     appType,
     opts,
   );
+  timings?.endPhase("getRdsInfoPath");
   if (!rdsInfoPath) {
     return { deployed: false, reason: "no-install-path" };
   }
 
+  timings?.startPhase("readDeviceMarker");
   const marker = await readDeviceMarker(deviceSerial, rdsInfoPath, opts);
+  timings?.endPhase("readDeviceMarker");
   if (!marker) {
     console.error(
       "[RDS] No deploy marker on device — app not installed or marker removed",
@@ -523,18 +615,26 @@ async function tryRdsDeployInternal(
   // CLI-specific: there is no file watcher populating the changelist, so drive
   // reconcile ourselves (Part 2d). Bail to full install if drift is too high or
   // no baseline exists yet.
+  timings?.startPhase("reconcile");
   const reconcileResult = await reconcileDetailedAsync(projectDir);
+  timings?.endPhase("reconcile");
   if (reconcileResult.rdsStatus === "full") {
     return { deployed: false, reason: "full-required" };
   }
 
+  timings?.startPhase("getDelta");
   const deltaEntries = getDeltaForDevice(projectDir, deviceSerial);
+  timings?.endPhase("getDelta");
+  timings?.startPhase("resolveDevicePaths");
   resolveDevicePaths(deltaEntries, projectDir, appType);
+  timings?.endPhase("resolveDevicePaths");
 
   if (deltaEntries.length === 0) {
     console.error("[RDS] No pending changes — fast-deploy (launch only)");
     if (runAfterInstall) {
+      timings?.startPhase("launch");
       const launchResult = await runNoChain(projectDir, deviceSerial, opts);
+      timings?.endPhase("launch");
       if (launchResult.status !== "success") {
         console.error(
           `[RDS] Fast-deploy launch failed: ${launchResult.output}`,
@@ -547,6 +647,7 @@ async function tryRdsDeployInternal(
     }
 
     const deployTimestamp = new Date().toISOString();
+    timings?.startPhase("syncState");
     await syncDeployState({
       projectDir,
       deviceSerial,
@@ -558,11 +659,19 @@ async function tryRdsDeployInternal(
       currentManifest: reconcileResult.currentManifest,
       opts,
     });
-    return { deployed: true, type: "fast-deploy" };
+    timings?.endPhase("syncState");
+
+    const result = { deployed: true, type: "fast-deploy" };
+    if (timings) {
+      result.rdsTimings = timings.toJSON();
+      timings.print("[RDS Benchmark] fast-deploy");
+    }
+    return result;
   }
 
   console.error(`[RDS] ${deltaEntries.length} delta file(s) to push to device`);
 
+  timings?.startPhase("pushDelta");
   await pushDeltaFiles(
     deviceSerial,
     projectDir,
@@ -570,9 +679,12 @@ async function tryRdsDeployInternal(
     rdsInfoPath,
     opts,
   );
+  timings?.endPhase("pushDelta");
 
   if (runAfterInstall) {
+    timings?.startPhase("launch");
     const launchResult = await runNoChain(projectDir, deviceSerial, opts);
+    timings?.endPhase("launch");
     if (launchResult.status !== "success") {
       console.error(
         `[RDS] RDS delta deploy launch failed: ${launchResult.output}`,
@@ -585,6 +697,7 @@ async function tryRdsDeployInternal(
   }
 
   const deployTimestamp = new Date().toISOString();
+  timings?.startPhase("syncState");
   await syncDeployState({
     projectDir,
     deviceSerial,
@@ -596,8 +709,14 @@ async function tryRdsDeployInternal(
     currentManifest: reconcileResult.currentManifest,
     opts,
   });
+  timings?.endPhase("syncState");
 
-  return { deployed: true, type: "rds" };
+  const result = { deployed: true, type: "rds" };
+  if (timings) {
+    result.rdsTimings = timings.toJSON();
+    timings.print("[RDS Benchmark] rds-delta");
+  }
+  return result;
 }
 
 // ─── Post-deploy RDS state update ─────────────────────────────────────────────────
@@ -620,8 +739,10 @@ async function tryRdsDeployInternal(
  * @param {string} deviceSerial - device serial number
  * @param {string} deployType - the type of deploy that just completed (typically 'full')
  * @param {{sdbPath?: string, tzPath?: string, timeoutMs?: number}} [opts]
+ * @returns {Promise<{rdsTimings?: object} | undefined>} - timings object when benchmark mode is enabled
  */
 async function updateRdsState(projectDir, deviceSerial, deployType, opts = {}) {
+  const timings = isBenchmarkMode() ? new RdsDeployTimings() : null;
   try {
     const state = getOrCreateState(projectDir);
     const appType = detectAppType(projectDir);
@@ -631,8 +752,11 @@ async function updateRdsState(projectDir, deviceSerial, deployType, opts = {}) {
     // and hands back the freshly scanned manifest so syncDeployState() does
     // not hash the tree a second time. With no prior baseline this is a
     // no-op returning currentManifest: null → regenerated below.
+    timings?.startPhase("reconcile");
     const reconcileResult = await reconcileDetailedAsync(projectDir);
+    timings?.endPhase("reconcile");
 
+    timings?.startPhase("syncState");
     await syncDeployState({
       projectDir,
       deviceSerial,
@@ -644,12 +768,20 @@ async function updateRdsState(projectDir, deviceSerial, deployType, opts = {}) {
       currentManifest: reconcileResult.currentManifest ?? undefined,
       opts,
     });
+    timings?.endPhase("syncState");
+
+    if (timings) {
+      const result = { rdsTimings: timings.toJSON() };
+      timings.print("[RDS Benchmark] updateRdsState");
+      return result;
+    }
   } catch (err) {
     // RDS state update failure should not break the install flow — log, don't throw.
     console.warn(
       `[RDS] Failed to update RDS state after ${deployType} deploy: ${err.message}`,
     );
   }
+  return undefined;
 }
 
 module.exports = {
@@ -659,4 +791,7 @@ module.exports = {
   syncDeployState,
   tryRdsDeploy,
   updateRdsState,
+  // Benchmark timing exports
+  isBenchmarkMode,
+  RdsDeployTimings,
 };

@@ -8,6 +8,12 @@ status: approved
 since_cli: 1.0.0
 description: "certificate-manager list-profiles returns success with profile list"
 
+# profiles.xml lives under the SDK data path, which resolveSdkDataPath() can
+# only find with a configured SDK root (or an sdb inside an SDK on PATH). The
+# CI safe-tier gate skips this TC (--skip-requires=sdk).
+requires:
+  capabilities: [sdk]
+
 lanes:
   cli:
     argv:

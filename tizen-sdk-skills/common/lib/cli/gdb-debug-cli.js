@@ -6,11 +6,12 @@
  * CLI runner for setupGdbDebug() execution
  *
  * Run directly without the agent having to assemble require paths:
- *   node <plugin>/lib/cli/gdb-debug-cli.js <appId> <binaryPath> [mode] [breakpoints] [port]
+ *   node <plugin>/lib/cli/gdb-debug-cli.js <appId> <binaryPath> [mode] [breakpoints] [port] [serial]
  *
  * Examples:
  *   node .../gdb-debug-cli.js org.example.myapp "C:/ws/MyApp/Debug/tpk/bin/myapp" attach "service_app_control"
  *   node .../gdb-debug-cli.js org.example.myapp "C:/ws/MyApp/Debug/tpk/bin/myapp" launch "main,service_app_create"
+ *   node .../gdb-debug-cli.js org.example.myapp "C:/ws/MyApp/Debug/tpk/bin/myapp" attach - - emulator-26101
  *
  * Arguments:
  *   appId       - Tizen package ID (required)
@@ -18,7 +19,8 @@
  *                 auto-searches nearby, so approximate guessed paths are acceptable)
  *   mode        - attach (default) | launch. "-" is also treated as attach
  *   breakpoints - Comma-separated function names (e.g., "main,service_app_create"). "-" = none
- *   port        - Debug port (default 5039)
+ *   port        - Debug port (default 5039). "-" = default
+ *   serial      - Device serial (default: first connected device)
  *
  * Always runs in setup-only mode (prepares gdbserver + port forwarding + init file, then exits) —
  * interactive gdb cannot be started by the agent, so the user pastes result.gdb_command
@@ -31,7 +33,8 @@
 const { setupGdbDebug } = require("../core/sdk-commands");
 const { runCli } = require("./cli-runner");
 
-const [, , appId, binaryPath, modeArg, bpArg, portArg] = process.argv;
+const [, , appId, binaryPath, modeArg, bpArg, portArg, serialArg] =
+  process.argv;
 
 if (!appId || !binaryPath) {
   console.error(
@@ -43,7 +46,7 @@ if (!appId || !binaryPath) {
           {
             code: "invalid_parameters",
             message:
-              "Usage: node gdb-debug-cli.js <appId> <binaryPath> [attach|launch] [breakpoints|-] [port]",
+              "Usage: node gdb-debug-cli.js <appId> <binaryPath> [attach|launch] [breakpoints|-] [port] [serial]",
           },
         ],
       },
@@ -61,8 +64,9 @@ runCli("tizen-sdk gdb-debug", () =>
     {
       launch: modeArg === "launch",
       breakpoints: bpArg && bpArg !== "-" ? bpArg : "",
-      port: portArg || undefined,
+      port: portArg && portArg !== "-" ? portArg : undefined,
       timeout: undefined,
+      serial: serialArg || undefined,
     },
     "tizen-sdk gdb-debug",
   ),

@@ -8,6 +8,11 @@ status: approved
 since_cli: 1.0.0
 description: "validate-repo-url returns success for the official Tizen SDK repository"
 
+# Fetches pkg_list from download.tizen.org, so it needs outbound network; the
+# CI safe-tier gate skips this TC (--skip-requires=net).
+requires:
+  capabilities: [net]
+
 lanes:
   cli:
     argv:

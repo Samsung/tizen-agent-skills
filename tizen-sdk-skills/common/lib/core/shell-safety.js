@@ -36,8 +36,14 @@ const { formatError } = require("../envelope/response-formatter");
 const UNSAFE_SHELL_CHARS = /["`$;|&<>\r\n]/;
 const UNSAFE_SHELL_CHAR_LIST = '" ` $ ; | & < > (or a line break)';
 
-/** Device serials are plain identifiers: emulator-26101, 0123456789ABCDEF, 192.168.0.10:26101. */
-const SERIAL_PATTERN = /^[A-Za-z0-9._:-]+$/;
+/**
+ * Device serials are plain identifiers: emulator-26101, 0123456789ABCDEF,
+ * 192.168.0.10:26101. The value is spliced into script argument strings
+ * (`-Serial "<s>"`, `-s "<s>"`) and `sdb -s <s>` argv, so besides the shell
+ * metacharacters it must not START with "-" (getopts / PowerShell would read
+ * it as the next option) and is capped at 64 characters.
+ */
+const SERIAL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/;
 
 /**
  * Why a value cannot be interpolated into a double-quoted shell argument, or

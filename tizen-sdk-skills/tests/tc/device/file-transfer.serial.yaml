@@ -3,15 +3,16 @@ id: tizen-sdk.file-transfer.serial
 plugin: tizen-sdk
 command: file-transfer
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "file-transfer --direction push --serial returns success"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture file /tmp/config.xml.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "file-transfer", "--direction", "push", "--local", "/tmp/config.xml", "--remote", "/opt/usr/apps/", "--serial", "emulator-26101"]
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "file-transfer", "--direction", "push", "--local", "${FIXTURE_TMP_DIR}/config.xml", "--remote", "/opt/usr/apps/", "--serial", "emulator-26101"]
     timeout_sec: 60
     expect:
       status: success

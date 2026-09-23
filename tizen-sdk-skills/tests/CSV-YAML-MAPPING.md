@@ -298,14 +298,14 @@
 | `TC-P-108` | Prompt — Run doctor health check | [tc/meta/meta.prompt-doctor.yaml](tc/meta/meta.prompt-doctor.yaml) | `tizen-sdk.meta.prompt-doctor` | `--doctor` | safe | Prompt |
 | `TC-P-109` | Prompt — Show capabilities | [tc/meta/meta.prompt-capabilities.yaml](tc/meta/meta.prompt-capabilities.yaml) | `tizen-sdk.meta.prompt-capabilities` | `--capabilities` | safe | Prompt |
 | `TC-P-110` | Prompt — List available commands | [tc/meta/meta.prompt-list-commands.yaml](tc/meta/meta.prompt-list-commands.yaml) | `tizen-sdk.meta.prompt-list-commands` | `no-args` | safe | Prompt |
-| `TC-P-111` | Run `tizen build` (guard rule #1 — tizen CLI forbidden) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 1)* | `tizen-sdk.guard.tizen-cli-forbidden` | `build-project` | safe | CLI + Prompt |
-| `TC-P-112` | Hand-write config.xml (guard rule #2 — Tizen project files must not be hand-created) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 2)* | `tizen-sdk.guard.no-handwrite-manifest` | `create-project` | safe | CLI + Prompt |
-| `TC-P-113` | Use invalid tz install flags (guard rule #3 — only -e and -p accepted) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 3)* | `tizen-sdk.guard.invalid-install-flags` | `install-app` | safe | CLI + Prompt |
-| `TC-P-114` | Use tz build with -p instead of -w (guard rule #4 — build uses -w not -p) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 4)* | `tizen-sdk.guard.build-w-not-p` | `build-project` | safe | CLI + Prompt |
-| `TC-P-115` | Use wrong sdb path (guard rule #5 — sdb is at <sdk>/tools/sdb) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 5)* | `tizen-sdk.guard.sdb-path` | `sdb-helper` | safe | CLI + Prompt |
-| `TC-P-116` | Manually configure gdbserver (guard rule #6 — no manual gdb/port-forward setup) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 6)* | `tizen-sdk.guard.no-manual-gdb` | `gdb-debug` | safe | CLI + Prompt |
-| `TC-P-117` | Use bash syntax on Windows (guard rule #7 — no bash syntax in cmd.exe) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 7)* | `tizen-sdk.guard.no-bash-on-windows` | `device-manager` | safe | CLI + Prompt |
-| `TC-P-118` | Run native binary with node (guard rule #8 — native executables must not be run with node) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 8)* | `tizen-sdk.guard.no-node-on-native` | `sdb-helper` | safe | CLI + Prompt |
+| `TC-P-111` | Run `tizen build` (guard rule #1 — tizen CLI forbidden) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 1)* | `tizen-sdk.guard.tizen-cli-forbidden` | `build-project` | safe | Prompt |
+| `TC-P-112` | Hand-write config.xml (guard rule #2 — Tizen project files must not be hand-created) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 2)* | `tizen-sdk.guard.no-handwrite-manifest` | `create-project` | safe | Prompt |
+| `TC-P-113` | Use invalid tz install flags (guard rule #3 — only -e and -p accepted) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 3)* | `tizen-sdk.guard.invalid-install-flags` | `install-app` | safe | Prompt |
+| `TC-P-114` | Use tz build with -p instead of -w (guard rule #4 — build uses -w not -p) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 4)* | `tizen-sdk.guard.build-w-not-p` | `build-project` | safe | Prompt |
+| `TC-P-115` | Use wrong sdb path (guard rule #5 — sdb is at <sdk>/tools/sdb) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 5)* | `tizen-sdk.guard.sdb-path` | `sdb-helper` | safe | Prompt |
+| `TC-P-116` | Manually configure gdbserver (guard rule #6 — no manual gdb/port-forward setup) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 6)* | `tizen-sdk.guard.no-manual-gdb` | `gdb-debug` | safe | Prompt |
+| `TC-P-117` | Use bash syntax on Windows (guard rule #7 — no bash syntax in cmd.exe) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 7)* | `tizen-sdk.guard.no-bash-on-windows` | `device-manager` | safe | Prompt |
+| `TC-P-118` | Run native binary with node (guard rule #8 — native executables must not be run with node) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 8)* | `tizen-sdk.guard.no-node-on-native` | `sdb-helper` | safe | Prompt |
 
 > `tc/meta/guard-rules.prompt.yaml` 은 멀티 도큐먼트 YAML 입니다 — `TC-P-111`~`TC-P-118`
 > 8건이 `---` 로 구분되어 한 파일 안에 들어 있으며, *(doc n)* 은 그 문서 순번입니다.
@@ -378,11 +378,20 @@ prompt 레인 118건은 모두 실행 완료입니다
 
 | status | 케이스 수 |
 | --- | ---: |
-| `draft` | 79 |
-| `approved` | 199 |
-| `candidate` | 8 |
+| `draft` | 22 |
+| `approved` | 264 |
+| `candidate` | 0 |
 
-`draft` 79건은 대부분 cli 레인 TC 로, 아직 전 레인 실행 검증이 끝나지 않은 케이스입니다.
+2026-09-22 device 티어 fixture 패스(`scripts/prepare-device-fixtures.mjs` +
+`scripts/run-device-tier.mjs --include-drafts`)로 device draft 25건, 2026-09-23 패스로
+device 4건(install-app ×3 단언 수정, gdb-debug.serial `--serial` 옵션 추가) + prompt 전용 1건
+(에이전트 세션 3회 실행) + mutating 27건(`scripts/run-mutating-tier.mjs --include-drafts`)이
+승격되었고, guard-rule candidate 8건은 미실행이던 cli 레인을 제거해(prompt 전용, 41/41 기록)
+approved 가 되었습니다. 남은 draft 22건은 모두 cli 레인으로, 각 YAML 의 NOTE 와 `requires`
+선언에 사유가 있습니다: packaged CLI(process.pkg)에서만 설치를 수행하거나 SDK 를 재설치하는
+설치 계열 14건(`requires: [sdk, net]`), 삼성 온라인 CA 3건(`samsung-account`), 네트워크
+디바이스 2건(`net-device`), GBS 빌드 2건(`gbs`, 리눅스 전용), `build-project.compiler-flags`
+(플래그 전달 기능 없음) (`tests/README.md`, "Device tier" / "Mutating tier").
 
 ---
 

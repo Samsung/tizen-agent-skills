@@ -3,15 +3,16 @@ id: tizen-sdk.dotnet-debug.happy
 plugin: tizen-sdk
 command: dotnet-debug
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "dotnet-debug --app-id with no --mode runs LAUNCH mode (the default since issue #97 — attach cannot work on Tizen) and returns launch_config with the app suspended under netcoredbg"
 
 lanes:
   cli:
-    # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the .NET app org.tizen.example.MyApp installed on the device.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "org.tizen.example.MyApp"]
+    # NOTE (2026-09-22): /tmp fixture paths and hardcoded app ids replaced by ${FIXTURE_*}
+    # placeholders (scripts/prepare-device-fixtures.mjs); executed on Windows via
+    # run-device-tier.mjs --include-drafts — passed; promoted draft → approved.
+    argv: ["tizen-sdk", "dotnet-debug", "--app-id", "${FIXTURE_DOTNET_APP_ID}"]
     timeout_sec: 120
     expect:
       status: success

@@ -3,13 +3,18 @@ id: tizen-sdk.project-delete.happy
 plugin: tizen-sdk
 command: project-delete
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "project-delete --project returns success"
 
+requires:
+  capabilities: [sdk]
+
+# NOTE (2026-09-23): deletes the project create-project.native-happy made; last TC of phase
+# p1-projects so the build-project.* TCs run before it. executed on Windows via scripts/run-mutating-tier.mjs --include-drafts on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
-    argv: ["tizen-sdk", "project-delete", "--project", "/tmp/tizen-apps/MyTizenApp01"]
+    argv: ["tizen-sdk", "project-delete", "--project", "${FIXTURE_PROJECTS_DIR}/MyNativeApp"]
     timeout_sec: 30
     expect:
       status: success

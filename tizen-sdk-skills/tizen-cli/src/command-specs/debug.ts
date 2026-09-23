@@ -38,6 +38,10 @@ export const DEBUG_SPECS: CommandSpec[] = [
       },
       { flags: "--port <port>", description: "Debug port", default: "5039" },
       {
+        flags: "--serial <serial>",
+        description: "Device serial (default: first connected device)",
+      },
+      {
         flags: "--timeout <seconds>",
         description: "PID search wait time in seconds (1-300, attach mode)",
         default: "30",
@@ -52,6 +56,7 @@ export const DEBUG_SPECS: CommandSpec[] = [
           breakpoints: o.breakpoints || "",
           port: o.port,
           timeout: o.timeout,
+          serial: o.serial,
         },
         "tizen-sdk gdb-debug",
       ),

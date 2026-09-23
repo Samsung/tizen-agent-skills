@@ -19,6 +19,7 @@ param(
     [Parameter(Mandatory=$false)][Alias('a')][string]$App,
     [Parameter(Mandatory=$false)][Alias('b')][string]$Binary,
     [Parameter(Mandatory=$false)][Alias('p')][int]$Port = 5039,
+    [Parameter(Mandatory=$false)][Alias('s')][string]$Serial = "",
     [Parameter(Mandatory=$false)][Alias('g')][string]$Gdb = "gdb",
     [Parameter(Mandatory=$false)][Alias('x')][string]$Breakpoints = "",
     [Parameter(Mandatory=$false)][Alias('t')][int]$Timeout = 30,
@@ -39,6 +40,7 @@ Required:
 
 Optional:
   -Port <PORT>           Debug port (default: 5039)
+  -Serial <SERIAL>       Device serial (default: first connected device)
   -Gdb <PATH>            GDB executable (default: auto-detect SDK gdb for the device arch, else PATH gdb)
   -Breakpoints "f1,f2"   Comma-separated breakpoints (e.g. "main,service_app_create")
   -Timeout <SEC>         PID lookup timeout in seconds (default: 30, attach mode only)
@@ -60,8 +62,8 @@ Examples:
 }
 
 # ---------------------------------------------------------------------------
-# Helpers  (Invoke-SdbLine — one-line `sdb shell` on $Sdb — comes from
-# lib\common.ps1; this script selects no $Serial, so sdb's default target is used)
+# Helpers  (Invoke-SdbLine — one-line `sdb shell` on $Sdb/$Serial — comes from
+# lib\common.ps1; $Serial is resolved in Step 1: -Serial, else the first device)
 # ---------------------------------------------------------------------------
 
 # Poll for the app PID until $Timeout. Returns the PID string, or $null.
@@ -154,6 +156,15 @@ Write-Step "1/6 Checking device connection..."
 $deviceLines = & $Sdb devices 2>$null | Where-Object { $_ -match '\sdevice(\s|$)' }
 if (-not $deviceLines) { Write-Err "No connected device found"; exit 1 }
 & $Sdb devices
+# Pin every sdb call below to one device: -Serial when given (and connected),
+# else the first online device — the same rule tizen-dotnet-debug.ps1 uses.
+if (-not $Serial) {
+    $Serial = Get-DeviceSerial $Sdb
+} elseif (@(Get-ConnectedDevices $Sdb) -notcontains $Serial) {
+    Write-Err "Device '$Serial' is not connected (see the sdb devices list above)"
+    exit 1
+}
+Write-Info "Target device: $Serial"
 
 # ---------------------------------------------------------------------------
 # Refuse Web apps BEFORE binary validation: a .wgt runs inside the web runtime
@@ -163,7 +174,7 @@ if (-not $deviceLines) { Write-Err "No connected device found"; exit 1 }
 # pkgid up in the device package list and bail out if its type is wgt.
 # ---------------------------------------------------------------------------
 $pkgIdCandidate = $App.Split('.')[0]
-$pkgLines = & $Sdb shell "pkgcmd -l" 2>$null
+$pkgLines = & $Sdb -s $Serial shell "pkgcmd -l" 2>$null
 foreach ($line in @($pkgLines)) {
     if ("$line" -match '\[wgt\]' -and "$line".Contains("[$pkgIdCandidate]")) {
         Write-Err "'$App' is a Web app (wgt) - GDB debugging is not supported for Web apps."
@@ -215,15 +226,82 @@ Write-Info "Using GDB: $Gdb"
 
 # Enable root so gdbserver can ptrace/launch and read the app's bin/ (emulator/dev
 # images). Best-effort: production devices may refuse, in which case we continue.
-& $Sdb root on 2>$null | Out-Null
+& $Sdb -s $Serial root on 2>$null | Out-Null
 
 # ---------------------------------------------------------------------------
-# Step 2: Locate gdbserver on device
+# Step 2: Locate gdbserver on device - or install it on demand from the SDK.
+# Emulator images (Tizen 8+) ship no gdbserver; the SDK carries it as
+# <sdk>\tools\on-demand\gdbserver_<ver>_<arch>.tar (gdbserver/gdbserver inside).
+# Same mechanism as netcoredbg in tizen-dotnet-debug.ps1: push the tar, extract
+# under /home/owner/share/tmp/sdk_tools/ (owner-writable, no smack fights) and
+# reuse it on the next run.
 # ---------------------------------------------------------------------------
+$GdbserverOnDemandBin = "/home/owner/share/tmp/sdk_tools/gdbserver/gdbserver"
+
+# Map `uname -m` to the on-demand tar's arch token (armv7l images use "armel").
+function Get-GdbserverTarArch {
+    $raw = Invoke-SdbLine "uname -m"
+    switch -Regex ($raw) {
+        'x86_64'  { return 'x86_64' }
+        'aarch64' { return 'aarch64' }
+        '^arm'    { return 'armel' }
+        'riscv64' { return 'riscv64' }
+        default   { Write-Err "Unsupported device architecture for the on-demand gdbserver: '$raw'"; return $null }
+    }
+}
+
+# Newest gdbserver_<ver>_<arch>.tar under <sdk>\tools\on-demand. Do NOT hardcode
+# a version - it moves with the SDK's gdb package.
+function Find-GdbserverTar {
+    param([string]$Arch)
+    $onDemand = Join-Path (Join-Path (Get-SdkPath) "tools") "on-demand"
+    if (-not (Test-Path $onDemand)) { return $null }
+    $best = $null
+    $bestVer = [version]"0.0"
+    foreach ($tar in @(Get-ChildItem -Path $onDemand -File -Filter "gdbserver_*_$Arch.tar" -ErrorAction SilentlyContinue)) {
+        if ($tar.Name -match 'gdbserver_([0-9][0-9.]*)_') {
+            try { $v = [version]$Matches[1] } catch { continue }
+            if ($v -gt $bestVer) { $bestVer = $v; $best = $tar.FullName }
+        }
+    }
+    return $best
+}
+
+# Push the tar and extract it into the sdk_tools dir (plain tar, not gzipped).
+function Install-Gdbserver {
+    param([string]$TarPath)
+    $deviceTar = "/home/owner/share/tmp/gdbserver.tar"
+    Write-Info "Installing gdbserver from: $TarPath"
+    Invoke-SdbLine "mkdir -p /home/owner/share/tmp/sdk_tools" | Out-Null
+    & $Sdb -s $Serial push "$TarPath" $deviceTar
+    if ($LASTEXITCODE -ne 0) { Write-Err "Failed to push the gdbserver package to the device"; exit 1 }
+    Invoke-SdbLine "cd /home/owner/share/tmp/sdk_tools && tar -xf $deviceTar" | Out-Null
+    Invoke-SdbLine "chmod +x $GdbserverOnDemandBin 2>/dev/null; rm -f $deviceTar" | Out-Null
+    # sdb shell never propagates the remote exit code - probe with an echo.
+    if ((Invoke-SdbLine "test -x $GdbserverOnDemandBin && echo ok") -ne "ok") {
+        Write-Err "gdbserver extraction failed on device (expected $GdbserverOnDemandBin)"
+        exit 1
+    }
+    Write-Success "gdbserver installed at $GdbserverOnDemandBin"
+}
+
 Write-Step "2/6 Locating gdbserver on device..."
-$GdbserverPath = Invoke-SdbLine "which gdbserver 2>/dev/null || echo /usr/bin/gdbserver"
-$check = & $Sdb shell "test -f '$GdbserverPath' && echo ok" 2>$null
-if ($check -notmatch "ok") { Write-Err "gdbserver not found at $GdbserverPath"; exit 1 }
+$GdbserverPath = Invoke-SdbLine "which gdbserver 2>/dev/null || (test -x /usr/bin/gdbserver && echo /usr/bin/gdbserver) || (test -x $GdbserverOnDemandBin && echo $GdbserverOnDemandBin)"
+if (-not $GdbserverPath) {
+    Write-Info "gdbserver is not on the device image - installing it from the SDK on demand"
+    $arch = Get-GdbserverTarArch
+    if (-not $arch) { exit 1 }
+    $tar = Find-GdbserverTar $arch
+    if (-not $tar) {
+        Write-Err "gdbserver package for '$arch' not found under $(Join-Path (Get-SdkPath) 'tools')\on-demand\ (gdbserver_<ver>_$arch.tar)"
+        Write-Info "Install the SDK's on-demand tools with Package Manager (or the tizen-sdk-install skill), then retry."
+        exit 1
+    }
+    Install-Gdbserver $tar
+    $GdbserverPath = $GdbserverOnDemandBin
+}
+$check = Invoke-SdbLine "test -x '$GdbserverPath' && echo ok"
+if ($check -ne "ok") { Write-Err "gdbserver not found at $GdbserverPath"; exit 1 }
 Write-Info "gdbserver: $GdbserverPath"
 
 # ---------------------------------------------------------------------------
@@ -253,12 +331,12 @@ if ($Launch) {
     }
 } else {
     Write-Step "3/6 Launching app and resolving PID (attach mode)..."
-    & $Sdb shell "app_launcher -s $App" 2>$null | Out-Null
+    & $Sdb -s $Serial shell "app_launcher -s $App" 2>$null | Out-Null
     Start-Sleep -Seconds 2
     $AppPid = Wait-AppPid ([System.IO.Path]::GetFileName($BinaryAbs))
     if (-not $AppPid) {
         Write-Err "Could not find PID for $App after ${Timeout}s"
-        & $Sdb shell "ps -ef | grep $App" 2>$null
+        & $Sdb -s $Serial shell "ps -ef | grep $App" 2>$null
         exit 1
     }
     Write-Info "App PID: $AppPid"
@@ -273,18 +351,18 @@ $GdbserverStarted = $false
 try {
     # Step 4: Start gdbserver
     Write-Step "4/6 Starting gdbserver on port $Port..."
-    & $Sdb shell "pkill gdbserver 2>/dev/null" | Out-Null
+    & $Sdb -s $Serial shell "pkill gdbserver 2>/dev/null" | Out-Null
     Start-Sleep -Seconds 1
     if ($SetupOnly) {
         # setup-only: the script exits before the user attaches gdb, so gdbserver must
         # outlive it. A device-side nohup is NOT enough (sdb kills the session's
         # processes when the client disconnects). Instead launch a DETACHED host sdb
         # client (separate process) that holds the device shell (and gdbserver) open.
-        Start-Process -FilePath $Sdb -ArgumentList @("shell", "$GdbserverPath $GdbserverArgs") -WindowStyle Hidden | Out-Null
+        Start-Process -FilePath $Sdb -ArgumentList @("-s", $Serial, "shell", "$GdbserverPath $GdbserverArgs") -WindowStyle Hidden | Out-Null
     } else {
         # interactive: this script stays alive running gdb, so its sdb client persists.
-        # $Sdb must be passed in - the job runs in a separate runspace that can't see it.
-        Start-Job -ScriptBlock { param($sdbExe, $cmd) & $sdbExe shell $cmd } -ArgumentList $Sdb, "$GdbserverPath $GdbserverArgs" | Out-Null
+        # $Sdb/$Serial must be passed in - the job runs in a separate runspace that can't see them.
+        Start-Job -ScriptBlock { param($sdbExe, $serial, $cmd) & $sdbExe -s $serial shell $cmd } -ArgumentList $Sdb, $Serial, "$GdbserverPath $GdbserverArgs" | Out-Null
     }
     $GdbserverStarted = $true
     $modeName = if ($Launch) { "launch" } else { "attach" }
@@ -293,7 +371,7 @@ try {
 
     # Step 5: Forward port
     Write-Step "5/6 Forwarding port $Port..."
-    & $Sdb forward "tcp:$Port" "tcp:$Port"
+    & $Sdb -s $Serial forward "tcp:$Port" "tcp:$Port"
     if ($LASTEXITCODE -ne 0) {
         Write-Err "Port forward failed (tcp:$Port -> tcp:$Port)."
         Write-Info "The host port may be in use - retry with a different -Port."
@@ -361,7 +439,7 @@ finally {
         }
         if ($GdbserverStarted) {
             Write-Warn "Terminating gdbserver on device..."
-            & $Sdb shell "pkill -9 gdbserver 2>/dev/null" | Out-Null
+            & $Sdb -s $Serial shell "pkill -9 gdbserver 2>/dev/null" | Out-Null
         }
     }
 }

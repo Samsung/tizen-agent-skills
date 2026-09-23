@@ -2,7 +2,8 @@
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
 /**
- * Project lifecycle commands — scaffold, template discovery, build.
+ * Project lifecycle commands — scaffold, delete, template discovery, WGT
+ * import, build.
  */
 
 import { CommandSpec, PROJECT_TYPES, sdkCommands } from "./types";
@@ -104,6 +105,50 @@ export const PROJECT_SPECS: CommandSpec[] = [
     ],
     handler: (o) =>
       sdkCommands.listTemplates(o.type, "tizen-sdk list-templates"),
+  },
+  {
+    name: "import-wgt",
+    description:
+      "Import an existing .wgt archive as an SDK-generated Web project (tz import-wgt) — the project is created at <working-dir>/<wgt file name without .wgt>",
+    collectAllMissing: true,
+    options: [
+      {
+        flags: "--wgt-path <path>",
+        description:
+          "Existing .wgt archive; its file name becomes the project name, so tz allows only letters and digits [A-Za-z0-9]",
+        required: true,
+        missingHint: "Path to the .wgt archive",
+      },
+      {
+        flags: "--profile <profile>",
+        description: "SDK profile family",
+        choices: ["tizen", "tv-samsung"],
+        required: true,
+        missingHint: "Profile (tizen|tv-samsung)",
+      },
+      {
+        flags: "--platform-version <version>",
+        description:
+          "Installed platform version in <major>.<minor> form, e.g. 10.0 (refused when <profile>-<version> is not an installed tz profile)",
+        required: true,
+        missingHint: "Platform version, e.g. 10.0",
+      },
+      {
+        flags: "--working-dir <dir>",
+        description:
+          "Existing destination workspace directory — the project folder is created inside it and must not exist yet",
+        required: true,
+        missingHint: "Destination workspace directory",
+      },
+    ],
+    handler: (o) =>
+      sdkCommands.importWgt(
+        o.wgtPath,
+        o.profile,
+        o.platformVersion,
+        o.workingDir,
+        "tizen-sdk import-wgt",
+      ),
   },
   {
     name: "build-project",

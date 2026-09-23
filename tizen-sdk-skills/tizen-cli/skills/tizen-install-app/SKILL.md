@@ -109,6 +109,8 @@ Installation on a cold emulator can be slow — set the Bash tool timeout to 600
 
 - Success `result`: `device_serial` used, install/launch status.
 - Failure `device_not_found` (`TIZEN_SDK_DEVICE_E001`): no connected device — run `tizen-cli tizen-sdk device-manager` first, then retry with its `result.device_serial`.
+- Failure `multiple_devices` (`TIZEN_SDK_DEVICE_E002`): more than one device is online and no `--serial` was given — the message lists the serials; ask the user which one (or take the one the request implies) and retry with `--serial <serial>`.
+- Other failures (`io_error`, `certificate_error`, …) report the install script's exit code plus its key `[ERROR]`/`[WARN]` lines, never the shell command line.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
 

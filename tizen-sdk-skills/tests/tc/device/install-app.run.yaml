@@ -3,17 +3,25 @@ id: tizen-sdk.install-app.run
 plugin: tizen-sdk
 command: install-app
 tier: device
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "install-app --package --run returns success with process_id"
 
 lanes:
   cli:
     # NOTE (2026-09-17): NOT executed in the Windows safe+device pass — needs the Linux fixture package /tmp/MyApp.tpk.
-    # Kept draft pending a Linux/WSL fixture run.
-    argv: ["tizen-sdk", "install-app", "--package", "/tmp/MyApp.tpk", "--run"]
+    # NOTE (2026-09-22): /tmp/MyApp.tpk replaced by ${FIXTURE_NATIVE_TPK} (built by
+    # scripts/prepare-device-fixtures.mjs).
+    # NOTE (2026-09-23): the expect block asserted $.result.process_id, a field the envelope has
+    # never had — installApp reports app_launched / app_running (app_running can be null on the
+    # RDS redeploy path, so only app_launched is asserted). Runs third in device phase
+    # c2-fixture-apps and leaves the app running; c3's debugCleanup hook stops it. Executed on
+    # Windows via run-device-tier.mjs --include-drafts on 2026-09-23 — passed; promoted
+    # draft → approved.
+    argv: ["tizen-sdk", "install-app", "--package", "${FIXTURE_NATIVE_TPK}", "--run"]
     timeout_sec: 120
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.process_id", matches: "^\\d+" }
+        - { path: "$.result.app_launched", equals: true }
+        - { path: "$.result.installation_status", matches: "completed" }

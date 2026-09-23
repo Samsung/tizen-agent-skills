@@ -7,6 +7,14 @@ status: draft
 since_cli: 1.0.0
 description: "install-rootstrap --zip-path returns success with rootstraps array"
 
+requires:
+  capabilities: [sdk]
+
+# NOTE (2026-09-23): stays draft for two reasons: --zip-path /tmp/custom-rootstrap.zip names a
+# fixture nothing in the repo produces (a valid ZIP is data/ or tizen-studio/ containing
+# tools/smart-build-interface/plugins/*.core*.xml — see tizen-install-rootstrap.ps1), and
+# installRootstrap only runs the installer under the packaged CLI (process.pkg; sdk.js),
+# so the test harness gets execution_error regardless of the ZIP.
 lanes:
   cli:
     argv: ["tizen-sdk", "install-rootstrap", "--zip-path", "/tmp/custom-rootstrap.zip"]

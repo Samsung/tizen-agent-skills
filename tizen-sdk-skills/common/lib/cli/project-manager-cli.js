@@ -4,7 +4,7 @@
 
 /**
  * Unified CLI runner for Tizen project lifecycle — create, list-templates,
- * build, and install.
+ * import, build, and install.
  *
  * This file consolidates the four former single-purpose positional CLI runners
  * (build-project-cli.js, create-project-cli.js, list-templates-cli.js,
@@ -18,6 +18,7 @@
  *   node .../project-manager-cli.js build --project "$HOME/tizen-apps/MyApp" --build-type Debug
  *   node .../project-manager-cli.js build --project "$HOME/tizen-apps/MyApp" --build-type Release --sign-profile myProfile --arch armv7l
  *   node .../project-manager-cli.js create --type webapp --template Basic --parent-path "$HOME/tizen-apps" --name MyTizenApp
+ *   node .../project-manager-cli.js import-wgt --wgt-path "$HOME/Downloads/MyWidget.wgt" --profile tizen --platform-version 10.0 --working-dir "$HOME/tizen-apps"
  *   node .../project-manager-cli.js list-templates --type native
  *   node .../project-manager-cli.js list-templates
  *   node .../project-manager-cli.js install --package "$HOME/tizen-apps/MyApp/Debug/MyApp.tpk"
@@ -25,7 +26,7 @@
  *   node .../project-manager-cli.js install --package "$HOME/tizen-apps/MyApp/Debug/MyApp.tpk" --reset-rds
  *
  * Actions:
- *   build | create | delete | list-templates | install
+ *   build | create | import-wgt | delete | list-templates | install
  *
  * Action arguments:
  *   build:
@@ -53,6 +54,12 @@
  *     --dry-run               (optional) Run every safety gate and report what WOULD be
  *                             deleted (result.status = "dry-run") without deleting
  *
+ *   import-wgt:
+ *     --wgt-path <path>       (required) Existing .wgt widget archive
+ *     --profile <profile>     (required) tizen | tv-samsung
+ *     --platform-version <v>  (required) Platform version, e.g. 10.0
+ *     --working-dir <dir>     (required) Existing destination workspace directory
+ *
  *   list-templates:
  *     --type <type>           (optional) Filter by project type (omit for all)
  *
@@ -68,6 +75,7 @@
 const {
   buildProject,
   createProject,
+  importWgt,
   deleteProject,
   listTemplates,
   installApp,
@@ -78,9 +86,10 @@ const COMMAND = "tizen-sdk project";
 
 const USAGE =
   "Usage: node project-manager-cli.js <action> [options]. Actions: build, " +
-  "create, delete, list-templates, install. " +
+  "create, import-wgt, delete, list-templates, install. " +
   "build --project <path> [--build-type Debug|Release|Test] [--sign-profile <name>] [--arch <arch>] [--clean] | " +
   "create --type <type> --template <name> --parent-path <dir> --name <appName> [--force] [--open] | " +
+  "import-wgt --wgt-path <path> --profile tizen|tv-samsung --platform-version <version> --working-dir <dir> | " +
   "delete --project <path> [--expect-name <appName>] [--dry-run] | " +
   "list-templates [--type <type>] | " +
   "install --package <path> [--device-serial <serial>] [--run] [--reset-rds]";
@@ -99,6 +108,10 @@ const OPTION_FLAGS = {
   "--parent-path": "parentPath",
   "--name": "name",
   "--package": "packagePath",
+  "--wgt-path": "wgtPath",
+  "--profile": "profile",
+  "--platform-version": "platformVersion",
+  "--working-dir": "workingDir",
   "--device-serial": "deviceSerial",
   "--expect-name": "expectName",
 };
@@ -153,6 +166,23 @@ switch (action) {
         !!options.force,
         "tizen-sdk create-project",
         !!options.open,
+      ),
+    );
+    break;
+  }
+  case "import-wgt": {
+    if (!options.wgtPath) usageError("import-wgt requires --wgt-path");
+    if (!options.profile) usageError("import-wgt requires --profile");
+    if (!options.platformVersion)
+      usageError("import-wgt requires --platform-version");
+    if (!options.workingDir) usageError("import-wgt requires --working-dir");
+    runCli("tizen-sdk import-wgt", () =>
+      importWgt(
+        options.wgtPath,
+        options.profile,
+        options.platformVersion,
+        options.workingDir,
+        "tizen-sdk import-wgt",
       ),
     );
     break;

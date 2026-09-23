@@ -3,9 +3,12 @@ id: tizen-sdk.create-project.force
 plugin: tizen-sdk
 command: create-project
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "create-project --force overwrites existing project and returns success"
+
+requires:
+  capabilities: [sdk]
 
 # NOTE (2026-09-01): two fixes. First, the environment issue that also hit
 # the other create-project TCs: --parent-path didn't exist and this SDK had
@@ -19,9 +22,12 @@ description: "create-project --force overwrites existing project and returns suc
 # also means a single run creates fresh rather than genuinely overwriting,
 # but a second run of the suite will then exercise the real overwrite path
 # (--force's documented purpose: "makes fresh-project runs repeatable").
+# NOTE (2026-09-23): /tmp/tizen-apps replaced by ${FIXTURE_PROJECTS_DIR}. Listed twice in
+# policy/mutating-run-order.yaml so the second run exercises the real overwrite path.
+# executed on Windows via scripts/run-mutating-tier.mjs --include-drafts (phase p1-projects) on 2026-09-23 — passed; promoted draft → approved.
 lanes:
   cli:
-    argv: ["tizen-sdk", "create-project", "--type", "webapp", "--template", "Basic", "--parent-path", "/tmp/tizen-apps", "--name", "MyForceApp01", "--force"]
+    argv: ["tizen-sdk", "create-project", "--type", "webapp", "--template", "Basic", "--parent-path", "${FIXTURE_PROJECTS_DIR}", "--name", "MyForceApp01", "--force"]
     timeout_sec: 60
     expect:
       status: success

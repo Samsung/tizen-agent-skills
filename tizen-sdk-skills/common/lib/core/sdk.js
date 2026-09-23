@@ -281,19 +281,34 @@ function installedVersionLabel(sdkPath, version) {
 }
 
 /**
- * "Already installed" must not be reported for a platform version that was
- * never installed: `sdk-install --tizen-version 99.0` used to return success
- * on every host that had any SDK, because the pre-check stopped at sdk.info.
- * When a version was requested explicitly, it has to be among the installed
- * platforms/tizen-X.Y directories.
+ * "Already installed" / "installed" must not be reported for a platform
+ * version that was never installed: `sdk-install --tizen-version 99.0` used
+ * to return success on every host that had any SDK, because the pre-check
+ * stopped at sdk.info. When a version was requested explicitly, it has to be
+ * among the installed platforms/tizen-X.Y directories.
+ *
+ * Two call sites, one rule:
+ *   - the pre-check on an SDK that is already installed (afterInstall=false);
+ *   - the packaged CLI right after it ran the installer (afterInstall=true).
+ *     sdk.info alone is not proof that TIZEN-X.Y went in: the installer
+ *     short-circuits on an existing sdk.info before it looks at -Platform, and
+ *     a repository that does not offer the version leaves the SDK untouched,
+ *     so `--tizen-version 99.99` came back as installation_status "completed".
  *
  * @param {string} sdkPath - installed SDK root
  * @param {string} version - requested version ("" = none requested)
  * @param {string} command - envelope command name
  * @param {number} startTime
+ * @param {{afterInstall?: boolean}} [opts]
  * @returns {object|null} failure envelope, or null when the version is present
  */
-function requestedPlatformMissing(sdkPath, version, command, startTime) {
+function requestedPlatformMissing(
+  sdkPath,
+  version,
+  command,
+  startTime,
+  opts = {},
+) {
   if (!version) return null;
   const installed = listInstalledPlatformVersions(sdkPath);
   if (installed.includes(version)) return null;
@@ -302,6 +317,23 @@ function requestedPlatformMissing(sdkPath, version, command, startTime) {
     installed.length > 0
       ? `installed platforms: ${installed.join(", ")}`
       : "no platforms/tizen-X.Y directory found";
+  const platformInstall = `tizen-cli tizen-sdk platform-install --platform-version ${version}`;
+
+  if (opts.afterInstall) {
+    console.error(
+      `[tizen-sdk] Installer finished, but platform TIZEN-${version} is not in ${sdkPath} (${installedNote}). Not reporting success.`,
+    );
+    return formatError(
+      command,
+      "platform_version_not_found",
+      `The installer finished and sdk.info exists at ${sdkPath}, but the requested platform TIZEN-${version} is not part of the SDK (${installedNote}). ` +
+        "The package repository most likely does not offer that version — existing releases look like 10.0 or 11.0. " +
+        `Re-run with a version the repository offers (or omit --tizen-version for the newest one), or add the platform with "${platformInstall}".`,
+      platformInstall,
+      startTime,
+    );
+  }
+
   console.error(
     `[tizen-sdk] SDK is installed but platform TIZEN-${version} is not (${installedNote}).`,
   );
@@ -310,11 +342,205 @@ function requestedPlatformMissing(sdkPath, version, command, startTime) {
     "platform_version_not_found",
     `Tizen SDK is installed at ${sdkPath}, but platform TIZEN-${version} is not part of it (${installedNote}). ` +
       "Check the version — existing releases look like 10.0 or 11.0. " +
-      `To add that platform to this SDK run "tizen-cli tizen-sdk platform-install --platform-version ${version}"; ` +
+      `To add that platform to this SDK run "${platformInstall}"; ` +
       "to reinstall the whole SDK with it, re-run this command with --force.",
-    `tizen-cli tizen-sdk platform-install --platform-version ${version}`,
+    platformInstall,
     startTime,
   );
+}
+
+/**
+ * Where the packaged CLI keeps the output of an installer run that failed:
+ * $TIZEN_LOGS_DIR, else <os tmpdir>/tizen-sdk-skills-logs. Separate from the
+ * jobs directory (job-paths.js), which only exists for detached jobs.
+ */
+function installerLogsDir() {
+  return (
+    process.env.TIZEN_LOGS_DIR ||
+    path.join(os.tmpdir(), "tizen-sdk-skills-logs")
+  );
+}
+
+/**
+ * Last non-empty lines of a script's output, CRLF-normalised and trimmed.
+ *
+ * @param {string} text
+ * @param {number} maxLines
+ * @returns {string[]}
+ */
+function outputTailLines(text, maxLines, maxLineLength = 0) {
+  const lines = String(text || "")
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.trimEnd())
+    .filter((l) => l.trim() !== "");
+  const tail = lines.slice(-maxLines);
+  if (maxLineLength > 0) {
+    return tail.map((l) =>
+      l.length > maxLineLength ? `${l.slice(0, maxLineLength - 1)}…` : l,
+    );
+  }
+  return tail;
+}
+
+/**
+ * How a child_process (exec|spawn)Sync failure ended. Node does not set
+ * `killed` on these errors: a timeout shows up as `code === "ETIMEDOUT"` with
+ * status null and signal SIGTERM, so `error.killed` would never be true here.
+ *
+ * @param {Error & {status?: number, signal?: string, code?: string}} error
+ * @param {string} subject - e.g. "installer", "install script"
+ * @returns {{text: string, timedOut: boolean, status: number|null, signal: string|null}}
+ */
+function describeChildExit(error, subject) {
+  const status = Number.isInteger(error?.status) ? error.status : null;
+  const signal = error?.signal || null;
+  const timedOut = error?.code === "ETIMEDOUT" || error?.killed === true;
+  let text;
+  if (timedOut) {
+    text = `${subject} timed out and was killed${signal ? ` (${signal})` : ""}`;
+  } else if (signal) {
+    text = `${subject} killed by ${signal}`;
+  } else if (status !== null) {
+    text = `${subject} exit code ${status}`;
+  } else {
+    text = `${subject} could not be run: ${error?.message || "unknown error"}`;
+  }
+  return { text, timedOut, status, signal };
+}
+
+/**
+ * Explain a failed installer run in a way that can still be diagnosed after
+ * the fact.
+ *
+ * A mutating-tier run failed after 763 s with the message
+ * "SDK installation failed: \n\n\n\n\n\n\n" and the same command passed 15 s
+ * later — nothing to go on. The old message was `stdout || stderr || message`:
+ * a whitespace-only stdout is truthy, so the stderr (where the PowerShell
+ * errors were) and the exit code were dropped, and nothing was kept on disk.
+ *
+ * This helper:
+ *   - uses BOTH captured streams (trimmed) and the exit code / signal;
+ *   - says so explicitly when the streams were empty, instead of printing an
+ *     empty string;
+ *   - writes the full captured output to a log file under installerLogsDir()
+ *     and names it in the message;
+ *   - points at the installer's own log (<sdkPath>/.install.log, written by the
+ *     script) and its durable result marker (<sdkPath>/.install-result) when
+ *     they exist.
+ *
+ * Node's execSync message ("Command failed: <full command line>") is not
+ * repeated: the command line is not a diagnosis.
+ *
+ * @param {Error & {stdout?: string, stderr?: string, status?: number, signal?: string, killed?: boolean}} error
+ * @param {{what: string, sdkPath?: string, logGroup: string, tailLines?: number, resumes?: boolean}} o
+ *   what      - subject of the sentence, e.g. "SDK installation"
+ *   sdkPath   - install root, for the script-side log and marker paths
+ *   logGroup  - file-name prefix of the persisted log
+ *   resumes   - the installer skips already-installed packages on a re-run
+ *               (the two SDK installers), so say so
+ * @returns {{message: string, details: string[], log_file: string|null, exit_code: number|null, signal: string|null}}
+ */
+function describeInstallerFailure(error, o) {
+  const tailLines = o.tailLines || 25;
+  const stdout = String(error?.stdout || "");
+  const stderr = String(error?.stderr || "");
+  const exit = describeChildExit(error, "installer");
+  const exitInfo = exit.text;
+  const { status, signal, timedOut } = exit;
+
+  // Both streams, stderr last: the scripts' own [ERROR] lines end up there
+  // on bash (every log_* helper writes to stderr) and PowerShell terminating
+  // errors do too. `details` keeps the lines whole; the message caps each
+  // line so a wide PowerShell error cannot balloon the envelope.
+  const combined = [stdout, stderr].filter((s) => s.trim() !== "").join("\n");
+  const tail = outputTailLines(combined, tailLines);
+  const messageTail = outputTailLines(combined, tailLines, 200);
+
+  let logFile = null;
+  try {
+    const dir = installerLogsDir();
+    fs.mkdirSync(dir, { recursive: true });
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    logFile = path.join(dir, `${o.logGroup}-${stamp}.log`);
+    const header =
+      `# ${o.what} failed — ${exitInfo}\n` +
+      `# ${new Date().toISOString()}\n` +
+      (o.sdkPath ? `# sdk path: ${o.sdkPath}\n` : "") +
+      "\n";
+    fs.writeFileSync(
+      logFile,
+      header +
+        "===== stdout =====\n" +
+        (stdout.trim() ? stdout : "(empty)\n") +
+        "\n===== stderr =====\n" +
+        (stderr.trim() ? stderr : "(empty)\n"),
+      "utf-8",
+    );
+  } catch (_e) {
+    logFile = null;
+  }
+
+  const parts = [`${o.what} failed (${exitInfo}).`];
+  if (messageTail.length > 0) {
+    parts.push(
+      `Installer output, last ${messageTail.length} line${messageTail.length === 1 ? "" : "s"}: ${messageTail.join(" | ")}`,
+    );
+  } else {
+    parts.push(
+      "The installer produced no output on the captured stdout/stderr streams.",
+    );
+  }
+  if (logFile) parts.push(`Full captured output: ${logFile}.`);
+  if (o.sdkPath) {
+    const scriptLog = path.join(o.sdkPath, ".install.log");
+    if (fs.existsSync(scriptLog)) {
+      parts.push(`Installer log written by the script: ${scriptLog}.`);
+    }
+    const marker = path.join(o.sdkPath, ".install-result");
+    if (fs.existsSync(marker)) {
+      let recorded = "";
+      try {
+        recorded = fs.readFileSync(marker, "utf-8").trim();
+      } catch (_e) {
+        recorded = "";
+      }
+      parts.push(
+        `Run-state marker ${marker}${recorded ? ` records "${recorded}"` : " exists"} (query with the installer's -Status / --status flag).`,
+      );
+    }
+    // A kill (timeout) leaves the 'running' marker behind: the script never
+    // reached its exit path, so say that the run was cut short rather than
+    // let the marker suggest an install is still in progress.
+    const running = path.join(o.sdkPath, ".install-running");
+    if (fs.existsSync(running)) {
+      parts.push(
+        timedOut
+          ? `The 'running' marker ${running} is still present because the installer was killed mid-run; the next run clears it.`
+          : `The 'running' marker ${running} is still present — the installer did not reach its exit path (crash or external kill).`,
+      );
+    }
+  }
+  if (o.resumes) {
+    parts.push(
+      "Re-running the same command resumes the install: packages that are already installed are skipped.",
+    );
+  }
+
+  // Envelope `details` is a list of diagnostic lines (see Envelope._normalizeError).
+  const details = [
+    exitInfo,
+    ...(logFile ? [`log_file: ${logFile}`] : []),
+    ...tail,
+  ];
+
+  return {
+    message: parts.join(" "),
+    details,
+    log_file: logFile,
+    exit_code: status,
+    signal,
+  };
 }
 
 /**
@@ -549,6 +775,17 @@ async function installSdk(
             "[tizen-sdk] SDK installation verified (sdk.info found).",
           );
 
+          // sdk.info is necessary, not sufficient: the platform that was asked
+          // for has to be there too (see requestedPlatformMissing).
+          const missing = requestedPlatformMissing(
+            sdkPath,
+            version,
+            command,
+            startTime,
+            { afterInstall: true },
+          );
+          if (missing) return missing;
+
           // Auto-init: write SDK path to ~/.tizen.sdk.path.config so that all
           // other skills (build, create, device, debug, etc.) can locate the
           // SDK via readSdkPath().
@@ -583,14 +820,19 @@ async function installSdk(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "SDK installation",
+          sdkPath,
+          logGroup: "sdk-install",
+          resumes: true,
+        });
         return formatError(
           command,
           "execution_error",
-          `SDK installation failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -1229,14 +1471,18 @@ async function installTvSdk(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "TV SDK installation",
+          sdkPath,
+          logGroup: "tv-sdk-install",
+        });
         return formatError(
           command,
           "execution_error",
-          `TV SDK installation failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -2145,6 +2391,16 @@ async function installSdkFromRepo(
           );
         }
 
+        // Same rule as installSdk: a requested platform must actually be there.
+        const missing = requestedPlatformMissing(
+          sdkPath,
+          platformVersion,
+          command,
+          startTime,
+          { afterInstall: true },
+        );
+        if (missing) return missing;
+
         const warnings = [
           `SDK installed successfully at ${sdkPath} from ${normalizedUrl}${pkgListFile ? ` (${pkgListFile})` : ""}.`,
         ];
@@ -2170,14 +2426,19 @@ async function installSdkFromRepo(
           startTime,
         );
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: `SDK installation from ${normalizedUrl}`,
+          sdkPath,
+          logGroup: "sdk-install-custom-repo",
+          resumes: true,
+        });
         return formatError(
           command,
           "execution_error",
-          `SDK installation from ${normalizedUrl} failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     }
@@ -2433,14 +2694,18 @@ async function downloadEmulatorPackage(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "Emulator package download",
+          sdkPath,
+          logGroup: "download-emulator-package",
+        });
         return formatError(
           command,
           "execution_error",
-          `Emulator package download failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -2667,14 +2932,18 @@ async function installPlatform(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "Platform package installation",
+          sdkPath,
+          logGroup: "platform-install",
+        });
         return formatError(
           command,
           "execution_error",
-          `Platform package installation failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -2920,14 +3189,18 @@ async function downloadMobilePlatform(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "Mobile platform package download",
+          sdkPath,
+          logGroup: "download-mobile-platform",
+        });
         return formatError(
           command,
           "execution_error",
-          `Mobile platform package download failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -3114,14 +3387,18 @@ async function installRootstrap(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "Rootstrap installation",
+          sdkPath,
+          logGroup: "install-rootstrap",
+        });
         return formatError(
           command,
           "execution_error",
-          `Rootstrap installation failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -3309,14 +3586,18 @@ async function installTvSdkFromZip(
           );
         }
       } catch (installError) {
-        const errOutput =
-          installError.stdout || installError.stderr || installError.message;
+        const failure = describeInstallerFailure(installError, {
+          what: "TV SDK installation from ZIP",
+          sdkPath,
+          logGroup: "tv-sdk-install-from-zip",
+        });
         return formatError(
           command,
           "execution_error",
-          `TV SDK installation from ZIP failed: ${errOutput}`,
+          failure.message,
           null,
           startTime,
+          failure.details,
         );
       }
     } else {
@@ -3363,6 +3644,11 @@ module.exports = {
   ensureSdkPathConfig,
   validateTizenVersion,
   listInstalledPlatformVersions,
+  requestedPlatformMissing,
+  describeInstallerFailure,
+  describeChildExit,
+  installerLogsDir,
+  outputTailLines,
   sdkInstallerFlags,
   downloadJobsFlags,
   installSdk,

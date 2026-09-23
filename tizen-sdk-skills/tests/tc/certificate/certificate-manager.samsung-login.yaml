@@ -7,6 +7,9 @@ status: draft
 since_cli: 1.0.0
 description: "certificate-manager --action samsung-login returns success"
 
+requires:
+  capabilities: [sdk, samsung-account]
+
 # NOTE (2026-09-01): found and fixed a real bug while investigating this
 # TC — getSamsungAccessToken was exported raw (unwrapped) in
 # common/lib/core/sdk-commands.js, so a failure came back as
@@ -20,6 +23,8 @@ description: "certificate-manager --action samsung-login returns success"
 # to 5 minutes for a browser redirect) or reuses a cached token tied to the
 # operator's real Samsung account — neither is something this suite
 # should automate or assert on. Left as draft.
+# NOTE (2026-09-23): capability samsung-account declared (a logged-in Samsung account / online-CA
+# session); never automated by this suite — stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "certificate-manager", "--action", "samsung-login", "--profile-name", "myProfile"]

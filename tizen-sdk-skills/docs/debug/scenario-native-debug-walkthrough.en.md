@@ -145,7 +145,7 @@ Claude confirms the app ID, binary path, mode, and breakpoints, then runs the se
 2. **wgt app guard** via `pkgcmd -l` — a web app is refused immediately and routed to `tizen-webapp-debug`
 3. Validate the host binary (auto-search nearby if missing)
 4. **Auto-select the SDK GDB** matching the device architecture, plus `sdb root on`
-5. Locate `gdbserver` on the device (`which gdbserver`, default `/usr/bin/gdbserver`)
+5. Locate `gdbserver` on the device (`which gdbserver`, `/usr/bin/gdbserver`, or a previous on-demand copy); when the image has none (emulator images since Tizen 8), push and extract `<sdk>/tools/on-demand/gdbserver_<ver>_<arch>.tar` to `/home/owner/share/tmp/sdk_tools/` — the same on-demand install `tizen-dotnet-debug` does for netcoredbg
 6. Resolve the debug target per mode
    - attach: run `app_launcher -s <app_id>` → get the PID with `pidof <exec>` → `gdbserver :5039 --attach <PID>`
    - launch: find the device binary under `/opt/usr/globalapps/<app_id>/bin` (or `/opt/usr/apps/...`) → `gdbserver :5039 <device-binary>`
@@ -256,7 +256,7 @@ Verify these items during a manual E2E test.
 | 12 | attach mode can't find the PID (not installed / failed to launch) | `error_category: "io_error"` — "Could not find the app PID within 30s", with launch-mode guidance |
 | 13 | Host binary missing (auto-search also fails) | `error_category: "io_error"` — detail contains `Host binary not found`, hints `<project>\Debug\tpk\bin\<exec>` |
 | 14 | launch mode but the binary isn't on the device (not installed) | `error_category: "io_error"` — `Cannot find app binary on device at /opt/usr/apps/<app_id>/bin/` |
-| 15 | No gdbserver on the device | `error_category: "io_error"` — `gdbserver not found at /usr/bin/gdbserver` |
+| 15 | No gdbserver on the device and no `gdbserver_<ver>_<arch>.tar` under `<sdk>/tools/on-demand` | `error_category: "io_error"` — `gdbserver package for '<arch>' not found under …/tools/on-demand/` (install the SDK's on-demand tools, then retry) |
 | 16 | No GDB on the host (neither SDK nor PATH) | `error_category: "io_error"` — `No GDB found`, suggests `-Gdb <path>` |
 | 17 | Invalid app ID / port / breakpoint format | `error_category: "invalid_parameters"` |
 | 18 | attach mode + a `main` breakpoint | setup succeeds but the breakpoint never hits → retry in launch mode |

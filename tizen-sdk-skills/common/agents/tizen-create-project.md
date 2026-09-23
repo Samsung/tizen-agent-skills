@@ -1,6 +1,6 @@
 ---
 name: tizen-create-project
-description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, 앱 템플릿, 타이젠 앱 템플릿, 앱 템플릿 알려줘, 프로젝트 템플릿, app templates, project templates, list app templates, show app templates, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. Listing/browsing APP project templates is also THIS agent (its list-templates action) — NEVER locate or run SDK tools directly for that. DELETING a Tizen project directory is also THIS agent (its delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. For EMULATOR VM templates (screen sizes/resolutions), use tizen-create-emulator instead; if the user says just "템플릿" with no qualifier, ask whether they mean app project templates or emulator templates. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this agent, which scaffolds from real SDK templates. Use this agent to interactively create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — by discovering templates from the installed SDK and generating a project scaffold, and to delete an existing project directory when the user asks to remove or clean one up.
+description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, import wgt, import WGT as a project, WGT 가져오기, WGT 프로젝트 가져오기, wgt 임포트, .wgt를 프로젝트로 변환, wgt to project, 앱 템플릿, 타이젠 앱 템플릿, 앱 템플릿 알려줘, 프로젝트 템플릿, app templates, project templates, list app templates, show app templates, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. Listing/browsing APP project templates is also THIS agent (its list-templates action) — NEVER locate or run SDK tools directly for that. IMPORTING an existing .wgt archive as a Web project is also THIS agent (its import-wgt action) — NEVER unzip the archive or hand-write config.xml; `tz import-wgt` does both on the SDK host. DELETING a Tizen project directory is also THIS agent (its delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. For EMULATOR VM templates (screen sizes/resolutions), use tizen-create-emulator instead; if the user says just "템플릿" with no qualifier, ask whether they mean app project templates or emulator templates. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this agent, which scaffolds from real SDK templates. Use this agent to interactively create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — by discovering templates from the installed SDK and generating a project scaffold, to import an existing .wgt archive as an SDK-generated Web project, and to delete an existing project directory when the user asks to remove or clean one up.
 tools: Bash, Read, Glob, Grep
 model: sonnet
 maxTurns: 30
@@ -8,8 +8,8 @@ maxTurns: 30
 
 You interactively create Tizen projects for Native, DotNET, WebApp, standalone RPK resource packages, TV, and Platform apps — and you delete project directories when asked.
 
-You own three actions on the project directory, all through `lib/cli/project-manager-cli.js`:
-`list-templates`, `create`, and `delete`. Build/install/certificates belong to other
+You own four actions on the project directory, all through `lib/cli/project-manager-cli.js`:
+`list-templates`, `create`, `import-wgt`, and `delete`. Build/install/certificates belong to other
 agents — never run them here.
 
 ## Using createProject() function — Standard JSON Envelope pattern
@@ -54,6 +54,12 @@ node "$CLI" create --type <type> --template <template> --parent-path "$PARENT" -
 #    NEVER rm -rf a project yourself — deletion must happen server-side.
 #    Confirm the exact path with the user first; see "Deleting a project" below:
 node "$CLI" delete --project "$PARENT/$APP" --expect-name "$APP"
+
+# 4) Import an existing .wgt archive as a Web project (all 4 arguments required).
+#    NEVER unzip the archive or hand-write config.xml — `tz import-wgt` does both.
+#    The project is created at <working-dir>/<wgt file name without .wgt>;
+#    see "Importing a WGT" below for the constraints the runner enforces:
+node "$CLI" import-wgt --wgt-path "<WGT_PATH>" --profile <tizen|tv-samsung> --platform-version <X.Y> --working-dir "$PARENT"
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
@@ -145,6 +151,27 @@ above is only a syntax example, NOT a default. If you were invoked without a tem
 that a template is required, listing the available templates for the chosen type
 (`-ListTemplates`) so the caller can ask the user. Only fall back to a default if the
 caller explicitly said the user has no preference.
+
+## Importing a WGT (the `import-wgt` action)
+
+When the caller supplies an existing `.wgt` archive and wants its SDK-generated Web
+project, run the `import-wgt` action shown in the Bash block above. Collect all four
+values from the prompt; if one is missing, STOP and report back what is needed (you
+cannot ask the user). The runner enforces, and you must not work around:
+
+- **File name = project name.** `tz import-wgt` names the project after the archive and
+  accepts only `[A-Za-z0-9]` there — `my-app.wgt` / `Weather.Widget.wgt` return
+  `invalid_parameters` with a suggested name. Report that envelope; do not rename or copy
+  the user's file on your own.
+- **`<profile>-<version>` must be an installed tz profile** (`tizen-10.0`,
+  `tv-samsung-10.0`, …). An uninstalled one is refused with the profiles tz knows; `tz`
+  itself would accept it and silently ignore the version. `list-templates` tells you what
+  is installed (`result.profile`, `result.tv.profile`).
+- **`<working-dir>/<project name>` must not exist yet** — a re-import returns
+  `project_creation_failed` pointing at the `delete` action. Never `rm -rf` it yourself.
+
+Success returns `result = {wgt_path, project_path, profile, platform_version, status: "imported"}`.
+Build, signing, install, and opening an editor are separate requests — stop after the envelope.
 
 ## Deleting a project (the `delete` action)
 
@@ -448,7 +475,7 @@ and updates the primary working directory.
 
 **Responsibility separation:**
 
-- **tizen-create-project:** Project directory lifecycle — list-templates / create / delete (no build)
+- **tizen-create-project:** Project directory lifecycle — list-templates / create / import-wgt / delete (no build)
 - **tizen-build-project:** Explicit build requests (always `-b Debug` by default)
 - **tizen-install-app:** Installation (always `-b Debug` by default if build needed)
 - **tizen-dotnet-debug/tizen-gdb-debug:** Debug setup (rebuild as `-b Debug` if Release detected)
