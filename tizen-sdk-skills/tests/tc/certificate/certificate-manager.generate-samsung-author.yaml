@@ -19,6 +19,7 @@ requires:
 # Left as draft.
 # NOTE (2026-09-23): capability samsung-account declared; issues a real certificate against a real
 # account — stays draft until an operator signs off on a run.
+# NOTE (2026-09-28): out of scope of the installer pass on this Windows host — stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "certificate-manager", "--action", "generate-samsung-author", "--identity", "jane@dev.com", "--password", "${FIXTURE_CERT_UNLOCK}", "--profile-name", "myProfile"]

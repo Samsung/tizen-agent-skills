@@ -198,7 +198,7 @@ DotNET 타입 템플릿으로 새 앱을 만들고, 앱 이름을 지정합니�
 | `launch_config` | VS Code `launch.json` 작성에 필요한 값 (launch 모드) |
 | `debug_command` | netcoredbg CLI 명령 (attach 모드, `powershell`·`cmd` 또는 `shell`) |
 
-> 💡 앱은 **DAP 클라이언트가 붙을 때까지 `Main()` 전에 정지**해 있습니다. 앱/DAP 서버/포워딩은 셋업 후에도 유지되므로 연결을 끊었다 다시 붙일 수 있습니다.
+> 💡 앱은 **DAP 클라이언트가 붙을 때까지 `Main()` 전에 정지**해 있습니다. 단, **VS Code 세션을 종료하면 앱과 DAP 서버가 함께 종료**됩니다(netcoredbg는 클라이언트가 끊기면 종료). sdb 포워딩만 남는데, 이 포워딩은 접속을 계속 받아 주기 때문에 그 상태로 다시 F5 하면 세션이 "시작"된 뒤 곧바로 끝납니다. `--project <dir>`를 넘기면 러너가 `.vscode/tasks.json`에 `tizen: netcoredbg launch` 태스크를 만들고 구성의 `preLaunchTask`로 연결하므로, F5마다 앱을 먼저 다시 띄워 종료 → F5가 그대로 동작합니다. 없으면 F5 전에 러너를 다시 실행해야 합니다.
 
 ---
 
@@ -278,7 +278,7 @@ attach 모드가 성공한 경우, envelope의 `debug_command`를 대화형 터�
 | 6 | 셋업 직후 앱 화면 | **아무것도 렌더링되지 않음** — `Main()` 전에 정지된 정상 상태 |
 | 7 | 8단계 F5 | VS Code가 연결되고 브레이크포인트에서 정지 |
 | 8 | Variables / Call Stack | 지역변수와 C# 콜스택이 심볼과 함께 표시 |
-| 9 | 연결 해제 후 재연결 | 앱·DAP 서버·포워딩이 유지되어 F5로 다시 붙을 수 있음 |
+| 9 | 종료 후 다시 F5 | `--project` 사용 시 `tizen: netcoredbg launch` preLaunchTask가 앱을 다시 띄우고 새 세션이 붙음; 없으면 두 번째 F5가 즉시 종료됨(disconnect 시 netcoredbg 종료) — 러너 재실행 필요 |
 
 ### 실패 경로 (에러 매핑)
 
@@ -306,7 +306,7 @@ node "$CLI" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711
 
 **Windows (cmd.exe / PowerShell):**
 ```
-dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js"
+dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & ver >nul
 node "<찾은-경로>" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711
 ```
 

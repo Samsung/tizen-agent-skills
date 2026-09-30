@@ -542,4 +542,28 @@ const ERROR_CODES = {
   },
 };
 
+/**
+ * Error codes of features that exist only in the internal repository live in
+ * a sibling file the public tree does not carry
+ * (scripts/publication/internal-only-paths.txt). Merge it when present; the
+ * core modules raising those categories are absent from the public tree too,
+ * so nothing dangles there. Only MODULE_NOT_FOUND for the file itself is
+ * swallowed — a present but broken file still fails loudly.
+ */
+function loadInternalErrorCodes() {
+  const id = "./error-codes.internal";
+  try {
+    return require(id);
+  } catch (e) {
+    if (
+      e &&
+      e.code === "MODULE_NOT_FOUND" &&
+      String(e.message).includes(`'${id}'`)
+    )
+      return {};
+    throw e;
+  }
+}
+Object.assign(ERROR_CODES, loadInternalErrorCodes());
+
 module.exports = { Envelope, ERROR_CODES };

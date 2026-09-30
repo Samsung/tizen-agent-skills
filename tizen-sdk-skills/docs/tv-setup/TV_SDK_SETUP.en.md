@@ -51,8 +51,10 @@ The base Tizen SDK consists of **121 packages** including:
 nohup bash "<installer.sh path>" > /tmp/tizen-sdk-install.log 2>&1 & \
 jobs -p
 
-# Poll every 25 seconds until STATUS=done
-sleep 25 && bash "<installer.sh path>" --status
+# Poll every 25 seconds until STATUS=done — increase the attempt number (#N) on every call
+# (Cline aborts after 5 consecutive identical calls); after 4 polls per turn that still say
+# running, tell the user and end the turn
+sleep 25 && echo "poll #1" && bash "<installer.sh path>" --status
 ```
 
 **Result:**
@@ -147,7 +149,11 @@ The installer automatically selects the fastest CDN mirror based on the system's
 | UTC-12 .. UTC-5  | Global    | `https://usa.sdk-dl.tizen.org/sdk/tizenstudio/official`       |
 | UTC-4 .. UTC-1   | Brazil    | `https://brazil.sdk-dl.tizen.org/sdk/tizenstudio/official`    |
 | UTC+0 .. UTC+4   | Official  | `https://download.tizen.org/sdk/tizenstudio/official`         |
-| UTC+5 .. UTC+12  | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+| UTC+5 .. UTC+8   | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+| UTC+9            | Official  | `https://download.tizen.org/sdk/tizenstudio/official`         |
+| UTC+10 .. UTC+12 | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+
+UTC+9 (Korea / Japan) is routed to the official server because `download.tizen.org` is hosted in AWS Seoul (ap-northeast-2), the closest origin for those regions.
 
 ## TV SDK Verification Methods
 

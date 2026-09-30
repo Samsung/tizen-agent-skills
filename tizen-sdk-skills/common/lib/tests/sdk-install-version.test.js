@@ -20,6 +20,9 @@
  *     reports the requested / newest installed version, never a made-up one
  *   - installSdkFromRepo(): same syntax check, before the URL is touched
  *   - installPlatform(): same syntax check for --platform-version
+ *   - downloadEmulatorPackage() / downloadMobilePlatform(): same syntax check
+ *     for --platform-version and --iot-headed-version, BEFORE the SDK lookup
+ *     (both used to splice the raw value into the installer command line)
  *   - shell safety: every accepted version passes shellUnsafeReason(); every
  *     UNSAFE_SHELL_CHARS character and non-ASCII digit is rejected
  *   - sdkInstallerFlags(): argument order / quoting for both script dialects,
@@ -54,6 +57,8 @@ const {
   installSdk,
   installSdkFromRepo,
   installPlatform,
+  downloadEmulatorPackage,
+  downloadMobilePlatform,
 } = require("../core/sdk");
 const { shellUnsafeReason } = require("../core/shell-safety");
 
@@ -513,8 +518,100 @@ console.error = () => {};
       );
     }
 
+    // --- downloadEmulatorPackage / downloadMobilePlatform: malformed version ----
+    // Regression: neither function validated --platform-version (or
+    // --iot-headed-version); the raw value went into `-PlatformVersion "<v>"`
+    // — a shell string in pkg mode, the suggested_fix command otherwise.
+    console.log(
+      "\n--- download-emulator-package / download-mobile-platform ---",
+    );
+    for (const bad of ["99.99.99", '10.0"; rm -rf /', "10.0 && whoami"]) {
+      const env = await downloadEmulatorPackage(bad);
+      check(
+        `download-emulator-package ${JSON.stringify(bad)} → failure`,
+        env.status,
+        "failure",
+      );
+      check(
+        `download-emulator-package ${JSON.stringify(bad)} → invalid_argument`,
+        env.errors[0].error_category,
+        "invalid_argument",
+      );
+      check(
+        `download-emulator-package ${JSON.stringify(bad)} → message quotes value + MAJOR.MINOR`,
+        env.errors[0].message.includes(`"${bad}"`) &&
+          env.errors[0].message.includes("MAJOR.MINOR"),
+        true,
+      );
+      check(
+        "download-emulator-package envelope keeps its own command name",
+        env.command,
+        "tizen-sdk download-emulator-package",
+      );
+    }
+    {
+      const env = await downloadMobilePlatform("10.0.1");
+      check(
+        "download-mobile-platform 10.0.1 → invalid_argument",
+        env.errors[0].error_category,
+        "invalid_argument",
+      );
+      check(
+        "download-mobile-platform envelope keeps its own command name",
+        env.command,
+        "tizen-sdk download-mobile-platform",
+      );
+    }
+    {
+      const env = await downloadMobilePlatform("10.0", true, '10.0"; whoami');
+      check(
+        "download-mobile-platform bad --iot-headed-version → failure",
+        env.status,
+        "failure",
+      );
+      check(
+        "download-mobile-platform bad --iot-headed-version → invalid_argument",
+        env.errors[0].error_category,
+        "invalid_argument",
+      );
+      check(
+        "download-mobile-platform bad --iot-headed-version → message names the option",
+        env.errors[0].message.includes("--iot-headed-version"),
+        true,
+      );
+    }
+    {
+      // The validator runs before readSdkPath(): with no SDK configured in the
+      // sandbox a VALID version must fail on the SDK check, not on syntax.
+      const env = await downloadEmulatorPackage("10.0");
+      check(
+        "download-emulator-package 10.0 (no SDK) → not a syntax error",
+        env.errors[0].error_category === "invalid_argument",
+        false,
+      );
+    }
+
     // --- source guard: version forwarded to the installer ------------------------
     console.log("\n--- source guard ---");
+    {
+      // Both download functions validate BEFORE touching the SDK path.
+      for (const fn of ["downloadEmulatorPackage", "downloadMobilePlatform"]) {
+        const fnSrc = fs.readFileSync(
+          path.resolve(__dirname, "../core/sdk.js"),
+          "utf-8",
+        );
+        const start = fnSrc.indexOf(`async function ${fn}(`);
+        const fnBody = fnSrc.slice(
+          start,
+          fnSrc.indexOf("readSdkPath()", start),
+        );
+        check(
+          `${fn} validates the version before readSdkPath()`,
+          fnBody.includes("validateTizenVersion("),
+          true,
+        );
+      }
+    }
     {
       const src = fs.readFileSync(
         path.resolve(__dirname, "../core/sdk.js"),

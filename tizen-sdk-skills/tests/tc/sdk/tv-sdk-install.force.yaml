@@ -3,7 +3,7 @@ id: tizen-sdk.tv-sdk-install.force
 plugin: tizen-sdk
 command: tv-sdk-install
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "tv-sdk-install --force returns success with packages array"
 
@@ -16,10 +16,18 @@ requires:
 # execution_error here. It also downloads into / reinstalls the host's real SDK. Needs a
 # host running the packaged CLI with network (capabilities sdk, net); not run in this pass.
 # --force reinstalls the TV extension.
+# NOTE (2026-09-28): runnable now. common/lib/core/sdk.js runsInstallerInline() also honours
+# TIZEN_SDK_INLINE_INSTALLER=1, and scripts/run-mutating-tier.mjs --with-installers runs phase
+# s2-sdk-installers with USERPROFILE/HOME pointed at a throwaway home (TIZEN_SDK_PATH removed), so the
+# install lands in <scratch>/home/tizen-sdk and the host's SDK is never touched. Still capabilities
+# sdk, net: ~10 GB from the repository. timeout_sec covers the download; the runner must never cut
+# the installer off mid-write (execFileSync kills node, not the PowerShell it spawned).
+# NOTE (2026-09-28): executed — scripts/run-mutating-tier.mjs --yes --with-installers --include-drafts, phase
+# s2-sdk-installers against the throwaway home (log: <scratch>/run.log). Passed → approved.
 lanes:
   cli:
     argv: ["tizen-sdk", "tv-sdk-install", "--force"]
-    timeout_sec: 600
+    timeout_sec: 1800
     expect:
       status: success
       jsonpath:

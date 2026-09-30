@@ -162,7 +162,7 @@ correspondence.
 | `create-emulator` | Device | Create a custom Tizen emulator VM |
 | `launch-emulator` | Device | Launch an existing emulator VM |
 | `emulator-manager` | Device | Full em-cli surface (create/delete/launch/list/modify/reset/capture) |
-| `device-manager` | Device | Find a connected device or stop emulators |
+| `device-manager` | Device | Find a connected device or stop emulators (problem reports go to `dlog-analyzer`) |
 | `install-app` | Device | Install (and optionally run) a .tpk/.wgt/.rpm |
 | `sdb-helper` | Device | Run sdb commands from natural-language requests |
 | `screenshot` | Device | Capture a screenshot from an emulator or device |
@@ -171,7 +171,7 @@ correspondence.
 | `gdb-debug` | Debug | Set up remote GDB debugging (Native apps) |
 | `dotnet-debug` | Debug | Set up remote netcoredbg debugging (.NET apps) |
 | `webapp-debug` | Debug | Set up remote Web app debugging via RWI/CDP |
-| `dlog-analyzer` | Debug | View/save/clear device logs (`log-dump`, `log-clear`), collect dlog, detect crashes/exceptions, suggest root causes |
+| `dlog-analyzer` | Debug | View/save/clear device logs (`log-dump`, `log-clear`), investigate symptoms (`investigate`, `probe`, `kernel`), collect dlog, detect crashes/exceptions, suggest root causes |
 | `playwright-test` | Test | Run/scaffold Playwright tests against a Tizen Web app |
 | `certificate-manager` | Certificate | Manage Tizen certificates and signing profiles |
 
@@ -284,7 +284,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-09-23 against v1.3.1. Every row can be re-measured with the
+Measured on 2026-09-30 against v1.4.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -295,12 +295,12 @@ or test suite is added.
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI commands | 35 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
-| Guard hooks | 3 PreToolUse scripts, 12 guard rules | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 72 files, ≈2,430 assertions | `node common/lib/tests/run-all.js` |
+| Guard hooks | 3 PreToolUse scripts, 13 guard rules | `common/hooks/` |
+| Unit tests (`common/lib/tests/`) | 80 files, ≈2,890 assertions | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 118 cases in 3 files | `cd vscode && npm test` |
-| Hook tests | 66 cases | `bash common/hooks/hooks.test.sh` |
-| Integration TCs (`tests/tc/`) | 286 TCs in 279 YAML files — safe 66 / mutating 79 / device 141; approved 264 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 212 Markdown files (`docs/` 91 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Hook tests | 122 cases | `bash common/hooks/hooks.test.sh` |
+| Integration TCs (`tests/tc/`) | 290 TCs in 283 YAML files — safe 69 / mutating 79 / device 142; approved 282 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| Documentation | 217 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
@@ -338,6 +338,7 @@ before the plugin moved to this repository are not republished here.
 **Architecture & reference**
 
 - [Tizen SDK Skills Detailed Documentation](docs/README.en.md)
+- [Architecture Diagrams](docs/ARCHITECTURE_DIAGRAMS.en.md) — the whole repository in 10 Mermaid diagrams
 - [Skills Reference](docs/SKILLS_REFERENCE.en.md)
 - [Skills ↔ Commands Mapping](docs/SKILLS_COMMANDS_MAPPING.en.md)
 - [SDK Commands Architecture](docs/SDK_COMMANDS_ARCHITECTURE.en.md)

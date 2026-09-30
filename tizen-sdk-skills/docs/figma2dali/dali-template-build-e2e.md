@@ -134,7 +134,7 @@ tizen-cli tizen-sdk create-project \
   --type platform \
   --template dali_demo \
   --parent-path /home/user/tizen-apps \
-  --name dali-demo
+  --name MyDaliDemoApp
 ```
 
 | 옵션                  | 필수    | 설명                                                      |
@@ -147,7 +147,7 @@ tizen-cli tizen-sdk create-project \
 **자연어 (Cline/Claude Code):**
 
 ```
-플랫폼 dali_demo 템플릿으로 dali-demo 앱 만들어줘
+플랫폼 dali_demo 템플릿으로 MyDaliDemoApp 앱 만들어줘
 ```
 
 **CLI 러너 직접 실행:**
@@ -156,7 +156,7 @@ tizen-cli tizen-sdk create-project \
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" create --type platform --template dali_demo --parent-path /home/user/tizen-apps --name dali-demo
+node "$CLI" create --type platform --template dali_demo --parent-path /home/user/tizen-apps --name MyDaliDemoApp
 ```
 
 **응답 예시:**
@@ -165,10 +165,10 @@ node "$CLI" create --type platform --template dali_demo --parent-path /home/user
 {
   "status": "success",
   "result": {
-    "project_name": "dali-demo",
+    "project_name": "MyDaliDemoApp",
     "project_type": "platform",
     "template_name": "dali_demo",
-    "project_path": "/home/user/tizen-apps/dali-demo",
+    "project_path": "/home/user/tizen-apps/MyDaliDemoApp",
     "status": "created"
   },
   "command": "tizen-sdk create-project",
@@ -179,17 +179,17 @@ node "$CLI" create --type platform --template dali_demo --parent-path /home/user
 ### 생성된 프로젝트 구조
 
 ```
-dali-demo/
+MyDaliDemoApp/
 ├── CMakeLists.txt              # CMake 빌드 설정 (C++17 포함)
 ├── tizen-manifest.xml          # Tizen 패키지 매니페스트
 ├── packaging/
-│   └── dali-demo.spec          # RPM spec 파일 (GBS 빌드에 사용)
+│   └── MyDaliDemoApp.spec          # RPM spec 파일 (GBS 빌드에 사용)
 ├── src/
 │   └── main.cpp                # DALi 데모 소스 코드
 └── shared/                     # 공유 리소스 (선택)
 ```
 
-> **템플릿 이름 자동 치환:** `dali_demo` 템플릿의 기본 이름인 `dali-demo`는 CMakeLists.txt, `.spec` 파일 등에 하드코딩되어 있습니다. 프로젝트 이름을 `dali-demo`가 아닌 다른 이름으로 지정하면, 생성 스크립트가 자동으로 템플릿 이름을 사용자가 지정한 프로젝트 이름으로 치환합니다. 예: `--name my-dali-app` → 빌드 산출물이 `my-dali-app-1.0.0-1.x86_64.rpm`이 됩니다.
+> **템플릿 이름 자동 치환:** `dali_demo` 템플릿의 기본 이름인 `dali-demo`는 CMakeLists.txt, `.spec` 파일 등에 하드코딩되어 있습니다. 이 기본 이름은 영문/숫자가 8자뿐이라 앱 이름 규칙(영문/숫자 10자 이상 — Tizen 패키지 ID가 10자이기 때문)에 걸려 `create-project`가 거절하므로, 항상 `MyDaliDemoApp`처럼 10자 이상인 이름을 직접 지정합니다. 그러면 생성 스크립트가 템플릿 이름을 지정한 프로젝트 이름으로 자동 치환합니다. 예: `--name MyDaliDemoApp` → 빌드 산출물이 `MyDaliDemoApp-1.0.0-1.x86_64.rpm`, 디바이스 바이너리가 `/usr/bin/MyDaliDemoApp`이 됩니다.
 
 ### C++17 설정 확인
 
@@ -211,7 +211,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 **tizen-cli 명령:**
 
 ```bash
-tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/dali-demo
+tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/MyDaliDemoApp
 ```
 
 | 옵션                  | 필수    | 기본값   | 설명                                        |
@@ -223,7 +223,7 @@ tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/dali-demo
 **자연어 (Cline/Claude Code):**
 
 ```
-dali-demo 프로젝트 빌드해줘
+MyDaliDemoApp 프로젝트 빌드해줘
 ```
 
 **CLI 러너 직접 실행:**
@@ -232,7 +232,7 @@ dali-demo 프로젝트 빌드해줘
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
+node "$CLI" build --project "/home/user/tizen-apps/MyDaliDemoApp" --build-type Debug
 ```
 
 **응답 예시 (성공):**
@@ -243,12 +243,12 @@ node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
   "result": {
     "artifacts": [
       {
-        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm",
+        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm",
         "format": ".rpm",
         "size_bytes": 11579
       },
       {
-        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-debuginfo-1.0.0-1.x86_64.rpm",
+        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-debuginfo-1.0.0-1.x86_64.rpm",
         "format": ".rpm",
         "size_bytes": 94539
       }
@@ -286,7 +286,7 @@ node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
       "message": "Build failed (exit 1).\n\nBuild errors:\n  .../main.cpp:42:10: fatal error: dali/dali.h: No such file or directory\n  ...\n\nFull log: /tmp/tizen-build-1785717621350.log",
       "details": [
         ".../main.cpp:42:10: fatal error: dali/dali.h: No such file or directory",
-        "make[2]: *** [CMakeFiles/dali-demo.dir/build.make:76: main.o] Error 1",
+        "make[2]: *** [CMakeFiles/MyDaliDemoApp.dir/build.make:76: main.o] Error 1",
         "error: Bad exit status from /var/tmp/rpm-tmp.k3Jd91 (%build)",
         "gbs:error: Local build failed"
       ]
@@ -301,15 +301,15 @@ node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
 
 ```
 ~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/
-├── dali-demo-1.0.0-1.x86_64.rpm              # 메인 패키지
-├── dali-demo-debuginfo-1.0.0-1.x86_64.rpm     # 디버그 정보
-└── dali-demo-debugsource-1.0.0-1.x86_64.rpm   # 디버그 소스
+├── MyDaliDemoApp-1.0.0-1.x86_64.rpm              # 메인 패키지
+├── MyDaliDemoApp-debuginfo-1.0.0-1.x86_64.rpm     # 디버그 정보
+└── MyDaliDemoApp-debugsource-1.0.0-1.x86_64.rpm   # 디버그 소스
 
 ~/GBS-ROOT/local/repos/tizen/x86_64/SRPMS/
-└── dali-demo-1.0.0-1.src.rpm                  # 소스 RPM
+└── MyDaliDemoApp-1.0.0-1.src.rpm                  # 소스 RPM
 ```
 
-> 빌드 산출물 경로는 다음 단계에서 사용됩니다: `~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm`
+> 빌드 산출물 경로는 다음 단계에서 사용됩니다: `~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm`
 
 ---
 
@@ -366,7 +366,7 @@ node "$CLI"
 
 ```bash
 tizen-cli tizen-sdk install-app \
-  --package /home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm \
+  --package /home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm \
   --run
 ```
 
@@ -378,7 +378,7 @@ tizen-cli tizen-sdk install-app \
 **자연어 (Cline/Claude Code):**
 
 ```
-dali-demo RPM 에뮬레이터에 설치하고 실행해줘
+MyDaliDemoApp RPM 에뮬레이터에 설치하고 실행해줘
 ```
 
 **CLI 러너 직접 실행:**
@@ -387,7 +387,7 @@ dali-demo RPM 에뮬레이터에 설치하고 실행해줘
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm" --device-serial emulator-26101 --run
+node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm" --device-serial emulator-26101 --run
 ```
 
 **응답 예시:**
@@ -396,7 +396,7 @@ node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS
 {
   "status": "success",
   "result": {
-    "package_path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm",
+    "package_path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm",
     "device_serial": "emulator-26101",
     "app_id": null,
     "installation_status": "completed",
@@ -407,7 +407,7 @@ node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS
 }
 ```
 
-> `app_id`가 `null`인 것은 정상입니다 — Platform (RPM) 앱은 `app_launcher`에 등록되지 않으므로 app_id가 없습니다. 대신 `/usr/bin/dali-demo` 바이너리로 직접 실행됩니다.
+> `app_id`가 `null`인 것은 정상입니다 — Platform (RPM) 앱은 `app_launcher`에 등록되지 않으므로 app_id가 없습니다. 대신 `/usr/bin/MyDaliDemoApp` 바이너리로 직접 실행됩니다.
 
 ### RPM 앱 실행 환경
 
@@ -420,7 +420,7 @@ RPM 플랫폼 앱은 `sdb shell`을 통해 **`owner` 사용자(uid 5001)로 실�
 | `ELM_ENGINE`               | `wayland_egl`                  | EFL 렌더링 엔진              |
 | `DBUS_SESSION_BUS_ADDRESS` | `unix:path=/run/user/5001/bus` | DBus 세션 버스 주소          |
 
-`setsid`를 사용하여 앱 프로세스를 새 세션으로 분리하며, `sdb shell` 종료 후에도 프로세스가 유지됩니다. 실행 후 `pgrep`으로 프로세스 생존을 폴링 검증(1초 간격, 최대 5회)하며, 출력은 `/tmp/dali-demo.log`로 리다이렉트됩니다.
+`setsid`를 사용하여 앱 프로세스를 새 세션으로 분리하며, `sdb shell` 종료 후에도 프로세스가 유지됩니다. 실행 후 `pgrep`으로 프로세스 생존을 폴링 검증(1초 간격, 최대 5회)하며, 출력은 `/tmp/MyDaliDemoApp.log`로 리다이렉트됩니다.
 
 ### 앱 재실행
 
@@ -428,7 +428,7 @@ Platform 앱은 `app_launcher`에 아이콘이 없어 앱 종료 후 디바이�
 
 ```bash
 # 앱 재실행 (RPM 재설치 불필요)
-~/bin/run-dali-demo.sh
+~/bin/run-MyDaliDemoApp.sh
 ```
 
 ---
@@ -510,17 +510,17 @@ tizen-cli tizen-sdk list-templates --type platform
 # 2. 프로젝트 생성
 tizen-cli tizen-sdk create-project \
   --type platform --template dali_demo \
-  --parent-path /home/user/tizen-apps --name dali-demo
+  --parent-path /home/user/tizen-apps --name MyDaliDemoApp
 
 # 3. GBS 빌드
-tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/dali-demo
+tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/MyDaliDemoApp
 
 # 4. 디바이스/에뮬레이터 준비
 tizen-cli tizen-sdk device-manager
 
 # 5. RPM 설치 및 실행
 tizen-cli tizen-sdk install-app \
-  --package ~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm \
+  --package ~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm \
   --run
 
 # 6. 스크린샷 캡처
@@ -531,10 +531,10 @@ tizen-cli tizen-sdk screenshot
 
 ```
 1) 플랫폼 템플릿 목록 보여줘
-2) 플랫폼 dali_demo 템플릿으로 dali-demo 앱 만들어줘
-3) dali-demo 프로젝트 빌드해줘
+2) 플랫폼 dali_demo 템플릿으로 MyDaliDemoApp 앱 만들어줘
+3) MyDaliDemoApp 프로젝트 빌드해줘
 4) 디바이스 연결해줘
-5) dali-demo RPM 에뮬레이터에 설치하고 실행해줘
+5) MyDaliDemoApp RPM 에뮬레이터에 설치하고 실행해줘
 6) 에뮬레이터 스크린샷 찍어줘
 ```
 
@@ -571,7 +571,7 @@ tizen-cli tizen-sdk screenshot
 | eldbus 연결 에러 무한 발생 | `DBUS_SESSION_BUS_ADDRESS` 미설정 | 최신 버전에서 자동 설정 |
 | Wayland 디스플레이 연결 실패 | `WAYLAND_DISPLAY`, `XDG_RUNTIME_DIR` 미설정 | 최신 버전에서 자동 설정 |
 
-> 실행 실패 시 envelope `warnings`에 `/tmp/dali-demo.log`의 마지막 20줄(`app-log:` 접두사)이 포함됩니다.
+> 실행 실패 시 envelope `warnings`에 `/tmp/MyDaliDemoApp.log`의 마지막 20줄(`app-log:` 접두사)이 포함됩니다.
 
 ### 스크린샷 관련
 

@@ -273,7 +273,7 @@ node "$CLI" org.example.myapp "/home/me/ws/MyApp/Debug/tpk/bin/myapp" launch "ma
 
 **Windows (cmd.exe / PowerShell):**
 ```
-dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js"
+dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*gdb-debug-cli.js" 2>nul & ver >nul
 node "<found-path>" org.example.myapp "C:/ws/MyApp/Debug/tpk/bin/myapp" launch "main,service_app_create" 5039
 ```
 

@@ -39,10 +39,17 @@ node "$CLI" push "<LOCAL_PATH>" "<REMOTE_PATH>" [deviceSerial] [--with-utf8]
 node "$CLI" pull - "<REMOTE_PATH>" [LOCAL_PATH] [deviceSerial] [--with-utf8]
 #   arg 1 (required) - direction: "push" or "pull"
 #   arg 2 (push: required, pull: use "-") - local (host) file/directory path
-#   arg 3 (required) - remote (device) file/directory path
+#   arg 3 (required) - remote (device) file/directory path — always POSIX ("/opt/usr/apps/x")
 #   arg 4 (optional) - device serial; omit to auto-select the single connected device
 #   --with-utf8 (optional flag) - handle UTF-8 encoded paths
 ```
+
+> **Windows Git Bash:** MSYS rewrites a leading-slash argument before `node` sees it —
+> `"/opt/usr/apps/x"` arrives as `C:/Program Files/Git/opt/usr/apps/x`. The runner detects the
+> Git / msys64 install root (`EXEPATH`) and restores `/opt/usr/apps/x`, reporting it in
+> `warnings`. Pass the device path as-is; do **not** write `//opt/...` and do **not** set
+> `MSYS_NO_PATHCONV=1` (that would also break the `$CLI` path). A genuine Windows path in the
+> remote slot is refused with `invalid_parameters`.
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
@@ -90,7 +97,8 @@ A large file or directory transfer can take minutes. Under Codex run it with **`
 | `multiple_devices` | Ask the user which serial to target, retry once with arg 4 |
 | `io_error` mentioning sdb not found | SDK may not be installed → send to `tizen-sdk-install` |
 | `io_error` (anything else) | Show `errors[0].details` (raw sdb output). Re-run the SAME command at most ONCE; if it fails again, report and stop. |
-| `invalid_parameters` (other) | Check direction is push/pull, paths are provided. Windows paths like `C:\logs\` are accepted as-is (backslashes are normalized) — do not rewrite them. |
+| `invalid_parameters` "Remote path must be a POSIX path on the device" | The remote slot received a Windows path. If you passed `/opt/...` from Git Bash, MSYS converted it under an install root the runner did not recognise (the message names `EXEPATH`) — re-run with `//opt/...` or from PowerShell. Otherwise the path is simply wrong; ask the user for the device path. |
+| `invalid_parameters` (other) | Check direction is push/pull, paths are provided. Windows **local** paths like `C:\logs\` are accepted as-is (backslashes are normalized) — do not rewrite them. |
 
 **Retry budget:** one re-run per distinct cause, never more. A file that is not
 there will not appear because you ask again.

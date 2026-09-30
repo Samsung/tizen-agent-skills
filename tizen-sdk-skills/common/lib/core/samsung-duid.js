@@ -41,9 +41,15 @@
  */
 
 const fs = require("fs");
-const { execSync } = require("child_process");
+const { execFileSync } = require("child_process");
 
-const { resolveSdbBinary } = require("./sdb");
+const {
+  resolveSdbBinary,
+  runSdb,
+  parseDevices,
+  onlineDevices,
+} = require("./sdb");
+const { isValidSerial } = require("./shell-safety");
 
 /** Maximum number of DUIDs allowed in a single distributor certificate request. */
 const MAX_DUIDS = 50;
@@ -317,12 +323,47 @@ function selectDuidCommand(capability) {
  * @throws {Error} if the command fails
  */
 function runDeviceShellCommand(sdbPath, serial, shellCmd, timeout) {
-  const cmd = `"${sdbPath}" -s "${serial}" shell "${shellCmd}"`;
-  return execSync(cmd, {
+  // argv array — no host shell, so neither the serial nor the command needs
+  // quoting here (the command string itself is interpreted by the DEVICE
+  // shell, exactly as `sdb shell "<cmd>"` would).
+  return execFileSync(sdbPath, ["-s", serial, "shell", shellCmd], {
     encoding: "utf-8",
     timeout: timeout || 15000,
     windowsHide: true,
   });
+}
+
+/** `sdb -s <serial> capability`, argv style (see runDeviceShellCommand). */
+function queryCapability(sdbPath, serial) {
+  return execFileSync(sdbPath, ["-s", serial, "capability"], {
+    encoding: "utf-8",
+    timeout: 15000,
+    windowsHide: true,
+  });
+}
+
+/**
+ * Online devices from `sdb devices`, via the shared sdb plumbing: the
+ * temp-file path survives a cold sdb server (a piped first call hangs until
+ * the timeout — see sdb.js), parseDevices() understands the 3-column output,
+ * and onlineDevices() drops offline/unauthorized entries that the previous
+ * hand-rolled parser picked as "the first device". Serials are screened so
+ * nothing odd from the sdb output reaches a command line.
+ *
+ * @param {string} sdbPath
+ * @returns {Array<{serial: string, state: string}>}
+ * @throws {Error} when `sdb devices` itself fails
+ */
+function listOnlineDevices(sdbPath) {
+  let output;
+  try {
+    output = runSdb(sdbPath, "devices", { viaTempFile: true });
+  } catch (err) {
+    throw new Error(`Failed to list devices: ${err.message}`);
+  }
+  return onlineDevices(parseDevices(output)).filter((d) =>
+    isValidSerial(d.serial),
+  );
 }
 
 /**
@@ -350,55 +391,31 @@ function acquireDuidFromDevice(serial) {
 
   const sdbPath = resolved.sdbPath;
 
-  // Serials are interpolated into shell command lines below — reject anything
-  // that isn't a plain serial (also blocks shell metacharacters)
-  if (serial && !/^[A-Za-z0-9._:-]+$/.test(serial)) {
+  // Same serial screen as every other sdb caller (shell-safety.js).
+  if (serial && !isValidSerial(serial)) {
     throw new Error(`Invalid device serial: ${serial}`);
   }
 
-  // If no serial given, list devices and pick the first one
+  // If no serial given, pick the first ONLINE device (offline / unauthorized
+  // entries used to be picked blindly and then failed on `capability`).
   let targetSerial = serial;
   let deviceName = "";
 
   if (!targetSerial) {
-    let devicesOutput;
-    try {
-      devicesOutput = execSync(`"${sdbPath}" devices`, {
-        encoding: "utf-8",
-        timeout: 10000,
-        windowsHide: true,
-      });
-    } catch (err) {
-      throw new Error(`Failed to list devices: ${err.message}`);
-    }
-
-    const lines = devicesOutput.split(/\r?\n/).filter((l) => l.trim());
-    // Skip header line
-    const deviceLines = lines.filter((l) => !l.startsWith("List of devices"));
-
-    if (deviceLines.length === 0) {
+    const devices = listOnlineDevices(sdbPath);
+    if (devices.length === 0) {
       throw new Error(
         "No connected devices found. Connect a device or start an emulator.",
       );
     }
-
-    // Parse first device line: "serial\tdevice"
-    const firstLine = deviceLines[0].split(/\s+/);
-    targetSerial = firstLine[0];
-    deviceName = firstLine[1] || "unknown";
+    targetSerial = devices[0].serial;
+    deviceName = devices[0].state;
   }
 
   // Query device capabilities
   let capabilityOutput;
   try {
-    capabilityOutput = execSync(
-      `"${sdbPath}" -s "${targetSerial}" capability`,
-      {
-        encoding: "utf-8",
-        timeout: 15000,
-        windowsHide: true,
-      },
-    );
+    capabilityOutput = queryCapability(sdbPath, targetSerial);
   } catch (err) {
     throw new Error(
       `Failed to get device capability for ${targetSerial}: ${err.message}`,
@@ -454,37 +471,15 @@ function acquireDuidsFromAllDevices() {
 
   const sdbPath = resolved.sdbPath;
 
-  let devicesOutput;
-  try {
-    devicesOutput = execSync(`"${sdbPath}" devices`, {
-      encoding: "utf-8",
-      timeout: 10000,
-      windowsHide: true,
-    });
-  } catch (err) {
-    throw new Error(`Failed to list devices: ${err.message}`);
-  }
-
-  const lines = devicesOutput.split(/\r?\n/).filter((l) => l.trim());
-  const deviceLines = lines.filter((l) => !l.startsWith("List of devices"));
-
   const results = [];
   const errors = [];
 
-  for (const line of deviceLines) {
-    const parts = line.split(/\s+/);
-    const serial = parts[0];
-    const deviceName = parts[1] || "unknown";
-
+  for (const { serial, state: deviceName } of listOnlineDevices(sdbPath)) {
     try {
       // Query device capabilities
       let capabilityOutput;
       try {
-        capabilityOutput = execSync(`"${sdbPath}" -s "${serial}" capability`, {
-          encoding: "utf-8",
-          timeout: 15000,
-          windowsHide: true,
-        });
+        capabilityOutput = queryCapability(sdbPath, serial);
       } catch (err) {
         errors.push({
           serial,

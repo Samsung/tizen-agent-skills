@@ -109,7 +109,11 @@ tizen-cli tizen-sdk dotnet-setup --force
 tizen-cli tizen-sdk dotnet-setup --workload-version 10.0.123
 tizen-cli tizen-sdk dotnet-setup --no-install-sdk    # SDK가 없어도 자동 설치하지 않음
 tizen-cli tizen-sdk dotnet-setup --sdk-channel 9.0   # 자동 설치 채널 (기본 8.0)
+tizen-cli tizen-sdk dotnet-setup --dotnet-root "C:\Program Files\dotnet"   # 이 SDK를 사용 (탐색 생략)
+tizen-cli tizen-sdk dotnet-setup --persist-env       # Tizen 확장 번들 dotnet도 사용자 환경에 영구 등록
 ```
+
+> **dotnet 선택과 환경변수 영구 저장 정책.** `dotnet`이 PATH에 없으면 러너가 설치된 SDK를 `DOTNET_ROOT` → 공식 설치 위치(`C:\Program Files\dotnet`, `%LOCALAPPDATA%\Microsoft\dotnet`, `~\.dotnet`) → Tizen 확장 번들(`…\sdktools\dotnet`) 순으로 순위를 매겨 고릅니다. 공식 위치의 SDK(또는 `--dotnet-root`로 지정한 SDK)는 User `DOTNET_ROOT`/`PATH`에 영구 등록되지만, 확장 번들 dotnet은 **이번 실행에서만** 사용됩니다 — 확장 업데이트로 경로가 사라지면 `DOTNET_ROOT`가 dangling 상태로 남기 때문입니다. 번들 dotnet을 그래도 영구 등록하려면 `--persist-env`를 붙이세요. 이미 dangling인 `DOTNET_ROOT`가 있으면 경고와 함께 정리 명령을 안내합니다. 결과 envelope의 `result.dotnet_candidates`에 발견된 SDK 전부가, `result.persisted_env`에 이번 실행이 기록한 값이 담깁니다.
 
 #### 방법 C: 수동 설정 (단계별)
 
@@ -172,10 +176,14 @@ powershell -ExecutionPolicy Bypass -File `
   "...\tizen-dotnet-setup.ps1" -NoInstallSdk
 powershell -ExecutionPolicy Bypass -File `
   "...\tizen-dotnet-setup.ps1" -SdkChannel "9.0"
+powershell -ExecutionPolicy Bypass -File `
+  "...\tizen-dotnet-setup.ps1" -DotnetRoot "C:\Program Files\dotnet"
+powershell -ExecutionPolicy Bypass -File `
+  "...\tizen-dotnet-setup.ps1" -PersistEnv
 ```
 
 **스크립트 자동 실행 내용:**
-1. .NET SDK 감지 — 어디에도 없으면 `%LOCALAPPDATA%\Microsoft\dotnet`에 user-scope로 자동 설치 (관리자 권한 불필요; `-NoInstallSdk`로 건너뜀)
+1. .NET SDK 감지 — PATH에 없으면 설치된 SDK를 순위대로(`DOTNET_ROOT` → 공식 위치 → Tizen 확장 번들) 골라 사용하고, 공식 위치면 User `DOTNET_ROOT`/`PATH`에 영구 등록 (번들 dotnet은 `-PersistEnv`를 줄 때만). 어디에도 없으면 `%LOCALAPPDATA%\Microsoft\dotnet`에 user-scope로 자동 설치 (관리자 권한 불필요; `-NoInstallSdk`로 건너뜀)
 2. Samsung workload-install.ps1 실행
 3. 워크로드 설치 검증
 4. 문제가 있으면 `[DIAG]` 정보 출력
@@ -208,8 +216,12 @@ tizen-cli tizen-sdk dotnet-setup
 tizen-cli tizen-sdk dotnet-setup --force
 tizen-cli tizen-sdk dotnet-setup --no-install-sdk    # SDK가 없어도 자동 설치하지 않음
 tizen-cli tizen-sdk dotnet-setup --sdk-channel 9.0   # 자동 설치 채널 (기본 8.0)
+tizen-cli tizen-sdk dotnet-setup --dotnet-root /usr/share/dotnet   # 이 SDK를 사용 (탐색 생략)
+tizen-cli tizen-sdk dotnet-setup --persist-env       # Tizen 확장 번들 dotnet도 ~/.bashrc에 영구 등록
 ```
 
+> `dotnet`이 PATH에 없으면 설치된 SDK를 `DOTNET_ROOT` → 공식 위치(`~/.dotnet`, `/usr/share/dotnet`, brew libexec 등) → Tizen 확장 번들(`…/sdktools/dotnet`) 순으로 골라 씁니다. 공식 위치의 SDK(또는 `--dotnet-root`)는 `~/.local/bin/dotnet` 심볼릭 링크와 `~/.bashrc` export 블록으로 영구 등록되고, 번들 dotnet은 `--persist-env`를 줄 때만 등록됩니다 (확장 업데이트로 경로가 사라지면 `DOTNET_ROOT`가 dangling 상태로 남기 때문). 기존 `~/.bashrc` 블록은 건너뛰지 않고 **교체**되므로 오래된 경로가 남지 않습니다.
+>
 > .NET SDK가 어디에도 없으면 러너가 공식 dotnet-install.sh로 **`~/.dotnet`에 user-scope 자동 설치**(sudo 불필요)한 뒤 워크로드 설치를 계속합니다. `~/.dotnet`은 사용자 소유라 워크로드 단계에서도 sudo가 필요 없습니다.
 
 #### 방법 C: 수동 설정 (단계별)
@@ -270,10 +282,12 @@ bash "...tizen-dotnet-setup.sh" --force
 bash "...tizen-dotnet-setup.sh" --version "10.0.123"
 bash "...tizen-dotnet-setup.sh" --no-install-sdk
 bash "...tizen-dotnet-setup.sh" --sdk-channel "9.0"
+bash "...tizen-dotnet-setup.sh" --dotnet-root /usr/share/dotnet
+bash "...tizen-dotnet-setup.sh" --persist-env
 ```
 
 **스크립트 자동 실행 내용:**
-1. .NET SDK 감지 — 어디에도 없으면 `~/.dotnet`에 user-scope로 자동 설치 (sudo 불필요; `--no-install-sdk`로 건너뜀)
+1. .NET SDK 감지 — PATH에 없으면 설치된 SDK를 순위대로(`DOTNET_ROOT` → 공식 위치 → Tizen 확장 번들) 골라 사용하고, 공식 위치면 `~/.local/bin` 링크 + `~/.bashrc`에 영구 등록 (번들 dotnet은 `--persist-env`를 줄 때만). 어디에도 없으면 `~/.dotnet`에 user-scope로 자동 설치 (sudo 불필요; `--no-install-sdk`로 건너뜀)
 2. Samsung workload-install.sh 실행
 3. 워크로드 설치 검증
 4. 문제가 있으면 `[DIAG]` 정보 출력
@@ -547,7 +561,7 @@ tizen-cli tizen-sdk create-project \
   --type dotnet \
   --template <위에서 조회한 템플릿 이름> \
   --parent-path ./projects \
-  --name MyApp
+  --name MyTizenDotnetApp
 ```
 
 `--type`, `--template`, `--parent-path`, `--name`은 모두 **필수**입니다. 앱 폴더는 `--parent-path` 안에 `--name` 이름으로 생성됩니다.

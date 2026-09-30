@@ -9,6 +9,510 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-09-30
+
+`dotnet-setup` picks the .NET SDK by where it lives and gains `--dotnet-root` / `--persist-env`;
+`dotnet-debug --project` writes a working `.vscode/launch.json` + `tasks.json`; `sdk-install` sends
+UTC+9 hosts to `download.tizen.org`; `dlog-analyzer` gains the analyzer's v0.1.3+ subcommands
+(`investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `app-log`, `device-profile`) with 0.2.1a0
+binaries for Linux, Windows and macOS, and symptom reports ("CPU at 300 %, video does not play") now
+reach it and follow its evidence flow (skill text, hook rules 17–19, prompt TC). Four security fixes
+(installer version screens, certificate-password redaction, loopback-only OAuth callback, hook-adapter
+path extraction), a publication toolchain that keeps internal-only features out of the public tree,
+Cline-safe install polling, and fixes across `sdb-helper`, `file-transfer`, `install-rootstrap`,
+`download-mobile-platform`, `download-emulator-package`, `create-project` and the Windows installer
+path handling. Test suite: 290 TCs in 283 files (282 approved, 8 draft); the installer phases of the
+mutating tier run against a throwaway home.
+
+### Added
+
+- **`dotnet-setup --dotnet-root <dir>` and `--persist-env`** (`tizen-dotnet-setup.ps1` `-DotnetRoot` /
+  `-PersistEnv`, `.sh`, `dotnet-setup-cli.js`, `tizen-cli tizen-sdk dotnet-setup`). `--dotnet-root` pins the
+  .NET SDK to use (the directory holding `dotnet` and `sdk/`) instead of discovering one; the runner
+  rejects a root with no dotnet binary as `invalid_parameters` before the script runs. `--persist-env`
+  opts a Tizen-extension-bundled dotnet into the persistent wiring described under Changed.
+  The success envelope gains `result.dotnet_candidates` (every SDK found: tier, version, whether the
+  Tizen workload is recorded, which one was used), `result.env_dotnet_root`, `result.dangling_dotnet_root`
+  and `result.persisted_env` (what this run wrote, `null` when nothing).
+- **`TIZEN_SDK_INLINE_INSTALLER=1`** (`runsInstallerInline()` in `common/lib/core/sdk.js`): the nine
+  installer branches (`sdk-install`, `sdk-install-custom-repo`, `tv-sdk-install`, `tv-sdk-install-from-zip`,
+  `update-package`, `platform-install`, `download-emulator-package`, `download-mobile-platform`,
+  `install-rootstrap`) ran inline only inside the pkg-compiled tizen-cli and handed the installer back as
+  `suggested_fix` everywhere else. The env toggle makes them run inline under `node tizen-sdk.js` too;
+  the default behaviour is unchanged (`common/lib/tests/inline-installer.test.js`).
+- **Integration suite: installer phases** `s2-sdk-installers` / `s3-dotnet-workload` in
+  `tests/policy/mutating-run-order.yaml`, run by `scripts/run-mutating-tier.mjs --with-installers`
+  (skipped by default). s2 installs a complete SDK into a throwaway home (`USERPROFILE`/`HOME`
+  redirected, `TIZEN_SDK_PATH` dropped), snapshots and restores the Windows User `Path` /
+  `TIZEN_SDK_PATH` that `tizen-sdk-install.ps1` rewrites (first teardown step, after stopping any
+  installer PowerShell that outlived its runner; a snapshot missing either key is refused because
+  `$null` would delete the variable; `--restore-user-env=<file>` redoes the restore after a killed
+  run), refuses to start without `LongPathsEnabled=1` (the installer would block on a UAC prompt) or
+  15 GB free, kills the runner's whole process tree on Ctrl+C, and deletes the scratch SDK afterwards
+  (`--keep-scratch-sdk`) — only as exactly `<scratch>/home` carrying the ownership marker it wrote
+  (`scratchHomeRemovable()`, unit-tested in `tests/scripts/runner-helpers.test.mjs`). `prepare-device-fixtures.mjs --only=rootstrap`
+  builds the `${FIXTURE_ROOTSTRAP_ZIP}` fixture for `install-rootstrap.happy`.
+  `build-project.compiler-flags` now asserts that an unsupported `--cflags` is rejected with
+  `invalid_argument` instead of pretending a flag passthrough exists. First promotion run: 15 of
+  the 22 remaining drafts approved (264 → 279 of 286); `download-mobile-platform.*` moved from
+  7.5 to 7.0 because the mirror no longer lists MOBILE-7.5. The 7 left need a Samsung account,
+  a Linux GBS host or a LAN device.
+
+- **Internal-only content can be left out of the public tree** (`scripts/publication/`).
+  Features that depend on Samsung-internal services now live behind three mechanisms so the
+  publication runbook (`_repo-root/UPLOAD.md`) can drop them without hand edits: their files are
+  listed in `internal-only-paths.txt` and the loaders tolerate their absence
+  (`sdk-commands.js internalCommands()`, `envelope.js loadInternalErrorCodes()` merging the new
+  `error-codes.internal.js`, and `tizen-cli/src/command-specs/internal-specs.ts`, which loads
+  `command-specs/internal/` with `require()` while the esbuild `internal-only` plugin marks a
+  missing directory — or every one under `TIZEN_PUBLIC_BUILD=1` — as external); prose about
+  them in published files sits between `internal-only:begin` / `internal-only:end` markers;
+  and `internal-only.js --check` (CI) fails when a listed path is missing, a fence is unbalanced
+  or an internal term appears outside a fence. `assemble-public-tree.js <dest>` copies the tree
+  without those paths, drops their command names from `tizen-cli/plugin.json`, strips the fences
+  and refuses to finish while any term remains. `internal-only-gating.test.js` simulates the
+  public tree by hiding the internal modules from `require()`.
+- **`dotnet-debug --project <dir>` writes `.vscode/launch.json` and `tasks.json`**
+  (`common/lib/core/debug.js`, `tizen-cli/src/command-specs/debug.ts`). Launch mode used to hand back a
+  template with `<APP_FOLDER_NAME>` and leave `launch.json` to the user or agent, which is where a wrong
+  debug type and a hard-coded TargetFramework crept in. With `--project` the runner reads `TargetFramework`
+  / `TargetFrameworks` (the Tizen TFM out of a `;` list, attributes such as `Condition` tolerated) and
+  `AssemblyName` from the `.csproj`, writes or merges the `Tizen .NET (netcoredbg)` coreclr configuration
+  without touching other entries, and reports `launch_config.launch_json_path` / `launch_json_action`.
+  Because netcoredbg ends the app and itself when VS Code sends terminate/disconnect — while the host
+  sdb forward keeps accepting connections, so a second F5 "started" and died at once — it also writes a
+  `tizen: netcoredbg launch` task (this runner, same app/port/serial, `--project ${workspaceFolder}`)
+  and wires it in as the configuration's `preLaunchTask`, so stop → F5 relaunches the app first. Both
+  files are planned before either is written (a non-strict-JSON `launch.json` skips `tasks.json` too;
+  a non-strict `tasks.json` drops the `preLaunchTask` instead of leaving a dangling reference), entries
+  are compared structurally so a user's file is not reformatted, and its indentation and trailing-newline
+  style are kept. The setup scripts, agent, skill and walkthrough now state the real stop → relaunch
+  behaviour instead of claiming the debugger server persists.
+- **`sdk-install` routes UTC+9 hosts (Korea, Japan) to `download.tizen.org`**
+  (`Select-CdnRepo` / `select_cdn_repo` in `tizen-sdk-install.ps1` / `.sh`). Every offset ≥ UTC+5 went to
+  the `singapore` CloudFront mirror, but the official host is a single origin in AWS Seoul and measured
+  faster from Korea (16 MB in 0.20–0.23 s vs 0.25–0.49 s). Exactly `+09:00` — checked on the raw offset,
+  so `+08:30` / `+09:30` still round into the singapore range — now returns
+  `https://download.tizen.org/sdk/tizenstudio/official`; both installers round half-hour zones the same
+  way (bash truncated, PowerShell used banker's rounding; both now round the magnitude away from zero).
+  `tests/scripts/cdn-mirror-selection.test.mjs` (part of `npm run lint` in `tests/`) extracts both
+  functions, injects 23 `date +%z` offsets and asserts each against the documented table and that the two
+  shells agree. Existing installs keep the mirror recorded in `repository.info`. Mirror tables in the
+  `tizen-sdk-install` skill and the TV SDK / installation docs updated.
+- **`dlog-analyzer`: the analyzer's v0.1.3+ subcommands, and 0.2.1a0 binaries for three platforms**
+  (`common/lib/core/dlog-analyzer.js`, `common/tools/tizen-dlog-analyzer/`). The runner, skill and agent
+  document and validate `app-log` (app-scoped log retrieval), `device-profile`, `investigate --symptoms`
+  (one-shot symptom probes), `probe list|run`, `snapshot create|compare|delete`, `timeline` and
+  `kernel collect|stop|analyze`; `snapshot compare` / `delete` validate their ids before the SDK-config
+  pre-check so a missing id is `invalid_parameters`, not `sdk_path_not_set`. The bundled binaries move
+  from v0.1.3.dev0 to **v0.2.1a0** for Linux and Windows and gain a **macOS (x86_64)** build; the
+  per-platform sizes and SHA-256 hashes in `common/tools/tizen-dlog-analyzer/NOTICE.md` are refreshed and
+  the macOS `shasum` verification command added.
+- **`sdb-helper` accepts bare package ids, "list installed packages" in either word order, and an
+  `emulator-restart` intent** (`common/lib/core/sdb-helper.js`). `package info dZEpxl2iAg` — the dotless
+  pkgid `pkgcmd -l` prints for a TPK/WGT — was rejected with "Could not find a package ID" because only
+  dotted app ids matched; `extractPackageId()` now prefers a dotted id, otherwise takes the token after the
+  intent keyword when it looks like a pkgid (a digit, both letter cases or `-`/`_`; SDK pkgids are 10
+  mixed-case alphanumerics) and refuses filler words, plain lowercase words, `emulator-<port>`, 12+-char
+  hex serials and the passed-in serial, so nothing unvetted reaches `pkgcmd -u -n` / `pkginfo --pkg`.
+  `list installed packages` / `applications` / "which packages are installed" all match `list-packages`.
+  "Reboot/restart the emulator" is a new `emulator-restart` intent that hands off to
+  `tizen-device-manager` (stop the VM) + `tizen-launch-emulator` (cold start): a guest `sdb shell reboot`
+  of the Windows emulator resets the WHPX vCPU and kills the QEMU process (`WHPX: Unexpected VP exit
+  code 4`), so the window dies and sdb never sees the device again. A gated `reboot` / `shutdown` whose
+  resolved serial is `emulator-<port>` carries the same warning in `result.note`; hardware serials get
+  none. Skill and agent intent tables updated (`common/lib/tests/sdb-helper.test.js` Tests 7b, 7b-2, 7c).
+- **`file-transfer` restores remote paths that Git Bash's MSYS layer rewrote**
+  (`normalizeRemotePath()` in `common/lib/core/file-transfer.js`). In Claude Code on Windows the Bash tool
+  is Git Bash, and MSYS turns any argument starting with `/` into a path under the Git install root
+  before node sees it: `/opt/usr/apps/x` arrives as `C:/Program Files/Git/opt/usr/apps/x` and sdb fails
+  against a path the user never typed (the agents' workaround was `//opt/...`). When the remote slot holds
+  a Windows drive path the runner strips the MSYS root — derived from `EXEPATH` (`bin` / `usr\bin` /
+  `mingw64\bin` tails removed; a bare drive is not accepted as a root) with a fallback to the well-known
+  Git / msys64 / cygwin roots — restores the device path and says so in `warnings`; `//opt/...` and
+  `///opt/...` collapse to `/opt/...`; a genuine Windows path is refused with `invalid_parameters` naming
+  `EXEPATH`. Local paths are untouched (MSYS converting `/c/Users/me/out` is exactly what a host-side
+  `sdb pull` needs), and `MSYS_NO_PATHCONV=1` is deliberately not recommended because it would also stop
+  the `/c/.../file-transfer-cli.js` runner path from being converted. Skill and agent now say: pass device
+  paths as-is (`common/lib/tests/file-transfer.test.js`).
+- **`install-rootstrap` honours `.rootstrap-installed` in the Phase-1 pre-check**
+  (`common/lib/core/sdk.js` `parseRootstrapMarker()`). Outside the packaged CLI the runner cannot run the
+  installer and tells the agent to re-run the pre-check afterwards to verify the marker — but the non-pkg
+  branch never looked at it and always answered "Rootstrap is NOT installed" with a fresh `suggested_fix`,
+  even right after a successful install. `<sdk>/.rootstrap-installed` is now read right after the SDK
+  check (BOM- and CRLF-tolerant, since PowerShell writes both; entry lines split with the same regex the
+  installer scripts use to build `DisplayName`) and, without `--force`, returns the success envelope built
+  from it (installed rootstraps + structure type). With `--force` and a marker present the hand-off now
+  says "already installed … but --force was given, so it will be reinstalled" instead of "NOT installed"
+  (`common/lib/tests/install-rootstrap-precheck.test.js`).
+- **`download-mobile-platform --include-iot-headed` falls back to the official repository for
+  `extension_info.xml`** (`tizen-download-mobile-platform.ps1` / `.sh`). An SDK installed from a custom
+  repository (`--repo-url`, e.g. an internal mirror) points `repository.info` at that mirror, which serves
+  `pkg_list` and binaries but usually not the extension catalogue, so the IOT-Headed step gave up on a 404
+  and the extension was never installed. Both scripts now retry the catalogue from
+  `https://download.tizen.org/sdk/tizenstudio/official` when the configured repository (compared with
+  trailing slashes stripped, CR-tolerant) fails and is not already the official one; only the catalogue
+  comes from there — the IoT packages are still fetched from the repository the catalogue names. The
+  outcome is tracked in one three-state flag in both shells, a partial file is removed before the retry,
+  and the messages (per-attempt error naming the URL, one "IOT-Headed extension will NOT be installed"
+  warning) are identical. Verified end to end on a host whose `repository.info` pointed at an internal
+  mirror (IOT-Headed-7.0, 7 packages).
+
+### Changed
+
+- **`dotnet-setup` picks the .NET SDK by where it lives, and no longer persists a Tizen-extension-bundled
+  dotnet by default** (`common/scripts/lib/common.ps1` `Get-DotnetCandidates`/`Select-DotnetCandidate`,
+  `common.sh` `list_dotnet_candidates`/`select_dotnet_candidate`, `tizen-dotnet-setup.ps1/.sh`).
+  Discovery used "already has the Tizen workload" as the primary rule, so the dotnet bundled under
+  `~/.tizen-extension-platform/server/sdktools/dotnet` beat `C:\Program Files\dotnet` whenever it carried
+  the workload — and `Enable-Dotnet`/`persist_dotnet` then wrote that path into the User `DOTNET_ROOT`/`PATH`
+  (Windows) or `~/.bashrc` (Unix), where it went stale as soon as the extension updated. Candidates are
+  now ranked PATH > `DOTNET_ROOT` > official install roots (Program Files, `%LOCALAPPDATA%\Microsoft\dotnet`,
+  `~/.dotnet`, `/usr/share/dotnet`, brew libexec, …) > bundled, with the workload only as a tie-breaker
+  inside a tier; the known bundled location is probed directly and the recursive walk of the profile
+  (tens of seconds on a large one) runs only as a fallback; workload presence is read from dotnet's own
+  install record (`metadata/workloads/<band>/InstalledWorkloads/tizen`) instead of a ~3 s
+  `dotnet workload list` per candidate. Official roots (and `--dotnet-root`) are still wired up
+  persistently; a bundled dotnet is used for the current run only, with a warning naming the two fixes
+  (an official SDK, or `--persist-env`). A `DOTNET_ROOT` that points at a directory with no dotnet is
+  reported as stale with the command that clears it, and is dropped from the User `PATH` when a new root
+  is persisted. `persist_dotnet` now **replaces** an existing `~/.bashrc` export block instead of skipping
+  it — skipping is how a stale `DOTNET_ROOT` survived every re-run. `tizen-build-project`'s "dotnet not on
+  PATH" hint uses the same ranking. Two follow-ups: a persisted root is always moved to the **front** of
+  the Windows User `PATH` (it used to be prepended only when absent, so a Program Files dotnet listed
+  behind the bundled one kept losing the `dotnet` lookup), and the `~/.bashrc` rewrite only removes a
+  block whose closing marker follows within a few lines — a block that had lost its marker used to take
+  the rest of the file with it; such a block is now left verbatim, reported, and a fresh block appended.
+  The candidate selection is implemented in both shells, and the tests run bash
+  `select_dotnet_candidate` and PowerShell `Select-DotnetCandidate` on the same fixtures to pin that they
+  agree.
+- **Cline: the detached-installer skills poll at most four times per turn, and every poll is a
+  different command** (`tizen-sdk-install`, `tizen-sdk-install-custom-repo`, `tizen-tv-sdk-install`,
+  `tizen-tv-sdk-install-from-zip` skills and agents, `harnessGuidance()` in `common/lib/core/sdk.js`, the
+  tizen-cli skill copy, TV setup docs). Cline aborts a tool after 5 consecutive identical calls and stops
+  the task after 6 errors in a row; the previous recipe — `sleep 25 && --status`, "run the same command
+  again" while `STATUS=running` — hit that guard on the fifth poll (~2 min into a 10–15 min install)
+  while the detached installer kept running. Each poll now carries an increasing attempt number
+  (`echo "poll #N"` / `Write-Host 'poll #N'`), and after four polls the agent ends the turn with a message
+  that states the install continues in the background, that **no completion notice will arrive on its
+  own** (Cline cannot notify), the `--status` / `-Status` command to check by hand, and the sentence to
+  ask with (설치 진행 상태를 알려줘 / "tell me the install progress"); when the user asks, the agent runs
+  `--status` and continues. `common/lib/tests/harness-guidance.test.js` pins the wording.
+- **One mapper for "no device / several devices" across every device command**
+  (`common/lib/core/sdb.js` `describeSerialFailure()` + `onlineDevices()`). `resolveSerial()`'s failure
+  was turned into an envelope error by hand in every device module — `sdb-helper`, `screenshot`,
+  `project` (install-app pre-check), `dlog-analyzer` — and the copies had drifted: only `sdb-helper`
+  attached a `suggested_fix`, `dlog-analyzer` collapsed categories (fixed in the PR before this one).
+  They all call the shared helper now, which keeps `resolveSerial()`'s category, lists only online
+  (`state === "device"`) serials, builds the `multiple_devices` message and `suggested_fix` around the
+  caller's own serial option (`--serial <serial>` by default; install-app and dlog-analyzer spell both
+  harnesses' forms) and hands the online serials to `details` as `"<serial> (<state>)"` lines. Visible
+  changes: `screenshot`, `install-app` and `dlog-analyzer` gain a `suggested_fix` naming the connected
+  serials on `multiple_devices`; the `multiple_devices` message no longer says "Specify --serial" to
+  the plugin dlog runner, which takes the serial positionally. `sdb-serial-failure.test.js` covers the
+  helper and guards that every `resolveSerial()` caller goes through it.
+- **`dlog-analyzer` follows the native CLI's SDK-resolved log directory** (`common/lib/core/dlog-analyzer.js`,
+  `common/lib/cli/dlog-analyzer-cli.js`, `common/scripts/tizen-dlog-analyzer/tizen-dlog-analyzer.sh`,
+  `tizen-cli/src/command-specs/dlog-analyzer.ts`). TizenDLogAnalyzer PR #155/#157 removed `--base-dir`
+  from every binary command; against that build the runner failed immediately with "No such option"
+  because `start`, `dlog-collect`, `error-analyze` and `app-log` all passed `--base-dir <tmp>/tizen-dlog-analyzer`
+  and read the app logs from `<tmp>/tizen-dlog-analyzer/app/<app-id>/`. The flag is gone from every
+  copy, and the new `resolveLogBaseDir()` applies the binary's own rule
+  (`~/.tizen.sdk.path.config` → `TIZEN_SDK_DATA_PATH` in `<sdk>/sdk.info` or the `<sdk>-data` sibling →
+  `<sdk-data>/dloganalyzer/`) so `error-analyze` / `app-log` look where the binary actually wrote.
+  Envelopes report `result.log_base_dir` (and `result.log_file` for the app actions); a missing, empty or
+  stale SDK config fails up front with `sdk_path_not_set` — checked before the binary and device lookups in
+  every action whose binary command touches the log directory (`start`, `dlog-collect`, `error-analyze`,
+  `app-log`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`; `app-launch` /
+  `app-terminate` are not gated), so it is the first and only error on a host without a device, whichever
+  binary build is installed — instead of a binary exit buried in the captured output. The resolver reproduces the binary's string handling, not
+  just its order: Python `strip()`/`splitlines()` semantics (a UTF-8 BOM in the config file is part of
+  the path to the binary, so the runner reports the same "does not exist" and says it is the BOM; a
+  `TIZEN_SDK_DATA_PATH=` line with an empty value is skipped and the scan continues). The `start` output-directory positional and the tizen-cli `--output-dir` for `start` are no
+  longer accepted (the binary cannot be pointed elsewhere) — `start` returns `invalid_parameters` when
+  one is given; `--output-dir` stays only as the second snapshot ID of `snapshot compare`. Only the
+  runner's PID files, captured stdout and the `log-dump` file remain under `$TMPDIR/tizen-dlog-analyzer/`.
+  **Requires a post-#155 `tizen-dlog-analyzer` binary**: the bundled `common/tools/tizen-dlog-analyzer/*`
+  builds (v0.1.3.dev0 with `--base-dir`) default to `./logs` when the flag is absent and must be refreshed
+  together with this change. New drift guards in `common/lib/tests/dlog-analyzer.test.js` fail if any
+  copy passes `--base-dir` again.
+
+### Security
+
+- **`download-emulator-package` / `download-mobile-platform` validate `--platform-version` and
+  `--iot-headed-version`** (`common/lib/core/sdk.js`). Both functions spliced the raw value into the
+  installer command line (`-PlatformVersion "<v>"`) — a shell string in pkg mode, the `suggested_fix`
+  command otherwise — without the `validateTizenVersion()` screen that `sdk-install` and
+  `platform-install` already apply. A value such as `10.0"; rm -rf ~` is now rejected with
+  `invalid_argument` before the SDK path is even read (`common/lib/tests/sdk-install-version.test.js`).
+- **Certificate passwords no longer leak into envelope messages** (`common/lib/core/certificate.js`
+  `describeKeytoolFailure()`). When keytool failed with an empty stderr (it reports a wrong password on
+  stdout), `validateCertificateFile()` and `inspect-certificate` fell back to `execFileSync`'s
+  `error.message`, which is the whole command line including `-storepass <password>`. The text is now
+  passed through `redactSecrets()` in all three places (`common/lib/tests/certificate.test.js`).
+- **The Samsung Account OAuth callback server listens on 127.0.0.1 only and answers 404 to any other
+  path** (`common/lib/core/samsung-auth.js`). It listened on every interface, so any host on the LAN
+  could POST a fabricated `code` to `/signin/callback`; requests for other paths (favicon probes) hung
+  without a response.
+- **Cline / Gemini hook adapters no longer let a write through when the body precedes the path**
+  (`cline/hooks/PreToolUse`, `gemini/hooks/BeforeTool`). The adapters cut the payload at the first
+  `"content"` / `"diff"` / `"old_string"` before extracting the path, so a tool call that emitted the
+  file body first lost its path and was allowed — bypassing the config.xml / tizen-manifest.xml guard.
+  They now take the first structural key (inside a JSON string every quote is `\"`, so a body cannot
+  spoof it) and refuse a write whose path cannot be determined (`common/hooks/hooks.test.sh`).
+
+### Fixed
+
+- **cmd.exe runner lookup printed nothing on any machine missing one of the four harnesses**
+  (review of #227; `scripts/rewrite-runner-snippets.js`, 34 `common/skills/*/SKILL.md` and
+  `common/agents/*.md`, 4 `docs/debug/*` walkthroughs, `common/lib/tests/plugin-cache.test.js`,
+  `cline/hooks/tizen-sdk-skills-guard.md`). The generated cmd.exe line handed one `dir /s /b` all four
+  `%USERPROFILE%\.<host>\plugins\cache\…` paths; `dir` aborts the whole listing (exit 1, no output) as
+  soon as one path sits under a dot-dir that does not exist — and nobody has `.claude`, `.cline`,
+  `.codex` and `.gemini` all installed. The generator now emits one `dir` per host chained with `&`,
+  each with its own `2>nul`, and a trailing `ver >nul` so a missing last host does not leave exit code 1;
+  the drift guard rejects the one-dir-many-paths form. Verified on Windows: bash, PowerShell and the new
+  cmd.exe form resolve the same `…\1.3.1\lib\cli\dlog-analyzer-cli.js`.
+- **`tizen-dlog-analyzer` — runner lookup section is structurally the same as every other skill**
+  (review of #227; `common/skills/tizen-dlog-analyzer/SKILL.md`, `common/hooks/tizen-sdk-skills-guard.md`,
+  `cline/hooks/tizen-sdk-skills-guard.md`). The bash and PowerShell blocks end in the same `node "$CLI" …`
+  call, the cmd.exe block is followed by the `node "<found-path>" …` step like elsewhere, the section
+  states that all three resolve the same `<host-dot-dir>/…/<VERSION>/lib/cli/` file and how each picks
+  the host and the version, and both guard rules use the same placeholders and the same "not in the skill
+  folder — do not `find` there" wording.
+- **`tizen-dlog-analyzer` — the live crash/exception analysis of `start-monitoring` is captured and
+  survives `stop`** (issue #226; `common/lib/core/dlog-analyzer.js`, `common/lib/cli/dlog-analyzer-cli.js`,
+  `common/skills/tizen-dlog-analyzer/SKILL.md`, `common/agents/tizen-dlog-analyzer.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`). The native binary is a PyInstaller (Python) build and
+  the runner redirects its stdout to `analyzer-output.log`, so Python block-buffered it: `check` showed
+  nothing during the session, and `stop` sent SIGTERM first, which ends a Python process without
+  flushing — the detections were lost. The three detached collectors now run with `PYTHONUNBUFFERED=1`,
+  every stop path sends SIGINT → SIGTERM → SIGKILL (`terminateGracefully`), and `stop` returns the last
+  200 captured lines (`result.output`, `total_lines`, `truncated`, `next_step`) — the file is only
+  truncated by the next `start`, so `check` still returns all of it afterwards. `dlog-collect <app-id>`
+  failing while the monitor runs (the binary allows one dlog collector) now says so and points at
+  `check` instead of stopping the monitor mid-reproduction; `start stop` is answered with "run `stop` on
+  its own". The skill/agent texts say `check` is never skipped when `start-monitoring` ran
+  (`common/lib/tests/dlog-analyzer.test.js` Tests 16–17). Follow-up from review: the three collectors
+  opened the capture file twice (`"w"` for stdout, `"a"` for stderr), so the two streams had independent
+  offsets and stdout overwrote lines stderr had appended — they now share one descriptor
+  (`openCollectorOutput`, the only place the file is truncated); `start` and `dlog-collect` remove their
+  PID file when the collector exits in the 2 s grace window (only `kernel collect` did), so a reused PID
+  can no longer make `stop` signal an unrelated process; and `stop` no longer advertises "last 0 of 0
+  lines" for an empty capture.
+- **`tizen-dlog-analyzer` — the final report follows `REPORT_TEMPLATE.md`** (issue #224; same skill/agent
+  files, `common/lib/core/dlog-analyzer.js`). The template lived only in a separate file the agent had to
+  `cat`; when it did not, the report came out as an improvised English-only "🔍 Investigation Report"
+  with emoji headings and a findings table. Every lane's skill text now carries the exact skeleton
+  (both blocks, all headings, the closing prompt) under "Final report — the only accepted shape", with
+  the observed wrong shapes named, and the `check` / `error-analyze` / `kernel analyze` envelopes restate
+  the shape in `result.report_format` so it travels with the data (Test 18).
+- **`tizen-dlog-analyzer` — the runner is found on the first try in Cline** (issue #223;
+  `common/skills/tizen-dlog-analyzer/SKILL.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `common/hooks/tizen-sdk-skills-guard.md`). Cline loads the skill from `~/.cline/skills/<skill>/`, which
+  holds only the markdown; the runner sits in the plugin cache. The skill's lookup snippet was buried
+  after the Goal / Routing / Boundary prose (line 63), had no cmd.exe / PowerShell form, and never said
+  the runner is not in the skill folder — so the agent spent two `find` calls over the skill directory
+  and `~/.cline` before running it. The lookup now opens the skill body, states where the runner is and
+  is not, and carries the same bash / cmd.exe / PowerShell trio as every other skill; the always-on Cline
+  rule (rule 1) and the host-neutral guard (rule 8) say the same so it holds before any skill is loaded.
+- **`tizen-dlog-analyzer` — symptom reports reach the analyzer and follow its evidence flow**
+  (issues #211–#215; `common/skills/tizen-dlog-analyzer/SKILL.md`, `common/agents/tizen-dlog-analyzer.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`, the `tizen-device-manager` and `tizen-sdb-helper`
+  skill/agent texts, `common/hooks/*`, `common/lib/core/dlog-analyzer.js`, `common/lib/core/sdb-helper.js`).
+  Five behaviours were observed on prompts like "the emulator CPU went to 300% and the video does not
+  play in com.samsung.fh.youtube — investigate": (#211) the request was delegated to
+  `tizen-device-manager` unless the user named the analyzer; (#212) after `dlog-collect` the model
+  slept on a timer and analyzed instead of asking the user to reproduce; (#213) the kernel log was
+  fetched with `sdb shell dmesg`; (#214) CPU/memory evidence was gathered with `sdb shell top / ps`
+  instead of the analyzer's probes; (#215) the unfiltered `app-log` was the first analysis call.
+  Fixes: the analyzer's `description` / `when_to_use` now name the symptom vocabulary (high CPU,
+  freeze, video not playing, 원인 분석 …) and state that a report mentioning the emulator is still its
+  job, while `tizen-device-manager` declares itself discovery/stop-only; a new **Investigation
+  workflow** (`investigate --symptoms` → collectors before reproduction → _end the turn and ask_ →
+  `error-analyze summary` → `check` → `kernel analyze` → escalate to `details` / filtered `app-log` /
+  `probe run`) plus Rules 10–13 (kernel via `kernel collect|stop|analyze`, evidence via
+  `investigate`/`probe`, errors-first analysis order, routing). Hooks: `check-skill-routing.sh` now
+  also guards `Agent`/`Task` and denies delegating symptom prompts to `tizen-device-manager`
+  (`hooks.json` / `claude.sh` / `claude.ps1` matcher `Skill|Agent|Task`); `check-tizen-commands.sh`
+  gains Rule 17 (raw `dmesg`/`kmsg` over sdb), Rule 18 (hand-typed `top`/`ps`/`free`/`/proc/*`
+  diagnostics over `sdb shell`) and Rule 19 (`sleep`/`Start-Sleep` around the runner's stop/analyze
+  actions, or a bare sleep ≥ 5 s while one of its collectors is alive — PID files under
+  `<tmp>/tizen-dlog-analyzer/`, liveness via `kill -0` or `ps -W` on Git Bash). `tizen-sdb-helper`
+  gains a `kernel-log` handoff intent (`dmesg` / `kmsg` / "kernel log" → dlog-analyzer). Runner:
+  **`kernel collect` is now a detached background collector** with `kernel stop` — the binary's
+  subcommand never terminates, so the previous synchronous `execFileSync` call always hit its 30 s
+  timeout and returned `kernel_failed`, which is what pushed the model to `sdb shell dmesg`.
+  `kernel analyze` is unchanged. Tests: `common/hooks/hooks.test.sh` (rules 17–19, Agent/Skill
+  routing), `common/lib/tests/dlog-analyzer.test.js` (`kernel stop`), `sdb-helper.test.js`
+  (`kernel-log` intent); new prompt-lane TC `tests/tc/dlog-analyzer/dlog-analyzer.prompt-symptom-routing.yaml`
+  (TC-P-119, `draft` until three agent-session runs — the bare symptom report must resolve to
+  `dlog-analyzer`, not `device-manager`; TC statistics in `tests/README*.md` / `CSV-YAML-MAPPING.md`
+  updated to 290 TCs). Its pass criterion is machine-checkable: `tests/schema/tc-schema.json` gains two
+  optional prompt-lane `expect` keys — `first_resolved_command` (the FIRST `must_call_tool` invocation
+  must resolve to this command) and `must_not_resolve_commands` (never resolved at any point of the
+  run) — since `must_resolve_command` alone passes a run that detours through `device-manager` first.
+  `tests/skills/run-test-suite.md` documents both and asks the prompt-lane runner to list the resolved
+  commands in order per attempt. Docs: dlog-analyzer walkthrough (EN/KO) Key Rules 3–7 + "Symptom
+  Investigation" table, `SKILLS_REFERENCE*.md` §9/§28, guard rule 13 (Cline rule 11).
+
+- **`download-emulator-package` reports the emulator images that are actually on disk**
+  (`common/lib/core/sdk.js`, `common/lib/envelope/response-formatter.js`). The pre-check judged
+  "what is installed" from the `.emulator-package-installed` marker alone, but that marker only
+  records installs made by this skill — `tizen-sdk-install`, `tizen-tv-sdk-install` and
+  `tizen-platform-install` also ship emulator images and never touch it. On a host whose 10.0 images
+  came from the SDK / TV SDK installers, a later 11.0 run created the marker with a single
+  `Platform version: 11.0` line and the envelope read as "only 11.0 installed". The envelope now
+  scans `platforms/tizen-X.Y/<profile>/emulator-images/` and carries the result as
+  `result.installed_images` (`[{platform, profile, image}]`, sorted by version) on both success paths
+  and as one `errors[0].details` line per image on the not-installed path; the warning text
+  distinguishes "Recorded by this skill: …" from "Emulator images on disk: 10.0 (tizen, tv-samsung),
+  11.0 (tizen)". The marker-based already-installed decision is unchanged
+  (`common/lib/tests/emulator-marker.test.js`).
+- **`create-project --force` validates everything before it removes the existing project**
+  (`common/lib/core/project.js`). The `fs.rmSync` ran before the app-name / template / parent-path
+  shell screens and the script lookup, so a request that was then rejected as `invalid_parameters` had
+  already deleted the project it was asked to replace. The removal now happens only after every
+  check passes, and a failed scaffold names `project_creation_failed` (not `build_failed`)
+  (`common/lib/tests/project-delete.test.js`).
+- **`--schema` marks password options `sensitive: true` again** (`tizen-cli/src/lib/schema-generator.ts`,
+  `tizen-cli/src/index.ts`). Two defects hid the marker MCP hosts use to mask secrets: the check
+  received Commander's `option.flags` (`"--password <password>"`) and never matched, and the
+  envelope's field-name masking then replaced the whole `"--password": {…}` schema object with
+  `"***"`, dropping `type` and `description` too. The generator now uses `option.long`, and the
+  `--schema` catalog (metadata only, no secret values) is written unmasked
+  (`tests/tc/meta/meta.schema.yaml`).
+- **`--help`, `--version` and `<command> --help` return a success envelope on stdout**
+  (`tizen-cli/src/index.ts`, `tizen-cli/src/commands.ts`). They printed Commander's text to stderr and
+  nothing to stdout, breaking the "exactly one JSON envelope" contract; the same text is now carried in
+  `result.help_text` (`tests/tc/meta/meta.help.yaml`).
+- **`sdb-helper` handles `uninstall` itself** (`common/lib/core/sdb-helper.js`). The intent was handed
+  off to `tizen-install-app`, which has no uninstall, so "uninstall the app" went nowhere. It is now a
+  gated `sdb shell pkgcmd -u -n "<pkgid>"` with a note about package id vs app id; the bare `launch app`
+  / `앱 실행` triggers were removed from the skill so they no longer collide with `tizen-install-app`.
+- **First sdb call of a session no longer hangs until the timeout** (`common/lib/core/sdb-helper.js`,
+  `common/lib/core/remote-device.js`, `common/lib/core/samsung-duid.js`). A cold sdb client that has to
+  start the daemon leaves it holding the stdout pipe; every entry point now calls `ensureSdbServer()`
+  (or `runSdb(..., {viaTempFile: true})`) first. `samsung-duid` also uses the shared `parseDevices()` /
+  `onlineDevices()` instead of taking the first line of `sdb devices` whatever its state, and runs sdb
+  with argv arrays instead of interpolated shell strings.
+- **`hidden-password` prompt no longer spins at 100 % CPU on EOF** and no longer closes the process's
+  own stdin on the Windows raw-mode failure path (`common/lib/cli/hidden-password.js`).
+- **`download-mobile-platform --force`** removes the install marker only when it actually runs the
+  installer inline, not when it merely returns a `suggested_fix` (`common/lib/core/sdk.js`).
+- **Skill descriptions fit the 1024-character host limit** (`tizen-create-project`, `tizen-sdb-helper`,
+  `tizen-dlog-analyzer` skills and agents, `tizen-cli/skills/tizen-create-emulator`). Longer
+  descriptions were truncated by the host, which is how the closing "NEVER hand-write config.xml" rule of
+  `tizen-create-project` silently disappeared; the routing rules now live in a "Routing rules" body
+  section and `tests/scripts/verify-skill-frontmatter.mjs` (part of `npm run lint` in `tests/`) fails on
+  any description over the limit. The `tizen-dlog-analyzer` skill no longer documents a `--app-id` flag
+  the node runner does not accept (the app id is positional).
+- **Test suite:** `tests/policy/tiers.yaml` classifies `import-wgt` (mutating) — it shipped in 1.3.1
+  without a tier, so its TCs would have defaulted to `skip` — and `verify-doc-stats.mjs` now fails when
+  `tiers.yaml` and `tizen-cli/plugin.json` disagree (internal-only command groups excluded).
+  `import-wgt` gets its first TCs (`import-wgt.missing-required`, `import-wgt.missing-archive`, both
+  safe tier — they fail on input validation before the SDK is touched). The runner
+  creates `<USERPROFILE>\AppData\Local` when the profile is redirected, so PowerShell 5.1 no longer drops
+  its `ModuleAnalysisCache` into `tests/Microsoft/` (also gitignored). `vscode/package.json` drops the
+  `icon` script that pointed at a file that does not exist.
+- **`tizen-create-project` no longer suggests app names the runner rejects.** The agent and skill
+  instructions (`common/agents/tizen-create-project.md`, `common/skills/tizen-create-project/SKILL.md`,
+  `tizen-cli/skills/tizen-create-project/SKILL.md`) never mentioned that `createProject()` requires at
+  least 10 letters/digits in the app name (Tizen's package ID is exactly 10 alphanumeric characters),
+  so the app-name question offered names such as `MyApp`, the create failed with `invalid_parameters`,
+  and the user was asked a second time. The rule is now stated where the name is asked, every example
+  and option must already pass it (`MyTizenWebApp`, `MyTizenNativeApp`, `MyTizenDotnetApp`,
+  `MyTizenApp01`, `MyDaliDemoApp`), and the remaining `--name MyApp` samples in the CLI help
+  (`--name` description), `project.js` hint, `T-CLI.md`, `docs/platform-gbs-build*.md` and
+  `docs/sdk-install/DOTNET_SETUP_E2E*.md` were replaced with names that pass. The two GBS
+  walkthroughs (`docs/tizen-cli/dali-demo-e2e-walkthrough*.md`, `docs/figma2dali/dali-template-build-e2e*.md`)
+  created the project as `dali-demo` (8 letters/digits — also rejected); they now use `MyDaliDemoApp`
+  throughout (project path, RPM file names, `/usr/bin` binary, `/tmp/<name>.log`, `~/bin/run-<name>.sh`)
+  and their template-substitution note explains why the template's default name cannot be used as-is.
+  The wording everywhere says _ASCII_ letters/digits (`A-Za-z0-9`; `-`, `_`, spaces and non-ASCII
+  characters such as 한글 are not counted), which is exactly what `validatePackageId()` checks;
+  `common/lib/tests/app-name-examples.test.js` runs every listed ✅/❌ example, the `--name`
+  description's example and the `createProject()` hint through `validatePackageId()` so the lists
+  cannot drift from the validator.
+- **`dlog-analyzer` device-resolution envelope keeps the real error category and lists only online
+  devices** (`common/lib/core/dlog-analyzer.js`, follow-up to PR #192). `deviceErrorEnvelope()` collapsed
+  every failure other than `multiple_devices` into `device_not_found`, so an `invalid_parameters`
+  serial, an `io_error` from `sdb devices` or a missing sdb binary all told the agent to "launch an
+  emulator". The category from `resolveSerial()` is now passed through unchanged (a missing binary,
+  which carries none, still maps to `device_not_found`). The `errors[0].devices` listing is filtered
+  to `state === "device"`, so `multiple_devices` no longer offers offline serials and
+  `device_not_found` never carries a `devices` array, as the skill docs already claimed. The helper is
+  exported and covered by `dlog-analyzer.test.js`. The agent prompt and both SKILL.md files now tell
+  the agent to re-run with the chosen serial in the positional `[serial]` slot — the plugin runner has
+  no `--serial` flag and rejected the retry PR #192 documented with `Unknown option` — and the
+  `error-analyze` rows no longer recommend `details` "for token efficiency" (it is the larger output;
+  `summary` is the compact one).
+- **`install-rootstrap` passes `-SdkPath` / `--sdk-path`** to its script. It resolved the SDK in JS
+  (`readSdkPath()`) but let the script re-resolve it through `Get-SdkPath`, whose candidates include
+  `$env:TIZEN_SDK_PATH` — the two could disagree and the rootstrap land in a different SDK than the
+  one the pre-check validated.
+- **`sdb-helper` keeps the device clause out of shell-command arguments** (`extractShellCommand()` in
+  `common/lib/core/sdb-helper.js`). "run shell command ls -la on emulator-26101" ran `ls -la on
+  emulator-26101` on the device (`ls: cannot access 'on'`), and a leading clause ("on emulator-26101
+  run shell command ls") defeated the keyword stripping and sent the whole sentence. A leading or
+  trailing "on (the|my|this) (device|emulator|target|tv|board) [serial]" or "on <serial>" is now stripped,
+  where a bare `<serial>` must be `emulator-<port>`, an IPv4[:port] or a hardware serial that interleaves
+  letters and digits — so `grep -i on file1.txt`, `echo on`, `tail -n 20 on log2024.txt` and
+  `ls /opt/on/the/device` are untouched — as is leading/trailing politeness (please, kindly, for me,
+  thanks). A request that is only a device clause yields no command (`sdb-helper.test.js` Test 5b).
+- **`sdk-install` on Windows wrote `C:/Users/me/tizen-sdk\bin` into the User `Path`**
+  (`tizen-sdk-install.ps1`, `common/scripts/lib/common.ps1` `ConvertTo-CanonicalWindowsPath`). The JS
+  layer passes `-Path` with forward slashes so a trailing backslash cannot escape the closing quote; the
+  installer used the value verbatim, so `Path`, `TIZEN_SDK_PATH`, `sdk.info` and
+  `~\.tizen.sdk.path.config` all stored the slash form, and the "already on Path" check never matched a
+  backslash entry — duplicating the three entries on every run. The path is canonicalised once, right
+  after it is resolved (anchored at PowerShell's `$PWD` for a relative path, drive root keeps its
+  separator, whitespace trimmed, a value `GetFullPath` rejects falls back to slash replacement instead of
+  aborting). `tizen-sdk-install-custom-repo` delegates to the same script and is covered
+  (`common/lib/tests/sdk-install-windows-path.test.js` runs the real helper in PowerShell).
+- **`remote-device` and `screenshot` verify the sdb binary exists before spawning it**
+  (`common/lib/core/remote-device.js`, `common/lib/core/screenshot.js`). Both used `resolveSdb()`, which
+  only joins `<sdk>/tools/sdb`; a missing binary went straight to the shell and, on a Korean Windows
+  host, came back as an `io_error` whose message was CP949 "path not found" decoded as UTF-8 — replacement
+  characters. They now use `resolveSdbBinary()` like the other sdb callers (configured path on disk, else
+  sdb on `PATH`, else a clean `sdk_path_not_set` pointing at `sdk-init`).
+- **Test suite:** the mutating tier's documented minimal prepare (`--only=tmp,projects,rootstrap`) never
+  created the `myProfile` signing profile, so `build-project.release --sign-profile myProfile` failed with
+  `TIZEN_SDK_CERT_E021` on any host without it; selecting `projects` now ensures the profile (same
+  create / keep / `--replace-profile` rules; `--skip-build` skips the step for every part alike). The
+  runner's no-launcher hint names the directory (`cd tizen-cli && pnpm build`). Suite status after this
+  release: **290 TCs in 283 files, approved 282 / draft 8** (safe 69 / mutating 79 / device 142) — the
+  new `import-wgt.*` and `meta.help` TCs are approved, TC-P-119 stays draft until three agent-session
+  runs.
+
+### Removed
+
+- `CI_TEST_FIX.md` and `SECURITY_FIXES_SUMMARY.md` — working notes with personal paths that were
+  committed to the repository root by mistake.
+
+### Documentation
+
+- **Repository-wide architecture diagrams** (`docs/ARCHITECTURE_DIAGRAMS.md` Korean,
+  `docs/ARCHITECTURE_DIAGRAMS.en.md` English): ten Mermaid diagrams per file — the six harnesses sharing
+  `common/`, the directory layout, the SKILL → runner → sdk-commands → plugin-cache → script call flow,
+  the Standard JSON Envelope, the guard hooks, setup/sync, the standalone tizen-sdk CLI build, the
+  commands by domain, a typical end-to-end flow, and the test/CI gates. Only flowchart and sequence
+  diagram types are used (the mindmap type is not rendered by older previews). Both READMEs link the pair
+  under "Architecture & reference". Every Mermaid `style` line here and in `tests/README.md` sets
+  `color:#1a1a1a` and a stroke — the light fills were rendered with white text on dark themes.
+- **Test-suite docs**: `tests/RUN-ORDER.md` collects the safe → mutating → device sequence (drivers,
+  prerequisites, phases, options, common failures) in one place, with Korean `tests/README.ko.md` /
+  `tests/RUN-ORDER.ko.md` linked from their English counterparts. `tests/README.md` puts the tizen-cli
+  build (`cd tizen-cli && pnpm install && pnpm build`) in front of every runner workflow — `dist/` is
+  gitignored, so a fresh checkout otherwise fails every cli-lane TC — warns that a bare `node runner.mjs`
+  runs the mutating and device tiers, and states the runner's executor resolution (Windows:
+  `TC_LAUNCHER_JS`, then `../tizen-cli/bin/tizen-sdk.js`; elsewhere `tizen-cli` / `tizen-sdk` on `PATH`)
+  and which drivers check bundle staleness. `TEST-SUITE-PLAN.md` is rewritten to match the current suite
+  and names `README.md` as the source of truth. `verify-doc-stats.mjs` now also checks the README
+  diagram, the lane table, `tiers.yaml` and `README.ko.md`, and fails loudly on `tiers.yaml` key drift;
+  the stale TC / lane counts it did not cover (281 → 286 at the time, cli 171 / prompt 118 → 167 / 119)
+  are fixed.
+
 ## [1.3.1] — 2026-09-23
 
 The integration suite's device and mutating tiers run end to end (ordered phases, host-built
@@ -672,7 +1176,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...HEAD
+[1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0
 [1.3.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...tizen-sdk-skills-v1.3.1
 [1.3.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.2.0...tizen-sdk-skills-v1.3.0
 [1.2.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.1.2...tizen-sdk-skills-v1.2.0

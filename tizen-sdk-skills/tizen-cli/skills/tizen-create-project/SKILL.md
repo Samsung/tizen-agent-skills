@@ -1,6 +1,6 @@
 ---
 name: tizen-create-project
-description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 생성해줘, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, import wgt, import WGT as a project, WGT 가져오기, WGT 프로젝트 가져오기, wgt 임포트, .wgt를 프로젝트로 변환, wgt to project, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 앱 삭제, 앱 삭제해줘, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, delete app folder, clean up projects. IMPORTING an existing .wgt archive as a Web project is also THIS skill (its import-wgt command) — NEVER unzip the archive or hand-write config.xml yourself; `tz import-wgt` does both on the SDK host. DELETING a Tizen project directory is also THIS skill (its project-delete action) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself; the delete runs on the SDK host and refuses any path without a Tizen project marker. NEVER hand-write Tizen project files (config.xml, tizen-manifest.xml) — ALWAYS use this command, which scaffolds from real SDK templates. Use this skill to create a new Tizen project — Native, DotNET, WebApp, standalone RPK resource package, TV, or Platform — from the installed SDK templates, to import an existing .wgt archive as an SDK-generated Web project, and to delete an existing project directory when the user asks to remove or clean one up.
+description: Create Tizen project or app, tizen create project, RPK resource project, 타이젠 프로젝트 생성, 타이젠 앱 생성, 타이젠 리소스 패키지 생성, 타이젠 앱 만들어줘, 웹앱 만들어줘, 웹앱 생성, 네이티브 앱 만들어줘, 닷넷 앱 만들어줘, Tizen 프로젝트 만들기, 앱 생성, 새 앱, 프로젝트 시작, make a tizen app, create webapp, import wgt, import WGT as a project, WGT 가져오기, wgt 임포트, wgt to project, 프로젝트 삭제, 프로젝트 삭제해줘, 타이젠 프로젝트 삭제, 프로젝트 지워줘, 프로젝트 폴더 삭제, 프로젝트 정리, delete project, delete tizen project, remove project, clean up projects. Owns the project-directory lifecycle through tizen-cli on the SDK host — create-project (Native, DotNET, WebApp, standalone RPK, TV, Platform) from real SDK templates, import-wgt, project-delete. NEVER hand-write config.xml / tizen-manifest.xml, unzip a .wgt, or rm -rf / Remove-Item a project yourself — ALWAYS use these commands. Full routing rules are in the body.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-09-22"
@@ -21,6 +21,16 @@ metadata:
 ---
 
 # Create Tizen Project
+
+## Routing rules
+
+These rules were moved out of the frontmatter description (hosts truncate it at 1024 characters) and apply verbatim:
+
+- Listing/browsing APP project templates is THIS command set (`tizen-cli tizen-sdk list-templates`) — NEVER locate or run SDK tools directly for that.
+- IMPORTING an existing `.wgt` archive as a Web project is THIS command set (`import-wgt`) — NEVER unzip the archive or hand-write `config.xml` yourself; `tz import-wgt` does both on the SDK host.
+- DELETING a Tizen project directory is THIS command set (`project-delete`) — NEVER `rm -rf` / `Remove-Item` / `del` a project yourself, and never delegate that to a shell command; the delete runs on the SDK host and refuses any path without a Tizen project marker.
+- EMULATOR VM templates (screen sizes/resolutions) belong to `tizen-create-emulator`; if the user says just "템플릿" with no qualifier, ask whether they mean app project templates or emulator templates.
+- NEVER hand-write Tizen project files (`config.xml`, `tizen-manifest.xml`) — ALWAYS scaffold from real SDK templates through this command set.
 
 ## When to use
 
@@ -81,15 +91,25 @@ tizen-cli tizen-sdk create-project --type <type> --template <name> --parent-path
 
 | `--template <name>` | **yes** | — | Template name exactly as returned by list-templates |
 | `--parent-path <dir>` | **yes** | — | Workspace (parent) directory — the app folder is created INSIDE it (not the app folder itself) |
-| `--name <appName>` | **yes** | — | App name = folder name to create (always the user-specified value) |
+| `--name <appName>` | **yes** | — | App name = folder name to create (always the user-specified value). **At least 10 ASCII letters/digits** (`A-Za-z0-9`; nothing else is counted) — Tizen derives the 10-character package ID from them; shorter names are rejected with `invalid_parameters`. |
 | `--force` | no | off | Replace the target folder if it already exists. Only replaces an empty folder or one that looks like a Tizen project — never an arbitrary directory. Makes repeated fresh-project runs repeatable. |
 | `--open` | no | off | Open the generated `.code-workspace` in VS Code after creation. Default is create-only (no window switch) — pass this ONLY when the user explicitly asks to open the project. |
 
 Example:
 
 ```
-tizen-cli tizen-sdk create-project --type webapp --template Basic --parent-path "C:/tizen-apps" --name MyTizenApp
+tizen-cli tizen-sdk create-project --type webapp --template Basic --parent-path "C:/tizen-apps" --name MyTizenWebApp
 ```
+
+**App name rule.** Count only `A-Za-z0-9` (`-`, `_`, spaces and non-ASCII characters
+such as 한글 do not count) and require 10 or more — that is exactly what the runner's
+`validatePackageId()` checks before deriving the lowercased 10-character package ID.
+When asking the user for the name, state the rule in the question
+("영문/숫자 10자 이상") and offer only examples that already pass, so a rejected name
+never forces a second round:
+
+- ✅ `MyTizenWebApp` (13), `MyTizenNativeApp` (16), `MyTizenDotnetApp` (16), `MyTizenApp01` (12), `MyDaliDemoApp` (13)
+- ❌ `MyApp` (5), `HelloApp` (8), `TestApp` (7), `Sample01` (8), `dali-demo` (8)
 
 ## Output
 
@@ -194,7 +214,7 @@ This is distinct from a .NET project configured with `pack_as_rpk: true`: that p
 `--type platform` creates a **platform sample** project (e.g., `dali_demo`). These are NOT `tz new` templates — they are complete source trees built with **GBS** (not `tz build`).
 
 - List available platform samples: `tizen-cli tizen-sdk list-templates --type platform`
-- Create: `tizen-cli tizen-sdk create-project --type platform --template dali_demo --parent-path <dir> --name MyApp`
+- Create: `tizen-cli tizen-sdk create-project --type platform --template dali_demo --parent-path <dir> --name MyDaliDemoApp` (10+ ASCII letters/digits, same rule as every other type)
 - Build: `tizen-cli tizen-sdk build-project --project <project> [--arch <arch>]` — runs GBS internally (NOT `tz build`; do not run `gbs` by hand)
 - Install / run: `tizen-cli tizen-sdk install-app --package <path>.rpm --run` — GBS produces `.rpm` (under `~/GBS-ROOT/local/repos/<arch>/RPMS/`), not `.tpk`; the app is an executable installed at `/usr/bin/<name>` and `--run` launches it
 

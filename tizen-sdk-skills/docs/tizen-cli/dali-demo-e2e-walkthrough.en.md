@@ -72,13 +72,13 @@ tizen-cli tizen-sdk create-project \
   --type platform \
   --template dali_demo \
   --parent-path /home/user/tizen-apps \
-  --name dali-demo
+  --name MyDaliDemoApp
 ```
 
 **Natural language (Cline/Claude Code):**
 
 ```
-Create a platform dali_demo template app called dali-demo
+Create a platform dali_demo template app called MyDaliDemoApp
 ```
 
 **CLI runner direct execution:**
@@ -87,7 +87,7 @@ Create a platform dali_demo template app called dali-demo
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" create --type platform --template dali_demo --parent-path /home/user/tizen-apps --name dali-demo
+node "$CLI" create --type platform --template dali_demo --parent-path /home/user/tizen-apps --name MyDaliDemoApp
 ```
 
 **Response example:**
@@ -96,10 +96,10 @@ node "$CLI" create --type platform --template dali_demo --parent-path /home/user
 {
   "status": "success",
   "result": {
-    "project_name": "dali-demo",
+    "project_name": "MyDaliDemoApp",
     "project_type": "platform",
     "template_name": "dali_demo",
-    "project_path": "/home/user/tizen-apps/dali-demo",
+    "project_path": "/home/user/tizen-apps/MyDaliDemoApp",
     "status": "created"
   },
   "warnings": [],
@@ -109,13 +109,13 @@ node "$CLI" create --type platform --template dali_demo --parent-path /home/user
 }
 ```
 
-> **Automatic template name substitution:** The `dali_demo` template's default name `dali-demo` is hardcoded in CMakeLists.txt, the `.spec` file, and other project files. If you specify a project name other than `dali-demo`, the creation script automatically substitutes the template name with your chosen project name in the following files:
+> **Automatic template name substitution:** The `dali_demo` template's default name `dali-demo` is hardcoded in CMakeLists.txt, the `.spec` file, and other project files. That default has only 8 ASCII letters/digits, so `create-project` rejects it under the app-name rule (at least 10 ASCII letters/digits — `A-Za-z0-9` only, because Tizen's package ID is 10 characters) — always pass your own name, such as `MyDaliDemoApp`. The creation script then substitutes the template name with your chosen project name in the following files:
 >
 > - **CMakeLists.txt** — CMake target name, binary name
 > - **packaging/`<template>.spec`** — RPM package name, file name (e.g., `dali-demo.spec` → `<project-name>.spec`, renamed)
 > - **Other text files** (`.txt`, `.cmake`, `.yaml`, `.json`, `.md`, `.spec`)
 >
-> Example: creating with `--name my-dali-app` produces a build artifact named `my-dali-app-1.0.0-1.x86_64.rpm`.
+> Example: creating with `--name MyDaliDemoApp` produces a build artifact named `MyDaliDemoApp-1.0.0-1.x86_64.rpm` and a device binary at `/usr/bin/MyDaliDemoApp`.
 
 ---
 
@@ -126,13 +126,13 @@ Build the created project with GBS.
 **tizen-cli command:**
 
 ```bash
-tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/dali-demo
+tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/MyDaliDemoApp
 ```
 
 **Natural language (Cline/Claude Code):**
 
 ```
-Build the dali-demo project
+Build the MyDaliDemoApp project
 ```
 
 **CLI runner direct execution:**
@@ -141,7 +141,7 @@ Build the dali-demo project
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
+node "$CLI" build --project "/home/user/tizen-apps/MyDaliDemoApp" --build-type Debug
 ```
 
 **Response example:**
@@ -152,12 +152,12 @@ node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
   "result": {
     "artifacts": [
       {
-        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm",
+        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm",
         "format": ".rpm",
         "size_bytes": 11579
       },
       {
-        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-debuginfo-1.0.0-1.x86_64.rpm",
+        "path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-debuginfo-1.0.0-1.x86_64.rpm",
         "format": ".rpm",
         "size_bytes": 94539
       }
@@ -171,7 +171,7 @@ node "$CLI" build --project "/home/user/tizen-apps/dali-demo" --build-type Debug
 }
 ```
 
-> The build artifact path is used in the next step: `~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm`
+> The build artifact path is used in the next step: `~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm`
 
 ---
 
@@ -230,14 +230,14 @@ Install the built RPM package on the device and launch it.
 
 ```bash
 tizen-cli tizen-sdk install-app \
-  --package /home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm \
+  --package /home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm \
   --run
 ```
 
 **Natural language (Cline/Claude Code):**
 
 ```
-Install and run the dali-demo RPM on the emulator
+Install and run the MyDaliDemoApp RPM on the emulator
 ```
 
 **CLI runner direct execution:**
@@ -246,7 +246,7 @@ Install and run the dali-demo RPM on the emulator
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm" --device-serial emulator-26101 --run
+node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm" --device-serial emulator-26101 --run
 ```
 
 **Response example:**
@@ -255,7 +255,7 @@ node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS
 {
   "status": "success",
   "result": {
-    "package_path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm",
+    "package_path": "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm",
     "device_serial": "emulator-26101",
     "app_id": null,
     "installation_status": "completed",
@@ -268,13 +268,13 @@ node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS
 }
 ```
 
-> `app_id` being `null` is expected — Platform (RPM) apps are not registered with `app_launcher`, so they have no app_id. Instead, they are launched directly via the `/usr/bin/dali-demo` binary.
+> `app_id` being `null` is expected — Platform (RPM) apps are not registered with `app_launcher`, so they have no app_id. Instead, they are launched directly via the `/usr/bin/MyDaliDemoApp` binary.
 
 > **Automatic rerun script generation:** Platform apps have no `app_launcher` icon, so after the app is killed (e.g., Back key) there is no way to restart it from the device home screen. To solve this, the `install-app` command automatically generates a host-side rerun script at `~/bin/run-<app-name>.sh` after installing an RPM package. This script re-launches the already-installed binary without re-installing the RPM:
 >
 > ```bash
 > # Re-launch the app (no RPM re-install needed)
-> ~/bin/run-dali-demo.sh
+> ~/bin/run-MyDaliDemoApp.sh
 > ```
 
 The script handles device detection, root access, Wayland environment setup, launching as the `owner` user (uid 5001), and process verification automatically.
@@ -350,17 +350,17 @@ tizen-cli tizen-sdk list-templates --type platform
 # 2. Create project
 tizen-cli tizen-sdk create-project \
   --type platform --template dali_demo \
-  --parent-path /home/user/tizen-apps --name dali-demo
+  --parent-path /home/user/tizen-apps --name MyDaliDemoApp
 
 # 3. GBS build
-tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/dali-demo
+tizen-cli tizen-sdk build-project --project /home/user/tizen-apps/MyDaliDemoApp
 
 # 4. Prepare device/emulator
 tizen-cli tizen-sdk device-manager
 
 # 5. Install and run RPM
 tizen-cli tizen-sdk install-app \
-  --package ~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/dali-demo-1.0.0-1.x86_64.rpm \
+  --package ~/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm \
   --run
 
 # 6. Capture screenshot

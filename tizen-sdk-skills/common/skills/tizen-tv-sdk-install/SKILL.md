@@ -47,7 +47,7 @@ This CLI is a **pre-check**, not the installer. It finishes in seconds. Run in f
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*tv-sdk-install-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
@@ -106,16 +106,26 @@ Never run `suggested_fix.command` in the Codex foreground. Recovery: `job-cli.js
 - Run the installer in foreground (may exceed the Bash tool's 10-min cap)
 - Poll/sleep while waiting
 
-### Cline — `nohup` + `sleep 25 && --status` 폴링 (Cline에는 30초 타임아웃이 있습니다)
+### Cline — 분리 실행 + 번호를 붙인 `sleep 25 && --status` 폴링, 한 턴 최대 4회 (30초 타임아웃 · 동일 호출 5회 가드)
 
 Cline은 background 작업이 끝나도 에이전트를 다시 깨우지 않습니다 (`<task-notification>` 없음).
 또한 Cline의 `execute_command`에는 **30초 하드 타임아웃**이 있으므로, `--wait` (내부 60초 sleep)는
 30초 타임아웃에 걸려 백그라운드로 전환됩니다. 대신 **`nohup`으로 프로세스를 분리**하고,
 **`sleep 25 && --status`** 로 25초 간격 폴링하여 완료를 감지합니다.
 
+Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 간주해 중단**시키는 가드도 있습니다
+(`Detected 5 consecutive identical calls`; 오류가 6번 연속되면 태스크가 멈춥니다). 설치 동안
+25초 폴링이 수십 번 필요하므로 폴링 명령을 그대로 반복하면 5번째에서 반드시 걸립니다. 따라서
+**폴링 명령마다 시도 번호를 넣어** 호출이 서로 달라지게 하고 (`poll #1`, `poll #2`, …), **한 턴에
+최대 4번**만 폴링한 뒤 여전히 `STATUS=running`이면 설치가 백그라운드에서 계속 진행 중임과 상태 확인
+명령을 사용자에게 알리고 **턴을 종료**합니다. 사용자가 돌아오면 (예: "계속", "끝났어?")
+`--status` / `-Status`를 한 번 실행해 이어갑니다. 분리된 설치 프로세스는 Cline이 멈추거나 턴이
+끝나도 계속 진행됩니다.
+
 **⚠️ `--wait`를 사용하지 마세요.** 60초 sleep이 Cline의 30초 타임아웃에 걸립니다.
 **⚠️ `sleep 30` 이상을 사용하지 마세요.** 30초 + `--status` 실행 시간이 타임아웃을 초과합니다.
 **⚠️ 포그라운드로 직접 실행하지 마세요.** 설치 로그가 컨텍스트 윈도우로 스트리밍됩니다.
+**⚠️ 같은 폴링 명령을 그대로 다시 실행하지 마세요.** 시도 번호 없이 반복하면 5번째 호출에서 Cline이 중단됩니다.
 
 #### Linux / macOS (Bash)
 
@@ -126,19 +136,24 @@ Cline은 background 작업이 끝나도 에이전트를 다시 깨우지 않습�
    jobs -p
    ```
 
-2. `sleep 25 && --status` 로 폴링 (25초 대기 후 상태 출력, 30초 타임아웃 내 안전):
+2. 시도 번호를 붙여 `sleep 25 && --status` 로 폴링 (25초 대기 후 상태 출력, 30초 타임아웃 내 안전;
+   `#N`은 호출마다 1씩 증가):
 
    ```bash
-   sleep 25 && bash "<installer-script>" --sdk-path="<sdk-path>" --status
+   sleep 25 && echo "poll #1" && bash "<installer-script>" --sdk-path="<sdk-path>" --status
    ```
 
-   - `STATUS=running` → 다시 `sleep 25 && --status` 실행 (25초 대기 후 자동 상태 재확인)
+   - `STATUS=running` → 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
+     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
+     설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
+     확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
+     (직접 확인: `bash "<installer-script>" --sdk-path="<sdk-path>" --status`)
    - `STATUS=done EXIT=0` → 완료
    - `STATUS=done EXIT=1` → 실패. `tail -20 /tmp/tizen-tv-sdk-install.log` 로 원인 확인
 
    **`sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
-   항상 `sleep 25 && --status`를 사용하세요.
+   항상 시도 번호를 붙인 `sleep 25 && --status`를 사용하세요.
 
 3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
 
@@ -150,18 +165,22 @@ Cline은 background 작업이 끝나도 에이전트를 다시 깨우지 않습�
    powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Detach
    ```
 
-2. `Start-Sleep 25; -Status` 로 폴링 (25초 대기 후 상태 출력):
+2. 시도 번호를 붙여 `Start-Sleep 25; -Status` 로 폴링 (25초 대기 후 상태 출력; `#N`은 호출마다 1씩 증가):
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -Command "Start-Sleep 25; powershell -ExecutionPolicy Bypass -File '<installer.ps1 path>' -Status"
+   powershell -ExecutionPolicy Bypass -Command "Start-Sleep 25; Write-Host 'poll #1'; powershell -ExecutionPolicy Bypass -File '<installer.ps1 path>' -Status"
    ```
 
-   - `STATUS=running` → 다시 동일 명령 실행
+   - `STATUS=running` → 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
+     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
+     설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
+     확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
+     (직접 확인: `powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Status`)
    - `STATUS=done EXIT=0` → 완료
    - `STATUS=done EXIT=1` → 실패. 로그 파일 확인
 
    **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
-   `-Status`만 단독으로 연속 실행하지 마세요. 항상 `Start-Sleep 25; -Status`를 사용하세요.
+   `-Status`만 단독으로 연속 실행하지 마세요. 항상 시도 번호를 붙인 `Start-Sleep 25; -Status`를 사용하세요.
 
 3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
 

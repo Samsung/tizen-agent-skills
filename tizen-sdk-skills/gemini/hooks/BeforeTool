@@ -35,6 +35,17 @@ json_val() {
   printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
 }
 
+# Same, but for the FIRST occurrence of the key. Inside a JSON string every
+# quote is escaped (\"), so an unescaped "key" can only be a structural key —
+# the first hit is the tool parameter no matter where "content"/"old_string"
+# sit or what the file body contains. (json_val's greedy .* takes the LAST
+# match, which a body containing the key name could hijack.)
+json_first() {
+  rest="${1#*\"$2\"}"
+  [ "$rest" = "$1" ] && return 0
+  printf '%s' "$rest" | sed -nE 's/^[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
+}
+
 tool="$(json_val "$input" tool_name)"
 
 case "$tool" in
@@ -44,13 +55,21 @@ case "$tool" in
     payload='{"tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}'
     ;;
   write_file|replace)
-    # Cut from "content"/"old_string"/"new_string" on before extracting the path,
-    # so a file body containing "file_path":"…" cannot hijack the match.
-    head_part="${input%%\"content\"*}"
-    head_part="${head_part%%\"old_string\"*}"
-    head_part="${head_part%%\"new_string\"*}"
-    fp="$(json_val "$head_part" file_path)"
-    [ -n "$fp" ] || allow
+    # First structural "file_path" key — see json_first. (The previous approach
+    # cut the payload at "content"/"old_string" first; when the model emitted
+    # the body BEFORE the path, the path was cut away and the write slipped
+    # through.)
+    # Scope the search to tool_input: a structural "file_path" key elsewhere in
+    # the hook payload (host metadata before "tool_input") must not be
+    # mistaken for the write target.
+    scope="${input#*\"tool_input\"}"
+    [ "$scope" = "$input" ] && scope="$input"
+    fp="$(json_first "$scope" file_path)"
+    if [ -z "$fp" ]; then
+      # A file write whose target we cannot determine is refused, not guessed.
+      printf '{"decision":"deny","reason":"tizen-sdk-skills guard: could not determine the target path of %s - retry with an explicit file_path parameter."}\n' "$tool"
+      exit 0
+    fi
     payload='{"tool_name":"Write","tool_input":{"file_path":"'"$fp"'"}}'
     ;;
   *)

@@ -24,6 +24,7 @@ const path = require("path");
 const {
   fileTransfer,
   normalizeLocalPath,
+  normalizeRemotePath,
   classifyTransferFailure,
   summarizeFileTransferOutput,
 } = require("../core/file-transfer");
@@ -64,6 +65,122 @@ async function run() {
     assert.strictEqual(normalizeLocalPath(""), "");
   });
 
+  console.log("\n=== normalizeRemotePath (Git Bash / MSYS conversion) ===");
+
+  // Git Bash rewrites a leading-slash argument into a path under the Git
+  // install root before node sees it. The runner must hand sdb the device
+  // path the user typed, whatever the install location.
+  const gitEnv = { EXEPATH: "C:\\Program Files\\Git\\bin" };
+  test("MSYS-converted remote path is restored (EXEPATH …\\Git\\bin)", () => {
+    const r = normalizeRemotePath(
+      "C:/Program Files/Git/opt/usr/apps/myfile.txt",
+      gitEnv,
+    );
+    assert.strictEqual(r.path, "/opt/usr/apps/myfile.txt");
+    assert.match(r.warning, /MSYS/);
+    assert.strictEqual(r.error, undefined);
+  });
+  test("EXEPATH without the bin tail also works", () => {
+    const r = normalizeRemotePath("C:/Program Files/Git/home/owner/x", {
+      EXEPATH: "C:\\Program Files\\Git",
+    });
+    assert.strictEqual(r.path, "/home/owner/x");
+  });
+  test("msys2 EXEPATH (…\\usr\\bin) resolves to its root", () => {
+    const r = normalizeRemotePath("D:/tools/msys64/tmp/x", {
+      EXEPATH: "D:\\tools\\msys64\\usr\\bin",
+    });
+    assert.strictEqual(r.path, "/tmp/x");
+  });
+  test("backslash spelling of the converted path is restored too", () => {
+    const r = normalizeRemotePath("C:\\Program Files\\Git\\opt\\x", gitEnv);
+    assert.strictEqual(r.path, "/opt/x");
+  });
+  test("root match is case-insensitive (Windows paths are)", () => {
+    const r = normalizeRemotePath("c:/program files/git/opt/x", gitEnv);
+    assert.strictEqual(r.path, "/opt/x");
+  });
+  test("well-known install roots are recognised without EXEPATH", () => {
+    assert.strictEqual(
+      normalizeRemotePath("C:/Program Files/Git/opt/x", {}).path,
+      "/opt/x",
+    );
+    assert.strictEqual(
+      normalizeRemotePath("D:/msys64/home/owner/x", {}).path,
+      "/home/owner/x",
+    );
+    assert.strictEqual(
+      normalizeRemotePath("C:/Program Files (x86)/Git/tmp/x", {}).path,
+      "/tmp/x",
+    );
+  });
+  test("the manual '//opt/...' workaround collapses to one slash", () => {
+    const r = normalizeRemotePath("//opt/usr/apps/x", gitEnv);
+    assert.strictEqual(r.path, "/opt/usr/apps/x");
+    assert.match(r.warning, /doubled leading slash/);
+    assert.strictEqual(normalizeRemotePath("///opt/x", gitEnv).path, "/opt/x");
+  });
+  test("a bare-drive EXEPATH is ignored, not treated as the MSYS root", () => {
+    // EXEPATH=C:\ would otherwise make every C:/... path look converted.
+    for (const EXEPATH of ["C:\\", "C:", "C:/"]) {
+      const r = normalizeRemotePath("C:/Users/me/x", { EXEPATH });
+      assert.ok(r.error, `EXEPATH=${EXEPATH}: ${JSON.stringify(r)}`);
+      assert.strictEqual(r.path, "C:/Users/me/x");
+    }
+    // …while a genuine conversion still resolves via the well-known roots.
+    assert.strictEqual(
+      normalizeRemotePath("C:/Program Files/Git/opt/x", { EXEPATH: "C:\\" })
+        .path,
+      "/opt/x",
+    );
+  });
+  test("mingw64 EXEPATH (…\\mingw64\\bin) resolves to its root", () => {
+    const r = normalizeRemotePath("D:/tools/Git/opt/x", {
+      EXEPATH: "D:\\tools\\Git\\mingw64\\bin",
+    });
+    assert.strictEqual(r.path, "/opt/x");
+  });
+  test("the install root itself (no trailing segment) is not a device path", () => {
+    const r = normalizeRemotePath("C:/Program Files/Git", gitEnv);
+    assert.ok(r.error, JSON.stringify(r));
+  });
+  test("a host path under the root is restored (documented trade-off)", () => {
+    // <root>/usr/bin/bash.exe is what MSYS produces for "/usr/bin/bash.exe";
+    // a Windows path is never valid here, so restoring is the only reading.
+    // The warning must show both spellings so a wrong guess is visible.
+    const r = normalizeRemotePath(
+      "C:/Program Files/Git/usr/bin/bash.exe",
+      gitEnv,
+    );
+    assert.strictEqual(r.path, "/usr/bin/bash.exe");
+    assert.match(r.warning, /C:\/Program Files\/Git\/usr\/bin\/bash\.exe/);
+    assert.match(r.warning, /"\/usr\/bin\/bash\.exe"/);
+  });
+  test("a plain device path is untouched, no warning", () => {
+    const r = normalizeRemotePath("/opt/usr/apps/x", gitEnv);
+    assert.deepStrictEqual(r, { path: "/opt/usr/apps/x" });
+  });
+  test("a relative device path is untouched", () => {
+    assert.deepStrictEqual(normalizeRemotePath("apps/x", gitEnv), {
+      path: "apps/x",
+    });
+  });
+  test("a genuine Windows path is an error, never sent to the device", () => {
+    const r = normalizeRemotePath("C:/Users/me/x", gitEnv);
+    assert.strictEqual(r.path, "C:/Users/me/x");
+    assert.match(r.error, /POSIX path on the device/);
+    assert.match(r.error, /EXEPATH=/);
+  });
+  test("a Git-root path that is not under the root is not stripped", () => {
+    // "C:/Program Files/Github/..." must not match the ".../Git" root.
+    const r = normalizeRemotePath("C:/Program Files/Github/opt/x", gitEnv);
+    assert.ok(r.error, JSON.stringify(r));
+  });
+  test("undefined / empty pass through", () => {
+    assert.strictEqual(normalizeRemotePath(undefined).path, undefined);
+    assert.strictEqual(normalizeRemotePath("").path, "");
+  });
+
   console.log("\n=== fileTransfer parameter validation (no sdb access) ===");
 
   const validation = async (label, args, expectMessageRe) => {
@@ -95,10 +212,41 @@ async function run() {
     /Remote path contains unsupported characters/,
   );
   await validation(
-    "backslash in REMOTE path is still rejected (device paths are POSIX)",
+    "Windows REMOTE path is still rejected (device paths are POSIX)",
     ["pull", undefined, "C:\\tmp\\x"],
+    /Remote path must be a POSIX path on the device/,
+  );
+  await validation(
+    "backslash elsewhere in the REMOTE path is still rejected",
+    ["pull", undefined, "/tmp/a\\b"],
     /Remote path contains unsupported characters/,
   );
+
+  // An MSYS-converted remote path must NOT be rejected: it is restored and
+  // proceeds to the script stage (where, with no device in a unit test, it
+  // fails for an unrelated reason — any category but invalid_parameters).
+  {
+    const saved = process.env.EXEPATH;
+    process.env.EXEPATH = "C:\\Program Files\\Git\\bin";
+    try {
+      const env = await fileTransfer(
+        "pull",
+        undefined,
+        "C:/Program Files/Git/opt/usr/apps/x",
+        "emulator-0",
+      );
+      test("pull: MSYS-converted remote path passes validation", () => {
+        assert.notStrictEqual(
+          env.errors && env.errors[0] && env.errors[0].error_category,
+          "invalid_parameters",
+          JSON.stringify(env),
+        );
+      });
+    } finally {
+      if (saved === undefined) delete process.env.EXEPATH;
+      else process.env.EXEPATH = saved;
+    }
+  }
 
   // push with a host path that does not exist must fail BEFORE sdb, name the
   // path, and tell the caller not to retry it.

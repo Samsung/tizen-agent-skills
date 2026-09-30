@@ -15,9 +15,14 @@
 
 const assert = require("assert");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const {
   parseDiagLines,
+  parseEnvLines,
+  parseCandidateLines,
+  describeEnvFacts,
   parseInstallTarget,
   parseWorkloadStatus,
   summarizeSuccessWarnings,
@@ -94,6 +99,96 @@ test("returns {} for output with no [DIAG] lines", () => {
   assert.deepStrictEqual(parseDiagLines("[ERROR] nope\n"), {});
   assert.deepStrictEqual(parseDiagLines(""), {});
   assert.deepStrictEqual(parseDiagLines(undefined), {});
+});
+
+// The [ENV]/[CANDIDATE] block both scripts print on every path — modelled on a
+// Windows machine where the Tizen extension's bundled dotnet sits first on
+// PATH and the official Program Files SDK second (the "why is Program Files
+// not reported?" field question).
+const FACTS_OUTPUT = [
+  "[ENV] env_dotnet_root=C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet",
+  "[ENV] dangling_dotnet_root=(none)",
+  "[ENV] persisted_dotnet_root=(none)",
+  "[ENV] persisted_path_entry=(none)",
+  "[CANDIDATE] path|true|9.0.304|true|C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet\\dotnet.exe",
+  "[CANDIDATE] official|false|8.0.424|false|C:\\Program Files\\dotnet\\dotnet.exe",
+].join("\n");
+
+console.log("\n=== parseEnvLines / parseCandidateLines / describeEnvFacts ===");
+
+test("parseEnvLines reads every [ENV] key, placeholders included", () => {
+  const env = parseEnvLines(FACTS_OUTPUT);
+  assert.strictEqual(
+    env.env_dotnet_root,
+    "C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet",
+  );
+  assert.strictEqual(env.dangling_dotnet_root, "(none)");
+  assert.strictEqual(env.persisted_dotnet_root, "(none)");
+  assert.deepStrictEqual(parseEnvLines(""), {});
+  assert.deepStrictEqual(parseEnvLines(undefined), {});
+});
+
+test("parseCandidateLines keeps a path with spaces intact (path is the LAST field)", () => {
+  const c = parseCandidateLines(FACTS_OUTPUT);
+  assert.strictEqual(c.length, 2);
+  assert.deepStrictEqual(c[1], {
+    tier: "official",
+    tizen_workload: false,
+    version: "8.0.424",
+    selected: false,
+    path: "C:\\Program Files\\dotnet\\dotnet.exe",
+  });
+  assert.strictEqual(c[0].tier, "path");
+  assert.strictEqual(c[0].tizen_workload, true);
+  assert.strictEqual(c[0].selected, true);
+});
+
+test("parseCandidateLines ignores malformed lines and survives CRLF", () => {
+  const crlf = FACTS_OUTPUT.split("\n").join("\r\n");
+  assert.strictEqual(parseCandidateLines(crlf).length, 2);
+  assert.ok(!parseCandidateLines(crlf).some((c) => /\r/.test(c.path)));
+  assert.deepStrictEqual(
+    parseCandidateLines("[CANDIDATE] official|maybe|8.0|x"),
+    [],
+  );
+  assert.deepStrictEqual(parseCandidateLines(""), []);
+});
+
+test("describeEnvFacts: nothing persisted -> persisted_env null, placeholders -> null", () => {
+  const facts = describeEnvFacts(parseEnvLines(FACTS_OUTPUT));
+  assert.strictEqual(facts.persisted_env, null);
+  assert.strictEqual(facts.dangling_dotnet_root, null);
+  assert.ok(/sdktools/.test(facts.env_dotnet_root));
+});
+
+test("describeEnvFacts: a persisted run reports what was written", () => {
+  const facts = describeEnvFacts(
+    parseEnvLines(
+      [
+        "[ENV] env_dotnet_root=(unset)",
+        "[ENV] dangling_dotnet_root=C:\\old\\dotnet",
+        "[ENV] persisted_dotnet_root=C:\\Program Files\\dotnet",
+        "[ENV] persisted_path_entry=C:\\Program Files\\dotnet",
+      ].join("\n"),
+    ),
+  );
+  assert.strictEqual(facts.env_dotnet_root, null);
+  assert.strictEqual(facts.dangling_dotnet_root, "C:\\old\\dotnet");
+  assert.deepStrictEqual(facts.persisted_env, {
+    dotnet_root: "C:\\Program Files\\dotnet",
+    path_entry: "C:\\Program Files\\dotnet",
+  });
+});
+
+test("[ENV]/[CANDIDATE] lines never leak into the warnings summary", () => {
+  const lines = summarizeDotnetSetupOutput(
+    `${FACTS_OUTPUT}\n[WARN]  This dotnet is bundled inside a Tizen extension tree`,
+  );
+  assert.ok(
+    !lines.some((l) => /\[ENV\]|\[CANDIDATE\]/.test(l)),
+    lines.join("\n"),
+  );
+  assert.ok(lines.some((l) => /bundled inside a Tizen extension tree/.test(l)));
 });
 
 console.log("\n=== classifyDotnetSetupFailure ===");
@@ -233,6 +328,53 @@ test("exit 3 carries the [DIAG] facts as structured details", () => {
   assert.ok(
     details.some((d) => d.startsWith("installer_checked_sdks=9.0.304")),
   );
+});
+
+test("exit 3 details list every dotnet found, after the [DIAG] facts, without duplicating env_dotnet_root", () => {
+  const { details } = classifyDotnetSetupFailure(
+    err(3, `${FACTS_OUTPUT}\n${MISMATCH_OUTPUT}`),
+  );
+  const candidates = details.filter((d) => d.startsWith("candidate="));
+  assert.strictEqual(candidates.length, 2, details.join("\n"));
+  assert.ok(
+    candidates.some((d) =>
+      /^candidate=official\|no-workload\|8\.0\.424\|-\|C:\\Program Files\\dotnet\\dotnet\.exe$/.test(
+        d,
+      ),
+    ),
+    candidates.join("\n"),
+  );
+  assert.ok(candidates.some((d) => /\|selected\|/.test(d)));
+  // [DIAG] first, candidates last.
+  assert.ok(
+    details.indexOf(candidates[0]) >
+      details.findIndex((d) => d.startsWith("sdk_band=")),
+  );
+  assert.strictEqual(
+    details.filter((d) => d.startsWith("env_dotnet_root=")).length,
+    1,
+    details.join("\n"),
+  );
+});
+
+test("exit 2 keeps a stale DOTNET_ROOT in details — it is usually why nothing was found", () => {
+  const { details } = classifyDotnetSetupFailure(
+    err(
+      2,
+      [
+        "[ENV] env_dotnet_root=C:\\gone\\dotnet",
+        "[ENV] dangling_dotnet_root=C:\\gone\\dotnet",
+        "[ENV] persisted_dotnet_root=(none)",
+        "[ENV] persisted_path_entry=(none)",
+        "[ERROR] .NET SDK (dotnet) is not installed or not on PATH.",
+      ].join("\n"),
+    ),
+  );
+  assert.ok(Array.isArray(details), "details expected");
+  assert.ok(details.includes("dangling_dotnet_root=C:\\gone\\dotnet"));
+  assert.ok(!details.some((d) => /\(none\)/.test(d)), details.join("\n"));
+  // No [ENV] block at all (older script) -> details stays null.
+  assert.strictEqual(classifyDotnetSetupFailure(err(2, "")).details, null);
 });
 
 test("exit 3 that ALSO reports a permission problem does not deny it", () => {
@@ -631,6 +773,427 @@ test("every [DIAG] key dotnet.js reads is emitted by BOTH scripts", () => {
     orphaned,
     [],
     `dotnet.js reads keys no script emits: ${orphaned}`,
+  );
+});
+
+// Same contract for the always-printed [ENV] / [CANDIDATE] block.
+const envKeysIn = (src) =>
+  [...src.matchAll(/\[ENV\]\s+([A-Za-z_][A-Za-z0-9_]*)=/g)].map((m) => m[1]);
+
+test(".ps1 and .sh emit the identical [ENV] key set", () => {
+  const ps1Keys = envKeysIn(PS1);
+  const shKeys = envKeysIn(SH);
+  assert.ok(ps1Keys.length > 0, "no [ENV] keys found in .ps1");
+  assert.deepStrictEqual(
+    ps1Keys,
+    shKeys,
+    `.ps1 emits [${ps1Keys}] but .sh emits [${shKeys}]`,
+  );
+});
+
+test("every [ENV] key dotnet.js reads is emitted by BOTH scripts", () => {
+  const consumed = [
+    ...new Set(
+      [...DOTNET_JS.matchAll(/\bval\("([a-z_]+)"\)/g)].map((m) => m[1]),
+    ),
+  ];
+  assert.ok(consumed.length > 0, 'no val("<key>") reads found');
+  const ps1Keys = envKeysIn(PS1);
+  const shKeys = envKeysIn(SH);
+  const orphaned = consumed.filter(
+    (k) => !ps1Keys.includes(k) || !shKeys.includes(k),
+  );
+  assert.deepStrictEqual(
+    orphaned,
+    [],
+    `dotnet.js reads [ENV] keys no script emits: ${orphaned}`,
+  );
+});
+
+// The exact [CANDIDATE] templates. parseCandidateLines() takes everything after
+// the fourth `|` as the path so that "C:\Program Files\dotnet" survives, and
+// expects literal lower-case true/false in fields 2 and 4 — so the templates
+// are pinned verbatim, then rendered and round-tripped through the parser.
+const PS1_CANDIDATE_TEMPLATE =
+  "$($c.Tier)|$($c.TizenWorkload.ToString().ToLower())|$($c.Version)|$($isSelected.ToString().ToLower())|$($c.Path)";
+// `${l%|*}` is the candidate line minus its path: tier|workload|version, where
+// workload is the literal true/false _dotnet_emit_candidate() wrote.
+const SH_CANDIDATE_TEMPLATE = "${l%|*}|$sel|$p";
+
+test("both scripts print [CANDIDATE] with exactly the template the parser expects", () => {
+  const ps = PS1.match(/Write-Host "\[CANDIDATE\] ([^"]*)"/);
+  assert.ok(ps, 'ps1: no Write-Host "[CANDIDATE] ..." line');
+  assert.strictEqual(ps[1], PS1_CANDIDATE_TEMPLATE);
+
+  const sh = SH.match(/echo "\[CANDIDATE\] ([^"]*)"/);
+  assert.ok(sh, 'sh: no echo "[CANDIDATE] ..." line');
+  assert.strictEqual(sh[1], SH_CANDIDATE_TEMPLATE);
+
+  // .sh: the emitter (lib/common.sh) writes `$tier|$wl|$ver|$real` with wl a
+  // literal true/false.
+  const commonSh = fs.readFileSync(
+    path.join(SCRIPT_DIR, "..", "lib", "common.sh"),
+    "utf8",
+  );
+  assert.ok(
+    /echo "\$tier\|\$wl\|\$ver\|\$real"/.test(commonSh),
+    ".sh: _dotnet_emit_candidate must print tier|wl|ver|real",
+  );
+  assert.ok(
+    /wl=false\s*\n\s*tizen_workload_recorded[^\n]*&& wl=true/.test(commonSh),
+    ".sh: wl must be the literal true/false",
+  );
+});
+
+test("rendered [CANDIDATE] templates round-trip through parseCandidateLines()", () => {
+  // Render each template the way its script would for one concrete candidate
+  // and check the parser reads back the same five fields.
+  const want = {
+    tier: "official",
+    tizen_workload: true,
+    version: "8.0.424",
+    selected: false,
+    path: "C:\\Program Files\\dotnet\\dotnet.exe",
+  };
+
+  const psLine =
+    "[CANDIDATE] " +
+    PS1_CANDIDATE_TEMPLATE.replace("$($c.Tier)", want.tier)
+      .replace("$($c.TizenWorkload.ToString().ToLower())", "true")
+      .replace("$($c.Version)", want.version)
+      .replace("$($isSelected.ToString().ToLower())", "false")
+      .replace("$($c.Path)", want.path);
+  assert.deepStrictEqual(parseCandidateLines(psLine), [want]);
+
+  const shLine =
+    "[CANDIDATE] " +
+    SH_CANDIDATE_TEMPLATE.replace(
+      "${l%|*}",
+      `${want.tier}|true|${want.version}`,
+    )
+      .replace("$sel", "false")
+      .replace("$p", want.path);
+  assert.deepStrictEqual(parseCandidateLines(shLine), [want]);
+});
+
+// ---------------------------------------------------------------------------
+// Candidate SELECTION is implemented twice (common.ps1 Select-DotnetCandidate,
+// common.sh select_dotnet_candidate). The two must agree on the tier order and
+// on the rule "lowest tier wins; the Tizen workload only breaks ties INSIDE a
+// tier" — the workload flipping the choice across tiers is the exact bug this
+// series fixes. Pinned first by reading the sources, then by RUNNING both
+// implementations on the same fixtures (bash / PowerShell when available).
+// ---------------------------------------------------------------------------
+const COMMON_SH = fs.readFileSync(
+  path.join(SCRIPT_DIR, "..", "lib", "common.sh"),
+  "utf8",
+);
+const COMMON_PS1 = fs.readFileSync(
+  path.join(SCRIPT_DIR, "..", "lib", "common.ps1"),
+  "utf8",
+);
+
+test(".ps1 and .sh declare the identical tier order", () => {
+  const ps = COMMON_PS1.match(/\$script:DotnetTierOrder\s*=\s*@\(([^)]*)\)/);
+  const sh = COMMON_SH.match(/^DOTNET_TIER_ORDER="([^"]*)"/m);
+  assert.ok(ps && sh, "tier order declaration not found in both files");
+  const psOrder = ps[1].split(",").map((s) => s.trim().replace(/^'|'$/g, ""));
+  const shOrder = sh[1].trim().split(/\s+/);
+  assert.deepStrictEqual(psOrder, shOrder);
+  assert.deepStrictEqual(psOrder, [
+    "path",
+    "dotnet_root",
+    "official",
+    "bundled",
+  ]);
+});
+
+// tier|tizen_workload|version|path fixtures, deliberately listed in an order
+// that would pick the wrong one if "first line" or "has workload" decided.
+const SELECTION_CASES = [
+  {
+    name: "workload does not flip the choice across tiers",
+    lines: [
+      "bundled|true|9.0.304|/b/dotnet",
+      "official|false|8.0.424|/o/dotnet",
+    ],
+    want: "/o/dotnet",
+  },
+  {
+    name: "inside a tier, one with the workload wins",
+    lines: [
+      "official|false|8.0.100|/o1/dotnet",
+      "official|true|8.0.424|/o2/dotnet",
+    ],
+    want: "/o2/dotnet",
+  },
+  {
+    name: "DOTNET_ROOT beats official and bundled even without the workload",
+    lines: [
+      "bundled|true|9.0.304|/b/dotnet",
+      "official|true|8.0.424|/o/dotnet",
+      "dotnet_root|false|8.0.100|/r/dotnet",
+    ],
+    want: "/r/dotnet",
+  },
+  {
+    name: "PATH beats everything",
+    lines: ["dotnet_root|true|8|/r/dotnet", "path|false|7|/p/dotnet"],
+    want: "/p/dotnet",
+  },
+  {
+    name: "no workload anywhere in the tier: first listed wins",
+    lines: [
+      "official|false|8.0.100|/o1/dotnet",
+      "official|false|8.0.424|/o2/dotnet",
+    ],
+    want: "/o1/dotnet",
+  },
+  {
+    name: "a path with spaces survives",
+    lines: ["official|false|8.0.424|/Program Files/dotnet/dotnet"],
+    want: "/Program Files/dotnet/dotnet",
+  },
+  { name: "nothing found", lines: [], want: "(none)" },
+];
+
+function runOrSkip(cmd, args, label) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", timeout: 60000 });
+  if (r.error && r.error.code === "ENOENT") {
+    console.log(`  skip ${label}: ${cmd} not available`);
+    return null;
+  }
+  assert.strictEqual(
+    r.status,
+    0,
+    `${label}: ${cmd} exited ${r.status}\n${r.stderr}\n${r.stdout}`,
+  );
+  return r.stdout.replace(/\r/g, "").trim().split("\n");
+}
+
+test("common.sh select_dotnet_candidate() picks what the tier rule says (bash run)", () => {
+  const shPath = path.join(SCRIPT_DIR, "..", "lib", "common.sh");
+  const script = [
+    `source "${shPath.replace(/\\/g, "/")}"`,
+    ...SELECTION_CASES.map((c) => {
+      const feed =
+        c.lines.length === 0
+          ? "printf ''"
+          : `printf '%s\\n' ${c.lines.map((l) => `'${l}'`).join(" ")}`;
+      return `best="$(${feed} | select_dotnet_candidate)"; if [ -n "$best" ]; then echo "\${best##*|}"; else echo "(none)"; fi`;
+    }),
+  ].join("\n");
+  const out = runOrSkip("bash", ["-c", script], "select_dotnet_candidate");
+  if (!out) return;
+  SELECTION_CASES.forEach((c, i) => {
+    assert.strictEqual(out[i], c.want, `.sh: ${c.name}`);
+  });
+});
+
+test("common.ps1 Select-DotnetCandidate picks what the tier rule says (PowerShell run)", () => {
+  const ps1Path = path.join(SCRIPT_DIR, "..", "lib", "common.ps1");
+  const toObj = (l) => {
+    const [tier, wl, ver, p] = l.split("|");
+    return `[pscustomobject]@{ Tier='${tier}'; TizenWorkload=$${wl}; Version='${ver}'; Path='${p}'; Root='${path.posix.dirname(p)}' }`;
+  };
+  const script = [
+    `. "${ps1Path}"`,
+    ...SELECTION_CASES.map((c) => {
+      const arr =
+        c.lines.length === 0 ? "@()" : `@(${c.lines.map(toObj).join(", ")})`;
+      return `$best = Select-DotnetCandidate ${arr}; if ($best) { Write-Output $best.Path } else { Write-Output '(none)' }`;
+    }),
+  ].join("\n");
+  const tmp = path.join(os.tmpdir(), `dotnet-select-${process.pid}.ps1`);
+  fs.writeFileSync(tmp, script, "utf8");
+  try {
+    const shell = process.platform === "win32" ? "powershell" : "pwsh";
+    const out = runOrSkip(
+      shell,
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        tmp,
+      ],
+      "Select-DotnetCandidate",
+    );
+    if (!out) return;
+    SELECTION_CASES.forEach((c, i) => {
+      assert.strictEqual(out[i], c.want, `.ps1: ${c.name}`);
+    });
+  } finally {
+    fs.unlinkSync(tmp);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// persist_dotnet() rewrites ~/.bashrc. A naive "skip from the opening marker
+// until the closing one" deletes the REST OF THE FILE when the closing marker
+// is missing, so the rewrite is exercised for real under a throwaway $HOME.
+// ---------------------------------------------------------------------------
+const BASHRC_BEGIN = "# >>> tizen-dotnet-setup (dotnet on PATH) >>>";
+const BASHRC_END = "# <<< tizen-dotnet-setup (dotnet on PATH) <<<";
+
+// Run persist_dotnet() from the setup script's own source against a fixture
+// ~/.bashrc; returns { rc: new file contents, log: stderr } or null when bash
+// is unavailable.
+function runPersistDotnet(bashrcFixture) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "dotnet-persist-"));
+  try {
+    const droot = path.join(home, "sdk");
+    fs.mkdirSync(droot);
+    fs.writeFileSync(path.join(droot, "dotnet"), "#!/bin/sh\nexit 0\n", {
+      mode: 0o755,
+    });
+    fs.writeFileSync(path.join(home, ".bashrc"), bashrcFixture, "utf8");
+
+    const fn = (name) => {
+      const m = SH.match(new RegExp(`^${name}\\(\\) \\{[\\s\\S]*?\\n\\}`, "m"));
+      assert.ok(m, `${name}() not found in tizen-dotnet-setup.sh`);
+      return m[0];
+    };
+    const posix = (p) =>
+      p
+        .replace(/\\/g, "/")
+        .replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`);
+    const script = [
+      "set -u",
+      `export HOME="${posix(home)}"`,
+      `PATH="${posix(droot)}:$PATH"`,
+      'log_info() { echo "[INFO] $*" >&2; }',
+      'log_success() { echo "[OK] $*" >&2; }',
+      'log_warning() { echo "[WARN] $*" >&2; }',
+      "PERSISTED_ROOT=''; PERSISTED_PATH_ENTRY=''",
+      fn("use_dotnet_for_this_run"),
+      fn("persist_dotnet"),
+      `persist_dotnet "${posix(droot)}/dotnet"`,
+    ].join("\n");
+    const r = spawnSync("bash", ["-c", script], {
+      encoding: "utf8",
+      timeout: 60000,
+    });
+    if (r.error && r.error.code === "ENOENT") {
+      console.log("  skip persist_dotnet: bash not available");
+      return null;
+    }
+    assert.strictEqual(
+      r.status,
+      0,
+      `persist_dotnet exited ${r.status}\n${r.stderr}`,
+    );
+    return {
+      rc: fs.readFileSync(path.join(home, ".bashrc"), "utf8"),
+      log: r.stderr,
+      droot: posix(droot),
+    };
+  } finally {
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test("persist_dotnet replaces a well-formed ~/.bashrc block and keeps everything else", () => {
+  const res = runPersistDotnet(
+    [
+      "alias ll='ls -l'",
+      "",
+      BASHRC_BEGIN,
+      'export DOTNET_ROOT="/old/dotnet"',
+      'export PATH="$DOTNET_ROOT:$PATH"',
+      BASHRC_END,
+      "export KEEP_ME=1",
+      "",
+    ].join("\n"),
+  );
+  if (!res) return;
+  assert.ok(!/\/old\/dotnet/.test(res.rc), `stale root survived:\n${res.rc}`);
+  assert.ok(/alias ll='ls -l'/.test(res.rc), "user line before the block lost");
+  assert.ok(/export KEEP_ME=1/.test(res.rc), "user line AFTER the block lost");
+  assert.strictEqual(
+    res.rc.split(BASHRC_BEGIN).length - 1,
+    1,
+    `expected exactly one block:\n${res.rc}`,
+  );
+  assert.ok(
+    res.rc.includes(`export DOTNET_ROOT="${res.droot}"`),
+    `new root missing:\n${res.rc}`,
+  );
+  assert.ok(/Replacing the dotnet export block/.test(res.log));
+  assert.ok(!/closing marker/.test(res.log), res.log);
+});
+
+test("persist_dotnet leaves a block WITHOUT its closing marker untouched instead of eating the file", () => {
+  const original = [
+    "alias ll='ls -l'",
+    BASHRC_BEGIN,
+    'export DOTNET_ROOT="/old/dotnet"',
+    "export KEEP_ME=1",
+    "export AND_ME=2",
+    "# a comment far below",
+    "source ~/.profile-extras",
+    "",
+  ].join("\n");
+  const res = runPersistDotnet(original);
+  if (!res) return;
+  // Every original line is still there, in order, followed by the new block.
+  assert.ok(
+    res.rc.startsWith(original),
+    `original content was altered:\n${res.rc}`,
+  );
+  assert.ok(
+    res.rc.includes(`export DOTNET_ROOT="${res.droot}"`),
+    "new block not appended",
+  );
+  assert.ok(res.rc.trimEnd().endsWith(BASHRC_END), "new block must be last");
+  assert.ok(
+    /closing marker/.test(res.log),
+    `expected the damaged-block warning:\n${res.log}`,
+  );
+});
+
+test("persist_dotnet drops several well-formed blocks and appends one", () => {
+  const block = (root) =>
+    [
+      BASHRC_BEGIN,
+      `export DOTNET_ROOT="${root}"`,
+      'export PATH="$DOTNET_ROOT:$PATH"',
+      BASHRC_END,
+    ].join("\n");
+  const res = runPersistDotnet(
+    `${block("/one")}\nexport MID=1\n${block("/two")}\n`,
+  );
+  if (!res) return;
+  assert.ok(!/\/one|\/two/.test(res.rc), res.rc);
+  assert.ok(/export MID=1/.test(res.rc));
+  assert.strictEqual(
+    (res.rc.match(/tizen-dotnet-setup \(dotnet on PATH\) >>>/g) || []).length,
+    1,
+  );
+});
+
+test("[ENV] and [CANDIDATE] are printed BEFORE the no-SDK exit in both scripts", () => {
+  // They must reach the envelope even when the script exits 2, or the stale
+  // DOTNET_ROOT that explains the failure is lost.
+  const shExit2 = SH.indexOf('log_error ".NET SDK (dotnet) is not installed');
+  const psExit2 = PS1.indexOf('Write-Err ".NET SDK (dotnet) is not installed');
+  assert.ok(shExit2 > 0 && psExit2 > 0, "could not locate the exit-2 branch");
+  assert.ok(
+    SH.indexOf("[ENV] env_dotnet_root=") < shExit2,
+    ".sh prints [ENV] after exit 2",
+  );
+  assert.ok(
+    SH.indexOf("[CANDIDATE]") < shExit2,
+    ".sh prints [CANDIDATE] after exit 2",
+  );
+  assert.ok(
+    PS1.indexOf("[ENV] env_dotnet_root=") < psExit2,
+    ".ps1 prints [ENV] after exit 2",
+  );
+  assert.ok(
+    PS1.indexOf("[CANDIDATE]") < psExit2,
+    ".ps1 prints [CANDIDATE] after exit 2",
   );
 });
 

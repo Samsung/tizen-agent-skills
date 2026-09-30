@@ -241,10 +241,18 @@ async function runOAuthFlow(_profileName) {
             reject(new Error(`samsung_auth_invalid_response: ${e.message}`));
           }
         });
+      } else {
+        // Anything but the callback path (browser favicon probes, stray
+        // requests) used to hang with no response — answer and move on.
+        res.writeHead(404, { "Content-Type": "text/plain" });
+        res.end("Not found");
       }
     });
 
-    controller.server.listen(port, () => {
+    // Loopback only: the redirect URI is http://localhost:<port>/..., so the
+    // browser always reaches us on 127.0.0.1. Listening on every interface
+    // let any host on the LAN post a fabricated `code` to this callback.
+    controller.server.listen(port, "127.0.0.1", () => {
       // Progress line for the caller (and for `job-cli.js wait` progress_tail
       // when this runs as a detached, escalated job under Codex CLI — the
       // agent relays the URL if the browser did not open on the user's side).
@@ -306,7 +314,8 @@ async function findAvailablePort(startPort, maxAttempts) {
     try {
       const srv = http.createServer();
       await new Promise((resolve, reject) => {
-        srv.listen(port, () => {
+        // Probe the same loopback binding the callback server will use.
+        srv.listen(port, "127.0.0.1", () => {
           srv.close(resolve);
         });
         srv.on("error", reject);

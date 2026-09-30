@@ -31,7 +31,7 @@ function Get-ClaudeHookEntries {
       "command": "bash \"__DIR__/check-project-writes.sh\"" }]
   },
   {
-    "matcher": "Skill",
+    "matcher": "Skill|Agent|Task",
     "hooks": [{ "type": "command",
       "command": "bash \"__DIR__/check-skill-routing.sh\"" }]
   }

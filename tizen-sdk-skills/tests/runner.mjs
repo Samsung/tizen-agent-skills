@@ -44,7 +44,13 @@
  * Prompt-lane TCs are NOT auto-executed — see skills/run-test-suite.md for Cline/Claude usage.
  */
 
-import { readFileSync, readdirSync, statSync, existsSync } from "node:fs";
+import {
+  readFileSync,
+  readdirSync,
+  statSync,
+  existsSync,
+  mkdirSync,
+} from "node:fs";
 import { join, dirname, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -425,7 +431,7 @@ function runCommand(argv, timeoutSec, env) {
           error_code: "RUNNER_NO_EXECUTOR",
           message:
             process.platform === "win32"
-              ? "No tizen-sdk launcher found. Build tizen-cli (`pnpm build`) or set TC_LAUNCHER_JS to the launcher's tizen-sdk.js."
+              ? "No tizen-sdk launcher found. Build tizen-cli first (`cd tizen-cli && pnpm install && pnpm build` — tests/ has no build script) or set TC_LAUNCHER_JS to the launcher's tizen-sdk.js."
               : "Neither tizen-cli nor tizen-sdk found on PATH. Install tizen-cli or add the plugin to PATH.",
         },
       ],
@@ -444,6 +450,21 @@ function runCommand(argv, timeoutSec, env) {
         },
       ],
     };
+  }
+
+  // Windows: the README safe-tier recipe redirects USERPROFILE to a throwaway
+  // folder. PowerShell 5.1 resolves LocalAppData as %USERPROFILE%\AppData\Local
+  // and, when that folder is missing, writes its ModuleAnalysisCache relative
+  // to the cwd — i.e. into tests/Microsoft/... (gitignored, but noise). Create
+  // the folder up front; a no-op for a real profile.
+  if (process.platform === "win32" && mergedEnv.USERPROFILE) {
+    try {
+      mkdirSync(join(mergedEnv.USERPROFILE, "AppData", "Local"), {
+        recursive: true,
+      });
+    } catch {
+      // best effort — an unwritable profile surfaces in the TC itself
+    }
   }
 
   // If executor is tizen-cli, argv already starts with "tizen-sdk <command>"

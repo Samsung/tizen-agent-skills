@@ -1,0 +1,29 @@
+# TC-P-119: Prompt — Symptom report that mentions the emulator routes to dlog-analyzer, not device-manager
+id: tizen-sdk.dlog-analyzer.prompt-symptom-routing
+plugin: tizen-sdk
+command: dlog-analyzer
+tier: device
+status: draft
+since_cli: 1.4.0
+description: "LLM resolves a CPU/playback symptom report ('emulator CPU 300%, video not playing, investigate') to dlog-analyzer without the user naming the skill (issue #211) — not to device-manager"
+
+# NOTE (2026-09-30): authored with the #211 fix (analyzer description/when_to_use symptom vocabulary,
+# device-manager declared discovery/stop-only, check-skill-routing.sh Agent/Skill guard). Stays draft
+# until a prompt-lane agent session has run it 3 times (skills/run-test-suite.md, Option 2).
+# The prompt deliberately omits the skill name. The pass criterion is encoded in `expect`, not in
+# prose: `first_resolved_command` — the FIRST tizen_cli_run_commands call must be `tizen-sdk
+# dlog-analyzer` (investigate / start / dlog-collect …); `must_not_resolve_commands` — a `tizen-sdk
+# device-manager` call at ANY point of the run is a FAIL, even if dlog-analyzer follows.
+lanes:
+  prompt:
+    text: "While trying to run a video in my com.samsung.fh.youtube app in the Tizen emulator, the CPU usage of the emulator raised to 300% on the host PC and the video is not playing. Investigate the issue."
+    timeout_sec: 600
+    max_tool_calls: 6
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk dlog-analyzer"
+      first_resolved_command: "tizen-sdk dlog-analyzer"
+      must_not_resolve_commands:
+        - "tizen-sdk device-manager"
+      envelope_status: success
+    pass_rate: "3/3"

@@ -335,6 +335,78 @@ function resolveSerial(sdbPath, serial, opts = {}) {
 }
 
 /**
+ * Online entries of a parseDevices() table, reduced to `{serial, state}`.
+ *
+ * Offline / unauthorized / locked entries are dropped: they appear in
+ * `sdb devices` but cannot be targeted with `-s`, so listing them next to a
+ * "pick one" prompt only sends the user into a second failure.
+ *
+ * @param {Array|undefined} devices
+ * @returns {Array<{serial: string, state: string}>}
+ */
+function onlineDevices(devices) {
+  return (devices || [])
+    .filter((d) => d && d.state === "device")
+    .map((d) => ({ serial: d.serial, state: d.state }));
+}
+
+/**
+ * Describe a failed resolveSerial() result in Standard JSON Envelope terms.
+ *
+ * Every device command maps the same resolveSerial() failure onto its
+ * envelope; before this helper each module hand-wrote that mapping (sdb-helper,
+ * screenshot, project, vd, dlog-analyzer) and they drifted — one attached a
+ * suggested_fix, another listed offline serials, a third collapsed every
+ * category into device_not_found. This is the single place that decides:
+ *
+ *   - `category`      — resolveSerial()'s errorCategory, unchanged
+ *                       (device_not_found / multiple_devices / io_error /
+ *                       invalid_parameters)
+ *   - `devices`       — the ONLINE devices only (see onlineDevices()); empty
+ *                       for every category but multiple_devices
+ *   - `message`       — resolveSerial()'s message, except multiple_devices,
+ *                       which is rebuilt around the caller's serial option so
+ *                       the agent is told how THIS command takes a serial
+ *   - `suggestedFix`  — multiple_devices: "Re-run with <serial option>" with
+ *                       the online serials spliced in; device_not_found:
+ *                       `opts.noDeviceFix` (null → formatError() falls back to
+ *                       the ERROR_CODES registry default); otherwise null
+ *   - `detailLines`   — one "<serial> (<state>)" line per online device, for
+ *                       formatError()'s `details` (diagnostic lines)
+ *
+ * @param {{errorCategory: string, message: string, devices?: Array}} result -
+ *   a failed resolveSerial() result (errorCategory set)
+ * @param {{serialOption?: string, noDeviceFix?: string|null}} [opts]
+ *   - serialOption: how the caller's command takes an explicit serial, with
+ *     the literal `<serial>` as placeholder. Default "--serial <serial>".
+ *     e.g. "--device-serial <serial>", or "the positional [serial] argument".
+ *   - noDeviceFix: suggested_fix command for device_not_found.
+ * @returns {{category: string, message: string, devices: Array<{serial: string, state: string}>, serials: string[], suggestedFix: string|null, detailLines: string[]}}
+ */
+function describeSerialFailure(result, opts = {}) {
+  const serialOption = opts.serialOption || "--serial <serial>";
+  const devices = onlineDevices(result.devices);
+  const serials = devices.map((d) => d.serial);
+  const category = result.errorCategory;
+  let message = result.message;
+  let suggestedFix = null;
+  if (category === "multiple_devices") {
+    message = `Multiple devices connected (${serials.join(", ")}). Pick one and re-run with ${serialOption}.`;
+    suggestedFix = `Re-run with ${serialOption.split("<serial>").join(`<one-of: ${serials.join(", ")}>`)}`;
+  } else if (category === "device_not_found") {
+    suggestedFix = opts.noDeviceFix || null;
+  }
+  return {
+    category,
+    message,
+    devices,
+    serials,
+    suggestedFix,
+    detailLines: devices.map((d) => `${d.serial} (${d.state})`),
+  };
+}
+
+/**
  * Make sure the sdb server daemon is running before any argv-style
  * (`execFile`, piped stdout) sdb call is made.
  *
@@ -367,4 +439,6 @@ module.exports = {
   runSdb,
   parseDevices,
   resolveSerial,
+  onlineDevices,
+  describeSerialFailure,
 };

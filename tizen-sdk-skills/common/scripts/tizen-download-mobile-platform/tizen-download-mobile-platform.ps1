@@ -12,7 +12,8 @@
 # - Resolves MOBILE-{version} and its Install-dependency packages
 # - Downloads each from (repo + Path) and merges data\ into the SDK root
 # - Optionally downloads IOT-Headed extension:
-#   1) Downloads extension_info.xml from the repository
+#   1) Downloads extension_info.xml from the repository (falls back to the
+#      official repo when a custom repository does not serve it)
 #   2) Parses the XML to extract the IoT Headed repository URL
 #   3) Downloads pkg_list from the IoT repository
 #   4) Resolves and installs IOT-Headed-{version} package
@@ -38,7 +39,10 @@ param(
 
 # Package repository (base URL for pkg_list and binary zip)
 # Falls back to the official repo if repository.info is missing.
-$PkgRepo = "https://download.tizen.org/sdk/tizenstudio/official"
+# The official repo is also used as the fallback source for extension_info.xml
+# when a custom repository (e.g. an internal mirror) does not serve it.
+$OfficialPkgRepo = "https://download.tizen.org/sdk/tizenstudio/official"
+$PkgRepo = $OfficialPkgRepo
 
 # OS auto-detect
 if ([System.Runtime.InteropServices.RuntimeInformation]::IsOSPlatform(
@@ -471,16 +475,44 @@ if ($IncludeIotHeaded) {
     $extensionInfoUrl = "$PkgRepo/extension_info.xml"
     $extensionInfoFile = Join-Path $workdir "extension_info.xml"
     
+    # Three outcomes, tracked by $extensionInfoOk (mirrors EXTENSION_INFO_OK in
+    # the .sh version): downloaded from the configured repo, downloaded from the
+    # official repo via fallback, or not downloaded at all.
     Write-Info "Downloading extension info: $extensionInfoUrl"
+    $extensionInfoOk = $false
     try {
         $progressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $extensionInfoUrl -OutFile $extensionInfoFile -UseBasicParsing
+        $extensionInfoOk = $true
     } catch {
-        Write-Err "Failed to download extension_info.xml: $_"
+        # Compare with trailing slashes stripped so an "official/" entry in
+        # repository.info does not trigger a pointless retry of the same URL.
+        if ($PkgRepo.TrimEnd('/') -ne $OfficialPkgRepo.TrimEnd('/')) {
+            # Custom repositories (internal mirrors) usually carry only pkg_list and
+            # binaries, not extension_info.xml. Fall back to the official repo for
+            # the extension catalogue only; the IoT packages are then fetched from
+            # the repository URL that catalogue points to.
+            Write-Warn "extension_info.xml not available at ${extensionInfoUrl}: $($_.Exception.Message)"
+            Remove-Item $extensionInfoFile -Force -ErrorAction SilentlyContinue
+            $extensionInfoUrl = "$OfficialPkgRepo/extension_info.xml"
+            Write-Info "Falling back to official repo for extension info: $extensionInfoUrl"
+            try {
+                $progressPreference = 'SilentlyContinue'
+                Invoke-WebRequest -Uri $extensionInfoUrl -OutFile $extensionInfoFile -UseBasicParsing
+                $extensionInfoOk = $true
+            } catch {
+                Write-Err "Failed to download extension_info.xml from official repo (${extensionInfoUrl}): $($_.Exception.Message)"
+            }
+        } else {
+            Write-Err "Failed to download extension_info.xml (${extensionInfoUrl}): $($_.Exception.Message)"
+        }
+    }
+
+    if (-not $extensionInfoOk) {
         Write-Warn "IOT-Headed extension will NOT be installed. Continuing with Mobile platform only."
     }
-    
-    if (Test-Path $extensionInfoFile) {
+
+    if ($extensionInfoOk) {
         # Parse the XML to extract IoT Headed repository URL
         try {
             $xml = [xml](Get-Content $extensionInfoFile -Raw)

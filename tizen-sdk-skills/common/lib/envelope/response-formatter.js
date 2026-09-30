@@ -359,12 +359,16 @@ function formatRepoInfo(
  * @param {Array} packages - List of installed packages [{name, status, version}]
  * @param {Array} warnings - Array of warning messages
  * @param {number} [startTime] - Task start time (Date.now() value)
+ * @param {string} [command]
+ * @param {Array} [installedImages] - Emulator image directories found on disk
+ *   [{platform, profile, image}], independent of the install marker
  */
 function formatEmulatorPackageDownload(
   packages,
   warnings = [],
   startTime,
   command = "tizen-sdk download-emulator-package",
+  installedImages = [],
 ) {
   const envelope = new Envelope(command);
   if (typeof startTime === "number") {
@@ -373,6 +377,7 @@ function formatEmulatorPackageDownload(
   return envelope.success(
     {
       packages: packages || [],
+      installed_images: installedImages || [],
       installation_status: "completed",
     },
     { warnings },

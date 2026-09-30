@@ -3,7 +3,7 @@ id: tizen-sdk.download-mobile-platform.iot-headed
 plugin: tizen-sdk
 command: download-mobile-platform
 tier: mutating
-status: draft
+status: approved
 since_cli: 1.0.0
 description: "download-mobile-platform --platform-version --include-iot-headed returns success"
 
@@ -20,10 +20,25 @@ requires:
 # common/lib/core/sdk.js) — without the already-installed short-circuit the command returns
 # execution_error here. It also downloads into / reinstalls the host's real SDK. Needs a
 # host running the packaged CLI with network (capabilities sdk, net); not run in this pass.
+# NOTE (2026-09-28): runnable now. common/lib/core/sdk.js runsInstallerInline() also honours
+# TIZEN_SDK_INLINE_INSTALLER=1, and scripts/run-mutating-tier.mjs --with-installers runs phase
+# s2-sdk-installers with USERPROFILE/HOME pointed at a throwaway home (TIZEN_SDK_PATH removed), so the
+# install lands in <scratch>/home/tizen-sdk and the host's SDK is never touched. Still capabilities
+# sdk, net: ~10 GB from the repository. timeout_sec covers the download; the runner must never cut
+# the installer off mid-write (execFileSync kills node, not the PowerShell it spawned).
+# NOTE (2026-09-28): first inline run (scratch SDK, repository.info → singapore.sdk-dl.tizen.org) failed with
+# "Target package not found in pkg_list: MOBILE-7.5 — available: MOBILE-6.0, 6.5, 7.0": the mirror no
+# longer carries 7.5. Switched to 7.0 (the newest MOBILE-* the mirror lists) and re-ran.
+# NOTE (2026-09-28): re-run with 7.0 against the same scratch SDK (runner.mjs --tc=download-mobile-platform
+# in the s2 environment): passed, <sdk>/.mobile-platform-installed written → approved.
+# NOTE (2026-09-29): the installer now falls back to download.tizen.org/sdk/tizenstudio/official for
+# extension_info.xml when the repository.info repo (a CDN mirror or a custom -RepoUrl mirror) returns 404
+# for it, so iot_headed_installed can come back true even on mirrors that carry no extension catalogue.
+# Verified on a host whose repository.info pointed at an internal mirror: IOT-Headed-7.0 installed.
 lanes:
   cli:
-    argv: ["tizen-sdk", "download-mobile-platform", "--platform-version", "7.5", "--include-iot-headed"]
-    timeout_sec: 600
+    argv: ["tizen-sdk", "download-mobile-platform", "--platform-version", "7.0", "--include-iot-headed"]
+    timeout_sec: 1800
     expect:
       status: success
       jsonpath:

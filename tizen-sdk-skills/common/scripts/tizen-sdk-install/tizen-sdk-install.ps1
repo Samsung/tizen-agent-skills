@@ -35,6 +35,17 @@ param(
 if (-not $Path) {
     $Path = Get-DefaultSdkInstallPath
 }
+# Normalise the install path ONCE, before anything is derived from it. The JS
+# layer hands -Path over with forward slashes ("C:/Users/me/tizen-sdk") because
+# a trailing backslash would escape the closing quote on the command line. Used
+# verbatim, that value leaked into everything this script persists - the User
+# Path entries became "C:/Users/me/tizen-sdk\bin", and TIZEN_SDK_PATH, sdk.info
+# and ~\.tizen.sdk.path.config all stored the slash form. Windows tolerates the
+# mix, but the "already on Path" string check never matched a backslash entry
+# (duplicates on every run) and the values looked broken in the env-var dialog.
+# ConvertTo-CanonicalWindowsPath (lib\common.ps1, dot-sourced above) also
+# anchors a relative -Path at $PWD and keeps a drive root intact.
+$Path = ConvertTo-CanonicalWindowsPath $Path
 
 # -----------------------------------------------------------------------------
 # Durable run-state markers (mirror of the bash script).
@@ -164,11 +175,33 @@ $ForceOptionalPackages = $true
 #   UTC-12 .. UTC-5  → Global     (North America)
 #   UTC-4  .. UTC-1  → Brazil     (South America)
 #   UTC+0  .. UTC+4  → Official   (Europe / Africa / Middle East)
-#   UTC+5  .. UTC+12 → Singapore  (India / China / Southeast Asia / Oceania)
+#   UTC+5  .. UTC+8  → Singapore  (India / China / Southeast Asia)
+#   UTC+9 (exact)    → Official   (Korea / Japan)
+#   UTC+10 .. UTC+12 → Singapore  (Oceania)
+#
+# Half-hour zones are rounded away from zero before the range lookup
+# (+05:30 → +6, +09:30 → +10, -03:30 → -4), identically in both installers.
+# UTC+9 is routed to the official server on purpose: download.tizen.org is a
+# single origin in AWS ap-northeast-2 (Seoul), so for Korea/Japan it is the
+# closest host, while the "singapore" name is a CloudFront distribution. It is
+# matched on the exact +09:00 offset, so +08:30 / +09:30 never reach it.
+# Covered by tests/scripts/cdn-mirror-selection.test.mjs.
 function Select-CdnRepo {
     $tzOffset = [TimeZoneInfo]::Local.GetUtcOffset([DateTime]::UtcNow).TotalHours
-    # Round to nearest integer to handle half-hour timezones (e.g., India +5:30 → +5.5 → +6)
-    $tzOffset = [Math]::Round($tzOffset)
+
+    # Korea / Japan (exactly +09:00): the official origin server is in AWS Seoul
+    # (ap-northeast-2), so it is the closest host. Matched on the raw offset
+    # BEFORE rounding so that half-hour zones such as +08:30 or +09:30 never
+    # land here by being rounded to 9 — they fall through to the ranges below.
+    if ($tzOffset -eq 9) {
+        return "https://download.tizen.org/sdk/tizenstudio/official"
+    }
+
+    # Round to nearest integer to handle half-hour timezones (e.g., India +5:30 → +5.5 → +6).
+    # AwayFromZero keeps this in step with the bash installer (which rounds :30 up on the
+    # magnitude, so -3:30 → -4 as well); the .NET default (banker's rounding) would send
+    # +4:30 to 4 but +5:30 to 6.
+    $tzOffset = [Math]::Round($tzOffset, [MidpointRounding]::AwayFromZero)
 
     if ($tzOffset -le -5) {
         return "https://usa.sdk-dl.tizen.org/sdk/tizenstudio/official"

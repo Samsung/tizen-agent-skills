@@ -285,39 +285,147 @@ find_tizen_tool() {
 # Prints the path to a usable SDK (preferring one that has the Tizen workload)
 # on stdout, or nothing if none is found. Does NOT modify the environment.
 # ----------------------------------------------------------------------------
-discover_dotnet() {
-  local candidates=() c first_sdk=""
+# Every usable SDK host on the machine is enumerated and ranked by WHERE it came
+# from (lower tier wins):
+#   path        - the `dotnet` already on PATH
+#   dotnet_root - $DOTNET_ROOT
+#   official    - Microsoft install roots (~/.dotnet, /usr/share/dotnet, brew libexec, ...)
+#   bundled     - dotnets shipped inside a Tizen extension / SDK tree (.../sdktools/dotnet)
+# Within a tier, one that already carries the Tizen workload is preferred. The
+# workload is only a tie-breaker: it is what tizen-dotnet-setup installs, so it
+# must not flip the choice of SDK across tiers.
+#
+# Well-known bundled locations are probed directly; the recursive scan of $HOME
+# is a fallback that runs only when nothing else turned up.
+# None of these functions modify the environment.
+DOTNET_TIER_ORDER="path dotnet_root official bundled"
 
-  command -v dotnet >/dev/null 2>&1 && candidates+=("$(command -v dotnet)")
-  [[ -n "${DOTNET_ROOT:-}" ]] && candidates+=("$DOTNET_ROOT/dotnet")
-  candidates+=(
-    "$HOME/.dotnet/dotnet"
-    "/usr/local/share/dotnet/dotnet"
-    "/usr/share/dotnet/dotnet"
-    "/usr/lib/dotnet/dotnet"
-    "/opt/dotnet/dotnet"
-  )
+official_dotnet_roots() {
+  echo "$HOME/.dotnet"
+  echo "/usr/local/share/dotnet"
+  echo "/usr/share/dotnet"
+  echo "/usr/lib/dotnet"
+  echo "/usr/lib64/dotnet"
+  echo "/opt/dotnet"
+  echo "/opt/homebrew/opt/dotnet/libexec"
+  echo "/usr/local/opt/dotnet/libexec"
+}
 
-  # Tizen SDK-bundled dotnets (…/server/sdktools/dotnet/dotnet and ~/tizen-sdk).
-  while IFS= read -r c; do [[ -n "$c" ]] && candidates+=("$c"); done < <(
-    { find "$HOME" -maxdepth 6 -type f -name dotnet -path '*/sdktools/dotnet/dotnet' 2>/dev/null
-      [[ -d "$HOME/tizen-sdk" ]] && find "$HOME/tizen-sdk" -maxdepth 6 -type f -name dotnet 2>/dev/null
-    } | sort -u
-  )
+known_bundled_dotnet_roots() {
+  echo "$HOME/.tizen-extension-platform/server/sdktools/dotnet"
+}
 
-  for c in "${candidates[@]}"; do
-    [[ -x "$c" ]] || continue
-    # Must be a real SDK (lists at least one SDK), not a runtime-only host.
-    [[ -n "$("$c" --list-sdks 2>/dev/null)" ]] || continue
-    [[ -z "$first_sdk" ]] && first_sdk="$c"
-    # Prefer one that already has the Tizen workload installed.
-    if "$c" workload list 2>/dev/null | grep -qiE '^[[:space:]]*tizen'; then
-      echo "$c"
-      return 0
-    fi
+# Classify a dotnet install root: official | bundled | other.
+dotnet_root_kind() {
+  local r="${1%/}" o
+  [[ -n "$r" ]] || { echo other; return; }
+  while IFS= read -r o; do
+    [[ "$r" == "${o%/}" ]] && { echo official; return; }
+  done < <(official_dotnet_roots)
+  case "$r" in
+    */sdktools/dotnet|*/.tizen-extension-platform/*|*/tizen-sdk/*) echo bundled; return ;;
+  esac
+  echo other
+}
+
+# SDK feature band, computed exactly the way Samsung's installer does
+# (major.minor.<first digit of patch>00): 10.0.302 -> 10.0.300.
+sdk_band() {
+  local v="$1"
+  [[ -n "$v" ]] || return 0
+  local major minor patch
+  IFS='.' read -r major minor patch _ <<<"$v"
+  [[ -n "$major" && -n "$minor" && -n "$patch" ]] || return 0
+  echo "${major}.${minor}.${patch:0:1}00"
+}
+
+# Is the Tizen workload recorded as installed for this SDK band? This is the
+# install record `dotnet workload list` itself reads, minus the ~3 s that
+# command spends per invocation — cheap enough to ask of every candidate.
+tizen_workload_recorded() {
+  local root="$1" band
+  band="$(sdk_band "$2")"
+  [[ -n "$band" && -e "$root/metadata/workloads/$band/InstalledWorkloads/tizen" ]]
+}
+
+# Follow symlinks to the real file (readlink -f is missing on older macOS).
+resolve_real_path() {
+  local p="$1"
+  if readlink -f "$p" >/dev/null 2>&1; then
+    readlink -f "$p"
+  else
+    echo "$p"
+  fi
+}
+
+# Probe one dotnet binary. Prints `tier|tizen_workload|version|path` (path LAST:
+# it may contain spaces) or nothing. Relies on bash's dynamic scoping to share
+# the caller's `seen` root list, so the same install is never reported twice.
+_dotnet_emit_candidate() {
+  local tier="$1" exe="$2" real root ver wl
+  [[ -x "$exe" ]] || return 1
+  real="$(resolve_real_path "$exe")"
+  root="$(cd "$(dirname "$real")" 2>/dev/null && pwd)" || return 1
+  case "$seen" in *" $root "*) return 1 ;; esac
+  seen="$seen$root "
+  # Must be a real SDK (lists at least one SDK), not a runtime-only host. The
+  # last line is the highest SDK — what `dotnet --version` resolves to absent a
+  # global.json, without letting a global.json in the CWD skew the answer.
+  ver="$("$real" --list-sdks 2>/dev/null | grep -v '^[[:space:]]*$' | tail -n 1 | cut -d' ' -f1)"
+  [[ -n "$ver" ]] || return 1
+  wl=false
+  tizen_workload_recorded "$root" "$ver" && wl=true
+  echo "$tier|$wl|$ver|$real"
+}
+
+list_dotnet_candidates() {
+  local probes=() p r exe seen=" " found=false
+
+  command -v dotnet >/dev/null 2>&1 && probes+=("path|$(command -v dotnet)")
+  [[ -n "${DOTNET_ROOT:-}" ]] && probes+=("dotnet_root|$DOTNET_ROOT/dotnet")
+  while IFS= read -r r; do probes+=("official|$r/dotnet"); done < <(official_dotnet_roots)
+  while IFS= read -r r; do probes+=("bundled|$r/dotnet"); done < <(known_bundled_dotnet_roots)
+
+  for p in "${probes[@]}"; do
+    _dotnet_emit_candidate "${p%%|*}" "${p#*|}" && found=true
   done
 
-  [[ -n "$first_sdk" ]] && echo "$first_sdk"
+  # Fallback only: walking $HOME can take tens of seconds.
+  if [[ "$found" == false ]]; then
+    while IFS= read -r exe; do
+      [[ -n "$exe" ]] && _dotnet_emit_candidate bundled "$exe" && found=true
+    done < <(
+      { find "$HOME" -maxdepth 6 -type f -name dotnet -path '*/sdktools/dotnet/dotnet' 2>/dev/null
+        [[ -d "$HOME/tizen-sdk" ]] && find "$HOME/tizen-sdk" -maxdepth 6 -type f -name dotnet 2>/dev/null
+      } | sort -u
+    )
+  fi
+  return 0
+}
+
+# Reads candidate lines on stdin, prints the chosen one: lowest tier first, and
+# within a tier one that already has the Tizen workload.
+select_dotnet_candidate() {
+  local lines tier l first wl
+  lines="$(cat)"
+  [[ -n "$lines" ]] || return 0
+  for tier in $DOTNET_TIER_ORDER; do
+    first=""
+    while IFS= read -r l; do
+      [[ "${l%%|*}" == "$tier" ]] || continue
+      [[ -z "$first" ]] && first="$l"
+      wl="${l#*|}"; wl="${wl%%|*}"
+      [[ "$wl" == true ]] && { echo "$l"; return 0; }
+    done <<<"$lines"
+    [[ -n "$first" ]] && { echo "$first"; return 0; }
+  done
+}
+
+# Path of the best usable dotnet on this machine, or nothing.
+discover_dotnet() {
+  local best
+  best="$(list_dotnet_candidates | select_dotnet_candidate)"
+  [[ -n "$best" ]] && echo "${best##*|}"
 }
 
 # ----------------------------------------------------------------------------

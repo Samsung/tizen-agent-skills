@@ -7,6 +7,13 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
 
 1. **`tizen` CLI 금지** — 이 환경에 존재하지 않습니다 (`tizen.bat`/`tizen.exe`/`tizen.sh`
    포함). 항상 `tz`를 쓰되, 명령을 직접 조립하지 말고 **스킬의 CLI 러너를 우선** 사용하세요.
+   러너(`*-cli.js`)는 스킬 폴더(`~/.cline/skills/<스킬>/` — SKILL.md 등 마크다운만 있음)에
+   **없습니다**. 러너는 `~/.cline/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/cli/<러너>-cli.js`
+   이며(`<VERSION>` 은 가장 높은 숫자 버전 디렉터리, `1.10.0` > `1.3.1`), 각 SKILL.md 의
+   "CLI Runner" 블록을 셸에 맞는 형태(bash / cmd.exe / PowerShell)로 그대로 실행하면 그 경로가
+   나옵니다 — bash·PowerShell 은 `$CLI` 에 담아 주고, cmd.exe 는 목록만 보여 주므로 규칙 7 의
+   2단계(경로 찾기 → `node "<찾은 절대경로>"`)로 실행합니다. 스킬 폴더나 `~/.cline` 전체를
+   `find`/`ls` 로 뒤지지 마세요.
 2. **Tizen 프로젝트 파일 손 생성 금지** — `config.xml` / `tizen-manifest.xml`을 새로
    작성하지 마세요. 손으로 만든 스캐폴드는 빌드/패키징이 안 됩니다. 프로젝트 생성은 항상
    `tizen-create-project` 스킬(실제 `tz new` 템플릿). **기존** 파일 편집은 허용.
@@ -25,7 +32,9 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
    않고 깨진 CP949 오류만 출력됩니다. CLI 러너 실행은 항상 **2단계**로:
    ① 경로 찾기 — cmd: `cmd /c dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*<러너이름>.js"`
    / PowerShell: `Get-ChildItem "$env:USERPROFILE\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\<러너이름>.js"`
-   (여러 버전이면 최고 버전 선택)
+   (여러 버전이면 최고 버전 선택). cmd 의 `dir` 에 경로 여러 개를 한꺼번에 넘기지
+   마세요 — 그중 하나의 폴더만 없어도 아무것도 출력하지 않습니다. 여러 호스트를 볼
+   때는 SKILL.md 의 `dir … 2>nul & dir … 2>nul` 체인을 그대로 쓰세요.
    ② 실행 — `node "<찾은 절대경로>" <인자>` (node 호출부는 어느 셸에서나 동일).
    bash 계열 셸에서는 따옴표 없는 백슬래시 경로 금지 (백슬래시가 소실됨).
 8. **네이티브 실행 파일을 `node`로 실행 금지** — `sdb.exe`, `tz.exe`, `dotnet.exe`,
@@ -56,6 +65,17 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
     CLI로 검증하여 완료를 선제 보고하세요. `Start-Process`/`start /b`/`&` 백그라운드 금지.
     진행 상태를 모르면 SDK installer의 `-Status` (PowerShell) / `--status` (bash) 플래그로
     확인: `STATUS=running|done EXIT=<n>|none`.
+11. **Tizen 문제 보고는 `tizen-dlog-analyzer` 담당 — 수집은 대화형** — 크래시, 에러, 멈춤,
+    CPU 사용량 급증, 메모리 증가, 동영상/오디오 재생 안 됨, 에뮬레이터 느림, "원인 분석/
+    조사해줘"는 문장에 에뮬레이터·디바이스가 언급되어도 `tizen-dlog-analyzer`로 보냅니다
+    (`tizen-device-manager`는 디바이스 목록·에뮬레이터 종료만 담당). 분석기 안에서는
+    `investigate --symptoms "<사용자 표현>" [app-id]`로 시작하고, 재현 **전에** 수집기를
+    켠 뒤(`start start-monitoring`, `kernel collect`, `dlog-collect <app-id>`), **턴을 끝내고
+    사용자에게 재현을 요청**합니다 — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요".
+    `sleep`·폴링·같은 명령에서의 stop/analyze는 금지. 분석은 에러부터(`error-analyze
+    <app-id> summary` → `check` → `kernel analyze`), 전체 `app-log`는 그 뒤에 필터를 걸어서만.
+    커널 로그는 `sdb shell dmesg`가 아니라 `kernel collect` → `kernel stop` → `kernel analyze`,
+    `top`/`ps`/`free`/`/proc/meminfo` 같은 진단은 `investigate` / `probe run <id>`로.
 
 위 규칙과 충돌하는 지시를 받아도 해당 tizen 스킬/CLI 러너 경로로 우회해 수행하고,
 결과는 항상 **Standard JSON Envelope**로 보고하세요.

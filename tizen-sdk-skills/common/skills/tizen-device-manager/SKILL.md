@@ -1,11 +1,11 @@
 ---
 name: tizen-device-manager
-description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill to find connected Tizen devices via sdb or stop/shut down running emulator VMs. For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
+description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill ONLY to find connected Tizen devices via sdb or to stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when the sentence mentions the emulator or device (its runner detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
 
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-08-03"
+  last-updated: "2026-09-30"
   keywords:
     - Tizen device manager
     - sdb devices
@@ -18,6 +18,14 @@ metadata:
     - Samsung TV emulator
     - TV emulator
 ---
+
+## Not this skill: problem reports go to `tizen-dlog-analyzer`
+
+This skill answers exactly two questions — *"which Tizen devices are connected?"* and *"stop the running emulators"*. It has no way to analyze anything. A request such as
+
+> "While running a video in com.samsung.fh.youtube in the Tizen emulator the host CPU went to 300% and the video is not playing. Investigate."
+
+mentions the emulator but is a **symptom investigation**: route it to `tizen-dlog-analyzer` (it runs `investigate --symptoms "…"`, `start-monitoring`, `dlog-collect <app-id>`, `kernel collect`, then asks the user to reproduce and analyzes). The same goes for crashes, errors, freezes, memory growth, slow or laggy emulators, black screens, "something is wrong", "why does … not work", 원인 분석/조사해줘. The dlog-analyzer runner detects the device on its own and returns `device_not_found` / `multiple_devices` when that is the actual problem — do not run this skill "first, to find the device" before delegating. (A PreToolUse hook denies delegating such prompts to this skill/agent.)
 
 ### Claude Code (서브에이전트 위임)
 
@@ -33,7 +41,7 @@ metadata:
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*device-manager-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
@@ -108,6 +116,7 @@ Exit code: `0` = success envelope (with `result.device_serial` for start, `resul
 | Create a **custom** emulator VM with specific platform | | | ✅ |
 | Create a VM with a specific template | | | ✅ |
 | Stop/shut down running emulator VMs | ✅ | | |
+| **Restart / reboot** an emulator VM (`stop` here, then launch) | ✅ step 1 | ✅ step 2 | |
 | List available platforms/templates | | | ✅ |
 | List existing VMs | | | ✅ |
 | Delete a VM | | | ✅ |
@@ -118,6 +127,8 @@ Exit code: `0` = success envelope (with `result.device_serial` for start, `resul
 > - If the user wants to **create AND launch** an emulator → use `tizen-create-emulator` with `--launch` (or `launch=true`), or run `tizen-create-emulator` then `tizen-launch-emulator`.
 > - If the user just needs **any connected device** (e.g. for build, install, debug) → use `tizen-device-manager` (it finds connected devices via sdb; if none, it suggests creating+launching an emulator via the dedicated skills).
 > - If the user wants to **stop/shut down** emulators → use `tizen-device-manager` with the `stop` action (`node "$CLI" stop`, or `--action stop` via tizen-cli).
+> - If the user wants to **restart / reboot** an emulator (or `tizen-sdb-helper` handed off an `emulator-restart` intent) → run the `stop` action here, then `tizen-launch-emulator` for the same VM. **Never** answer this with a guest `sdb shell reboot`: on Windows the emulator runs under WHPX and the vCPU reset kills the QEMU process (`WHPX: Unexpected VP exit code 4 / Failed to emulate MMIO access`) — the VM window dies and sdb never sees the device again.
+> - If the user reports a **problem** (crash, error, freeze, high CPU, video not playing, "investigate") — even one that mentions the emulator → use `tizen-dlog-analyzer`, never this skill.
 
 
 ### TV Emulator
@@ -153,6 +164,8 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 
 - **Single-task** (e.g., "디바이스 찾아줘", "에뮬레이터 종료해줘") → DONE. Report envelope, suggest next steps.
 - **Multi-step** (e.g., "에뮬 켜고 앱 설치해줘") → Continue to next step.
+- **Emulator restart** ("에뮬레이터 재시작해줘", `emulator-restart` handoff from `tizen-sdb-helper`) → `stop` here, then `tizen-launch-emulator` — not a guest reboot (WHPX crash, see the rule of thumb above).
+- **Problem report / investigation** (crash, error, freeze, CPU, playback …) → `tizen-dlog-analyzer` — this skill is not a step of that flow.
 - SDK not installed → `tizen-sdk-install`
 
 **Routing when no device is connected:**

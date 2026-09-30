@@ -23,6 +23,7 @@ import {
   realpathSync,
   rmSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
@@ -324,6 +325,7 @@ export const FIXTURE_NEEDS = {
   // mutating tier
   "k3-cert-profiles": ["FIXTURE_TMP_DIR"],
   "p1-projects": ["FIXTURE_PROJECTS_DIR"],
+  "s2-sdk-installers": ["FIXTURE_ROOTSTRAP_ZIP"],
 };
 /**
  * Every key prepare-device-fixtures.mjs writes to fixtures.generated.env.
@@ -341,6 +343,7 @@ export const GENERATED_FIXTURE_KEYS = new Set([
   "FIXTURE_DOTNET_APP_ID",
   "FIXTURE_WEB_WGT",
   "FIXTURE_WEB_APP_ID",
+  "FIXTURE_ROOTSTRAP_ZIP",
 ]);
 /** Keys whose value is a path that must exist on disk (the rest are ids). */
 export const FIXTURE_FILE_KEYS = new Set([
@@ -350,6 +353,7 @@ export const FIXTURE_FILE_KEYS = new Set([
   "FIXTURE_NATIVE_BIN",
   "FIXTURE_DOTNET_TPK",
   "FIXTURE_WEB_WGT",
+  "FIXTURE_ROOTSTRAP_ZIP",
 ]);
 
 /** A key is usable when set and, for path keys, present on disk. */
@@ -456,6 +460,240 @@ export function emptyDir(realDir) {
     n++;
   }
   return n;
+}
+
+// ── Installer phases: host processes, User environment, scratch home ──────
+//
+// Used by run-mutating-tier.mjs for the opt-in installer phases. Everything
+// here that touches the host is deliberately narrow: exactly two User-scope
+// environment values, one directory the run itself created, and only
+// PowerShell processes running this repo's plugin scripts.
+
+/** Run one PowerShell command (no profile, non-interactive); stdout or throw. */
+export function powershell(command, { timeoutMs = 30_000 } = {}) {
+  const r = spawnSync(
+    "powershell",
+    ["-NoProfile", "-NonInteractive", "-Command", command],
+    {
+      encoding: "utf-8",
+      timeout: timeoutMs,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  if (r.error) throw r.error;
+  if (r.status !== 0)
+    throw new Error((r.stderr || r.stdout || `exit ${r.status}`).trim());
+  return (r.stdout || "").trim();
+}
+
+/** The User-scope values tizen-sdk-install.ps1 rewrites (Windows only). */
+export const USER_ENV_KEYS = ["Path", "TIZEN_SDK_PATH"];
+
+/**
+ * Normalise a User-scope value for comparison: the registry cannot tell an
+ * absent variable from an empty one the way .NET reports them (null vs ""),
+ * and SetEnvironmentVariable deletes the variable for both.
+ */
+export const userEnvValue = (v) => (v === undefined || v === "" ? null : v);
+
+/**
+ * A snapshot is only usable when every key is present as its own property
+ * with a string or null value. `$e.Path` on a missing property is $null in
+ * PowerShell, and SetEnvironmentVariable(..., $null) DELETES the variable —
+ * so a truncated or hand-edited snapshot must never reach the restore.
+ * Returns null when valid, otherwise the reason.
+ */
+export function validateUserEnvSnapshot(snap) {
+  if (!snap || typeof snap !== "object" || Array.isArray(snap))
+    return "snapshot is not an object";
+  for (const k of USER_ENV_KEYS) {
+    if (!Object.hasOwn(snap, k)) return `snapshot lacks "${k}"`;
+    if (snap[k] !== null && typeof snap[k] !== "string")
+      return `snapshot "${k}" is not a string or null`;
+  }
+  return null;
+}
+
+/** User-scope Path / TIZEN_SDK_PATH as an object (Windows); null elsewhere. */
+export function readUserEnv() {
+  if (process.platform !== "win32") return null;
+  const json = powershell(
+    "[pscustomobject]@{" +
+      USER_ENV_KEYS.map(
+        (k) => `${k}=[Environment]::GetEnvironmentVariable('${k}','User')`,
+      ).join(";") +
+      "} | ConvertTo-Json -Compress",
+  );
+  return JSON.parse(json);
+}
+
+/**
+ * Write the User-scope values back from `snapshotFile` and re-read them to
+ * prove it. Refuses an invalid snapshot before touching anything. Safe to
+ * run again by hand after a killed run:
+ *   node scripts/run-mutating-tier.mjs --restore-user-env=<snapshotFile>
+ */
+export function restoreUserEnv(snapshotFile) {
+  if (process.platform !== "win32") {
+    note("User environment: nothing to restore on this platform");
+    return true;
+  }
+  if (!existsSync(snapshotFile)) {
+    bad(`no User-environment snapshot at ${snapshotFile}`);
+    return false;
+  }
+  let want;
+  try {
+    want = JSON.parse(readFileSync(snapshotFile, "utf-8"));
+  } catch (e) {
+    bad(`User-environment snapshot unreadable: ${e.message}`);
+    return false;
+  }
+  const invalid = validateUserEnvSnapshot(want);
+  if (invalid) {
+    bad(`refusing to restore from ${snapshotFile}: ${invalid}`);
+    return false;
+  }
+  powershell(
+    `$e = Get-Content -Raw -LiteralPath '${snapshotFile.replace(/'/g, "''")}' | ConvertFrom-Json; ` +
+      USER_ENV_KEYS.map(
+        (k) => `[Environment]::SetEnvironmentVariable('${k}', $e.${k}, 'User')`,
+      ).join("; "),
+  );
+  const have = readUserEnv();
+  const differ = USER_ENV_KEYS.filter(
+    (k) => userEnvValue(have[k]) !== userEnvValue(want[k]),
+  );
+  if (differ.length) {
+    bad(`User environment still differs after restore: ${differ.join(", ")}`);
+    return false;
+  }
+  ok(`User ${USER_ENV_KEYS.join(" / ")} restored from ${snapshotFile}`);
+  return true;
+}
+
+/** Marker the driver drops into the scratch home it creates; the delete needs it. */
+export const SCRATCH_HOME_MARKER = ".tizen-mutating-scratch-home";
+export const SCRATCH_HOME_NAME = "home";
+
+/** Create <scratch>/home (and the AppData dirs) and mark it as ours. */
+export function createScratchHome(scratchHome) {
+  mkdirSync(join(scratchHome, "AppData", "Roaming"), { recursive: true });
+  mkdirSync(join(scratchHome, "AppData", "Local"), { recursive: true });
+  writeFileSync(
+    join(scratchHome, SCRATCH_HOME_MARKER),
+    `created by tests/scripts/run-mutating-tier.mjs ${new Date().toISOString()}\n`,
+  );
+}
+
+/**
+ * Why `scratchHome` may NOT be deleted, or null when it may: it must exist,
+ * not be a symlink/junction, resolve to exactly `<realpath(scratch)>/home`
+ * (the one directory the driver creates — never a nested path, a sibling,
+ * another drive or the scratch dir itself), and carry SCRATCH_HOME_MARKER,
+ * so a pre-existing `home` under a user-supplied --scratch is left alone.
+ */
+export function scratchHomeRemovable(scratchHome, scratch) {
+  if (!scratchHome || !scratch) return "no directory configured";
+  if (!existsSync(scratchHome)) return null; // nothing to delete
+  if (lstatSync(scratchHome).isSymbolicLink()) return "it is a symbolic link";
+  const rel = relative(
+    realpathSync.native(scratch),
+    realpathSync.native(scratchHome),
+  );
+  if (isAbsolute(rel) || rel !== SCRATCH_HOME_NAME)
+    return `it is not <scratch>/${SCRATCH_HOME_NAME} (resolved to ${rel || "the scratch dir itself"})`;
+  if (!existsSync(join(scratchHome, SCRATCH_HOME_MARKER)))
+    return `it has no ${SCRATCH_HOME_MARKER} marker (not created by this driver)`;
+  return null;
+}
+
+/** Delete <scratch>/home when scratchHomeRemovable() allows it. */
+export function removeScratchHome(scratchHome, scratch) {
+  const why = scratchHomeRemovable(scratchHome, scratch);
+  if (why) {
+    bad(`refusing to delete ${scratchHome}: ${why}`);
+    return false;
+  }
+  if (!existsSync(scratchHome)) {
+    note(`scratch home ${scratchHome} absent`);
+    return true;
+  }
+  rmSync(scratchHome, { recursive: true, force: true });
+  ok(`removed ${scratchHome}`);
+  return true;
+}
+
+/**
+ * Stop a spawned child together with its descendants. child.kill() on
+ * Windows ends only the node process; the `cmd /c ... powershell` installer
+ * it spawned would keep writing into the SDK — and into the User
+ * environment — after the driver has moved on to its teardown.
+ */
+export function killTree(child) {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+  if (process.platform === "win32") {
+    spawnSync("taskkill", ["/T", "/F", "/PID", String(child.pid)], {
+      stdio: "ignore",
+      timeout: 30_000,
+    });
+  } else child.kill();
+}
+
+/** Where the runner's plugin scripts live; used to recognise our own PowerShell processes. */
+export const PLUGIN_SCRIPTS_DIR = join(REPO, "tizen-cli", "dist", "scripts");
+
+/** The script groups the installer phases run; only these are ever stopped. */
+export const INSTALLER_SCRIPT_GROUPS = [
+  "tizen-sdk-install",
+  "tizen-sdk-install-custom-repo",
+  "tizen-tv-sdk-install",
+  "tizen-tv-sdk-install-from-zip",
+  "tizen-update-package",
+  "tizen-platform-install",
+  "tizen-download-emulator-package",
+  "tizen-download-mobile-platform",
+  "tizen-install-rootstrap",
+  "tizen-dotnet-setup",
+];
+
+/**
+ * Kill PowerShell processes still running one of THIS repo's installer
+ * scripts (a runner timeout kills node, not the script it spawned; left
+ * alone, tizen-sdk-install.ps1 would rewrite the User environment after the
+ * teardown restored it). Matches `-File "<PLUGIN_SCRIPTS_DIR>\<group>\..."`
+ * for the installer groups only, and never the querying shell itself — its
+ * own command line contains the same path, which is how an earlier version
+ * matched (and stopped) itself. Returns [{pid, commandLine}] of what it
+ * stopped; [] on non-Windows or when none were found.
+ */
+export function stopOrphanedInstallers() {
+  if (process.platform !== "win32") return [];
+  const dir = PLUGIN_SCRIPTS_DIR.replace(/'/g, "''");
+  const patterns = INSTALLER_SCRIPT_GROUPS.map(
+    (g) => `'*-File*${dir}\\${g}\\*'`,
+  ).join(",");
+  // $PID is the querying shell: its own command line carries every pattern.
+  const out = powershell(
+    `$pats = @(${patterns}); ` +
+      `Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" | ` +
+      `Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine } | ` +
+      `Where-Object { $c = $_.CommandLine; @($pats | Where-Object { $c -like $_ }).Count -gt 0 } | ` +
+      `ForEach-Object { [pscustomobject]@{ pid = $_.ProcessId; commandLine = $_.CommandLine } } | ` +
+      `ConvertTo-Json -Compress`,
+    { timeoutMs: 60_000 },
+  );
+  if (!out) return [];
+  const parsed = JSON.parse(out);
+  const found = (Array.isArray(parsed) ? parsed : [parsed]).filter((p) =>
+    Number.isInteger(p?.pid),
+  );
+  for (const { pid } of found)
+    spawnSync("taskkill", ["/T", "/F", "/PID", String(pid)], {
+      stdio: "ignore",
+      timeout: 30_000,
+    });
+  return found;
 }
 
 /**

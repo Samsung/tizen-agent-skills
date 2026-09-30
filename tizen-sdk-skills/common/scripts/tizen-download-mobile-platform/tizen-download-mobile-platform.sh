@@ -12,7 +12,8 @@
 # - Resolves MOBILE-{version} and its Install-dependency packages
 # - Downloads each from (repo + Path) and merges data/ into the SDK root
 # - Optionally downloads IOT-Headed extension:
-#   1) Downloads extension_info.xml from the repository
+#   1) Downloads extension_info.xml from the repository (falls back to the
+#      official repo when a custom repository does not serve it)
 #   2) Parses the XML to extract the IoT Headed repository URL
 #   3) Downloads pkg_list from the IoT repository
 #   4) Resolves and installs IOT-Headed-{version} package
@@ -40,7 +41,10 @@ DRY_RUN=false
 HELP=false
 
 # Package repository (base URL for pkg_list and binary zip)
-PKG_REPO="https://download.tizen.org/sdk/tizenstudio/official"
+# The official repo is also used as the fallback source for extension_info.xml
+# when a custom repository (e.g. an internal mirror) does not serve it.
+OFFICIAL_PKG_REPO="https://download.tizen.org/sdk/tizenstudio/official"
+PKG_REPO="$OFFICIAL_PKG_REPO"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -218,7 +222,8 @@ fi
 # Read repository.info to use the same CDN mirror
 REPO_INFO_FILE="$PKG_INFO_DIR/repository.info"
 if [[ -f "$REPO_INFO_FILE" ]]; then
-    REPO_URL=$(grep "^Repository=" "$REPO_INFO_FILE" | sed 's/^Repository=\s*//' | tr -d '\n')
+    # Strip CR too: repository.info may have been written on Windows (CRLF).
+    REPO_URL=$(grep "^Repository=" "$REPO_INFO_FILE" | sed 's/^Repository=\s*//' | tr -d '\r\n')
     if [[ -n "$REPO_URL" ]]; then
         PKG_REPO="$REPO_URL"
         log_success "Using repository from repository.info: $PKG_REPO"
@@ -557,8 +562,38 @@ if [[ "$INCLUDE_IOT_HEADED" == true ]]; then
     EXTENSION_INFO_URL="$PKG_REPO/extension_info.xml"
     EXTENSION_INFO_FILE="$WORKDIR/extension_info.xml"
     
+    # Three outcomes, tracked by EXTENSION_INFO_OK (mirrors $extensionInfoOk in
+    # the .ps1 version): downloaded from the configured repo, downloaded from the
+    # official repo via fallback, or not downloaded at all.
     log_info "Downloading extension info: $EXTENSION_INFO_URL"
+    EXTENSION_INFO_OK=false
     if curl -fsSL -o "$EXTENSION_INFO_FILE" "$EXTENSION_INFO_URL" 2>/dev/null; then
+        EXTENSION_INFO_OK=true
+    # Compare with trailing slashes stripped so an "official/" entry in
+    # repository.info does not trigger a pointless retry of the same URL.
+    elif [[ "${PKG_REPO%/}" != "${OFFICIAL_PKG_REPO%/}" ]]; then
+        # Custom repositories (internal mirrors) usually carry only pkg_list and
+        # binaries, not extension_info.xml. Fall back to the official repo for
+        # the extension catalogue only; the IoT packages are then fetched from
+        # the repository URL that catalogue points to.
+        log_warn "extension_info.xml not available at $EXTENSION_INFO_URL"
+        rm -f "$EXTENSION_INFO_FILE"
+        EXTENSION_INFO_URL="$OFFICIAL_PKG_REPO/extension_info.xml"
+        log_info "Falling back to official repo for extension info: $EXTENSION_INFO_URL"
+        if curl -fsSL -o "$EXTENSION_INFO_FILE" "$EXTENSION_INFO_URL" 2>/dev/null; then
+            EXTENSION_INFO_OK=true
+        else
+            log_error "Failed to download extension_info.xml from official repo ($EXTENSION_INFO_URL)"
+        fi
+    else
+        log_error "Failed to download extension_info.xml ($EXTENSION_INFO_URL)"
+    fi
+
+    if [[ "$EXTENSION_INFO_OK" != true ]]; then
+        log_warn "IOT-Headed extension will NOT be installed. Continuing with Mobile platform only."
+    fi
+
+    if [[ "$EXTENSION_INFO_OK" == true ]]; then
         # Parse the XML to extract IoT Headed repository URL
         # Look for <extension> block containing <name>Tizen IoT Headed</name> followed by <repository>
         IOT_REPO=""
@@ -605,9 +640,6 @@ if [[ "$INCLUDE_IOT_HEADED" == true ]]; then
             log_error "Could not find IOT-Headed repository URL in extension_info.xml"
             log_warn "IOT-Headed extension will NOT be installed."
         fi
-    else
-        log_error "Failed to download extension_info.xml"
-        log_warn "IOT-Headed extension will NOT be installed."
     fi
     
     if [[ "$IOT_PKGLIST_DOWNLOAD_FAILED" == true ]]; then

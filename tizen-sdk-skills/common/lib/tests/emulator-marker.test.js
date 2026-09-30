@@ -17,9 +17,14 @@
  */
 
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const {
   parseEmulatorMarkerPlatforms,
   isEmulatorMarkerSatisfied,
+  listInstalledEmulatorImages,
+  describeEmulatorImages,
 } = require("../core/sdk");
 
 let passed = 0;
@@ -167,6 +172,139 @@ test("auto-detect result still carries the recorded list for the message", () =>
     isEmulatorMarkerSatisfied(LEGACY_MARKER, "").recorded,
     [],
   );
+});
+
+console.log("\n=== listInstalledEmulatorImages — what is actually on disk ===");
+
+// The marker only records installs made by tizen-download-emulator-package.
+// The SDK / TV SDK / platform installers also ship emulator images but never
+// write that marker, so a 10.0 image installed by tizen-sdk-install was
+// invisible to the pre-check and the envelope read as "only 11.0 installed".
+function withFixtureSdk(fn) {
+  const sdk = fs.mkdtempSync(path.join(os.tmpdir(), "emu-images-"));
+  try {
+    const mk = (...segs) =>
+      fs.mkdirSync(path.join(sdk, ...segs), { recursive: true });
+    mk(
+      "platforms",
+      "tizen-11.0",
+      "tizen",
+      "emulator-images",
+      "tizen-11.0-x86_64",
+    );
+    mk(
+      "platforms",
+      "tizen-10.0",
+      "tizen",
+      "emulator-images",
+      "tizen-10.0-x86_64",
+    );
+    mk(
+      "platforms",
+      "tizen-10.0",
+      "tv-samsung",
+      "emulator-images",
+      "tv-samsung-10.0-x86_64",
+    );
+    // Platform present but no emulator image → contributes nothing.
+    mk("platforms", "tizen-9.0", "tizen", "rootstraps");
+    // Non-platform siblings that must be ignored.
+    mk("platforms", "common", "tizen", "emulator-images", "not-a-platform");
+    mk("platforms", "tv-samsung-9.0", "emulator-images", "wrong-layout");
+    // Stray FILES where directories are expected must be skipped, not crash.
+    fs.writeFileSync(path.join(sdk, "platforms", "tizen-12.0"), "");
+    fs.writeFileSync(
+      path.join(
+        sdk,
+        "platforms",
+        "tizen-10.0",
+        "tizen",
+        "emulator-images",
+        "README.txt",
+      ),
+      "",
+    );
+    fn(sdk);
+  } finally {
+    fs.rmSync(sdk, { recursive: true, force: true });
+  }
+}
+
+test("lists every platform/profile/image dir, sorted by version then profile", () => {
+  withFixtureSdk((sdk) => {
+    assert.deepStrictEqual(listInstalledEmulatorImages(sdk), [
+      { platform: "10.0", profile: "tizen", image: "tizen-10.0-x86_64" },
+      {
+        platform: "10.0",
+        profile: "tv-samsung",
+        image: "tv-samsung-10.0-x86_64",
+      },
+      { platform: "11.0", profile: "tizen", image: "tizen-11.0-x86_64" },
+    ]);
+  });
+});
+
+test("sorts numerically, not lexically (9.0 < 10.0)", () => {
+  withFixtureSdk((sdk) => {
+    fs.mkdirSync(
+      path.join(
+        sdk,
+        "platforms",
+        "tizen-9.0",
+        "tizen",
+        "emulator-images",
+        "tizen-9.0-x86_64",
+      ),
+      { recursive: true },
+    );
+    assert.deepStrictEqual(
+      listInstalledEmulatorImages(sdk).map((i) => i.platform),
+      ["9.0", "10.0", "10.0", "11.0"],
+    );
+  });
+});
+
+test("missing SDK / platforms dir / empty path yields []", () => {
+  assert.deepStrictEqual(listInstalledEmulatorImages(""), []);
+  assert.deepStrictEqual(listInstalledEmulatorImages(undefined), []);
+  assert.deepStrictEqual(
+    listInstalledEmulatorImages(path.join(os.tmpdir(), "does-not-exist-emu")),
+    [],
+  );
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), "emu-bare-"));
+  try {
+    assert.deepStrictEqual(listInstalledEmulatorImages(bare), []);
+  } finally {
+    fs.rmSync(bare, { recursive: true, force: true });
+  }
+});
+
+console.log("\n=== describeEmulatorImages — the warning text ===");
+
+test("groups profiles under each platform", () => {
+  assert.strictEqual(
+    describeEmulatorImages([
+      { platform: "10.0", profile: "tizen", image: "a" },
+      { platform: "10.0", profile: "tv-samsung", image: "b" },
+      { platform: "11.0", profile: "tizen", image: "c" },
+    ]),
+    "10.0 (tizen, tv-samsung), 11.0 (tizen)",
+  );
+});
+
+test("dedupes a profile listed twice for the same platform", () => {
+  assert.strictEqual(
+    describeEmulatorImages([
+      { platform: "10.0", profile: "tizen", image: "x86_64" },
+      { platform: "10.0", profile: "tizen", image: "aarch64" },
+    ]),
+    "10.0 (tizen)",
+  );
+});
+
+test("empty / missing list reads as 'none'", () => {
+  assert.strictEqual(describeEmulatorImages([]), "none");
+  assert.strictEqual(describeEmulatorImages(undefined), "none");
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -22,6 +22,9 @@
  *  - createProject --force had no protected-path guard, so
  *    --parent-path C:\Users --name <user> --force deleted the entire home
  *    directory when any immediate child carried a Tizen marker
+ *  - createProject --force removed the existing project BEFORE the template /
+ *    app-name / parent-path screens, so a request rejected as invalid had
+ *    already destroyed the project it was asked to replace
  *
  * All fixtures live under a temp sandbox; nothing outside it is touched.
  * Junction creation (no admin needed on Windows) is skipped where symlinks
@@ -294,6 +297,85 @@ const PLAIN_CSPROJ =
     check(
       "non-Tizen dir survives",
       fs.existsSync(path.join(parent, "NotTizen001", "data.txt")),
+      true,
+    );
+
+    // Regression: --force removed the existing Tizen project BEFORE the
+    // template / app-name / parent-path screens ran, so a request that was
+    // then rejected as invalid had already destroyed the user's project.
+    mk(
+      path.join(parent, "ForceKeep0001", "tizen_web_project.yaml"),
+      "project_type: web_app",
+    );
+    const badTemplate = await createProject(
+      "webapp",
+      'Basic"; rm -rf x',
+      parent,
+      "ForceKeep0001",
+      true,
+    );
+    check("force + invalid template refused", badTemplate.status, "failure");
+    check(
+      "refusal is the template screen",
+      /Invalid template name/.test(badTemplate.errors[0].message),
+      true,
+    );
+    check(
+      "existing Tizen project survives a refused --force",
+      fs.existsSync(
+        path.join(parent, "ForceKeep0001", "tizen_web_project.yaml"),
+      ),
+      true,
+    );
+    // Same guarantee for the other two screens that run after the existence
+    // check: the app-name pattern and the parent-path shell screen.
+    mk(
+      path.join(parent, "ForceKeep 0002", "tizen_web_project.yaml"),
+      "project_type: web_app",
+    );
+    const badName = await createProject(
+      "webapp",
+      "Basic",
+      parent,
+      "ForceKeep 0002",
+      true,
+    );
+    check("force + app name with a space refused", badName.status, "failure");
+    check(
+      "refusal is the app-name screen",
+      /Invalid app name/.test(badName.errors[0].message),
+      true,
+    );
+    check(
+      "project survives a refused --force (app name)",
+      fs.existsSync(
+        path.join(parent, "ForceKeep 0002", "tizen_web_project.yaml"),
+      ),
+      true,
+    );
+    const dollarParent = path.join(SANDBOX, "force$parent");
+    mk(
+      path.join(dollarParent, "ForceKeep0003", "tizen_web_project.yaml"),
+      "project_type: web_app",
+    );
+    const badParent = await createProject(
+      "webapp",
+      "Basic",
+      dollarParent,
+      "ForceKeep0003",
+      true,
+    );
+    check("force + unsafe parent path refused", badParent.status, "failure");
+    check(
+      "refusal is the parent-path shell screen",
+      /parent path/.test(badParent.errors[0].message),
+      true,
+    );
+    check(
+      "project survives a refused --force (parent path)",
+      fs.existsSync(
+        path.join(dollarParent, "ForceKeep0003", "tizen_web_project.yaml"),
+      ),
       true,
     );
 

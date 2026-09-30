@@ -14,12 +14,17 @@
  *   node .../dotnet-setup-cli.js - 9.0.100                # Specific workload version
  *   node .../dotnet-setup-cli.js - - --no-install-sdk     # Never auto-install a missing .NET SDK
  *   node .../dotnet-setup-cli.js - - --sdk-channel 9.0    # Auto-install channel override
+ *   node .../dotnet-setup-cli.js --dotnet-root "C:\Program Files\dotnet"   # Use this SDK, skip discovery
+ *   node .../dotnet-setup-cli.js --persist-env            # Persist even a Tizen-bundled dotnet
  *
  * Arguments (all optional):
  *   force            - Literal "force" to reinstall workload even if it exists. "-" is a placeholder
  *   workloadVersion  - Tizen workload version to pass to Samsung installer. "-" is a placeholder
  *   --no-install-sdk - Do not auto-install a missing .NET SDK (guidance envelope instead)
  *   --sdk-channel <chan> - .NET SDK channel for the auto-install (script default: 8.0)
+ *   --dotnet-root <dir>  - Use the .NET SDK at this install root (the directory holding dotnet and sdk/)
+ *   --persist-env        - Also persist a Tizen-extension-bundled dotnet into the user environment.
+ *                          Official install roots are always persisted; bundled ones only with this flag
  *
  * Workload installation takes several minutes — callers should set Bash tool timeout to 600000ms
  * and run in foreground (installation is idempotent, so retrying on timeout is safe).
@@ -44,19 +49,29 @@ const { runCli } = require("./cli-runner");
 // version. Positionals keep their documented order among the non-flag args.
 const argv = process.argv.slice(2);
 let noInstallSdk = false;
+let persistEnv = false;
 let sdkChannel;
+let dotnetRoot;
 const positionals = [];
 for (let i = 0; i < argv.length; i++) {
   if (argv[i] === "--no-install-sdk") {
     noInstallSdk = true;
     continue;
   }
+  if (argv[i] === "--persist-env") {
+    persistEnv = true;
+    continue;
+  }
+  // A trailing value flag with no value must FAIL, not silently fall back to
+  // the default — '' is rejected by setupDotnet's validation, while undefined
+  // (flag absent) skips it. (tizen-cli's commander layer already errors on a
+  // missing value; keep the failure modes aligned.)
   if (argv[i] === "--sdk-channel") {
-    // A trailing --sdk-channel with no value must FAIL, not silently fall back
-    // to the default channel — '' is rejected by setupDotnet's validation,
-    // while undefined (flag absent) skips it. (tizen-cli's commander layer
-    // already errors on a missing <channel> value; keep the failure modes aligned.)
     sdkChannel = argv[i + 1] !== undefined ? argv[++i] : "";
+    continue;
+  }
+  if (argv[i] === "--dotnet-root") {
+    dotnetRoot = argv[i + 1] !== undefined ? argv[++i] : "";
     continue;
   }
   positionals.push(argv[i]);
@@ -70,5 +85,7 @@ runCli("tizen-sdk dotnet-setup", () =>
   setupDotnet(force, version, "tizen-sdk dotnet-setup", {
     noInstallSdk,
     sdkChannel,
+    dotnetRoot,
+    persistEnv,
   }),
 );

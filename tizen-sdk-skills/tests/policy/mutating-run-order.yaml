@@ -22,14 +22,16 @@
 # collide with policy/device-run-order.yaml (both share FIXTURE_NEEDS in
 # scripts/lib/driver-common.mjs; runner-helpers.test.mjs checks).
 #
-# NOT listed on purpose (draft, reason in each TC's NOTE): the SDK-installing
-# TCs that only execute under the packaged CLI or reinstall the host's SDK
-# (sdk-install.force, *-custom-repo.force, tv-sdk-install.force, dotnet-setup.force,
-# update-package.*, platform-install.happy, download-emulator-package.*,
-# download-mobile-platform.*, install-rootstrap.happy), the Samsung online-CA
-# actions (samsung-login, generate-samsung-*), the GBS builds
-# (build-project.arch / .gbs — Linux only) and build-project.compiler-flags
-# (no flag passthrough exists).
+# NOT listed on purpose (draft, reason in each TC's NOTE): the Samsung online-CA
+# actions (samsung-login, generate-samsung-* — a real account and a real
+# certificate) and the GBS builds (build-project.arch / .gbs — Linux only).
+#
+# Phases s2/s3 are the SDK INSTALLERS. The driver skips them unless
+# --with-installers (or --phase= names one): s2 downloads ~10 GB into a
+# throwaway home the driver points USERPROFILE/HOME at, with
+# TIZEN_SDK_INLINE_INSTALLER=1 so the installer branch runs inline instead of
+# coming back as suggested_fix (common/lib/core/sdk.js runsInstallerInline);
+# s3 reinstalls the host's real .NET Tizen workload.
 #
 # Invariants the order relies on:
 #   * s1 needs an installed SDK with platforms/tizen-10.0, <sdk>/.tv-sdk-installed
@@ -49,6 +51,21 @@
 #     create-project.force is listed twice so the second run is a real
 #     overwrite; build-project.release signs with the active myProfile that
 #     scripts/prepare-device-fixtures.mjs creates; project-delete is last.
+#     build-project.compiler-flags fails in Commander's parser (unknown
+#     option) and touches nothing.
+#   * s2 runs against an EMPTY home: sdk-install-custom-repo.force goes first
+#     because on an empty dir --force is just the real install (sdk.info,
+#     the scratch ~/.tizen.sdk.path.config, repository.info); the platform /
+#     emulator / mobile installers then add packages and write their
+#     <sdk>/.*-installed markers (download-emulator-package.happy is the
+#     short-circuit on the marker .specific-version wrote); update-package
+#     needs an installed SDK; install-rootstrap needs sdk.info and the ZIP
+#     fixture ${FIXTURE_ROOTSTRAP_ZIP}; sdk-install.force is LAST so it is a
+#     real --force over an existing SDK (the per-package skip keeps it short).
+#     The driver deletes TIZEN_SDK_PATH from the phase env: Get-SdkPath in
+#     common/scripts/lib/common.ps1 would otherwise find the real SDK.
+#   * s3 has no home redirect: the workload lands in the real dotnet install,
+#     and a redirected USERPROFILE would only send NuGet to the scratch dir.
 
 phases:
   # Already-installed short-circuits of the SDK installers. ~1 min.
@@ -90,6 +107,7 @@ phases:
   - name: p1-projects
     tcs:
       - tizen-sdk.create-project.native-happy # MyNativeApp — the build/delete target
+      - tizen-sdk.build-project.compiler-flags # --cflags rejected by the parser (invalid_argument)
       - tizen-sdk.create-project.webapp-happy # MyWebApp01
       - tizen-sdk.create-project.dotnet-happy # MyDotNetApp
       - tizen-sdk.create-project.force # MyForceApp01 (fresh)
@@ -98,3 +116,28 @@ phases:
       - tizen-sdk.build-project.clean
       - tizen-sdk.build-project.release # --sign-profile myProfile
       - tizen-sdk.project-delete.happy # MyNativeApp gone
+
+  # INSTALLERS — skipped without --with-installers. Real installs into the
+  # throwaway home <scratch>/home (USERPROFILE/HOME redirected, TIZEN_SDK_PATH
+  # removed, TIZEN_SDK_INLINE_INSTALLER=1). ~10 GB download, 60-90 min.
+  - name: s2-sdk-installers
+    tcs:
+      - tizen-sdk.sdk-install-custom-repo.force # empty home → the real install (sdk.info, scratch path config)
+      - tizen-sdk.tv-sdk-install.force
+      - tizen-sdk.platform-install.happy # 10.0 → .platform-installed
+      - tizen-sdk.download-emulator-package.specific-version # 10.0 → .emulator-package-installed
+      - tizen-sdk.download-emulator-package.happy # short-circuit on that marker
+      - tizen-sdk.download-emulator-package.force
+      - tizen-sdk.download-mobile-platform.happy # 7.5 (MOBILE-10.0 does not exist in the repo)
+      - tizen-sdk.download-mobile-platform.iot-headed
+      - tizen-sdk.update-package.dry-run
+      - tizen-sdk.update-package.happy
+      - tizen-sdk.update-package.force
+      - tizen-sdk.install-rootstrap.happy # ${FIXTURE_ROOTSTRAP_ZIP}
+      - tizen-sdk.sdk-install.force # last: --force over the SDK the phase built
+
+  # INSTALLERS — skipped without --with-installers. No home redirect:
+  # reinstalls the host's real .NET Tizen workload (network, several minutes).
+  - name: s3-dotnet-workload
+    tcs:
+      - tizen-sdk.dotnet-setup.force

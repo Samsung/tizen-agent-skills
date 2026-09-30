@@ -1402,6 +1402,23 @@ function resolveKeytoolBinary(sdkRoot) {
   return `keytool${ext}`;
 }
 
+/**
+ * keytool failure text with the -storepass value masked. execFileSync's
+ * error.message is the whole command line ("Command failed: keytool -list
+ * ... -storepass <password>"), and keytool usually reports bad passwords on
+ * stdout, so the stderr-empty fallback used to hand the password to the
+ * envelope. Field-name masking cannot see inside a message string.
+ *
+ * @param {any} error - the execFileSync error
+ * @param {string} password - value to redact (empty/non-string = nothing)
+ * @returns {string}
+ */
+function describeKeytoolFailure(error, password) {
+  const stderr = error && error.stderr ? String(error.stderr).trim() : "";
+  const text = stderr || (error && error.message) || String(error);
+  return redactSecrets(text, [password]);
+}
+
 function validateCertificateFile(filePath, password, sdkRoot) {
   const extension = path.extname(filePath).toLowerCase();
   const keytool = resolveKeytoolBinary(sdkRoot);
@@ -1428,7 +1445,7 @@ function validateCertificateFile(filePath, password, sdkRoot) {
   } catch (error) {
     return {
       valid: false,
-      error: error.stderr ? error.stderr.toString().trim() : error.message,
+      error: describeKeytoolFailure(error, password),
     };
   }
 }
@@ -1647,9 +1664,7 @@ async function inspectCertificate(
         windowsHide: true,
       });
     } catch (error) {
-      const detail = error.stderr
-        ? error.stderr.toString().trim()
-        : error.message;
+      const detail = describeKeytoolFailure(error, input.password);
       return formatError(
         command,
         "cert_inspection_failed",
@@ -1670,7 +1685,7 @@ async function inspectCertificate(
     return formatError(
       command,
       "cert_inspection_failed",
-      `Failed to inspect certificate: ${error.message}`,
+      `Failed to inspect certificate: ${redactSecrets(error.message, [input.password])}`,
       null,
       startTime,
     );
@@ -1735,6 +1750,7 @@ module.exports = {
   addProfilePathStatuses,
   preflightSigningProfile,
   resolveKeytoolBinary,
+  describeKeytoolFailure,
   validateCertificateFile,
   parseKeytoolMetadata,
 };

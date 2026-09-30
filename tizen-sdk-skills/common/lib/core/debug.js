@@ -16,6 +16,7 @@ const { Envelope } = require("../envelope/envelope");
 const { findLatestVersionDir, execPluginScript } = require("./plugin-cache");
 const { checkShellSafe, isValidSerial } = require("./shell-safety");
 const { summarizeOutput } = require("./output-summary");
+const { findFirstFileByExtension } = require("./rds/yaml-reader");
 
 /**
  * Extract only key lines from GDB debug setup script stdout for envelope warnings
@@ -316,6 +317,354 @@ function dotnetDebugOutputTail(
 const LAUNCH_SUSPENDED_NOTE =
   "The app is running under netcoredbg but SUSPENDED before Main(): it shows NO window until VS Code connects (F5). This is expected, not a failed launch.";
 
+/** Name of the launch.json configuration this runner owns (created or replaced in place). */
+const DOTNET_LAUNCH_CONFIG_NAME = "Tizen .NET (netcoredbg)";
+/** Label of the tasks.json task that re-runs this runner before every F5. */
+const DOTNET_LAUNCH_TASK_LABEL = "tizen: netcoredbg launch";
+
+/**
+ * Pull the TargetFramework and `<AssemblyName>` out of raw .csproj text. Pure.
+ *
+ * Accepts `<TargetFramework>` and multi-targeting `<TargetFrameworks>` (with or
+ * without attributes such as `Condition="..."`). A `;`-separated list yields the
+ * Tizen TFM when there is one, else the first entry — that is the output
+ * directory `dotnet build` produces for the Tizen target.
+ *
+ * @param {string} content
+ * @returns {{targetFramework: string|null, assemblyName: string|null}}
+ */
+function parseCsprojProps(content) {
+  const tfm = content.match(
+    /<TargetFrameworks?(?:\s[^>]*)?>\s*([^<]+?)\s*<\/TargetFrameworks?>/,
+  );
+  let targetFramework = null;
+  if (tfm) {
+    const list = tfm[1]
+      .split(";")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    targetFramework = list.find((t) => /tizen/i.test(t)) || list[0] || null;
+  }
+  const asm = content.match(
+    /<AssemblyName(?:\s[^>]*)?>\s*([^<]+?)\s*<\/AssemblyName>/,
+  );
+  return {
+    targetFramework,
+    assemblyName: asm ? asm[1].trim() : null,
+  };
+}
+
+/**
+ * Locate the app's .csproj under `projectPath` and derive the host-side
+ * `program` / `cwd` VS Code needs for a Debug build.
+ *
+ * The .csproj may sit at the project root or one level down
+ * (`<root>/<App>/<App>.csproj`, the layout `tz new` produces); the BFS lookup
+ * returns the shallowest one. The output directory is always `bin/Debug/<tfm>`:
+ * netcoredbg needs .pdb files, and the setup script already refuses Release builds.
+ *
+ * @param {string} projectPath - absolute project (workspace) directory
+ * @returns {{csprojPath: string, csprojDirRel: string, targetFramework: string,
+ *   assemblyName: string, program: string, cwd: string}}
+ * @throws {Error} when no .csproj is found or it has no <TargetFramework>
+ */
+function resolveDotnetLaunchProgram(projectPath) {
+  const csprojPath = findFirstFileByExtension(projectPath, ".csproj");
+  if (!csprojPath) {
+    throw new Error(`No .csproj found under ${projectPath}`);
+  }
+  const { targetFramework, assemblyName } = parseCsprojProps(
+    fs.readFileSync(csprojPath, "utf-8"),
+  );
+  if (!targetFramework) {
+    throw new Error(`${csprojPath} has no <TargetFramework>`);
+  }
+  const name = assemblyName || path.basename(csprojPath, ".csproj");
+  const rel = path
+    .relative(projectPath, path.dirname(csprojPath))
+    .split(path.sep)
+    .join("/");
+  const csprojDirRel = rel || ".";
+  const outDir =
+    (csprojDirRel === "." ? "" : `${csprojDirRel}/`) +
+    `bin/Debug/${targetFramework}`;
+  return {
+    csprojPath,
+    csprojDirRel,
+    targetFramework,
+    assemblyName: name,
+    program: `\${workspaceFolder}/${outDir}/${name}.dll`,
+    cwd: `\${workspaceFolder}/${outDir}`,
+  };
+}
+
+/**
+ * The `coreclr` configuration VS Code needs to connect to the netcoredbg DAP
+ * server the setup script left listening (via the sdb-forwarded host port).
+ * `coreclr` is contributed by the C# extension (ms-dotnettools.csharp).
+ *
+ * @param {{program: string, cwd: string, port: number, preLaunchTask?: string}} p
+ * @returns {object} one launch.json `configurations[]` entry
+ */
+function buildDotnetLaunchConfiguration({ program, cwd, port, preLaunchTask }) {
+  return {
+    name: DOTNET_LAUNCH_CONFIG_NAME,
+    type: "coreclr",
+    request: "launch",
+    program,
+    cwd,
+    debugServer: port,
+    stopAtEntry: false,
+    ...(preLaunchTask ? { preLaunchTask } : {}),
+  };
+}
+
+/**
+ * The tasks.json task VS Code runs before every F5: this runner in launch mode.
+ *
+ * Needed because netcoredbg ends the app AND itself when the client disconnects
+ * (Stop in VS Code sends terminate/disconnect), while the host-side sdb forward
+ * keeps accepting connections — so a second F5 against the stale port "starts"
+ * and dies at once. Relaunching on every F5 makes stop → F5 just work.
+ *
+ * @param {{appId: string, port: number, serial?: string, cliPath?: string}} p
+ * @returns {object} one tasks.json `tasks[]` entry
+ */
+function buildDotnetLaunchTask({ appId, port, serial, cliPath }) {
+  const cli =
+    cliPath || path.resolve(__dirname, "..", "cli", "dotnet-debug-cli.js");
+  const args = [cli, appId, "launch", "-", String(port)];
+  if (serial) args.push(serial);
+  args.push("--project", "${workspaceFolder}");
+  return {
+    label: DOTNET_LAUNCH_TASK_LABEL,
+    type: "process",
+    command: "node",
+    args,
+    presentation: { reveal: "silent", panel: "shared", clear: true },
+    problemMatcher: [],
+  };
+}
+
+/** Structural equality for JSON values — key order is irrelevant. */
+function jsonDeepEqual(a, b) {
+  if (a === b) return true;
+  if (a === null || b === null || typeof a !== typeof b) return false;
+  if (Array.isArray(a) || Array.isArray(b)) {
+    return (
+      Array.isArray(a) &&
+      Array.isArray(b) &&
+      a.length === b.length &&
+      a.every((v, i) => jsonDeepEqual(v, b[i]))
+    );
+  }
+  if (typeof a === "object") {
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    return (
+      ka.length === kb.length &&
+      ka.every(
+        (k) =>
+          Object.prototype.hasOwnProperty.call(b, k) &&
+          jsonDeepEqual(a[k], b[k]),
+      )
+    );
+  }
+  return false;
+}
+
+/** Indentation unit of an existing JSON file (tabs or spaces); two spaces when undetectable. */
+function detectJsonIndent(text) {
+  const m = text.match(/^([ \t]+)\S/m);
+  return m ? m[1] : "  ";
+}
+
+/**
+ * Plan the merge of one entry into a VS Code `.vscode/*.json` file that holds
+ * an array of entries (launch.json `configurations`, tasks.json `tasks`) —
+ * without writing. Only the entry selected by `match` is replaced; everything
+ * else is preserved, the file's own indentation and trailing-newline style are
+ * kept, and an entry that is structurally equal (key order ignored) counts as
+ * unchanged so a user's file is never rewritten for nothing. A file that is
+ * not strict JSON (comments, trailing commas) is reported as skipped.
+ *
+ * @param {string} filePath
+ * @param {{defaults: object, key: string, match: (e: object) => boolean, entry: object}} p
+ * @returns {{action: 'created'|'updated'|'unchanged'|'skipped', reason?: string, text?: string}}
+ *   `text` is the content to write; absent when unchanged or skipped
+ */
+function planVscodeJsonMerge(filePath, { defaults, key, match, entry }) {
+  let doc = { ...defaults, [key]: [] };
+  let indent = "  ";
+  let eol = "\n";
+  let action = "created";
+  if (fs.existsSync(filePath)) {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    let parsed;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (e) {
+      return {
+        action: "skipped",
+        reason: `${filePath} exists but is not strict JSON (${e.message}); add the entry by hand.`,
+      };
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return {
+        action: "skipped",
+        reason: `${filePath} exists but is not a JSON object; add the entry by hand.`,
+      };
+    }
+    indent = detectJsonIndent(raw);
+    eol = raw.endsWith("\n") ? "\n" : "";
+    doc = parsed;
+    if (!Array.isArray(doc[key])) doc[key] = [];
+    for (const [k, v] of Object.entries(defaults)) {
+      if (doc[k] === undefined) doc[k] = v;
+    }
+    const idx = doc[key].findIndex((e) => e && match(e));
+    if (idx === -1) {
+      doc[key].push(entry);
+      action = "updated";
+    } else if (jsonDeepEqual(doc[key][idx], entry)) {
+      return { action: "unchanged" };
+    } else {
+      doc[key][idx] = entry;
+      action = "updated";
+    }
+  } else {
+    doc[key].push(entry);
+  }
+  return { action, text: `${JSON.stringify(doc, null, indent)}${eol}` };
+}
+
+/** Write what {@link planVscodeJsonMerge} planned (no-op for unchanged/skipped). */
+function commitVscodeJsonMerge(filePath, plan) {
+  if (plan.text === undefined) return;
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, plan.text, "utf-8");
+}
+
+/**
+ * Plan + commit in one step. See {@link planVscodeJsonMerge}.
+ *
+ * @returns {{action: 'created'|'updated'|'unchanged'|'skipped', reason?: string}}
+ */
+function mergeVscodeJson(filePath, spec) {
+  const plan = planVscodeJsonMerge(filePath, spec);
+  commitVscodeJsonMerge(filePath, plan);
+  return {
+    action: plan.action,
+    ...(plan.reason ? { reason: plan.reason } : {}),
+  };
+}
+
+/**
+ * Write `<projectPath>/.vscode/launch.json` (and, when `opts.appId` is given,
+ * `.vscode/tasks.json` with the relaunch task wired in as `preLaunchTask`) for
+ * the netcoredbg DAP server the setup script left listening.
+ *
+ * @param {string} projectPath - absolute project (workspace) directory
+ * @param {number} port - DAP server port (host side, sdb-forwarded)
+ * @param {{appId?: string, serial?: string, cliPath?: string}} [opts] - with
+ *   `appId` the relaunch task is generated; `serial` pins the device; `cliPath`
+ *   overrides the runner path (defaults to this plugin's dotnet-debug-cli.js)
+ * @returns {{launch_json_path: string, action: 'created'|'updated'|'unchanged'|'skipped',
+ *   reason?: string, configuration: object, program: string, cwd: string,
+ *   target_framework: string, csproj_path: string, pre_launch_task?: string,
+ *   tasks_json_path?: string, tasks_json_action?: string, tasks_reason?: string,
+ *   task?: object}}
+ * @throws {Error} from {@link resolveDotnetLaunchProgram}
+ */
+function writeDotnetLaunchJson(projectPath, port, opts = {}) {
+  const resolved = resolveDotnetLaunchProgram(projectPath);
+  const launchJsonPath = path.join(projectPath, ".vscode", "launch.json");
+  const tasksJsonPath = path.join(projectPath, ".vscode", "tasks.json");
+  const launchSpec = (preLaunchTask) => ({
+    defaults: { version: "0.2.0" },
+    key: "configurations",
+    match: (c) => c.name === DOTNET_LAUNCH_CONFIG_NAME,
+    entry: buildDotnetLaunchConfiguration({
+      program: resolved.program,
+      cwd: resolved.cwd,
+      port,
+      preLaunchTask,
+    }),
+  });
+
+  // Plan everything before writing anything: launch.json first, because a
+  // relaunch task nobody references (launch.json unwritable) would be an
+  // orphan, and a preLaunchTask pointing at a task that could not be written
+  // would break F5. Nothing is committed unless launch.json is writable.
+  let task = null;
+  let tasksPlan = null;
+  let preLaunchTask;
+  let launchPlan;
+  if (opts.appId) {
+    task = buildDotnetLaunchTask({
+      appId: opts.appId,
+      port,
+      serial: opts.serial,
+      cliPath: opts.cliPath,
+    });
+    launchPlan = planVscodeJsonMerge(
+      launchJsonPath,
+      launchSpec(DOTNET_LAUNCH_TASK_LABEL),
+    );
+    if (launchPlan.action !== "skipped") {
+      tasksPlan = planVscodeJsonMerge(tasksJsonPath, {
+        defaults: { version: "2.0.0" },
+        key: "tasks",
+        match: (t) => t.label === DOTNET_LAUNCH_TASK_LABEL,
+        entry: task,
+      });
+      if (tasksPlan.action === "skipped") {
+        launchPlan = planVscodeJsonMerge(launchJsonPath, launchSpec(undefined));
+      } else {
+        preLaunchTask = DOTNET_LAUNCH_TASK_LABEL;
+      }
+    }
+  } else {
+    launchPlan = planVscodeJsonMerge(launchJsonPath, launchSpec(undefined));
+  }
+
+  const launchSkipped = launchPlan.action === "skipped";
+  if (!launchSkipped) {
+    // tasks.json first so launch.json never references a task that is not there yet.
+    if (tasksPlan) commitVscodeJsonMerge(tasksJsonPath, tasksPlan);
+    commitVscodeJsonMerge(launchJsonPath, launchPlan);
+  }
+
+  const tasksInfo = task
+    ? {
+        tasks_json_path: tasksJsonPath,
+        task,
+        ...(launchSkipped
+          ? {
+              tasks_json_action: "skipped",
+              tasks_reason: `${launchJsonPath} could not be updated, so the relaunch task was not written either.`,
+            }
+          : {
+              tasks_json_action: tasksPlan.action,
+              ...(tasksPlan.reason ? { tasks_reason: tasksPlan.reason } : {}),
+            }),
+      }
+    : {};
+
+  return {
+    configuration: launchSpec(preLaunchTask).entry,
+    program: resolved.program,
+    cwd: resolved.cwd,
+    target_framework: resolved.targetFramework,
+    csproj_path: resolved.csprojPath,
+    launch_json_path: launchJsonPath,
+    action: launchPlan.action,
+    ...(launchPlan.reason ? { reason: launchPlan.reason } : {}),
+    ...(preLaunchTask ? { pre_launch_task: preLaunchTask } : {}),
+    ...tasksInfo,
+  };
+}
+
 /**
  * Tizen DotNET app remote debugging setup (setup-only)
  *
@@ -337,6 +686,10 @@ const LAUNCH_SUSPENDED_NOTE =
  * @param {string} [opts.serial=''] - device serial (default: first connected device)
  * @param {number|string} [opts.timeout=30] - PID search wait time (seconds, attach mode)
  * @param {boolean} [opts.forceInstall=false] - reinstall netcoredbg
+ * @param {string} [opts.projectPath] - host project (workspace) directory. Launch mode
+ *   only: when given, `<projectPath>/.vscode/launch.json` is created/updated with a
+ *   ready-to-run `coreclr` configuration (program/cwd resolved from the .csproj), so
+ *   the user just presses F5 instead of copying a placeholder template.
  * @returns {object} Standard JSON Envelope
  */
 async function setupDotnetDebug(
@@ -400,6 +753,23 @@ async function setupDotnetDebug(
         "invalid_parameters",
         `Invalid device serial "${serial}": only letters, digits, '.', '_', ':' and '-' are allowed (no leading '-', at most 64 characters).`,
       );
+    }
+    let projectPath = "";
+    if (opts.projectPath !== undefined && opts.projectPath !== "") {
+      projectPath = path.resolve(String(opts.projectPath).trim());
+      let isDir = false;
+      try {
+        isDir = fs.statSync(projectPath).isDirectory();
+      } catch {
+        isDir = false;
+      }
+      if (!isDir) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `Project path does not exist or is not a directory: ${projectPath}`,
+        );
+      }
     }
 
     // resolveScript() assumes <group>/<group>.ps1 filename, but this script has a different
@@ -576,6 +946,69 @@ async function setupDotnetDebug(
       );
     }
 
+    // launch mode + known project: write .vscode/launch.json so the user only presses F5.
+    // A hand-written launch.json is where the placeholder template used to go wrong
+    // (wrong debug type, wrong TFM); resolving it from the .csproj removes that step.
+    let launchJson = null;
+    let launchJsonWarning = null;
+    let tasksJsonWarning = null;
+    if (launch && projectPath) {
+      try {
+        launchJson = writeDotnetLaunchJson(projectPath, port, {
+          appId,
+          serial,
+        });
+        if (launchJson.action === "skipped") {
+          launchJsonWarning = `launch.json not written: ${launchJson.reason}`;
+        }
+        if (launchJson.tasks_json_action === "skipped") {
+          tasksJsonWarning = `tasks.json not written: ${launchJson.tasks_reason} Without the "${DOTNET_LAUNCH_TASK_LABEL}" preLaunchTask, re-run this runner before every F5.`;
+        }
+      } catch (e) {
+        launchJsonWarning = `launch.json not written: ${e.message}`;
+      }
+    }
+    const launchJsonReady = launchJson && launchJson.action !== "skipped";
+    const relaunchWired = launchJsonReady && !!launchJson.pre_launch_task;
+    // netcoredbg ends the app and itself when the client disconnects, so the
+    // "reconnect" story is: relaunch. Say how, depending on what got written.
+    const stopNote = relaunchWired
+      ? `Stopping the session ends the app and the DAP server; pressing F5 again re-runs the "${DOTNET_LAUNCH_TASK_LABEL}" task, which relaunches the app under netcoredbg.`
+      : "Stopping the session ends the app and the DAP server — re-run this runner before the next F5.";
+    const csharpExtNote =
+      "The coreclr debug type needs the C# extension (ms-dotnettools.csharp).";
+    const launchConfig = launch
+      ? launchJsonReady
+        ? {
+            ...launchJson.configuration,
+            debug_server_port: port,
+            launch_json_path: launchJson.launch_json_path,
+            launch_json_action: launchJson.action,
+            ...(launchJson.tasks_json_path
+              ? {
+                  tasks_json_path: launchJson.tasks_json_path,
+                  tasks_json_action: launchJson.tasks_json_action,
+                }
+              : {}),
+            ...(launchJson.pre_launch_task
+              ? { pre_launch_task: launchJson.pre_launch_task }
+              : {}),
+            csproj_path: launchJson.csproj_path,
+            target_framework: launchJson.target_framework,
+            note: `${LAUNCH_SUSPENDED_NOTE} .vscode/launch.json is ready (${launchJson.action}${relaunchWired ? `; tasks.json ${launchJson.tasks_json_action}` : ""}): open ${projectPath} in VS Code, pick "${DOTNET_LAUNCH_CONFIG_NAME}", set a breakpoint, press F5. ${stopNote} ${csharpExtNote}`,
+          }
+        : {
+            type: "coreclr",
+            request: "launch",
+            debug_server_port: port,
+            workspace_placeholder: "<APP_FOLDER_NAME>",
+            note: `${LAUNCH_SUSPENDED_NOTE} Create .vscode/launch.json in the workspace root with the netcoredbg DAP config. Replace <APP_FOLDER_NAME> with your app folder name. ${stopNote} ${csharpExtNote}`,
+          }
+      : null;
+    const launchNote = launchJsonReady
+      ? `${LAUNCH_SUSPENDED_NOTE} netcoredbg DAP server is listening on device port ${port}; host tcp:${port} is forwarded. ${launchJson.launch_json_path} is ready (${launchJson.action}) — open the project in VS Code, select "${DOTNET_LAUNCH_CONFIG_NAME}", set a breakpoint, and press F5. ${stopNote}`
+      : `${LAUNCH_SUSPENDED_NOTE} netcoredbg DAP server is listening on device port ${port}; host tcp:${port} is forwarded. Create .vscode/launch.json, open the project in VS Code, set a breakpoint, and press F5. ${stopNote}`;
+
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
     return envelope.success(
@@ -601,24 +1034,20 @@ async function setupDotnetDebug(
         netcoredbg_status: "installed",
         port_forwarded: launch ? portForwarded : false,
         debug_command: !launch ? debugCommand : null,
-        launch_config: launch
-          ? {
-              type: "coreclr",
-              request: "launch",
-              debug_server_port: port,
-              workspace_placeholder: "<APP_FOLDER_NAME>",
-              note: `${LAUNCH_SUSPENDED_NOTE} Create .vscode/launch.json in the workspace root with the netcoredbg DAP config. Replace <APP_FOLDER_NAME> with your app folder name.`,
-            }
-          : null,
+        launch_config: launchConfig,
         note: launch
-          ? `${LAUNCH_SUSPENDED_NOTE} netcoredbg DAP server is listening on device port ${port}; host tcp:${port} is forwarded. Create .vscode/launch.json, open the project in VS Code, set a breakpoint, and press F5.`
+          ? launchNote
           : debugCommand.powershell
             ? "Run ONE of the debug_command lines in an interactive terminal: powershell form (leading & is PowerShell-only) or cmd form. The app is running and netcoredbg is installed."
             : "Run the debug_command.shell line in an interactive terminal. The app is running and netcoredbg is installed.",
       },
       {
         // Key lines only (warnings/errors) instead of full setup log
-        warnings: summarizeDotnetDebugOutput(output),
+        warnings: [
+          ...(launchJsonWarning ? [launchJsonWarning] : []),
+          ...(tasksJsonWarning ? [tasksJsonWarning] : []),
+          ...summarizeDotnetDebugOutput(output),
+        ],
       },
     );
   } catch (error) {
@@ -635,4 +1064,14 @@ async function setupDotnetDebug(
 module.exports = {
   setupGdbDebug,
   setupDotnetDebug,
+  DOTNET_LAUNCH_CONFIG_NAME,
+  DOTNET_LAUNCH_TASK_LABEL,
+  parseCsprojProps,
+  resolveDotnetLaunchProgram,
+  buildDotnetLaunchConfiguration,
+  buildDotnetLaunchTask,
+  jsonDeepEqual,
+  planVscodeJsonMerge,
+  mergeVscodeJson,
+  writeDotnetLaunchJson,
 };

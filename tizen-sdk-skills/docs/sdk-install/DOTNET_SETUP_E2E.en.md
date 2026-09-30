@@ -111,7 +111,11 @@ tizen-cli tizen-sdk dotnet-setup --force
 tizen-cli tizen-sdk dotnet-setup --workload-version 10.0.123
 tizen-cli tizen-sdk dotnet-setup --no-install-sdk    # never auto-install a missing SDK
 tizen-cli tizen-sdk dotnet-setup --sdk-channel 9.0   # auto-install channel (default 8.0)
+tizen-cli tizen-sdk dotnet-setup --dotnet-root "C:\Program Files\dotnet"   # use this SDK, skip discovery
+tizen-cli tizen-sdk dotnet-setup --persist-env       # persist even a Tizen-extension-bundled dotnet
 ```
+
+> **How the SDK is chosen, and what gets persisted.** When `dotnet` is not on PATH the runner ranks the installed SDKs — `DOTNET_ROOT`, then official install roots (`C:\Program Files\dotnet`, `%LOCALAPPDATA%\Microsoft\dotnet`, `~\.dotnet`), then Tizen-extension-bundled dotnets (`…\sdktools\dotnet`) — and picks the best. An SDK in an official root (or one given via `--dotnet-root`) is persisted into the User `DOTNET_ROOT`/`PATH`; a bundled dotnet is used **for this run only**, because an extension update can move or delete it and leave a dangling `DOTNET_ROOT` behind. Pass `--persist-env` to persist a bundled dotnet anyway. An already-dangling `DOTNET_ROOT` is reported with the command that clears it. The envelope lists every SDK found in `result.dotnet_candidates` and what this run wrote in `result.persisted_env`.
 
 #### Method C: Manual Setup (Step-by-step)
 
@@ -172,10 +176,14 @@ powershell -ExecutionPolicy Bypass -File `
   "...\tizen-dotnet-setup.ps1" -NoInstallSdk
 powershell -ExecutionPolicy Bypass -File `
   "...\tizen-dotnet-setup.ps1" -SdkChannel "9.0"
+powershell -ExecutionPolicy Bypass -File `
+  "...\tizen-dotnet-setup.ps1" -DotnetRoot "C:\Program Files\dotnet"
+powershell -ExecutionPolicy Bypass -File `
+  "...\tizen-dotnet-setup.ps1" -PersistEnv
 ```
 
 **Script automatically:**
-1. Detects .NET SDK — and if none exists anywhere, auto-installs one user-scope into `%LOCALAPPDATA%\Microsoft\dotnet` (no admin rights; skip with `-NoInstallSdk`)
+1. Detects .NET SDK — if not on PATH, ranks the installed SDKs (`DOTNET_ROOT` → official roots → Tizen-extension-bundled), uses the best one and persists it into the User `DOTNET_ROOT`/`PATH` when it lives in an official root (a bundled dotnet only with `-PersistEnv`). If none exists anywhere, auto-installs one user-scope into `%LOCALAPPDATA%\Microsoft\dotnet` (no admin rights; skip with `-NoInstallSdk`)
 2. Runs Samsung's workload-install.ps1
 3. Verifies workload installation
 4. Outputs `[DIAG]` information if there are issues
@@ -210,8 +218,12 @@ tizen-cli tizen-sdk dotnet-setup --force
 tizen-cli tizen-sdk dotnet-setup --workload-version 10.0.123
 tizen-cli tizen-sdk dotnet-setup --no-install-sdk    # never auto-install a missing SDK
 tizen-cli tizen-sdk dotnet-setup --sdk-channel 9.0   # auto-install channel (default 8.0)
+tizen-cli tizen-sdk dotnet-setup --dotnet-root /usr/share/dotnet   # use this SDK, skip discovery
+tizen-cli tizen-sdk dotnet-setup --persist-env       # persist even a Tizen-extension-bundled dotnet
 ```
 
+> When `dotnet` is not on PATH the runner ranks the installed SDKs — `DOTNET_ROOT`, then official roots (`~/.dotnet`, `/usr/share/dotnet`, brew libexec, …), then Tizen-extension-bundled dotnets (`…/sdktools/dotnet`). An official-root SDK (or `--dotnet-root`) is persisted via a `~/.local/bin/dotnet` symlink plus a `~/.bashrc` export block; a bundled dotnet only with `--persist-env` (an extension update can move or delete it, leaving a dangling `DOTNET_ROOT`). An existing `~/.bashrc` block is **replaced**, not skipped, so a stale path never survives a re-run.
+>
 > If no .NET SDK exists anywhere, the runner **auto-installs one user-scope into `~/.dotnet`** (official dotnet-install.sh, **no sudo needed**) and continues with the workload. Because `~/.dotnet` is user-owned, the workload step needs no sudo either.
 
 #### Method C: Manual Setup (Step-by-step)
@@ -272,10 +284,12 @@ bash "...tizen-dotnet-setup.sh" --force
 bash "...tizen-dotnet-setup.sh" --version "10.0.123"
 bash "...tizen-dotnet-setup.sh" --no-install-sdk
 bash "...tizen-dotnet-setup.sh" --sdk-channel "9.0"
+bash "...tizen-dotnet-setup.sh" --dotnet-root /usr/share/dotnet
+bash "...tizen-dotnet-setup.sh" --persist-env
 ```
 
 **Script automatically:**
-1. Detects .NET SDK — and if none exists anywhere, auto-installs one user-scope into `~/.dotnet` (no sudo; skip with `--no-install-sdk`)
+1. Detects .NET SDK — if not on PATH, ranks the installed SDKs (`DOTNET_ROOT` → official roots → Tizen-extension-bundled), uses the best one and persists it (`~/.local/bin` link + `~/.bashrc`) when it lives in an official root (a bundled dotnet only with `--persist-env`). If none exists anywhere, auto-installs one user-scope into `~/.dotnet` (no sudo; skip with `--no-install-sdk`)
 2. Runs Samsung's workload-install.sh
 3. Verifies workload installation
 4. Outputs `[DIAG]` information if there are issues
@@ -550,7 +564,7 @@ tizen-cli tizen-sdk create-project \
   --type dotnet \
   --template <template name from step 1> \
   --parent-path ./projects \
-  --name MyApp
+  --name MyTizenDotnetApp
 ```
 
 `--type`, `--template`, `--parent-path` and `--name` are all **required**. The app folder is created inside `--parent-path`, named after `--name`.

@@ -18,6 +18,13 @@
  *   terminateApp       — Terminate a running Tizen app via sdb
  *   collectAppLogs     — Collect dlog filtered by app PID (app-specific logs)
  *   analyzeErrors      — Analyze collected app logs for non-fatal runtime errors (E/F priority)
+ *   appLog             — Print the full collected log for one app (all priorities, hot + cold files)
+ *   deviceProfile      — Detect and print the connected device's profile (type, version, arch, root, tools)
+ *   investigate        — Run a one-shot first-pass investigation and emit a budgeted report
+ *   runProbe            — List and run evidence probes from the data-driven catalog
+ *   manageSnapshot      — Create, list, and compare system snapshots
+ *   runTimeline         — Analyze and visualize probe history across snapshots
+ *   manageKernel        — Kernel log collection (background, like dlog-collect) / stop / analysis (kmsg/dmesg)
  *   dumpDeviceLogs     — One-shot dlog buffer dump via sdb (`dlog -d`), optional tag/priority filter
  *   clearDeviceLogs    — Clear the device dlog buffer via sdb (`dlog -c`), confirmation-gated
  *
@@ -25,16 +32,33 @@
  * here — not in sdb-helper — so that every device-log request has ONE owner:
  * sdb-helper hands its log intents off to this skill, and this runner covers
  * both the quick one-shot operations and the continuous collect/analyze flow.
+ *
+ * Where the logs live: the native binary has no `--base-dir` option (removed
+ * in TizenDLogAnalyzer PR #155). It stores everything it collects under
+ * `<sdk-data>/dloganalyzer/`, resolved from `~/.tizen.sdk.path.config`;
+ * resolveLogBaseDir() below applies the same rule so this module reads the
+ * app logs from the directory the binary actually wrote to. Only the
+ * runner's own PID files and captured stdout stay in the OS temp dir.
  */
 
 const { spawn, execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const { resolveSdbBinary, resolveSerial, runSdb } = require("./sdb");
+const {
+  resolveSdbBinary,
+  resolveSerial,
+  runSdb,
+  describeSerialFailure,
+} = require("./sdb");
+const { CONFIG_FILE: SDK_CONFIG_FILE } = require("./sdk");
 const { orderedCacheRoots } = require("./plugin-cache");
 
-// --- State files (PID + output) are kept in the OS temp dir ---
+// --- State files (PID + captured stdout) are kept in the OS temp dir ---
+//
+// Only the runner's own bookkeeping lives here. The collected logs, snapshots
+// and device profiles are written by the native binary under the SDK data
+// directory — see resolveLogBaseDir() below.
 const STATE_DIR = path.join(os.tmpdir(), "tizen-dlog-analyzer");
 const PID_FILE = path.join(STATE_DIR, "analyzer.pid");
 const OUTPUT_FILE = path.join(STATE_DIR, "analyzer-output.log");
@@ -43,6 +67,286 @@ function ensureStateDir() {
   if (!fs.existsSync(STATE_DIR)) {
     fs.mkdirSync(STATE_DIR, { recursive: true });
   }
+}
+
+// Lines of captured analysis `stop` returns inline (the file keeps all of it).
+const STOP_OUTPUT_LINES = 200;
+
+/**
+ * Environment for the detached collectors. The native binary is a PyInstaller
+ * (Python) build; with stdout redirected to a file Python block-buffers it, so
+ * the live crash/exception analysis reached analyzer-output.log only when the
+ * buffer filled — `check` showed nothing during the session and the tail was
+ * lost on termination (issue #226). PYTHONUNBUFFERED makes every line land as
+ * it is written.
+ */
+function collectorEnv(device) {
+  return {
+    ...process.env,
+    PYTHONUNBUFFERED: "1",
+    SDB_SERIAL: device.serial,
+    SDB_PATH: device.sdbPath,
+  };
+}
+
+/**
+ * One descriptor for a detached collector's stdout *and* stderr — the `2>&1`
+ * shape. Opening the capture file twice ("w" for stdout, "a" for stderr) gave
+ * the two streams independent file offsets: stdout kept writing at its own
+ * position and overwrote whatever stderr had appended in between, so lines of
+ * the captured analysis went missing. Truncates the file: a new session always
+ * starts from an empty capture (this is the only place it is truncated).
+ */
+function openCollectorOutput(file) {
+  return fs.openSync(file, "w");
+}
+
+/**
+ * SIGINT first so a Python collector gets KeyboardInterrupt and flushes /
+ * closes its files, then SIGTERM, then SIGKILL as a last resort.
+ *
+ * On Windows every one of these is TerminateProcess (no KeyboardInterrupt),
+ * so there the capture relies on PYTHONUNBUFFERED alone — see collectorEnv().
+ */
+async function terminateGracefully(pid) {
+  try {
+    process.kill(pid, "SIGINT");
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    if (isProcessRunning(pid)) {
+      process.kill(pid, "SIGTERM");
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (isProcessRunning(pid)) {
+      process.kill(pid, "SIGKILL");
+    }
+  } catch (_e) {
+    // Process may have already exited
+  }
+}
+
+/**
+ * Tail of the analysis captured from a `start` session, for the `stop`
+ * envelope. Pure apart from the file read; null when no session ever ran.
+ */
+function capturedOutputSummary(file, limit) {
+  if (!fs.existsSync(file)) return null;
+  let text;
+  try {
+    text = fs.readFileSync(file, "utf-8");
+  } catch {
+    return null;
+  }
+  const tail = tailLines(sanitizeDlogOutput(text), limit);
+  return {
+    output: tail.text,
+    total_lines: tail.total_lines,
+    returned_lines: tail.returned_lines,
+    truncated: tail.truncated,
+  };
+}
+
+/**
+ * Attached to every analysis result the agent renders from (check,
+ * error-analyze, kernel analyze), so the shape of the final report travels
+ * with the data instead of depending on a separate `cat REPORT_TEMPLATE.md`
+ * the agent may skip (issue #224).
+ */
+const REPORT_FORMAT_HINT =
+  "Final report = REPORT_TEMPLATE.md rendered twice: '## Analysis Report (English)' " +
+  "with '### 0. Summary' (Date / Emulator/Device / App / Issue), '### 1. Root Cause', " +
+  "'### 2. Additional Findings', '### 3. Solution Suggestions', '### 4. Workarounds'; " +
+  "then a '---' line; then '## 분석 보고서 (한국어)' with the same sections " +
+  "(0. 요약 / 1. 근본 원인 / 2. 추가 발견 사항 / 3. 해결 방안 제안 / 4. 임시 해결 방법). " +
+  "Bullets only — no tables, no emoji headings, no improvised title.";
+
+// ---------------------------------------------------------------------------
+// Log base directory — resolved from the Tizen SDK configuration
+// ---------------------------------------------------------------------------
+
+/**
+ * Name of the directory the native binary creates under the SDK data path.
+ * Must match `_DLOG_ANALYZER_DIR_NAME` in TizenDLogAnalyzer's `sdk_paths.py`.
+ */
+const LOG_BASE_DIR_NAME = "dloganalyzer";
+
+// Python's str.strip() / str.splitlines(), which is what sdk_paths.py applies
+// to the config file and to sdk.info. They differ from JS trim()/split in
+// two ways that matter here: Python does NOT strip U+FEFF (a BOM-prefixed
+// config path is "<BOM>C:/..." to the binary and therefore "does not exist"),
+// and it also splits lines on \v \f \x1c-\x1e \x85 U+2028 U+2029.
+const PY_WS =
+  "\\t\\n\\v\\f\\r\\x1c-\\x1f \\x85\\xa0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000";
+const PY_STRIP_RE = new RegExp(`^[${PY_WS}]+|[${PY_WS}]+$`, "g");
+const PY_LINE_BREAKS = "\\n\\r\\v\\f\\x1c\\x1d\\x1e\\x85\\u2028\\u2029";
+const PY_SPLITLINES_RE = new RegExp(`\\r\\n|[${PY_LINE_BREAKS}]`);
+const BOM = "\ufeff";
+const SDK_DATA_PATH_KEY = "TIZEN_SDK_DATA_PATH=";
+
+function stripLikePython(s) {
+  return s.replace(PY_STRIP_RE, "");
+}
+
+function splitLinesLikePython(s) {
+  return s.split(PY_SPLITLINES_RE);
+}
+
+/**
+ * Resolve the directory the native tizen-dlog-analyzer binary stores its logs
+ * in. Since TizenDLogAnalyzer PR #155/#157 the CLI has no `--base-dir` option:
+ * every command derives ONE log base directory from the SDK configuration and
+ * the runner has to read collected logs from the very same place.
+ *
+ * The order mirrors `resolve_log_base_dir()` in the binary's `sdk_paths.py`
+ * exactly, so both sides always agree:
+ *   1. `~/.tizen.sdk.path.config` (written by tizen-sdk-init) names the SDK
+ *      install directory. Missing/empty file -> error. A path that no longer
+ *      exists -> error (a stale config must not make us look for logs next to
+ *      a directory that is gone).
+ *   2. `TIZEN_SDK_DATA_PATH` in `<sdk>/sdk.info` names the SDK data directory:
+ *      the first line whose value is non-empty after strip() wins, a line
+ *      with an empty value is skipped (the scan continues), and when no line
+ *      qualifies — or sdk.info is missing/unreadable — the `<sdk>-data`
+ *      sibling convention applies.
+ *   3. The log base directory is `<sdk-data>/dloganalyzer/`.
+ *
+ * "Exactly" includes the string handling: the binary uses Python's strip()
+ * and splitlines(), so this module uses stripLikePython()/splitLinesLikePython()
+ * rather than trim()/split — JS trim() would swallow a UTF-8 BOM that the
+ * binary keeps as the first character of the path (and then fails on), and
+ * would miss the extra line separators Python honours.
+ *
+ * Deliberately NOT sdb.js's resolveSdkDataPath(): that one falls back to the
+ * sdb on PATH when the configured directory is not an SDK, which the binary
+ * never does — the two would disagree on exactly the machines where it hurts.
+ *
+ * The directory is not created here; the binary creates it on first use and
+ * the read-only actions (error-analyze, app-log) only need to know the path.
+ *
+ * @param {{configFile?: string}} [opts] - test hook: alternate config file
+ * @returns {{baseDir: string, sdkRoot: string, sdkDataPath: string, source: 'sdk.info'|'sibling'}|{error: string}}
+ */
+function resolveLogBaseDir(opts = {}) {
+  const configFile = (opts && opts.configFile) || SDK_CONFIG_FILE;
+  const initHint =
+    "Run tizen-sdk-init (tizen-cli tizen-sdk sdk-init --sdk-path <path>) first.";
+
+  // _read_sdk_install_path(): read_text().strip(); empty/unreadable -> None.
+  let sdkRoot = "";
+  try {
+    if (fs.existsSync(configFile)) {
+      sdkRoot = stripLikePython(fs.readFileSync(configFile, "utf-8"));
+    }
+  } catch (error) {
+    return {
+      error: `Could not read the Tizen SDK config ${configFile}: ${error.message}. ${initHint}`,
+    };
+  }
+  if (!sdkRoot) {
+    return {
+      error: `Tizen SDK path is not configured (${configFile} is missing or empty). ${initHint}`,
+    };
+  }
+
+  // Path(sdk_install_path).is_dir() — a BOM-prefixed path fails this check in
+  // the binary exactly like a removed directory does; say why when it is
+  // the BOM, because the path itself will look fine to the reader.
+  let isDir = false;
+  try {
+    isDir = fs.statSync(sdkRoot).isDirectory();
+  } catch (_error) {
+    isDir = false;
+  }
+  if (!isDir) {
+    const bomHint = sdkRoot.startsWith(BOM)
+      ? ` The file starts with a UTF-8 byte-order mark, which the analyzer binary reads as part of the path. Rewrite it without the BOM (tizen-sdk sdk-init --sdk-path ${sdkRoot.slice(BOM.length)}).`
+      : " Run tizen-sdk-init with the current SDK location.";
+    return {
+      error: `Tizen SDK path ${sdkRoot} (from ${configFile}) does not exist.${bomHint}`,
+    };
+  }
+
+  // _read_sdk_data_path(): sdk.info is authoritative — the data path is not
+  // required to be a sibling. The first TIZEN_SDK_DATA_PATH= line with a
+  // non-empty value wins; a line with an empty value is skipped and the scan
+  // goes on (no break), exactly as the binary's loop does.
+  let sdkDataPath = null;
+  let source = "sibling";
+  try {
+    const sdkInfoPath = path.join(sdkRoot, "sdk.info");
+    if (fs.existsSync(sdkInfoPath)) {
+      const info = fs.readFileSync(sdkInfoPath, "utf-8");
+      for (const rawLine of splitLinesLikePython(info)) {
+        const line = stripLikePython(rawLine);
+        if (!line.startsWith(SDK_DATA_PATH_KEY)) continue;
+        const value = stripLikePython(line.slice(SDK_DATA_PATH_KEY.length));
+        if (value) {
+          sdkDataPath = value;
+          source = "sdk.info";
+          break;
+        }
+      }
+    }
+  } catch (_error) {
+    // unreadable sdk.info -> fall through to the sibling convention
+  }
+  if (!sdkDataPath) {
+    sdkDataPath = path.join(
+      path.dirname(sdkRoot),
+      `${path.basename(sdkRoot)}-data`,
+    );
+  }
+
+  return {
+    baseDir: path.join(sdkDataPath, LOG_BASE_DIR_NAME),
+    sdkRoot,
+    sdkDataPath,
+    source,
+  };
+}
+
+/**
+ * Failure envelope for an unresolvable log base directory. Same category the
+ * other SDK-data consumers (certificate-manager, remote-device) report.
+ */
+function logBaseDirError(command, message) {
+  return {
+    command,
+    status: "failure",
+    errors: [{ category: "sdk_path_not_set", message }],
+  };
+}
+
+function binaryNotFoundError(command) {
+  return {
+    command,
+    status: "failure",
+    errors: [
+      {
+        category: "binary_not_found",
+        message:
+          "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
+      },
+    ],
+  };
+}
+
+/**
+ * Binary lookup for the actions whose binary command reads or writes the
+ * SDK-resolved log directory (device-profile, investigate, probe, snapshot,
+ * timeline, kernel — every one of them calls get_log_base_dir() in the
+ * binary and exits 1 with SdkPathNotConfiguredError when the SDK is not
+ * configured). Checking the SDK config here, before the binary is even
+ * looked up, turns that into one sdk_path_not_set envelope regardless of
+ * which binary build is installed.
+ *
+ * @returns {{binaryPath: string, logBase: object}|{error: object}}
+ */
+function resolveBinaryForLogs(command) {
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return { error: logBaseDirError(command, logBase.error) };
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return { error: binaryNotFoundError(command) };
+  return { binaryPath, logBase };
 }
 
 // ---------------------------------------------------------------------------
@@ -317,9 +621,74 @@ function resolveDevice(serial) {
   if (resolved.error) return { error: resolved.error };
 
   const target = resolveSerial(resolved.sdbPath, serial);
-  if (target.errorCategory) return { error: target.message };
+  if (target.errorCategory) {
+    return {
+      error: target.message,
+      errorCategory: target.errorCategory,
+      devices: target.devices,
+    };
+  }
 
   return { sdbPath: resolved.sdbPath, serial: target.serial };
+}
+
+/**
+ * How dlog-analyzer takes an explicit serial, spelled for both harnesses (see
+ * deviceErrorEnvelope()).
+ */
+const DLOG_SERIAL_OPTION =
+  "the chosen serial (--serial <serial> in tizen-cli, the positional [serial] argument in the plugin runner)";
+
+/**
+ * Build a Standard JSON Envelope error block for a device-resolution failure.
+ *
+ * The binary (v0.2.0a0, PR #151) now lists connected devices and exits 1 when
+ * multiple devices are connected and no --serial is given. This helper mirrors
+ * that behaviour through the shared describeSerialFailure(): the category
+ * resolveSerial() reported is kept (multiple_devices / device_not_found /
+ * invalid_parameters / io_error), multiple_devices carries the ONLINE device
+ * listing as `devices` plus a suggested_fix, and device_not_found never
+ * carries a `devices` array, as the skill docs state. A missing sdb binary
+ * (no category) maps to device_not_found.
+ *
+ * The serial option is spelled for both harnesses: tizen-cli takes
+ * `--serial`, the plugin runner (dlog-analyzer-cli.js) takes the serial as a
+ * positional argument and rejects `--serial` with "Unknown option".
+ *
+ * @param {string} command - Envelope command label
+ * @param {{error: string, errorCategory?: string, devices?: Array}} device -
+ *   The failed resolveDevice() result.
+ * @returns {{command: string, status: string, errors: Array}}
+ */
+function deviceErrorEnvelope(command, device) {
+  if (!device.errorCategory) {
+    return {
+      command,
+      status: "failure",
+      errors: [{ category: "device_not_found", message: device.error }],
+    };
+  }
+  const failure = describeSerialFailure(
+    {
+      errorCategory: device.errorCategory,
+      message: device.error,
+      devices: device.devices,
+    },
+    { serialOption: DLOG_SERIAL_OPTION },
+  );
+  const error = { category: failure.category, message: failure.message };
+  if (failure.devices.length > 0) error.devices = failure.devices;
+  if (failure.suggestedFix) {
+    error.suggested_fix = {
+      command: failure.suggestedFix,
+      auto_fixable: false,
+    };
+  }
+  return {
+    command,
+    status: "failure",
+    errors: [error],
+  };
 }
 
 /**
@@ -350,14 +719,36 @@ function getRunningPid() {
 
 /**
  * Start background dlog monitoring.
+ *
+ * The collected logs go to the SDK-resolved log base directory (see
+ * resolveLogBaseDir()); the binary no longer accepts a custom output
+ * directory, so a non-empty `outputDir` is rejected instead of being
+ * silently ignored.
+ *
  * @param {string} subcommand - dlog-collect | exception-detect | start-monitoring
  * @param {string} [serial] - Optional device serial
- * @param {string} [outputDir] - Optional output directory
+ * @param {string} [outputDir] - Legacy parameter; must be empty
  * @param {string} [commandLabel] - Envelope command label
  */
 async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
   const command = commandLabel || "tizen-sdk dlog-analyzer start";
   ensureStateDir();
+
+  if (outputDir) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            `A custom output directory (${outputDir}) is no longer supported: tizen-dlog-analyzer ` +
+            "stores every log under <sdk-data>/dloganalyzer/, resolved from ~/.tizen.sdk.path.config. " +
+            "Re-run without the output directory.",
+        },
+      ],
+    };
+  }
 
   // Check if already running
   const existingPid = getRunningPid();
@@ -374,55 +765,31 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
     };
   }
 
+  // Resolve the log directory before touching the binary or a device: a
+  // missing/stale SDK config is the cheapest and most actionable failure,
+  // and reporting it here (one envelope error) beats a binary that exits 1
+  // two seconds later with the message buried in the captured output.
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+
   // Resolve binary
   const binaryPath = resolveBinary();
-  if (!binaryPath) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "binary_not_found",
-          message:
-            "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
-        },
-      ],
-    };
-  }
+  if (!binaryPath) return binaryNotFoundError(command);
 
   // Resolve device
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
-  const outDir = outputDir || path.join(STATE_DIR, "dlog-output");
-  if (!fs.existsSync(outDir)) {
-    fs.mkdirSync(outDir, { recursive: true });
-  }
+  // Open the capture file (truncated; shared by stdout and stderr)
+  const outFd = openCollectorOutput(OUTPUT_FILE);
 
-  // Open output file for writing (truncate)
-  const outFd = fs.openSync(OUTPUT_FILE, "w");
-  const errFd = fs.openSync(OUTPUT_FILE, "a");
-
-  // Spawn the binary as a detached background process
-  const child = spawn(
-    binaryPath,
-    [subcommand, "--serial", device.serial, "--base-dir", outDir],
-    {
-      detached: true,
-      stdio: ["ignore", outFd, errFd],
-      env: {
-        ...process.env,
-        SDB_SERIAL: device.serial,
-        SDB_PATH: device.sdbPath,
-      },
-    },
-  );
+  // Spawn the binary as a detached background process. No --base-dir: the
+  // binary resolves <sdk-data>/dloganalyzer/ itself (same rule as logBase).
+  const child = spawn(binaryPath, [subcommand, "--serial", device.serial], {
+    detached: true,
+    stdio: ["ignore", outFd, outFd],
+    env: collectorEnv(device),
+  });
 
   // Without an 'error' listener, a failed spawn (ENOENT/EACCES, e.g. missing
   // exec bit) raises an uncaught exception during the wait below
@@ -432,13 +799,10 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
   });
 
   child.unref();
-  // The child holds its own copies of the fds — close the parent's to avoid
-  // leaking two descriptors per start for the life of the CLI process
+  // The child holds its own copy of the fd — close the parent's to avoid
+  // leaking a descriptor per start for the life of the CLI process
   try {
     fs.closeSync(outFd);
-  } catch (_) {}
-  try {
-    fs.closeSync(errFd);
   } catch (_) {}
 
   // Wait briefly to see if it crashes immediately
@@ -462,6 +826,12 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
     const output = fs.existsSync(OUTPUT_FILE)
       ? fs.readFileSync(OUTPUT_FILE, "utf-8")
       : "";
+    // A dead PID must not stay on disk: once the OS reuses the number,
+    // getRunningPid() would report an unrelated process as the monitor and
+    // `stop` would signal it (same cleanup as startKernelCollect).
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch {}
     return {
       command,
       status: "failure",
@@ -482,19 +852,36 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
       subcommand: subcommand,
       device_serial: device.serial,
       output_file: OUTPUT_FILE,
-      output_dir: outDir,
-      message: `tizen-dlog-analyzer (${subcommand}) started in background (PID ${child.pid}). Output is being written to ${OUTPUT_FILE}. Ask the user to interact with the app. When they report an issue, run 'check' to retrieve the analyzed output.`,
+      log_base_dir: logBase.baseDir,
+      message: `tizen-dlog-analyzer (${subcommand}) started in background (PID ${child.pid}). Output is being written to ${OUTPUT_FILE}; collected logs go to ${logBase.baseDir}. Ask the user to interact with the app. When they report an issue, run 'check' to retrieve the analyzed output.`,
     },
   };
 }
 
 /**
  * Stop the background dlog monitoring process.
+ *
+ * The envelope carries the tail of the analysis the session captured: the
+ * output file survives `stop` (only the next `start` truncates it), and
+ * returning it here means the live findings are not lost when the agent stops
+ * the monitor without running `check` first (issue #226).
+ *
  * @param {string} [commandLabel] - Envelope command label
  */
 async function stopDlogAnalyzer(commandLabel) {
   const command = commandLabel || "tizen-sdk dlog-analyzer stop";
   const pid = getRunningPid();
+  const captured = () => {
+    const summary = capturedOutputSummary(OUTPUT_FILE, STOP_OUTPUT_LINES);
+    if (!summary) return { output_file: null, output: null };
+    return {
+      output_file: OUTPUT_FILE,
+      ...summary,
+      next_step:
+        "Run 'check' for the complete analyzed output of this session (it stays in output_file until the next 'start').",
+    };
+  };
+
   if (!pid) {
     // Clean up stale PID file
     try {
@@ -506,33 +893,33 @@ async function stopDlogAnalyzer(commandLabel) {
       status: "success",
       result: {
         was_running: false,
+        ...captured(),
         message: "No running tizen-dlog-analyzer process found.",
       },
     };
   }
 
-  try {
-    process.kill(pid, "SIGTERM");
-    // Wait briefly for graceful shutdown
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    if (isProcessRunning(pid)) {
-      process.kill(pid, "SIGKILL");
-    }
-  } catch (_e) {
-    // Process may have already exited
-  }
+  await terminateGracefully(pid);
 
   try {
     fs.unlinkSync(PID_FILE);
   } catch {}
 
+  const summary = captured();
   return {
     command,
     status: "success",
     result: {
       was_running: true,
       pid: pid,
-      message: `tizen-dlog-analyzer (PID ${pid}) stopped.`,
+      ...summary,
+      message:
+        `tizen-dlog-analyzer (PID ${pid}) stopped.` +
+        // An existing but empty capture (the collector printed nothing before
+        // it was stopped) must not advertise "last 0 of 0 lines".
+        (summary.output
+          ? ` The analysis captured during the session is in result.output (last ${summary.returned_lines} of ${summary.total_lines} lines); run 'check' for all of it.`
+          : ""),
     },
   };
 }
@@ -569,6 +956,7 @@ async function checkDlogAnalyzer(commandLabel) {
       pid: pid,
       output_file: OUTPUT_FILE,
       output: output,
+      report_format: REPORT_FORMAT_HINT,
       message: isRunning
         ? "tizen-dlog-analyzer is still running. The output below is the latest analyzed data."
         : "tizen-dlog-analyzer is not running. The output below is from the last session.",
@@ -605,16 +993,19 @@ async function statusDlogAnalyzer(commandLabel) {
 // ---------------------------------------------------------------------------
 
 /**
- * The native binary creates `app/<app-id>/` under the --base-dir we pass.
- * So we pass STATE_DIR as --base-dir, and the log ends up at:
- *   <STATE_DIR>/app/<app-id>/<app-id>.hot.log
+ * The native binary creates `app/<app-id>/` under the SDK-resolved log base
+ * directory, so an app's hot log lives at:
+ *   <sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log
+ *
+ * @param {string} appId
+ * @param {string} baseDir - `baseDir` from resolveLogBaseDir()
  */
-function appLogDir(appId) {
-  return path.join(STATE_DIR, "app", appId);
+function appLogDir(appId, baseDir) {
+  return path.join(baseDir, "app", appId);
 }
 
-function appLogFile(appId) {
-  return path.join(appLogDir(appId), `${appId}.hot.log`);
+function appLogFile(appId, baseDir) {
+  return path.join(appLogDir(appId, baseDir), `${appId}.hot.log`);
 }
 
 /**
@@ -712,28 +1103,10 @@ async function launchApp(appId, serial, commandLabel) {
   if (!isValidAppId(appId)) return invalidAppIdError(command, appId);
 
   const binaryPath = resolveBinary();
-  if (!binaryPath) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "binary_not_found",
-          message:
-            "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
-        },
-      ],
-    };
-  }
+  if (!binaryPath) return binaryNotFoundError(command);
 
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
   try {
     const output = execFileSync(
@@ -816,28 +1189,10 @@ async function terminateApp(appId, serial, commandLabel) {
   if (!isValidAppId(appId)) return invalidAppIdError(command, appId);
 
   const binaryPath = resolveBinary();
-  if (!binaryPath) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "binary_not_found",
-          message:
-            "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
-        },
-      ],
-    };
-  }
+  if (!binaryPath) return binaryNotFoundError(command);
 
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
   try {
     const output = execFileSync(
@@ -909,10 +1264,11 @@ function getCollectPid() {
  * user reports back, call stopCollectAppLogs to stop collection and then
  * analyzeErrors to analyze the collected logs.
  *
- * The app must be running. Logs are saved to <STATE_DIR>/app/<app-id>/<app-id>.hot.log
- *
- * Key: we pass --base-dir STATE_DIR (not appLogDir) because the native binary
- * creates `app/<app-id>/` under whatever --base-dir is given.
+ * The app must be running. Logs are saved to
+ * <sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log — the binary
+ * resolves that directory from the SDK configuration on its own (no
+ * --base-dir), and resolveLogBaseDir() mirrors the rule so error-analyze /
+ * app-log read from the same place.
  *
  * @param {string} appId - Tizen app ID (e.g. org.example.myapp)
  * @param {string} [serial] - Optional device serial
@@ -951,14 +1307,15 @@ async function collectAppLogs(appId, serial, commandLabel) {
     };
   }
 
+  // Where the binary will write — resolved before the device/binary lookups
+  // so a broken SDK config fails first and by itself, and so the envelope
+  // can name the log file.
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const logFile = appLogFile(appId, logBase.baseDir);
+
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
   // Best-effort PID lookup for informational purposes.
   //
@@ -977,49 +1334,23 @@ async function collectAppLogs(appId, serial, commandLabel) {
 
   // Resolve the native binary
   const binaryPath = resolveBinary();
-  if (!binaryPath) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "binary_not_found",
-          message:
-            "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
-        },
-      ],
-    };
-  }
+  if (!binaryPath) return binaryNotFoundError(command);
 
-  // Open output file for writing (truncate)
-  const outFd = fs.openSync(APP_COLLECT_OUTPUT_FILE, "w");
-  const errFd = fs.openSync(APP_COLLECT_OUTPUT_FILE, "a");
+  // Open the capture file (truncated; shared by stdout and stderr)
+  const outFd = openCollectorOutput(APP_COLLECT_OUTPUT_FILE);
 
   // Spawn the native binary as a detached background process:
-  //   tizen-dlog-analyzer dlog-collect --app-id <appId> --serial <serial> --base-dir <STATE_DIR> --fresh
+  //   tizen-dlog-analyzer dlog-collect --app-id <appId> --serial <serial> --fresh
   //
-  // The native binary creates app/<app-id>/ under --base-dir, so passing
-  // STATE_DIR results in logs at: <STATE_DIR>/app/<app-id>/<app-id>.hot.log
+  // The binary creates app/<app-id>/ under <sdk-data>/dloganalyzer/, so the
+  // logs end up at logFile above.
   const child = spawn(
     binaryPath,
-    [
-      "dlog-collect",
-      "--app-id",
-      appId,
-      "--serial",
-      device.serial,
-      "--base-dir",
-      STATE_DIR,
-      "--fresh",
-    ],
+    ["dlog-collect", "--app-id", appId, "--serial", device.serial, "--fresh"],
     {
       detached: true,
-      stdio: ["ignore", outFd, errFd],
-      env: {
-        ...process.env,
-        SDB_SERIAL: device.serial,
-        SDB_PATH: device.sdbPath,
-      },
+      stdio: ["ignore", outFd, outFd],
+      env: collectorEnv(device),
     },
   );
 
@@ -1031,9 +1362,6 @@ async function collectAppLogs(appId, serial, commandLabel) {
   child.unref();
   try {
     fs.closeSync(outFd);
-  } catch (_) {}
-  try {
-    fs.closeSync(errFd);
   } catch (_) {}
 
   // Wait briefly to see if it crashes immediately
@@ -1057,13 +1385,26 @@ async function collectAppLogs(appId, serial, commandLabel) {
     const output = fs.existsSync(APP_COLLECT_OUTPUT_FILE)
       ? fs.readFileSync(APP_COLLECT_OUTPUT_FILE, "utf-8")
       : "";
+    // Dead PID off disk before the OS can reuse the number (see
+    // startDlogAnalyzer / startKernelCollect).
+    try {
+      fs.unlinkSync(APP_COLLECT_PID_FILE);
+    } catch {}
+    // The native binary runs one dlog collector at a time; while a system-wide
+    // `start` session holds it, the app-scoped collector cannot start. Its
+    // lines are in the system-wide capture already, so the answer is `check`,
+    // not stopping the monitor in the middle of the reproduction window.
+    const monitorPid = getRunningPid();
+    const monitorHint = monitorPid
+      ? `\nA system-wide 'start' session is running (PID ${monitorPid}). If the output above says another collector holds the lock, do not stop the monitor mid-reproduction: it already captures this app's lines — analyze with 'check' (and 'kernel analyze') instead of 'error-analyze', or run 'stop' first and then 'dlog-collect ${appId}' again.`
+      : "";
     return {
       command,
       status: "failure",
       errors: [
         {
           category: "process_crashed",
-          message: `dlog-collect exited immediately. Output:\n${output}`,
+          message: `dlog-collect exited immediately. Output:\n${output}${monitorHint}`,
         },
       ],
     };
@@ -1077,9 +1418,10 @@ async function collectAppLogs(appId, serial, commandLabel) {
       app_id: appId,
       app_pid: pid,
       device_serial: device.serial,
-      log_file: appLogFile(appId),
+      log_file: logFile,
+      log_base_dir: logBase.baseDir,
       output_file: APP_COLLECT_OUTPUT_FILE,
-      message: `dlog-collect for app "${appId}"${pid ? ` (PID ${pid})` : " (app PID not resolved yet — the native binary resolves it)"} started in background (collect PID ${child.pid}). Logs are being written to ${appLogFile(appId)}. Ask the user to browse the app and reproduce the issue. When they report back, run stop-collect to stop collection, then error-analyze --app-id ${appId} to analyze the logs.`,
+      message: `dlog-collect for app "${appId}"${pid ? ` (PID ${pid})` : " (app PID not resolved yet — the native binary resolves it)"} started in background (collect PID ${child.pid}). Logs are being written to ${logFile}. Ask the user to browse the app and reproduce the issue. When they report back, run stop-collect to stop collection, then error-analyze --app-id ${appId} to analyze the logs.`,
     },
   };
 }
@@ -1105,19 +1447,7 @@ async function stopCollectAppLogs(commandLabel) {
     };
   }
 
-  try {
-    process.kill(pid, "SIGINT");
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    if (isProcessRunning(pid)) {
-      process.kill(pid, "SIGTERM");
-      await new Promise((resolve) => setTimeout(resolve, 500));
-    }
-    if (isProcessRunning(pid)) {
-      process.kill(pid, "SIGKILL");
-    }
-  } catch (_e) {
-    // Process may have already exited
-  }
+  await terminateGracefully(pid);
 
   try {
     fs.unlinkSync(APP_COLLECT_PID_FILE);
@@ -1136,9 +1466,9 @@ async function stopCollectAppLogs(commandLabel) {
 
 /**
  * Analyze collected app logs for non-fatal runtime errors (E/F priority).
- * Delegates to: tizen-dlog-analyzer error-analyze --app-id <app-id> --base-dir <STATE_DIR> [--format <format>]
+ * Delegates to: tizen-dlog-analyzer error-analyze --app-id <app-id> [--format <format>]
  *
- * The native binary reads from <STATE_DIR>/app/<app-id>/<app-id>.hot.log
+ * The native binary reads <sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log
  * and handles deduplication, summary lines, and detail entries output.
  *
  * @param {string} appId - Tizen app ID (e.g. org.example.myapp)
@@ -1177,7 +1507,9 @@ async function analyzeErrors(appId, format, commandLabel) {
     };
   }
 
-  const logFile = appLogFile(appId);
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const logFile = appLogFile(appId, logBase.baseDir);
   if (!fs.existsSync(logFile)) {
     return {
       command,
@@ -1185,39 +1517,19 @@ async function analyzeErrors(appId, format, commandLabel) {
       errors: [
         {
           category: "no_logs",
-          message: `No collected logs found for app "${appId}". Run dlog-collect --app-id ${appId} first.`,
+          message: `No collected logs found for app "${appId}" (expected ${logFile}). Run dlog-collect --app-id ${appId} first.`,
         },
       ],
     };
   }
 
   const binaryPath = resolveBinary();
-  if (!binaryPath) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "binary_not_found",
-          message:
-            "tizen-dlog-analyzer binary not found for this platform. Ensure the setup script has been run.",
-        },
-      ],
-    };
-  }
+  if (!binaryPath) return binaryNotFoundError(command);
 
-  // Build the native binary command
+  // Build the native binary command (it resolves the log directory itself)
   // The native binary's --format accepts: summary, details, both (default)
   const nativeFormat = format || "both";
-  const args = [
-    "error-analyze",
-    "--app-id",
-    appId,
-    "--base-dir",
-    STATE_DIR,
-    "--format",
-    nativeFormat,
-  ];
+  const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
 
   try {
     const output = execFileSync(binaryPath, args, {
@@ -1237,8 +1549,10 @@ async function analyzeErrors(appId, format, commandLabel) {
       result: {
         app_id: appId,
         format: nativeFormat,
+        log_file: logFile,
         error_count: errorCount,
         output: trimmedOutput,
+        report_format: REPORT_FORMAT_HINT,
         message:
           errorCount > 0
             ? `Found ${errorCount} unique runtime errors in logs for app "${appId}".`
@@ -1314,13 +1628,7 @@ async function dumpDeviceLogs(serial, opts = {}, commandLabel) {
   }
 
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
   // Each filterspec is quoted so a shell never globs `*:E`.
   const specArgs = parsed.specs.map((s) => `"${s}"`).join(" ");
@@ -1402,13 +1710,7 @@ async function clearDeviceLogs(serial, confirm, commandLabel) {
   if (gate) return gate;
 
   const device = resolveDevice(serial);
-  if (device.error) {
-    return {
-      command,
-      status: "failure",
-      errors: [{ category: "device_not_found", message: device.error }],
-    };
-  }
+  if (device.error) return deviceErrorEnvelope(command, device);
 
   const sdbArgs = `-s "${device.serial}" dlog -c`;
   try {
@@ -1450,6 +1752,614 @@ async function clearDeviceLogs(serial, confirm, commandLabel) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// New v0.1.3 commands: app-log, device-profile, investigate, probe,
+// snapshot, timeline, kernel
+// ---------------------------------------------------------------------------
+
+/**
+ * Helper: run the native binary and return a success/failure envelope.
+ */
+function runBinary(command, binaryPath, args, opts = {}) {
+  const {
+    timeout = 30000,
+    result: extraResult = {},
+    errorCategory = "binary_exec_failed",
+    errorPrefix = "Command failed",
+  } = opts;
+  try {
+    const output = execFileSync(binaryPath, args, {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout,
+    });
+    return {
+      command,
+      status: "success",
+      result: { output: output.trim(), ...extraResult },
+    };
+  } catch (error) {
+    const stderr = error.stderr ? error.stderr.toString().trim() : "";
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: errorCategory,
+          message: `${errorPrefix}: ${stderr || error.message}`,
+        },
+      ],
+    };
+  }
+}
+
+/**
+ * Print the full collected log for one app (all priorities, hot + cold files).
+ * @param {string} appId - Tizen app ID
+ * @param {object} [opts] - { since, until, priority, tags, keywords, format, output, maxLines, maxChars }
+ * @param {string} [commandLabel]
+ */
+async function appLog(appId, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer app-log";
+  if (!appId) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: "app_id is required. Usage: app-log --app-id <app-id>",
+        },
+      ],
+    };
+  }
+  if (!isValidAppId(appId)) return invalidAppIdError(command, appId);
+
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const logFile = appLogFile(appId, logBase.baseDir);
+  if (!fs.existsSync(logFile)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "no_logs",
+          message: `No collected logs found for app "${appId}" (expected ${logFile}). Run dlog-collect --app-id ${appId} first.`,
+        },
+      ],
+    };
+  }
+
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return binaryNotFoundError(command);
+
+  // No --base-dir: the binary reads from the SDK-resolved directory itself
+  const args = ["app-log", "--app-id", appId];
+  if (opts.since) args.push("--since", opts.since);
+  if (opts.until) args.push("--until", opts.until);
+  if (opts.priority) args.push("--priority", opts.priority);
+  if (opts.tags) {
+    (Array.isArray(opts.tags) ? opts.tags : [opts.tags]).forEach((t) =>
+      args.push("--tag", t),
+    );
+  }
+  if (opts.keywords) {
+    (Array.isArray(opts.keywords) ? opts.keywords : [opts.keywords]).forEach(
+      (k) => args.push("--keyword", k),
+    );
+  }
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.output) args.push("--output", opts.output);
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+
+  return runBinary(command, binaryPath, args, {
+    result: {
+      app_id: appId,
+      log_file: logFile,
+      message: `Full log for app "${appId}" (all priorities, hot + cold files).`,
+    },
+    errorCategory: "app_log_failed",
+    errorPrefix: `Failed to print log for app "${appId}"`,
+  });
+}
+
+/**
+ * Detect and print the connected device's profile (type, version, arch, root, tools).
+ * @param {string} [serial]
+ * @param {object} [opts] - { refresh, maxAge, format }
+ * @param {string} [commandLabel]
+ */
+async function deviceProfile(serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer device-profile";
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const device = resolveDevice(serial);
+  if (device.error) return deviceErrorEnvelope(command, device);
+  const args = ["device-profile", "--serial", device.serial];
+  if (opts.refresh) args.push("--refresh");
+  if (opts.maxAge != null) args.push("--max-age", String(opts.maxAge));
+  if (opts.format) args.push("--format", opts.format);
+  return runBinary(command, binaryPath, args, {
+    result: {
+      device_serial: device.serial,
+      message: `Device profile for ${device.serial}.`,
+    },
+    errorCategory: "device_profile_failed",
+    errorPrefix: "Failed to detect device profile",
+  });
+}
+
+/**
+ * Run a one-shot first-pass investigation and emit a budgeted report.
+ * @param {string} [appId] - Optional app ID for app-scoped investigation
+ * @param {string} [serial]
+ * @param {object} [opts] - { symptoms, profile, format, budget, budgetTokens, allowNetworkProbe }
+ * @param {string} [commandLabel]
+ */
+async function investigate(appId, serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer investigate";
+  if (appId && !isValidAppId(appId)) return invalidAppIdError(command, appId);
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const device = resolveDevice(serial);
+  if (device.error) return deviceErrorEnvelope(command, device);
+  const args = ["investigate", "--serial", device.serial];
+  if (appId) args.push("--app-id", appId);
+  if (opts.symptoms) args.push("--symptoms", opts.symptoms);
+  if (opts.profile) args.push("--profile", opts.profile);
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.budget != null) args.push("--budget", String(opts.budget));
+  if (opts.budgetTokens != null)
+    args.push("--budget-tokens", String(opts.budgetTokens));
+  if (opts.allowNetworkProbe) args.push("--allow-network-probe");
+  return runBinary(command, binaryPath, args, {
+    timeout: 60000,
+    result: {
+      device_serial: device.serial,
+      message: `Investigation report for device ${device.serial}.`,
+    },
+    errorCategory: "investigate_failed",
+    errorPrefix: "Investigation failed",
+  });
+}
+
+/**
+ * List and run evidence probes from the data-driven catalog.
+ * @param {string} subcommand - "list" or "run"
+ * @param {string} [probeId] - Probe ID (required for "run")
+ * @param {string} [serial]
+ * @param {object} [opts] - { format }
+ * @param {string} [commandLabel]
+ */
+async function runProbe(subcommand, probeId, serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer probe";
+  const sub = subcommand || "list";
+  const validSubs = ["list", "run"];
+  if (!validSubs.includes(sub)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `Invalid subcommand: '${sub}'. Must be one of: ${validSubs.join(", ")}`,
+        },
+      ],
+    };
+  }
+  if (sub === "run" && !probeId) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            "probe_id is required for 'probe run'. Usage: probe run <probe-id>",
+        },
+      ],
+    };
+  }
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  if (sub === "run") {
+    const device = resolveDevice(serial);
+    if (device.error) return deviceErrorEnvelope(command, device);
+    const args = ["probe", "run", probeId, "--serial", device.serial];
+    if (opts.format) args.push("--format", opts.format);
+    return runBinary(command, binaryPath, args, {
+      result: {
+        probe_id: probeId,
+        device_serial: device.serial,
+        message: `Probe "${probeId}" executed on device ${device.serial}.`,
+      },
+      errorCategory: "probe_failed",
+      errorPrefix: `Probe "${probeId}" failed`,
+    });
+  }
+  const args = ["probe", "list"];
+  if (opts.format) args.push("--format", opts.format);
+  return runBinary(command, binaryPath, args, {
+    timeout: 15000,
+    result: { message: "Available evidence probes." },
+    errorCategory: "probe_failed",
+    errorPrefix: "Failed to list probes",
+  });
+}
+
+/**
+ * Create, list, compare, and delete system snapshots.
+ * @param {string} subcommand - "create", "list", "compare", or "delete"
+ * @param {string[]} [compareIds] - Two snapshot IDs for "compare"
+ * @param {string} [snapshotId] - Snapshot ID for "delete"
+ * @param {string} [serial]
+ * @param {string} [commandLabel]
+ */
+async function manageSnapshot(subcommand, compareIds, serial, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer snapshot";
+  const sub = subcommand || "list";
+  const validSubs = ["create", "list", "compare", "delete"];
+  if (!validSubs.includes(sub)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `Invalid subcommand: '${sub}'. Must be one of: ${validSubs.join(", ")}`,
+        },
+      ],
+    };
+  }
+  // Argument validation first — before the SDK-config / binary pre-check —
+  // so a malformed request is invalid_parameters on every host.
+  if (sub === "compare" && (!compareIds || compareIds.length < 2)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            "Two snapshot IDs are required for 'snapshot compare'. Usage: snapshot compare <id1> <id2>",
+        },
+      ],
+    };
+  }
+  if (sub === "delete" && (!compareIds || compareIds.length < 1)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            "Snapshot ID is required for 'snapshot delete'. Usage: snapshot delete <id>",
+        },
+      ],
+    };
+  }
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  if (sub === "create") {
+    const device = resolveDevice(serial);
+    if (device.error) return deviceErrorEnvelope(command, device);
+    return runBinary(
+      command,
+      binaryPath,
+      ["snapshot", "create", "--serial", device.serial],
+      {
+        result: {
+          device_serial: device.serial,
+          message: `Snapshot created for device ${device.serial}.`,
+        },
+        errorCategory: "snapshot_failed",
+        errorPrefix: "Failed to create snapshot",
+      },
+    );
+  }
+  if (sub === "compare") {
+    return runBinary(
+      command,
+      binaryPath,
+      ["snapshot", "compare", compareIds[0], compareIds[1]],
+      {
+        result: {
+          snapshot_ids: [compareIds[0], compareIds[1]],
+          message: `Comparison between snapshots ${compareIds[0]} and ${compareIds[1]}.`,
+        },
+        errorCategory: "snapshot_failed",
+        errorPrefix: "Failed to compare snapshots",
+      },
+    );
+  }
+  if (sub === "delete") {
+    return runBinary(
+      command,
+      binaryPath,
+      ["snapshot", "delete", compareIds[0]],
+      {
+        result: {
+          snapshot_id: compareIds[0],
+          message: `Snapshot ${compareIds[0]} deleted.`,
+        },
+        errorCategory: "snapshot_failed",
+        errorPrefix: "Failed to delete snapshot",
+      },
+    );
+  }
+  return runBinary(command, binaryPath, ["snapshot", "list"], {
+    timeout: 15000,
+    result: { message: "Available system snapshots." },
+    errorCategory: "snapshot_failed",
+    errorPrefix: "Failed to list snapshots",
+  });
+}
+
+/**
+ * Analyze and visualize probe history across snapshots.
+ * @param {string} subcommand - "show", "report", "analyze", or "export"
+ * @param {object} [opts] - { probeId, format, output }
+ * @param {string} [commandLabel]
+ */
+async function runTimeline(subcommand, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer timeline";
+  const sub = subcommand || "show";
+  const validSubs = ["show", "report", "analyze", "export"];
+  if (!validSubs.includes(sub)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `Invalid subcommand: '${sub}'. Must be one of: ${validSubs.join(", ")}`,
+        },
+      ],
+    };
+  }
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const args = ["timeline", sub];
+  if (opts.probeId) args.push("--probe-id", opts.probeId);
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.output) args.push("--output", opts.output);
+  return runBinary(command, binaryPath, args, {
+    result: { subcommand: sub, message: `Timeline ${sub} for probe history.` },
+    errorCategory: "timeline_failed",
+    errorPrefix: "Failed to generate timeline",
+  });
+}
+
+// --- Kernel-log background collection state files ---
+//
+// `kernel collect` is a long-running subcommand of the native binary, exactly
+// like `dlog-collect`: it streams the kmsg buffer (or polls dmesg) until it is
+// stopped. Running it through runBinary()/execFileSync killed it at the 30 s
+// timeout and reported `kernel_failed`, so the model learned to run
+// `sdb shell dmesg` by hand instead (issue #213). It is therefore managed as a
+// detached background process with its own PID file, mirroring
+// collectAppLogs()/stopCollectAppLogs(); `kernel analyze` stays synchronous.
+const KERNEL_COLLECT_PID_FILE = path.join(STATE_DIR, "kernel-collect.pid");
+const KERNEL_COLLECT_OUTPUT_FILE = path.join(
+  STATE_DIR,
+  "kernel-collect-output.log",
+);
+
+/**
+ * Read the current kernel-collect background process PID (if any).
+ */
+function getKernelCollectPid() {
+  if (!fs.existsSync(KERNEL_COLLECT_PID_FILE)) return null;
+  try {
+    const pid = parseInt(
+      fs.readFileSync(KERNEL_COLLECT_PID_FILE, "utf-8").trim(),
+      10,
+    );
+    return isProcessRunning(pid) ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Start kernel-log collection as a detached background process.
+ *
+ * The binary writes to `<sdk-data>/dloganalyzer/app/kernel/kernel.hot.log`
+ * (its own SDK-resolved base dir). The envelope names that file and tells the
+ * agent to hand control back to the user for reproduction, then run
+ * `kernel stop` + `kernel analyze`.
+ */
+async function startKernelCollect(command, serial) {
+  ensureStateDir();
+
+  const existingPid = getKernelCollectPid();
+  if (existingPid) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "already_running",
+          message: `Kernel log collection is already running (PID ${existingPid}). Stop it first with: kernel stop`,
+        },
+      ],
+    };
+  }
+
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const logFile = path.join(logBase.baseDir, "app", "kernel", "kernel.hot.log");
+
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return binaryNotFoundError(command);
+
+  const device = resolveDevice(serial);
+  if (device.error) return deviceErrorEnvelope(command, device);
+
+  // Capture file (truncated; shared by stdout and stderr)
+  const outFd = openCollectorOutput(KERNEL_COLLECT_OUTPUT_FILE);
+
+  const child = spawn(
+    binaryPath,
+    ["kernel", "collect", "--serial", device.serial],
+    {
+      detached: true,
+      stdio: ["ignore", outFd, outFd],
+      env: collectorEnv(device),
+    },
+  );
+
+  let spawnError = null;
+  child.on("error", (err) => {
+    spawnError = err;
+  });
+
+  child.unref();
+  try {
+    fs.closeSync(outFd);
+  } catch (_) {}
+
+  // Wait briefly to see if it crashes immediately (no kmsg access, no device …)
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+
+  if (spawnError || child.pid === undefined) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "process_crashed",
+          message: `Failed to start kernel collect: ${spawnError ? spawnError.message : "no PID assigned"}`,
+        },
+      ],
+    };
+  }
+  fs.writeFileSync(KERNEL_COLLECT_PID_FILE, String(child.pid));
+
+  if (!isProcessRunning(child.pid)) {
+    const output = fs.existsSync(KERNEL_COLLECT_OUTPUT_FILE)
+      ? fs.readFileSync(KERNEL_COLLECT_OUTPUT_FILE, "utf-8")
+      : "";
+    try {
+      fs.unlinkSync(KERNEL_COLLECT_PID_FILE);
+    } catch {}
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "process_crashed",
+          message: `kernel collect exited immediately. Output:\n${output}`,
+        },
+      ],
+    };
+  }
+
+  return {
+    command,
+    status: "success",
+    result: {
+      pid: child.pid,
+      device_serial: device.serial,
+      log_file: logFile,
+      log_base_dir: logBase.baseDir,
+      output_file: KERNEL_COLLECT_OUTPUT_FILE,
+      message: `Kernel log collection started in background (collect PID ${child.pid}) on device ${device.serial}. Lines are being written to ${logFile}. Ask the user to reproduce the issue, then run 'kernel stop' followed by 'kernel analyze'.`,
+    },
+  };
+}
+
+/**
+ * Stop the background kernel-log collection process.
+ */
+async function stopKernelCollect(command) {
+  const pid = getKernelCollectPid();
+  if (!pid) {
+    try {
+      fs.unlinkSync(KERNEL_COLLECT_PID_FILE);
+    } catch {}
+    return {
+      command,
+      status: "success",
+      result: {
+        was_running: false,
+        message: "No running kernel log collection process found.",
+      },
+    };
+  }
+
+  await terminateGracefully(pid);
+
+  try {
+    fs.unlinkSync(KERNEL_COLLECT_PID_FILE);
+  } catch {}
+
+  return {
+    command,
+    status: "success",
+    result: {
+      was_running: true,
+      pid,
+      message: `Kernel log collection (PID ${pid}) stopped. Run 'kernel analyze' to analyze the collected kernel log.`,
+    },
+  };
+}
+
+/**
+ * Kernel log collection and analysis (kmsg/dmesg).
+ *
+ *   collect — start the long-running collector in the background (see
+ *             startKernelCollect); one instance at a time
+ *   stop    — stop that background collector
+ *   analyze — analyze the collected kernel log files (synchronous)
+ *
+ * @param {string} subcommand - "collect", "stop" or "analyze"
+ * @param {string} [serial]
+ * @param {object} [opts] - { format }
+ * @param {string} [commandLabel]
+ */
+async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer kernel";
+  const sub = subcommand || "collect";
+  const validSubs = ["collect", "stop", "analyze"];
+  if (!validSubs.includes(sub)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `Invalid subcommand: '${sub}'. Must be one of: ${validSubs.join(", ")}`,
+        },
+      ],
+    };
+  }
+  if (sub === "stop") return stopKernelCollect(command);
+  if (sub === "collect") return startKernelCollect(command, serial);
+
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const args = ["kernel", "analyze"];
+  if (opts.format) args.push("--format", opts.format);
+  return runBinary(command, binaryPath, args, {
+    result: {
+      message: "Kernel log analysis.",
+      report_format: REPORT_FORMAT_HINT,
+    },
+    errorCategory: "kernel_failed",
+    errorPrefix: "Failed to analyze kernel log",
+  });
+}
+
 module.exports = {
   startDlogAnalyzer,
   stopDlogAnalyzer,
@@ -1460,9 +2370,20 @@ module.exports = {
   collectAppLogs,
   stopCollectAppLogs,
   analyzeErrors,
+  // New v0.1.3 commands
+  appLog,
+  deviceProfile,
+  investigate,
+  runProbe,
+  manageSnapshot,
+  runTimeline,
+  manageKernel,
+  // One-shot device-log actions
   dumpDeviceLogs,
   clearDeviceLogs,
   // Pure helpers (unit-tested without a device)
+  resolveLogBaseDir,
+  appLogFile,
   isValidAppId,
   parseFirstPid,
   extractPidFromPsOutput,
@@ -1471,4 +2392,9 @@ module.exports = {
   tailLines,
   sanitizeDlogOutput,
   buildLogClearGate,
+  deviceErrorEnvelope,
+  collectorEnv,
+  capturedOutputSummary,
+  REPORT_FORMAT_HINT,
+  STOP_OUTPUT_LINES,
 };

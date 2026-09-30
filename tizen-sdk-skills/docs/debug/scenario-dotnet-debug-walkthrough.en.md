@@ -198,7 +198,7 @@ Internally this happens automatically:
 | `launch_config` | the values needed to write VS Code's `launch.json` (launch mode) |
 | `debug_command` | the netcoredbg CLI command (attach mode; `powershell`/`cmd` or `shell`) |
 
-> 💡 The app stays **suspended before `Main()` until a DAP client connects**. The app, the DAP server, and the port forward all persist after setup, so you can disconnect and reconnect.
+> 💡 The app stays **suspended before `Main()` until a DAP client connects**. Note that **stopping the VS Code session ends the app and the DAP server** (netcoredbg exits on client disconnect); only the sdb port forward remains, and because that forward still accepts connections, a second F5 against it "starts" and terminates at once. Pass `--project <dir>` so the runner writes `.vscode/tasks.json` with a `tizen: netcoredbg launch` task wired in as the configuration's `preLaunchTask` — then every F5 relaunches the app first and stop → F5 just works. Without it, re-run the runner before each F5.
 
 ---
 
@@ -278,7 +278,7 @@ Verify these items during a manual E2E test.
 | 6 | The app screen right after setup | **nothing renders** — correct, it is suspended before `Main()` |
 | 7 | Step 8 F5 | VS Code connects and stops at the breakpoint |
 | 8 | Variables / Call Stack | locals and a symbolized C# call stack |
-| 9 | Disconnect and reconnect | the app, DAP server, and forward persist — F5 reattaches |
+| 9 | Stop, then F5 again | with `--project`: the `tizen: netcoredbg launch` preLaunchTask relaunches the app and the new session connects; without it the second F5 terminates immediately (netcoredbg exited on disconnect) until the runner is re-run |
 
 ### Failure paths (error mapping)
 
@@ -306,7 +306,7 @@ node "$CLI" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711
 
 **Windows (cmd.exe / PowerShell):**
 ```
-dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js"
+dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & ver >nul
 node "<found-path>" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711
 ```
 

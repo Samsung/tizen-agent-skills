@@ -156,7 +156,11 @@ During SDK install, the installer script automatically selects the fastest CDN m
 | UTC-12 .. UTC-5  | Global     | `https://usa.sdk-dl.tizen.org/sdk/tizenstudio/official`        |
 | UTC-4  .. UTC-1  | Brazil     | `https://brazil.sdk-dl.tizen.org/sdk/tizenstudio/official`      |
 | UTC+0  .. UTC+4  | Official   | `https://download.tizen.org/sdk/tizenstudio/official`           |
-| UTC+5  .. UTC+12 | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`  |
+| UTC+5  .. UTC+8  | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`  |
+| UTC+9            | Official   | `https://download.tizen.org/sdk/tizenstudio/official`           |
+| UTC+10 .. UTC+12 | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`  |
+
+UTC+9 (Korea / Japan) is routed to the official server because `download.tizen.org` is hosted in AWS Seoul (ap-northeast-2), the closest origin for those regions.
 
 The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` after a successful install. The package updater reads this file to download updates from the same mirror.
 
@@ -483,7 +487,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 
 ### 9. tizen-device-manager
 
-**Description:** Find connected Tizen devices via SDB (`start`) or shut down all running emulator VMs (`stop`, via em-cli kill). **This skill does not create or launch emulators** — creation is handled by `tizen-create-emulator` and booting by `tizen-launch-emulator`.
+**Description:** Find connected Tizen devices via SDB (`start`) or shut down all running emulator VMs (`stop`, via em-cli kill). **This skill does not create or launch emulators** — creation is handled by `tizen-create-emulator` and booting by `tizen-launch-emulator`. **It is not a diagnostic skill either:** a problem report (crash, error, freeze, high CPU, video not playing, "investigate") belongs to `tizen-dlog-analyzer` even when it mentions the emulator — the routing hook redirects such prompts.
 
 **Use Case:** Check connected devices/emulators, or shut down running emulators.
 
@@ -1337,9 +1341,10 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | Parameter    | Type   | Default      | Description                                                              |
 | ------------ | ------ | ------------ | ------------------------------------------------------------------------ |
-| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze` |
-| `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended) |
-| `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze |
+| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` |
+| `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect` (background) / `stop` / `analyze`. timeline: `show`/`report`/`analyze`/`export` |
+| `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, app-log; optional for investigate (app-scoped) |
+| `symptoms`   | string | `null`       | For investigate: the user's own symptom words (e.g. "300% cpu, video not playing") — selects the probe bundles |
 | `format`     | string | `null`       | For error-analyze only: `summary` (summary lines only), `details` (detail entries only), or omit for both |
 | `serial`     | string | `null`       | Optional sdb device serial (auto-select if omitted)                      |
 
@@ -1355,6 +1360,10 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js app-terminate <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
+node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id] --symptoms "<the user's words>"
+node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
+node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--priority <p>] [--max-lines <n>]   # escalation only
 ```
 
 **Workflow (background monitoring):**
@@ -1369,10 +1378,22 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 **Workflow (app-specific log analysis — when user provides an app ID):**
 
 1. **Launch the app** (`app-launch <app-id>`) — launch a specific app and get its PID (short delay expected)
-2. **Start background collection** (`dlog-collect <app-id>`) — start background log collection filtered by app PID, saved to `<tmp>/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`
-3. **Ask user to browse** — tell the user to browse the app and reproduce the issue; give two options: "error/crash occurred" or "nothing happened"
-4. **Stop collection and analyze** — when user reports back: `stop-collect` to stop, then `error-analyze <app-id> [format]` to analyze E/F priority entries (deduplicated by tag+message with occurrence count). Always use `error-analyze` — do not read the log file directly.
+2. **Start background collection** (`dlog-collect <app-id>`) — start background log collection filtered by app PID, saved to `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the SDK data path comes from `~/.tizen.sdk.path.config` → `TIZEN_SDK_DATA_PATH` in `sdk.info`, or the `<sdk>-data` sibling)
+3. **Ask user to browse — and end the turn** — tell the user to browse the app and reproduce the issue; give two options: "done — error/crash occurred" or "nothing happened". No `sleep`, no polling, no `stop-collect` in the same turn (the guard hook denies timer waits around the runner).
+4. **Stop collection and analyze, errors first** — when user reports back: `stop-collect` to stop, then `error-analyze <app-id> summary` to analyze E/F priority entries (deduplicated by tag+message with occurrence count). Widen only if the symptom is still unexplained: `error-analyze <app-id> details` → filtered `app-log <app-id> --priority W --since 10m --max-lines 300`. Always use the analyzers — do not read the log file directly, and never open with `app-log`.
 5. **Terminate the app** (`app-terminate <app-id>`) — clean up
+
+**Workflow (symptom investigation — crash, freeze, high CPU, memory, video not playing):**
+
+A problem report belongs here even when it mentions the emulator or device (`tizen-device-manager` only lists devices / stops emulators — the routing hook redirects such prompts).
+
+1. **First pass** (`investigate --symptoms "<the user's words>" [app-id]`) — device profile → symptom-matched probe bundles (CPU, memory, freeze, media, graphics …) → correlated report. Summarize; not the final report yet.
+2. **Start the collectors before reproduction** — `start start-monitoring`, `kernel collect` (CPU / freeze / memory / graphics / driver symptoms), `app-launch <app-id>` if needed, `dlog-collect <app-id>`
+3. **Stop and ask the user to reproduce — end the turn** — "(1) done, it occurred / (2) nothing happened"
+4. **Stop, then analyze in order** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; escalate only if unexplained (`error-analyze … details` → filtered `app-log` → `probe list` / `probe run <probe-id>`)
+5. **Report** (bilingual template) → next-step prompt → `stop` when done
+
+Kernel logs always go through `kernel collect` → `kernel stop` → `kernel analyze` (never `sdb shell dmesg`); probes through `investigate` / `probe run` (never a hand-typed `sdb shell top / ps / free`).
 
 **Action descriptions:**
 
@@ -1386,9 +1407,14 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 | `app-terminate` | Terminate a running Tizen app via `sdb shell app_launcher -k`    |
 | `dlog-collect`  | Start background dlog collection filtered by app PID (app must be running) |
 | `stop-collect`  | Stop the background app dlog collection process                   |
-| `error-analyze` | Analyze collected app logs for E/F priority errors with deduplication |
+| `error-analyze` | Analyze collected app logs for E/F priority errors with deduplication — the first analysis call |
+| `app-log`       | Full collected log of one app (all priorities, hot + cold) — escalation only, after `error-analyze`, filtered |
+| `investigate`   | One-shot first pass: symptom words → probe bundles → correlated report (the first call of a symptom investigation) |
+| `probe`         | `list` the evidence-probe catalog / `run <probe-id>` one probe (replaces hand-typed `sdb shell top/ps/free`) |
+| `kernel`        | `collect` the kernel log in the background / `stop` it / `analyze` it (replaces `sdb shell dmesg`) |
+| `device-profile` / `snapshot` / `timeline` | Device profile; system snapshots (create/list/compare/delete); probe history across snapshots |
 
-**Notes:** Only one background instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` when done. App-specific logs are stored in `$TMPDIR/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`. `dlog-collect` requires the app to be running (uses `pgrep` to find PID). `error-analyze` requires `dlog-collect` → `stop-collect` to have been run first. Always use `error-analyze` to analyze logs — do not read the log file directly. When the analysis is complete, the report is always rendered in both languages (English first, then Korean) following `REPORT_TEMPLATE.md`.
+**Notes:** Only one background instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` when done. App-specific logs are stored in `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the native binary has no `--base-dir` option; an unconfigured SDK path returns `sdk_path_not_set`). `dlog-collect` requires the app to be running (uses `pgrep` to find PID). `error-analyze` requires `dlog-collect` → `stop-collect` to have been run first. Always use `error-analyze` to analyze logs — do not read the log file directly. When the analysis is complete, the report is always rendered in both languages (English first, then Korean) following `REPORT_TEMPLATE.md`.
 
 
 **Dependencies:** `tizen-launch-emulator` or `tizen-device-manager` (a running device/emulator is required)

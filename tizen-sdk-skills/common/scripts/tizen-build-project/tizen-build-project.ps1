@@ -75,7 +75,9 @@ function Test-HasProjectConfig {
     (Test-Path (Join-Path $Path "tizen_native_project.yaml")) -or `
     (Test-Path (Join-Path $Path "tizen_dotnet_project.yaml")) -or `
     (Test-Path (Join-Path $Path "tizen_resource_project.yaml")) -or `
-    (Test-Path (Join-Path $Path "config.xml"))
+    (Test-Path (Join-Path $Path "config.xml")) -or `
+    (Get-ChildItem -Path $Path -Filter "*.csproj" -ErrorAction SilentlyContinue) -or `
+    ((Test-Path (Join-Path $Path "tizen-manifest.xml")) -and (Test-Path (Join-Path $Path "CMakeLists.txt")))
 }
 
 function Verify-ProjectPath {

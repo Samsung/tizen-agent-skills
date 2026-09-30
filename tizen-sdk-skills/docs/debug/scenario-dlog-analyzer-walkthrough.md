@@ -16,11 +16,31 @@
 
 1. **항상 `dlog-collect`로 로그를 수집하세요** — 절대 `sdb shell dlog` 같은 원시 명령을 사용하면 안 됩니다. 시스템 전체(`start dlog-collect` / `start start-monitoring`)든 앱별(`dlog-collect <app-id>`)든 `dlog-collect`를 사용해야 합니다.
 2. **항상 `error-analyze` (앱별) 또는 `check` (시스템 모니터링)으로 분석하세요** — 로그 파일을 직접 읽으면 안 됩니다. 이 명령들이 중복 제거, 분류, 포맷팅을 처리합니다.
-3. **연속 명령 후에는 사용자에게 선택지를 제시하세요** — `start-monitoring`, `dlog-collect <app-id>` 등 연속 명령을 시작한 후, 사용자가 다음 중 하나를 선택하도록 하세요:
-   - **계속 수집**: 백그라운드에서 계속 수집/모니터링하며 사용자가 앱을 사용하도록 함
-   - **지금 중지하고 분석**: 수집/모니터링을 중지(`stop` 또는 `stop-collect`)하고 즉시 `check` / `error-analyze`를 실행
+3. **연속 명령 후에는 디바이스를 사용자에게 넘기고 턴을 끝내세요** — `start-monitoring`, `dlog-collect <app-id>`, `kernel collect` 등 연속 명령을 시작한 후, 사용자에게 앱을 사용하며 이슈를 재현해 달라고 요청하고 다음 중 하나를 선택하도록 하세요:
+   - **재현 완료 — 에러/크래시/증상이 발생했어요** (열린 세션이면 **계속 수집**)
+   - **아무 일도 없었어요** / **지금 중지하고 분석**: 수집을 중지(`stop`, `stop-collect`, `kernel stop`)하고 `check` / `error-analyze` / `kernel analyze`를 실행
    
-   **폴링하거나 루핑하지 마세요** — 사용자의 선택을 기다립니다.
+   **폴링·루핑·`sleep` 금지** — 재현 시간은 사용자의 것입니다. 타이머는 사용자 답변의 대체물이 아니며, 가드 훅이 `sleep … && stop-collect`를 차단합니다 (이슈 #212).
+4. **문제 보고는 에뮬레이터가 언급되어도 이 스킬의 일입니다** — "에뮬레이터에서 com.samsung.fh.youtube 동영상을 재생하니 CPU가 300%까지 올라가고 재생이 안 돼요, 조사해줘"는 `tizen-device-manager`(디바이스 목록·에뮬레이터 종료 전용)의 작업이 아니라 여기로 라우팅합니다 (이슈 #211).
+5. **커널 로그는 `kernel collect` → `kernel stop` → `kernel analyze`로** — `sdb shell dmesg` / `cat /proc/kmsg` 금지 (이슈 #213).
+6. **증거 프로브는 `investigate --symptoms "…"`와 `probe run <id>`로** — `sdb shell top / ps / free / cat /proc/meminfo`를 직접 치지 않습니다 (이슈 #214).
+7. **에러부터 분석, 전체 로그는 마지막에** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; 증상이 설명되지 않을 때만 `error-analyze … details` → 필터를 건 `app-log` → `probe run` (이슈 #215).
+
+---
+
+## 증상 조사 (CPU / 멈춤 / 동영상 재생 안 됨) — 짧은 경로
+
+사용자가 크래시가 아닌 증상을 보고할 때 — 예: *"에뮬레이터에서 com.samsung.fh.youtube 동영상을 재생하니 호스트 CPU가 300%까지 올라가고 동영상이 재생되지 않아요. 조사해줘."* — 에이전트는 다음 순서로 진행합니다:
+
+| 단계 | 에이전트 동작 | tizen-cli 명령 |
+|------|---------------|----------------|
+| 1 | 1차 조사: 증상 → 프로브 번들 → 상관 분석 보고서 | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
+| 2 | 재현 **전에** 수집기 시작 | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` · `--action dlog-collect --app-id …` |
+| 3 | **멈추고 질문** — "지금 이슈를 재현해 주세요. (1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요" — 그리고 **턴 종료** | (에이전트 상호작용 — `sleep`·폴링 없음) |
+| 4 | 답변 후: 수집기 중지 | `--action stop-collect` · `--action kernel --subcommand stop` |
+| 5 | 에러부터 분석 | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
+| 6 | 설명되지 않을 때만 확대 | `--action error-analyze --format details` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 7 | 2개 언어 보고서, 다음 단계 안내, 정리 | `--action stop` |
 
 ---
 
@@ -304,17 +324,15 @@ tizen-cli tizen-sdk dlog-analyzer --action app-launch --app-id org.example.myapp
 tizen-cli tizen-sdk dlog-analyzer --action dlog-collect --app-id org.example.myapp
 ```
 
-앱의 PID로 필터링된 dlog를 **백그라운드 프로세스**로 수집을 시작합니다. 앱이 **실행 중이어야 합니다** — `pgrep`으로 PID를 조회합니다. 로그는 `$TMPDIR/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`에 지속적으로 기록됩니다.
+앱의 PID로 필터링된 dlog를 **백그라운드 프로세스**로 수집을 시작합니다. 앱이 **실행 중이어야 합니다** — `pgrep`으로 PID를 조회합니다. 로그는 `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 지속적으로 기록됩니다 (SDK 데이터 경로는 `~/.tizen.sdk.path.config` → `sdk.info`의 `TIZEN_SDK_DATA_PATH` 또는 `<sdk>-data`에서 결정되며, 응답의 `result.log_file`에 표시됨).
 
 ### C단계 — 사용자에게 계속 수집할지 분석할지 선택하도록 요청
 
-에이전트가 사용자에게 다음과 같이 안내합니다: *"백그라운드에서 로그 수집이 시작되었습니다. 앱을 사용하면서 이슈를 재현해 보세요."*
+에이전트가 사용자에게 다음과 같이 안내합니다: *"백그라운드에서 로그 수집이 시작되었습니다. 앱을 사용하면서 이슈를 재현해 보세요."* — 그리고 그 자리에서 **턴을 끝내며** 두 가지 옵션을 제시합니다:
+1. **재현 완료 — 에러/크래시가 발생했어요** (계속 테스트하려면 **계속 수집**)
+2. **아무 일도 없었어요** / **수집 중지 및 지금 분석** — 수집을 중지(`stop-collect`)하고 즉시 `error-analyze`를 실행하여 지금까지 수집된 로그 분석
 
-사용자가 충분히 앱을 테스트한 후, 에이전트는 사용자에게 두 가지 옵션 중 하나를 선택하도록 제시합니다:
-1. **계속 수집** — 백그라운드 수집을 계속 실행하며 사용자가 추가로 앱을 테스트
-2. **수집 중지 및 지금 분석** — 수집을 중지(`stop-collect`)하고 즉시 `error-analyze`를 실행하여 지금까지 수집된 로그 분석
-
-**폴링하지 마세요.** 사용자의 선택을 기다립니다.
+**폴링·루핑·`sleep` 금지.** 사용자의 선택을 기다립니다 — 재현 시간은 사용자의 것입니다. `sleep 30 && … stop-collect`가 바로 이슈 #212에서 보고된 동작이며, 가드 훅이 이를 차단합니다.
 
 ### D단계 — 사용자의 선택에 따라 진행
 
@@ -339,7 +357,13 @@ tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id org.example.my
 
 수집된 로그에서 Error(E) 및 Fatal(F) 우선순위 항목을 분석합니다. tag+message 기준으로 중복 제거하여 발생 횟수를 계산합니다. 출력은 일반 텍스트입니다(토큰 효율적, Rich 테이블 없음): 요약은 항목당 한 줄씩(`N. Module=TAG | Repeated=X | Message: ...`) 표시되며, 상세 섹션은 `[Error N]` 블록과 `Full log:` 라인을 보여줍니다.
 
-에이전트는 `error-analyze` 출력을 읽고 근본 원인을 파악하여 수정을 적용합니다.
+에이전트는 `error-analyze` 출력을 읽고 근본 원인을 파악하여 수정을 적용합니다. E/F 요약(그리고 `check`, 수집했다면 `kernel analyze`)으로 증상이 설명되지 않을 때만 범위를 넓힙니다 — `--format details`, 그 다음 **필터를 건** 전체 로그:
+
+```bash
+tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id org.example.myapp --priority W --since 10m --max-lines 300
+```
+
+`app-log`는 절대 첫 번째 분석 호출이 아닙니다 (이슈 #215).
 
 **사용자가 "계속 수집"을 선택한 경우:**
 
@@ -381,6 +405,20 @@ tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id org.example.my
 | 앱 로그 수집 | `tizen-cli tizen-sdk dlog-analyzer --action dlog-collect --app-id <id>` |
 | 앱 로그 수집 중지 | `tizen-cli tizen-sdk dlog-analyzer --action stop-collect` |
 | 앱 에러 분석 | `tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id <id> [--format summary\|details]` |
+| 전체 앱 로그 출력 | `tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id <id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]` |
+| 디바이스 프로필 | `tizen-cli tizen-sdk dlog-analyzer --action device-profile [--refresh]` |
+| 조사 | `tizen-cli tizen-sdk dlog-analyzer --action investigate [--app-id <id>] [--symptoms <text>]` |
+| 프로브 목록 | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand list` |
+| 프로브 실행 | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand run --app-id <probe-id>` |
+| 스냅샷 생성 | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand create` |
+| 스냅샷 목록 | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand list` |
+| 스냅샷 비교 | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand compare --app-id <id1> --output-dir <id2>` |
+| 스냅샷 삭제 | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand delete --app-id <id>` |
+| 타임라인 조회 | `tizen-cli tizen-sdk dlog-analyzer --action timeline --subcommand show` |
+| 타임라인 보고서 | `tizen-cli tizen-sdk dlog-analyzer --action timeline --subcommand report` |
+| 커널 로그 수집 (백그라운드) | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand collect` |
+| 커널 로그 수집 중지 | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand stop` |
+| 커널 로그 분석 | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand analyze` |
 | 앱 종료 | `tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id <id>` |
 
 

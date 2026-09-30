@@ -2,7 +2,7 @@
   "name": "tizen-ai-extension",
   "displayName": "Tizen AI Extension",
   "description": "Install and sync Tizen SDK Skills (skills, agents, hooks) for Claude Code and Cline from a single VS Code extension.",
-  "version": "1.3.1",
+  "version": "1.4.0",
   "publisher": "tizen-sdk-team",
   "license": "Apache-2.0",
   "repository": {
@@ -116,7 +116,6 @@
   },
   "scripts": {
     "build": "node esbuild.config.js",
-    "icon": "node scripts/generate-icon.js",
     "typecheck": "tsc --noEmit",
     "test": "node esbuild.config.js && node dist/tests.js && node dist/hooks.test.js && node dist/install.test.js",
     "vscode:prepublish": "tsc --noEmit && node esbuild.config.js",

@@ -44,13 +44,13 @@ interface PluginSchema {
 }
 
 /**
- * True if an option name is sensitive and should be masked in logs/transcripts.
- * Matches the same patterns as user-command.js and mask-secrets.js.
+ * True if an option's long flag ("--password") is sensitive and should be
+ * masked in logs/transcripts. Matches the same patterns as user-command.js
+ * and mask-secrets.js. Takes Commander's `option.long` — NOT `option.flags`,
+ * which is the whole "--password <password>" spec and never matched.
  */
-function isSensitiveOption(longFlags: string): boolean {
-  if (!longFlags) return false;
-  const flag = longFlags.split(",")[0].trim(); // e.g., "-p, --password" → "--password"
-  if (!flag.startsWith("--")) return false;
+function isSensitiveOption(flag: string): boolean {
+  if (!flag || !flag.startsWith("--")) return false;
   if (flag.startsWith("--prompt-") || flag.endsWith("-file")) return false;
 
   const SENSITIVE = new Set([
@@ -80,7 +80,7 @@ function optionToSchema(option: any): OptionSchema {
   };
 
   // Mark sensitive parameters so harness can mask them in MCP invocations
-  if (isSensitiveOption(option.flags)) {
+  if (isSensitiveOption(option.long || "")) {
     schema.sensitive = true;
   }
 

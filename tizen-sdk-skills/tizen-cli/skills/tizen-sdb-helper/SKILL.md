@@ -65,13 +65,14 @@ of executing the command.
 | Connect over network | "connect to 192.168.1.100:26101" | No     | `tizen-remote-device`     |
 | Disconnect           | "disconnect 192.168.1.100"       | No     | `tizen-remote-device`     |
 | Install              | "install app"                    | Yes    | `tizen-install-app`       |
-| Uninstall            | "uninstall app"                  | Yes    | `tizen-install-app`       |
+| Uninstall            | "uninstall org.example.app"      | Yes    | — (`pkgcmd -u -n <pkgid>`, gated) |
 | List packages        | "list installed packages"        | No     | —                         |
 | Package info         | "show package info"              | No     | —                         |
 | Launch app           | "launch app"                     | No     | — (`app_launcher -s`; when it prints no `successfully launched` — Samsung TV images are silent for a non-root shell — retried with the TV launcher `0 was_execute <appid>`, accepted on `app_id[<appid>] launched` / `resumed`) |
 | Kill app             | "kill app"                       | Yes    | —                         |
 | List running apps    | "list running apps"              | No     | —                         |
 | Logs — tail / save / clear | "tail the logs", "save logs", "clear log" | — | `tizen-dlog-analyzer` (`result.note` names the action: `log-dump`, `log-clear --confirm`, `start`) |
+| Kernel log      | "dmesg", "show the kernel log"   | —      | `tizen-dlog-analyzer` (`--action kernel --subcommand collect` → `stop` → `analyze`) |
 | Screenshot           | "screenshot the TV"             | No     | `tizen-screenshot`        |
 
 | Shell command | "run shell command" | No | — |
@@ -139,7 +140,7 @@ Follow it with `tizen-cli tizen-sdk dlog-analyzer --action log-dump` (view/save)
 }
 ```
 
-**Success (handoff intent — install/uninstall):**
+**Success (handoff intent — install):**
 
 ```json
 {
@@ -223,7 +224,7 @@ Follow it with `tizen-cli tizen-sdk dlog-analyzer --action log-dump` (view/save)
 
 - Device logs (view / save / clear) and crash analysis → `tizen-cli tizen-sdk dlog-analyzer`
 - Screenshot capture → `tizen-cli tizen-sdk screenshot`
-- Package install/uninstall → `tizen-cli tizen-sdk install-app`
+- Package install → `tizen-cli tizen-sdk install-app` (uninstall is a gated intent of this command)
 - Device discovery → `tizen-cli tizen-sdk device-manager`
 - Create an emulator VM → `tizen-cli tizen-sdk create-emulator`
 - Launch an emulator VM → `tizen-cli tizen-sdk launch-emulator`

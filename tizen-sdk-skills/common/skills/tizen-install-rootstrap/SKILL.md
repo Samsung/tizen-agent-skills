@@ -34,13 +34,14 @@ Custom rootstrap packages are **SDK extension packages**, so Tizen SDK must be i
 ```
 1. Validate ZIP file path (security checks) ← path traversal, symlinks rejected
 2. Verify Tizen SDK is installed (sdk.info) ← abort if not found
-3. Extract ZIP to temporary directory
-4. Detect ZIP structure (data/ or tizen-studio/)
-5. Parse rootstrap XML metadata from plugins directory
-6. Copy tools/ folder to SDK
-7. Copy platforms/ folder to SDK
-8. For tizen-studio structure: check native packages, copy as tizen-7.0
-9. Create .rootstrap-installed marker on success
+3. Check .rootstrap-installed marker ← present and no --force: success envelope from the marker, stop here
+4. Extract ZIP to temporary directory
+5. Detect ZIP structure (data/ or tizen-studio/)
+6. Parse rootstrap XML metadata from plugins directory
+7. Copy tools/ folder to SDK
+8. Copy platforms/ folder to SDK
+9. For tizen-studio structure: check native packages, copy as tizen-7.0
+10. Create .rootstrap-installed marker on success
 ```
 
 ### What the installer does
@@ -116,7 +117,7 @@ This CLI is a **pre-check**, not the installer. It finishes in seconds. Run in f
 
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*install-rootstrap-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**

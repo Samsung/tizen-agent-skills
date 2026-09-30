@@ -102,7 +102,7 @@ tizen-cli tizen-sdk create-project \
   --type platform \
   --template dali_demo \
   --parent-path /home/user/tizen-apps \
-  --name MyApp
+  --name MyDaliDemoApp
 ```
 
 | 옵션                  | 필수    | 설명                                                      |

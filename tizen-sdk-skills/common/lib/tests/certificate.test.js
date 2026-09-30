@@ -29,6 +29,8 @@ const {
   readSigningProfiles,
   DISTRIBUTOR_TYPES,
   DISTRIBUTOR_VERSIONS,
+  describeKeytoolFailure,
+  validateCertificateFile,
 } = require("../core/certificate");
 
 const { loadFixturePassword } = require("./fixture-helpers");
@@ -428,6 +430,70 @@ console.log("\nTest 5: generateAuthorCertificate invalid-parameter envelopes");
       other.errors[0].error_category,
       "profile_update_failed",
     );
+  }
+
+  // keytool failure text must never carry the -storepass value. execFileSync's
+  // error.message is the whole argv ("Command failed: keytool ... -storepass
+  // <pw>") and keytool reports bad passwords on stdout, so the stderr-empty
+  // fallback used to put the password into the envelope.
+  console.log(
+    "\nTest: describeKeytoolFailure / validateCertificateFile redaction",
+  );
+  {
+    const leaky = {
+      stderr: "",
+      message: `Command failed: keytool -list -keystore a.p12 -storepass ${VALID_PASSWORD}`,
+    };
+    const text = describeKeytoolFailure(leaky, VALID_PASSWORD);
+    check(
+      "  password removed from error.message",
+      text.includes(VALID_PASSWORD),
+      false,
+    );
+    check("  redaction marker present", text.includes("***"), true);
+    check(
+      "  stderr wins when present",
+      describeKeytoolFailure(
+        { stderr: "keystore password was incorrect\n", message: "x" },
+        VALID_PASSWORD,
+      ),
+      "keystore password was incorrect",
+    );
+    check(
+      "  stderr is redacted too",
+      describeKeytoolFailure(
+        { stderr: `bad ${VALID_PASSWORD}` },
+        VALID_PASSWORD,
+      ).includes(VALID_PASSWORD),
+      false,
+    );
+    check(
+      "  empty password leaves the text unchanged",
+      describeKeytoolFailure({ message: "Command failed: keytool -list" }, ""),
+      "Command failed: keytool -list",
+    );
+    // End to end: whether keytool is on PATH (wrong password → keytool error)
+    // or not (ENOENT → execFileSync error with the full argv), the returned
+    // text must not contain the password.
+    const fixture = path.resolve(
+      __dirname,
+      "../../../tests/fixtures/certs/test-fixture-author.p12",
+    );
+    if (fs.existsSync(fixture)) {
+      const v = validateCertificateFile(
+        fixture,
+        VALID_PASSWORD + "x",
+        path.join(os.tmpdir(), "no-such-sdk"),
+      );
+      check("  wrong password → not valid", v.valid, false);
+      check(
+        "  wrong password → error text has no password",
+        String(v.error).includes(VALID_PASSWORD + "x"),
+        false,
+      );
+    } else {
+      console.log("  (skip) fixture .p12 not present");
+    }
   }
 
   console.log(

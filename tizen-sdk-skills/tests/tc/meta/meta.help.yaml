@@ -1,0 +1,21 @@
+# --help / --version used to print Commander's text to stderr and NOTHING to
+# stdout, breaking the "exactly one JSON envelope on stdout" contract every
+# host relies on. They now return a success envelope carrying the same text.
+id: tizen-sdk.meta.help
+plugin: tizen-sdk
+command: "--help"
+tier: safe
+status: approved
+since_cli: 1.4.0
+description: "--help returns a success envelope whose result.help_text is Commander's usage text"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "--help"]
+    timeout_sec: 30
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.help_text", matches: "Usage:" }
+        - { path: "$.result.help_text", matches: "create-project" }
+        - { path: "$.result.version", matches: "^\\d+\\.\\d+\\.\\d+" }
