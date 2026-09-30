@@ -263,6 +263,23 @@ mutating tier run against a throwaway home.
 
 ### Fixed
 
+- **Native projects created under `tizen-11.0` mixed API versions and failed to build**
+  (`create-project-app.sh` / `.ps1` `sync_custom_templates` → new `align_synced_manifest_api_version` /
+  `Align-SyncedManifestApiVersion`, `common/lib/tests/list-templates.test.js`). The plugin's custom
+  `BasicUI` native template is one tree copied verbatim under every `platforms/tizen-X.Y/…/Template/Native`
+  the runner selects, and its `tizen-manifest.xml` carried a fixed `api-version="10.0"`. `tz new -p tizen-11.0`
+  writes `tizen_native_project.yaml` (`api_version: "11.0"`) and `.tproject` (`tizen-11.0`) from the profile
+  but copies the manifest as-is, so the project came out with 11.0 next to 10.0 and `tz build` could not
+  resolve a consistent rootstrap. The sync step now rewrites the copied manifest's `api-version` to the
+  numeric part of the selected profile. Only a copy still byte-identical to the plugin's template is
+  touched (`cmp -s` / byte-array compare) — SDK-shipped and user-edited manifests are left alone — which
+  also repairs copies made by earlier plugin versions on their next `list-templates` / create run. The
+  rewrite is anchored to the `api-version` attribute of the `<manifest …>` root element, first match only,
+  with the same pattern in both twins; non-`tizen-X.Y` profiles (TV, wearable) are never rewritten. Seven
+  script-layer TCs cover the fresh copy under 11.0 (attribute-only diff against the template), the
+  unchanged 10.0 copy, the stale-copy repair, idempotence on a repaired copy, a `tv-samsung-*` profile and
+  the untouched edited manifest; three source-inspection TCs hold the `.ps1` twin to the same anchor,
+  guard and call site.
 - **cmd.exe runner lookup printed nothing on any machine missing one of the four harnesses**
   (review of #227; `scripts/rewrite-runner-snippets.js`, 34 `common/skills/*/SKILL.md` and
   `common/agents/*.md`, 4 `docs/debug/*` walkthroughs, `common/lib/tests/plugin-cache.test.js`,
