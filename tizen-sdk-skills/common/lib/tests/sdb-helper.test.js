@@ -54,6 +54,13 @@ const intentCases = [
   ["take a screenshot", "screenshot"],
   ["install this tpk", "install"],
   ["reboot the device", "reboot"],
+  // Both word orders of the package listing (the first one used to fall
+  // through to "Could not match request").
+  ["list installed packages", "list-packages"],
+  ["list packages installed", "list-packages"],
+  ["show all installed apps", "list-packages"],
+  ["list running apps", "list-running"],
+  ["package info dZEpxl2iAg", "package-info"],
 ];
 for (const [request, expectedId] of intentCases) {
   const m = matchIntent(request);
@@ -115,6 +122,29 @@ for (const req of [
   );
   check(`  "${req}" carries a handoff hint`, typeof m.handoffHint, "string");
 }
+// Kernel log requests (dmesg / kmsg) hand off to the analyzer's kernel
+// commands, not to a plain dlog dump (issue #213).
+for (const req of ["dmesg", "show the kernel log", "collect kmsg"]) {
+  const m = matchIntent(req);
+  check(`  "${req}" is the kernel-log intent`, m.id, "kernel-log");
+  check(
+    `  "${req}" hands off to tizen-dlog-analyzer`,
+    m.handoff,
+    "tizen-dlog-analyzer",
+  );
+  check(
+    `  "${req}" hint names kernel collect`,
+    m.handoffHint.includes("kernel collect"),
+    true,
+  );
+}
+// …while an explicit shell request that merely mentions dmesg stays a shell
+// command (the shell block precedes the log block on purpose).
+check(
+  '  "run shell command dmesg" stays shell-command',
+  matchIntent("run shell command dmesg").id,
+  "shell-command",
+);
 check(
   "  log-clear keeps its gated flag",
   matchIntent("clear logs").gated,
@@ -262,6 +292,93 @@ for (const [request, expectedCmd] of boundaryCases) {
   const result = buildCommand("shell-command", "emulator-26101", request);
   const expected = `-s "emulator-26101" shell "${expectedCmd}; echo __SDB_EXIT:${EXIT_MARKER}"`;
   check(`  "${request}"`, result.command, expected);
+}
+
+// Test 5b: a device clause / politeness in a free-form request is WHERE to
+// run, not WHAT to run. "run shell command ls -la on emulator-26101" used to
+// execute 'ls -la on emulator-26101' on the device (harmless, but "ls: cannot
+// access 'on'" noise and a different result). Words that merely look like
+// "on" inside the command must survive.
+console.log(
+  "\nTest 5b: device clause and politeness are not command arguments",
+);
+{
+  const strip = [
+    ["run shell command ls -la on emulator-26101", "ls -la"],
+    ["run shell command ls -la on the device", "ls -la"],
+    ["run shell command ls -la on the device emulator-26101", "ls -la"],
+    ["shell df -h /opt on my TV", "df -h /opt"],
+    ["run shell command cat /proc/version on the target.", "cat /proc/version"],
+    ["run shell command whoami on 192.168.0.5:26101", "whoami"],
+    ["run shell command whoami on R3CN30ABCDE", "whoami"],
+    ["run shell command whoami on 0000d1b2c3d4e5f6", "whoami"],
+    // After a device noun the serial may look like anything serial-ish.
+    ["run shell command whoami on device host1.local:26101", "whoami"],
+    ["on emulator-26101 run shell command ls", "ls"],
+    ["on the device, run shell command ls", "ls"],
+    ["please run shell command ls -la please", "ls -la"],
+    ["run shell command ls -la, please", "ls -la"],
+    ["run shell command ls -la for me", "ls -la"],
+    ["run shell command ls -la on emulator-26101 please", "ls -la"],
+    ["run shell command ls -la please on emulator-26101", "ls -la"],
+  ];
+  for (const [request, expectedCmd] of strip) {
+    const result = buildCommand("shell-command", "emulator-26101", request);
+    const expected = `-s "emulator-26101" shell "${expectedCmd}; echo __SDB_EXIT:${EXIT_MARKER}"`;
+    check(`  "${request}"`, result.command, expected);
+  }
+  // The exact resolved serial is stripped even when it is not serial-shaped,
+  // also behind a trailing "please" and behind any device noun.
+  for (const [request, expectedCmd] of [
+    ["run shell command ls on abc", "ls"],
+    ["run shell command ls on abc please", "ls"],
+    ["run shell command ls on my target abc", "ls"],
+  ]) {
+    check(
+      `  resolved serial 'abc': "${request}"`,
+      buildCommand("shell-command", "abc", request).command,
+      `-s "abc" shell "${expectedCmd}; echo __SDB_EXIT:${EXIT_MARKER}"`,
+    );
+  }
+  // Command text that happens to contain "on" / "please" stays intact. A
+  // bare "on <token>" is only a device clause for an unmistakable serial:
+  // file names (dots, underscores) and word+number tokens are arguments.
+  // "grep -i on file1.txt" used to lose "on file1.txt" and run a bare
+  // "grep -i" on the device, which blocks on stdin.
+  const keep = [
+    ["run shell command grep -i on file.txt", "grep -i on file.txt"],
+    ["run shell command grep -i on file1.txt", "grep -i on file1.txt"],
+    [
+      "run shell command tail -n 20 on log2024.txt",
+      "tail -n 20 on log2024.txt",
+    ],
+    ["run shell command cat on app_v2-final", "cat on app_v2-final"],
+    ["run shell command echo on backup2024", "echo on backup2024"],
+    ["run shell command echo on 2024report", "echo on 2024report"],
+    ["run shell command echo on", "echo on"],
+    ["run shell command ls on", "ls on"],
+    ["run shell command cat please.txt", "cat please.txt"],
+    ["run shell command ls /opt/on/the/device", "ls /opt/on/the/device"],
+    ["run shell command echo device", "echo device"],
+    ["run shell command ls -la on tmp", "ls -la on tmp"],
+  ];
+  for (const [request, expectedCmd] of keep) {
+    const result = buildCommand("shell-command", "emulator-26101", request);
+    const expected = `-s "emulator-26101" shell "${expectedCmd}; echo __SDB_EXIT:${EXIT_MARKER}"`;
+    check(`  "${request}" is kept`, result.command, expected);
+  }
+  // Only a device clause → no command.
+  const onlyDevice = buildCommand(
+    "shell-command",
+    "emulator-26101",
+    "run shell command on emulator-26101",
+  );
+  check(
+    "  'run shell command on emulator-26101' → empty",
+    onlyDevice.command,
+    "",
+  );
+  check("  … → has note", typeof onlyDevice.note, "string");
 }
 
 // Test 6: no intent may emit an unsubstituted <PLACEHOLDER>.
@@ -454,6 +571,286 @@ const leaked = sweep
   .map(([id, req]) => [id, buildCommand(id, "S", req).command])
   .filter(([, cmd]) => /<[A-Za-z]+>/.test(cmd));
 check("  no intent leaks <PLACEHOLDER>", leaked, []);
+
+// Test 7: uninstall is handled here, gated, and never handed off
+// (the former handoff pointed at tizen-install-app, which has no uninstall).
+console.log("\nTest 7: uninstall intent");
+{
+  const m = matchIntent("uninstall org.example.myapp");
+  check("  uninstall → 'uninstall'", m && m.id, "uninstall");
+  check("  uninstall is gated", m && m.gated, true);
+  check("  uninstall has no handoff", m && m.handoff, undefined);
+  check(
+    "  'remove the app X' → 'uninstall'",
+    matchIntent("remove the app org.example.myapp")?.id,
+    "uninstall",
+  );
+  check(
+    "  'install' still hands off to tizen-install-app",
+    matchIntent("install this tpk")?.handoff,
+    "tizen-install-app",
+  );
+  const cmd = buildCommand("uninstall", "S", "uninstall org.example.myapp");
+  check(
+    "  builds pkgcmd -u -n <pkgid>",
+    cmd.command,
+    '-s "S" shell pkgcmd -u -n "org.example.myapp"',
+  );
+  check(
+    "  note explains package id vs app id",
+    /package id/.test(cmd.note),
+    true,
+  );
+  const missing = buildCommand("uninstall", "S", "uninstall");
+  check("  missing id → empty command", missing.command, "");
+  check(
+    "  missing id → note asks for it",
+    /package ID/.test(missing.note),
+    true,
+  );
+}
+
+// Test 7b: bare (dotless) package ids — the pkgid `pkgcmd -l` prints for a
+// TPK/WGT app (`dZEpxl2iAg` of `dZEpxl2iAg.MyTizenWebApp`) has no dot, so the
+// dotted-only app-id extractor rejected exactly the id the user copied.
+console.log("\nTest 7b: bare package ids for package-info / uninstall");
+{
+  const cases = [
+    [
+      "package-info",
+      "package info dZEpxl2iAg",
+      '-s "emulator-26101" shell pkginfo --pkg "dZEpxl2iAg"',
+    ],
+    [
+      "package-info",
+      'package info "hQaMXc3Qbc" on emulator-26101',
+      '-s "emulator-26101" shell pkginfo --pkg "hQaMXc3Qbc"',
+    ],
+    [
+      "package-info",
+      "package info for the package org.tizen.dali-demo",
+      '-s "emulator-26101" shell pkginfo --pkg "org.tizen.dali-demo"',
+    ],
+    [
+      "uninstall",
+      "uninstall dZEpxl2iAg",
+      '-s "emulator-26101" shell pkgcmd -u -n "dZEpxl2iAg"',
+    ],
+    [
+      "uninstall",
+      "remove the package hQaMXc3Qbc",
+      '-s "emulator-26101" shell pkgcmd -u -n "hQaMXc3Qbc"',
+    ],
+    // Fillers are skipped, quotes and a trailing period are tolerated, and
+    // a dotted id anywhere in the request still wins.
+    [
+      "package-info",
+      "package info for the id dZEpxl2iAg",
+      '-s "emulator-26101" shell pkginfo --pkg "dZEpxl2iAg"',
+    ],
+    [
+      "uninstall",
+      "uninstall 'hQaMXc3Qbc'.",
+      '-s "emulator-26101" shell pkgcmd -u -n "hQaMXc3Qbc"',
+    ],
+    [
+      "package-info",
+      "package info my_pkg-2",
+      '-s "emulator-26101" shell pkginfo --pkg "my_pkg-2"',
+    ],
+    [
+      "package-info",
+      "package info MyPackage",
+      '-s "emulator-26101" shell pkginfo --pkg "MyPackage"',
+    ],
+    [
+      "package-info",
+      "Package Info DZEPXL2IAG",
+      '-s "emulator-26101" shell pkginfo --pkg "DZEPXL2IAG"',
+    ],
+  ];
+  for (const [intentId, request, expected] of cases) {
+    check(
+      `  ${intentId}: "${request}"`,
+      buildCommand(intentId, "emulator-26101", request).command,
+      expected,
+    );
+  }
+  // Never mistaken for a package id: a serial (emulator-<port>, the passed-in
+  // serial, a long hex hardware serial), a filler left over when nothing
+  // follows it (the regex must not backtrack onto "app"/"id"/"the"), or any
+  // plain lowercase word ("my", "from", "please") — the token is spliced into
+  // pkginfo / pkgcmd, so only id-shaped tokens get through.
+  for (const request of [
+    "package info on emulator-26101",
+    "package info on 0000d8a5f1c2ab",
+    "package info please",
+    "package info",
+    "package info id",
+    "package info the",
+    "package info app",
+    "package info on my device",
+    "package info mypkg",
+    "package info of installed",
+    "uninstall it",
+    "uninstall app",
+    "uninstall now",
+    "uninstall the package from the device",
+    "remove the app",
+  ]) {
+    const intentId = /^(uninstall|remove)/.test(request)
+      ? "uninstall"
+      : "package-info";
+    const r = buildCommand(intentId, "emulator-26101", request);
+    check(`  "${request}" → empty command`, r.command, "");
+    check(
+      `  "${request}" → asks for a package ID`,
+      /package ID/.test(r.note),
+      true,
+    );
+  }
+  // The serial passed to buildCommand is refused even when it is not
+  // emulator-shaped.
+  check(
+    "  the resolved hardware serial is not a package id",
+    buildCommand("package-info", "R3CN30ABCDE", "package info R3CN30ABCDE")
+      .command,
+    "",
+  );
+}
+
+// list-packages: both word orders and "application(s)", without stealing
+// list-running or install.
+console.log("\nTest 7b-2: list-packages phrasing");
+for (const [request, expectedId] of [
+  ["list installed packages", "list-packages"],
+  ["list packages installed", "list-packages"],
+  ["show all installed apps", "list-packages"],
+  ["show me which apps are installed", "list-packages"],
+  ["which packages are installed", "list-packages"],
+  ["list installed applications", "list-packages"],
+  ["installed packages", "list-packages"],
+  ["list running apps", "list-running"],
+  ["show running apps", "list-running"],
+  ["install this tpk", "install"],
+  ["uninstall dZEpxl2iAg", "uninstall"],
+]) {
+  check(`  "${request}"`, matchIntent(request)?.id, expectedId);
+}
+check(
+  "  'list apps' (no 'installed') is not list-packages",
+  matchIntent("list apps")?.id !== "list-packages",
+  true,
+);
+
+// Test 7c: restarting an emulator is never a guest reboot. Under WHPX (Windows)
+// the vCPU reset kills the QEMU process ("WHPX: Unexpected VP exit code 4") and
+// the VM never comes back, so "reboot the emulator" hands off to the emulator
+// skills, and a gated reboot/shutdown aimed at an emulator serial carries a note
+// naming the stop → cold-start path.
+console.log("\nTest 7c: emulator restart guidance");
+{
+  for (const req of [
+    "reboot the emulator",
+    "restart the emulator",
+    "emulator restart please",
+    "please reboot my emulator now",
+  ]) {
+    const m = matchIntent(req);
+    check(`  "${req}" → emulator-restart`, m && m.id, "emulator-restart");
+    check(
+      `  "${req}" hands off to tizen-device-manager`,
+      m && m.handoff,
+      "tizen-device-manager",
+    );
+    check(
+      `  "${req}" hint names tizen-launch-emulator`,
+      /tizen-launch-emulator/.test((m && m.handoffHint) || ""),
+      true,
+    );
+  }
+  // Plain device wording keeps the gated intents; "restart the app" is not a
+  // reboot; "factory reset the emulator" stays a factory reset.
+  check(
+    "  'reboot the device' → reboot",
+    matchIntent("reboot the device")?.id,
+    "reboot",
+  );
+  check("  'reboot' → reboot", matchIntent("reboot")?.id, "reboot");
+  check(
+    "  'power off the device' → shutdown",
+    matchIntent("power off the device")?.id,
+    "shutdown",
+  );
+  check(
+    "  'restart the app org.x.y' is not a reboot",
+    matchIntent("restart the app org.x.y")?.id !== "reboot" &&
+      matchIntent("restart the app org.x.y")?.id !== "emulator-restart",
+    true,
+  );
+  check(
+    "  'factory reset the emulator' → factory-reset",
+    matchIntent("factory reset the emulator")?.id,
+    "factory-reset",
+  );
+
+  const emuReboot = buildCommand(
+    "reboot",
+    "emulator-26101",
+    "reboot the device",
+  );
+  check(
+    "  reboot on emulator serial keeps the gated command",
+    emuReboot.command,
+    '-s "emulator-26101" shell reboot',
+  );
+  check(
+    "  reboot on emulator serial carries the WHPX note",
+    /WHPX/.test(emuReboot.note || "") &&
+      /tizen-device-manager/.test(emuReboot.note || "") &&
+      /tizen-launch-emulator/.test(emuReboot.note || ""),
+    true,
+  );
+  const emuShutdown = buildCommand("shutdown", "emulator-26101", "shutdown");
+  check(
+    "  shutdown on emulator serial carries the note",
+    /tizen-launch-emulator/.test(emuShutdown.note || ""),
+    true,
+  );
+  const hwReboot = buildCommand("reboot", "0000d8a5f1c2", "reboot the device");
+  check("  reboot on hardware serial has no note", hwReboot.note, undefined);
+  check(
+    "  reboot on hardware serial keeps the command",
+    hwReboot.command,
+    '-s "0000d8a5f1c2" shell reboot',
+  );
+}
+
+// Test 8: source guard — the sdb server is started once (ensureSdbServer)
+// before any piped runSdb / resolveSerial call. A cold daemon holds the pipe
+// open until the timeout, which surfaced as a false io_error on the first
+// call of a session (see sdb.js ensureSdbServer).
+console.log("\nTest 8: cold-sdb source guard");
+{
+  const fs = require("fs");
+  const path = require("path");
+  const src = fs.readFileSync(
+    path.resolve(__dirname, "../core/sdb-helper.js"),
+    "utf-8",
+  );
+  const body = src.slice(src.indexOf("async function runSdbCommand("));
+  const ensureAt = body.indexOf("ensureSdbServer(sdbPath)");
+  const firstRun = body.indexOf("runSdb(sdbPath");
+  const firstResolve = body.indexOf("resolveSerial(sdbPath");
+  check("  runSdbCommand calls ensureSdbServer", ensureAt !== -1, true);
+  check("  ...before the first runSdb", ensureAt < firstRun, true);
+  check("  ...before resolveSerial", ensureAt < firstResolve, true);
+  check(
+    "  no hand-rolled start-server retry remains",
+    /runSdb\(sdbPath, "start-server"\)/.test(body),
+    false,
+  );
+}
 
 console.log(
   `\n=== ${failures === 0 ? "ALL PASS" : failures + " FAILURE(S)"} ===`,

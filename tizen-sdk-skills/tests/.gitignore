@@ -1,1 +1,6 @@
 node_modules/
+
+# PowerShell 5.1 drops its ModuleAnalysisCache into the runner cwd when
+# USERPROFILE is redirected to a folder without AppData\Local (README, safe-tier
+# recipe). runner.mjs now creates that folder; this catches older runs.
+Microsoft/

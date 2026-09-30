@@ -25,6 +25,7 @@ requires:
 # should automate or assert on. Left as draft.
 # NOTE (2026-09-23): capability samsung-account declared (a logged-in Samsung account / online-CA
 # session); never automated by this suite — stays draft.
+# NOTE (2026-09-28): out of scope of the installer pass on this Windows host — stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "certificate-manager", "--action", "samsung-login", "--profile-name", "myProfile"]

@@ -44,7 +44,9 @@ function promptHiddenPassword(label) {
   try {
     process.stdin.setRawMode(true);
   } catch (rawModeError) {
-    fs.closeSync(ttyFd);
+    // On Windows ttyFd IS process.stdin.fd — closing it would tear down the
+    // process's own stdin (the finally below makes the same distinction).
+    if (!isWindows) fs.closeSync(ttyFd);
     throw new Error(
       `${label}: Cannot enable raw mode: ${rawModeError.message}\n` +
         `Use one of the following alternatives:\n` +
@@ -60,7 +62,14 @@ function promptHiddenPassword(label) {
     const bytes = [];
     while (true) {
       const bytesRead = fs.readSync(ttyFd, buffer, 0, 1, null);
-      if (bytesRead === 0) continue;
+      // 0 bytes is end-of-input (Ctrl-D, closed terminal) — not "try again":
+      // looping here spun at 100% CPU forever with no way to type anything.
+      if (bytesRead === 0) {
+        process.stderr.write("\n");
+        throw new Error(
+          `${label}: Hidden password prompt ended without input (EOF).`,
+        );
+      }
       const byte = buffer[0];
       if (byte === 0x0d || byte === 0x0a) {
         process.stderr.write("\n");

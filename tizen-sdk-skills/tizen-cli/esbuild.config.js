@@ -60,6 +60,34 @@ function copyDirRecursive(src, dest, excludes) {
   }
 }
 
+// ─── Internal-only command groups ───────────────────────────────────────
+// src/command-specs/internal/ holds command groups that the public tree does
+// not carry (scripts/publication/internal-only-paths.txt); internal-specs.ts
+// loads it with require() inside try/catch. When the directory is missing —
+// or always, under TIZEN_PUBLIC_BUILD=1, which lets CI build the public
+// variant from the internal tree — the import is left external instead of
+// failing the bundle, so the runtime require() throws MODULE_NOT_FOUND and the
+// groups are absent from the command list, the schema and plugin.json.
+const PUBLIC_BUILD = process.env.TIZEN_PUBLIC_BUILD === "1";
+const internalOnlyPlugin = {
+  name: "internal-only",
+  setup(build) {
+    build.onResolve({ filter: /^\.\/internal(\/|$)/ }, (args) => {
+      const base = path.resolve(args.resolveDir, args.path);
+      const exists =
+        fs.existsSync(base) ||
+        [".ts", ".js"].some((ext) => fs.existsSync(base + ext));
+      if (PUBLIC_BUILD || !exists) return { path: args.path, external: true };
+      return undefined; // default resolution
+    });
+  },
+};
+if (PUBLIC_BUILD) {
+  console.log(
+    "ℹ️  TIZEN_PUBLIC_BUILD=1: internal-only command groups left out of the bundle",
+  );
+}
+
 esbuild
   .build({
     entryPoints: [path.join(__dirname, "src", "index.ts")],
@@ -72,6 +100,7 @@ esbuild
     sourcemap: false,
     logLevel: "info",
     resolveExtensions: [".ts", ".tsx", ".js", ".jsx", ".json", ".node"],
+    plugins: [internalOnlyPlugin],
   })
   .then(() => {
     // ─── Sync version from package.json to all manifest files ───────────
@@ -205,8 +234,13 @@ esbuild
         : null;
 
       if (Array.isArray(commands) && commands.length > 0) {
-        // Update both the source plugin.json and the dist copy
-        for (const jsonPath of [pluginJsonSrc, pluginJsonDest]) {
+        // Update both the source plugin.json and the dist copy. A public
+        // variant built from the internal tree only rewrites the dist copy:
+        // the committed manifest keeps the full internal command list.
+        const targets = PUBLIC_BUILD
+          ? [pluginJsonDest]
+          : [pluginJsonSrc, pluginJsonDest];
+        for (const jsonPath of targets) {
           if (fs.existsSync(jsonPath)) {
             const manifest = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
             manifest.commands = commands;

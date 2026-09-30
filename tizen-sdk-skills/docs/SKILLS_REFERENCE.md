@@ -466,7 +466,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 
 ### 9. tizen-device-manager
 
-**설명:** SDB로 연결된 Tizen 디바이스 탐지(`start`) 또는 실행 중인 에뮬레이터 VM 전체 종료(`stop`, em-cli kill 사용). **에뮬레이터를 직접 생성/부팅하지 않습니다** — 생성은 `tizen-create-emulator`, 부팅은 `tizen-launch-emulator`가 담당합니다.
+**설명:** SDB로 연결된 Tizen 디바이스 탐지(`start`) 또는 실행 중인 에뮬레이터 VM 전체 종료(`stop`, em-cli kill 사용). **에뮬레이터를 직접 생성/부팅하지 않습니다** — 생성은 `tizen-create-emulator`, 부팅은 `tizen-launch-emulator`가 담당합니다. **진단 스킬도 아닙니다:** 문제 보고(크래시, 에러, 멈춤, CPU 급증, 동영상 재생 안 됨, "조사해줘")는 에뮬레이터가 언급되어도 `tizen-dlog-analyzer`의 일이며, 라우팅 훅이 그런 프롬프트를 되돌려 보냅니다.
 
 **사용 시점:** 연결된 디바이스/에뮬레이터 확인, 실행 중인 에뮬레이터 종료.
 
@@ -1317,9 +1317,10 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | 파라미터      | 타입   | 기본값   | 설명                                                                     |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze` 중 하나 |
-| `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장)     |
-| `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze에 필수 |
+| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel` 중 하나 |
+| `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect`(백그라운드)/`stop`/`analyze`. timeline: `show`/`report`/`analyze`/`export`     |
+| `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze, app-log에 필수; investigate는 선택(앱 범위 조사) |
+| `symptoms`    | string | `null`   | investigate 전용: 사용자의 증상 표현 그대로 (예: "300% cpu, video not playing") — 실행할 프로브 번들을 선택 |
 | `format`      | string | `null`   | error-analyze 전용: `summary` (요약 라인만), `details` (상세 항목만), 생략 시 둘 다  |
 | `serial`      | string | `null`   | sdb 디바이스 시리얼 (생략 시 자동 선택)                                  |
 
@@ -1335,6 +1336,13 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js app-terminate <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
+node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]
+node <plugin>/lib/cli/dlog-analyzer-cli.js device-profile [--refresh]
+node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js snapshot create|list|compare|delete [id1] [id2]
+node <plugin>/lib/cli/dlog-analyzer-cli.js timeline show|report|analyze|export
+node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 ```
 
 **워크플로우 (백그라운드 모니터링):**
@@ -1349,10 +1357,22 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 **워크플로우 (앱별 로그 분석 — 사용자가 앱 ID를 지정한 경우):**
 
 1. **앱 실행** (`app-launch <app-id>`) — 특정 앱을 실행하고 PID 획득 (약간의 지연 있음)
-2. **백그라운드 수집 시작** (`dlog-collect <app-id>`) — 앱 PID로 필터링된 로그를 백그라운드로 수집 시작, `<tmp>/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`에 저장
-3. **사용자에게 앱 사용 요청** — 앱을 사용하며 이슈를 재현하도록 안내하고 "에러/크래시 발생" 또는 "아무 일 없음" 두 가지 선택지 제시
-4. **수집 중지 및 분석** — 사용자가 보고하면 `stop-collect`로 수집을 중지한 뒤 `error-analyze <app-id> [format]`로 E/F 우선순위 항목 분석 (tag+message 기준 중복 제거 및 발생 횟수 계산). 항상 `error-analyze`를 사용하고 로그 파일을 직접 읽지 않음.
+2. **백그라운드 수집 시작** (`dlog-collect <app-id>`) — 앱 PID로 필터링된 로그를 백그라운드로 수집 시작, `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장 (SDK 데이터 경로는 `~/.tizen.sdk.path.config` → `sdk.info`의 `TIZEN_SDK_DATA_PATH` 또는 `<sdk>-data`에서 결정)
+3. **사용자에게 앱 사용 요청 — 그리고 턴 종료** — 앱을 사용하며 이슈를 재현하도록 안내하고 "재현 완료 — 에러/크래시 발생" 또는 "아무 일 없음" 두 가지 선택지 제시. `sleep`·폴링·같은 턴의 `stop-collect` 금지 (가드 훅이 러너 주변의 타이머 대기를 차단)
+4. **수집 중지 및 분석 — 에러부터** — 사용자가 보고하면 `stop-collect`로 수집을 중지한 뒤 `error-analyze <app-id> summary`로 E/F 우선순위 항목 분석 (tag+message 기준 중복 제거 및 발생 횟수 계산). 증상이 설명되지 않을 때만 확대: `error-analyze <app-id> details` → 필터를 건 `app-log <app-id> --priority W --since 10m --max-lines 300`. 항상 분석 명령을 사용하고 로그 파일을 직접 읽지 않으며, `app-log`로 시작하지 않음.
 5. **앱 종료** (`app-terminate <app-id>`) — 정리
+
+**워크플로우 (증상 조사 — 크래시, 멈춤, CPU 급증, 메모리, 동영상 재생 안 됨):**
+
+문제 보고는 에뮬레이터·디바이스가 언급되어도 이 스킬의 일입니다 (`tizen-device-manager`는 디바이스 목록·에뮬레이터 종료 전용 — 라우팅 훅이 그런 프롬프트를 되돌려 보냄).
+
+1. **1차 조사** (`investigate --symptoms "<사용자 표현>" [app-id]`) — 디바이스 프로필 → 증상에 맞는 프로브 번들(CPU, 메모리, 멈춤, 미디어, 그래픽 …) → 상관 분석 보고서. 요약만 — 최종 보고서는 아님
+2. **재현 전에 수집기 시작** — `start start-monitoring`, `kernel collect`(CPU / 멈춤 / 메모리 / 그래픽 / 드라이버 증상), 필요하면 `app-launch <app-id>`, `dlog-collect <app-id>`
+3. **멈추고 사용자에게 재현 요청 — 턴 종료** — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요"
+4. **중지 후 순서대로 분석** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; 설명되지 않을 때만 확대 (`error-analyze … details` → 필터를 건 `app-log` → `probe list` / `probe run <probe-id>`)
+5. **보고서**(2개 언어 템플릿) → 다음 단계 안내 → 완료 시 `stop`
+
+커널 로그는 항상 `kernel collect` → `kernel stop` → `kernel analyze` (`sdb shell dmesg` 금지); 프로브는 `investigate` / `probe run` (`sdb shell top / ps / free` 직접 입력 금지).
 
 **액션 설명:**
 
@@ -1366,9 +1386,16 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 | `app-terminate` | `sdb shell app_launcher -k`로 실행 중인 Tizen 앱 종료        |
 | `dlog-collect`  | 앱 PID로 필터링된 dlog를 백그라운드로 수집 시작 (앱이 실행 중이어야 함) |
 | `stop-collect`  | 백그라운드 앱 dlog 수집 프로세스 종료                         |
-| `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함)   |
+| `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함) — 첫 번째 분석 호출 |
+| `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일) — `error-analyze` 이후 확대용, 필터 필수 |
+| `device-profile`| 연결된 디바이스의 프로필 감지 및 출력 (타입, 버전, 아키텍처, 루트, 도구) |
+| `investigate`   | 일회성 1차 조사: 증상 표현 → 프로브 번들 → 상관 분석 보고서 (증상 조사의 첫 호출) |
+| `probe`         | 증거 프로브 카탈로그 `list` / `run <probe-id>` 한 개 실행 (`sdb shell top/ps/free` 직접 입력 대체) |
+| `snapshot`      | 시스템 스냅샷 생성, 목록 조회, 비교                          |
+| `timeline`      | 스냅샷 간 프로브 히스토리 분석 및 시각화                    |
+| `kernel`        | 커널 로그 `collect`(백그라운드) / `stop` / `analyze` (kmsg/dmesg — `sdb shell dmesg` 대체) |
 
-**참고:** 백그라운드 인스턴스는 한 번에 하나만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`으로 종료해야 함. 앱별 로그는 `$TMPDIR/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`에 저장됨. `dlog-collect`는 앱이 실행 중이어야 함 (`pgrep`으로 PID 조회). `error-analyze`는 `dlog-collect` → `stop-collect` 이후 실행해야 함. 로그 분석은 항상 `error-analyze`로 — 로그 파일을 직접 읽지 않음. 분석 완료 시 보고서는 `REPORT_TEMPLATE.md` 구조로 영문 → 한글 순서로 항상 두 언어로 렌더링됨.
+**참고:** 백그라운드 인스턴스는 한 번에 하나만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`으로 종료해야 함. 앱별 로그는 `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장됨 (네이티브 바이너리에 `--base-dir` 옵션 없음; SDK 경로 미설정 시 `sdk_path_not_set` 반환). `dlog-collect`는 앱이 실행 중이어야 함 (`pgrep`으로 PID 조회). `error-analyze`는 `dlog-collect` → `stop-collect` 이후 실행해야 함. 로그 분석은 항상 `error-analyze`로 — 로그 파일을 직접 읽지 않음. 분석 완료 시 보고서는 `REPORT_TEMPLATE.md` 구조로 영문 → 한글 순서로 항상 두 언어로 렌더링됨.
 
 
 **의존성:** `tizen-launch-emulator` 또는 `tizen-device-manager` (실행 중인 디바이스/에뮬레이터 필요)

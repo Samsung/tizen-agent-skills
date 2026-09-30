@@ -125,6 +125,26 @@ TCs start with `status: draft`.
   endings; `.gitattributes` enforces LF for `*.md`). CI does not lint
   Markdown, so run `npx prettier --check <file>` yourself.
 
+### Internal-only content
+
+Some features depend on services that only exist inside Samsung and are not
+part of the public repository. Three rules keep them out of the published
+tree (`_repo-root/UPLOAD.md` applies them; CI verifies them with
+`node scripts/publication/internal-only.js --check`):
+
+1. **Files** that belong to such a feature are listed in
+   `scripts/publication/internal-only-paths.txt`. Put new internal command
+   specs under `tizen-cli/src/command-specs/internal/` and register the core
+   module's functions through its `sdkCommands` export — the aggregators
+   (`sdk-commands.js`, `envelope.js`, `command-specs/internal-specs.ts`) load
+   internal modules optionally and never name them.
+2. **Prose** about the feature inside a file that *is* published (a shared
+   skill, `CHANGELOG.md`) sits between `<!-- internal-only:begin -->` and
+   `<!-- internal-only:end -->` lines.
+3. **Terms** that only the feature uses (its command names, service names)
+   are listed in `scripts/publication/internal-only.js`; the check fails when
+   one appears outside a listed path or a fence, so add the fence first.
+
 ## 9. Versioning and releases (Maintainers)
 
 1. Bump the version in one `chore: bump version to X.Y.Z` commit. It lives in

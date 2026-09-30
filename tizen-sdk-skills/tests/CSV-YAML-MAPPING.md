@@ -12,11 +12,11 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **286** |
-| CSV TC ID 가 매핑된 케이스 | **254** |
+| YAML 테스트 케이스 총 개수 | **290** |
+| CSV TC ID 가 매핑된 케이스 | **255** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
-| └─ Prompt 레인 (`TC-P-*`) | 118 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **32** |
+| └─ Prompt 레인 (`TC-P-*`) | 119 |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **35** |
 
 ### 도메인별 분포
 
@@ -25,19 +25,19 @@
 | `device` | 103 |
 | `sdk` | 66 |
 | `debug` | 32 |
-| `project` | 26 |
+| `project` | 28 |
 | `certificate` | 25 |
-| `meta` | 16 |
+| `meta` | 17 |
 | `test` | 15 |
-| `dlog-analyzer` | 3 |
+| `dlog-analyzer` | 4 |
 
 ### 티어별 분포
 
 | tier | 케이스 수 |
 | --- | ---: |
-| `device` | 141 |
+| `device` | 142 |
 | `mutating` | 79 |
-| `safe` | 66 |
+| `safe` | 69 |
 
 ---
 
@@ -306,6 +306,7 @@
 | `TC-P-116` | Manually configure gdbserver (guard rule #6 — no manual gdb/port-forward setup) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 6)* | `tizen-sdk.guard.no-manual-gdb` | `gdb-debug` | safe | Prompt |
 | `TC-P-117` | Use bash syntax on Windows (guard rule #7 — no bash syntax in cmd.exe) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 7)* | `tizen-sdk.guard.no-bash-on-windows` | `device-manager` | safe | Prompt |
 | `TC-P-118` | Run native binary with node (guard rule #8 — native executables must not be run with node) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 8)* | `tizen-sdk.guard.no-node-on-native` | `sdb-helper` | safe | Prompt |
+| `TC-P-119` | Prompt — Symptom report that mentions the emulator routes to dlog-analyzer, not device-manager (issue #211) | [tc/dlog-analyzer/dlog-analyzer.prompt-symptom-routing.yaml](tc/dlog-analyzer/dlog-analyzer.prompt-symptom-routing.yaml) | `tizen-sdk.dlog-analyzer.prompt-symptom-routing` | `dlog-analyzer` | device | Prompt |
 
 > `tc/meta/guard-rules.prompt.yaml` 은 멀티 도큐먼트 YAML 입니다 — `TC-P-111`~`TC-P-118`
 > 8건이 `---` 로 구분되어 한 파일 안에 들어 있으며, *(doc n)* 은 그 문서 순번입니다.
@@ -335,9 +336,12 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/device/sdb-helper.missing-required.yaml](tc/device/sdb-helper.missing-required.yaml) | `tizen-sdk.sdb-helper.missing-required` | `sdb-helper` | device | CLI | sdb-helper fails with invalid_argument when --request is missing |
 | [tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml](tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml) | `tizen-sdk.dlog-analyzer.log-clear-without-confirm` | `dlog-analyzer` | safe | CLI | dlog-analyzer --action log-clear without --confirm fails (user_input_required) before touching any device |
 | [tc/dlog-analyzer/dlog-analyzer.missing-required.yaml](tc/dlog-analyzer/dlog-analyzer.missing-required.yaml) | `tizen-sdk.dlog-analyzer.missing-required` | `dlog-analyzer` | device | CLI | dlog-analyzer fails with invalid_argument when --action is missing |
+| [tc/meta/meta.help.yaml](tc/meta/meta.help.yaml) | `tizen-sdk.meta.help` | `--help` | safe | CLI | --help returns a success envelope whose result.help_text is Commander's usage text |
 | [tc/project/build-project.missing-required.yaml](tc/project/build-project.missing-required.yaml) | `tizen-sdk.build-project.missing-required` | `build-project` | safe | CLI | build-project fails with invalid_argument when --project is missing |
 | [tc/project/create-project.invalid-type.yaml](tc/project/create-project.invalid-type.yaml) | `tizen-sdk.create-project.invalid-type` | `create-project` | safe | CLI | create-project fails with invalid_argument when --type is not a valid choice |
 | [tc/project/create-project.missing-required.yaml](tc/project/create-project.missing-required.yaml) | `tizen-sdk.create-project.missing-required` | `create-project` | safe | CLI | create-project fails with invalid_argument when all required options are missing |
+| [tc/project/import-wgt.missing-archive.yaml](tc/project/import-wgt.missing-archive.yaml) | `tizen-sdk.import-wgt.missing-archive` | `import-wgt` | safe | CLI | import-wgt fails with io_error when --wgt-path does not exist |
+| [tc/project/import-wgt.missing-required.yaml](tc/project/import-wgt.missing-required.yaml) | `tizen-sdk.import-wgt.missing-required` | `import-wgt` | safe | CLI | import-wgt fails with invalid_argument when all required options are missing |
 | [tc/project/project-delete.missing-required.yaml](tc/project/project-delete.missing-required.yaml) | `tizen-sdk.project-delete.missing-required` | `project-delete` | safe | CLI | project-delete fails with invalid_argument when --project is missing |
 | [tc/sdk/check-disk-space.happy.yaml](tc/sdk/check-disk-space.happy.yaml) | `tizen-sdk.check-disk-space.happy` | `check-disk-space` | safe | CLI | check-disk-space returns success with disk_free info |
 | [tc/sdk/check-node.happy.yaml](tc/sdk/check-node.happy.yaml) | `tizen-sdk.check-node.happy` | `check-node` | safe | CLI | check-node returns success with node_version matching v<digits> |
@@ -362,9 +366,9 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 이 공백은 **의도된 것**입니다 — `list-projects` 명령 자체가 플러그인에 존재하지
 않아 해당 TC 를 삭제했습니다(커밋 `6d839ae`). 되살릴 대상이 아닙니다.
 
-### `TC-P-*` — 확인 범위 1 ~ 118, 매핑 118건, 공백 0건
+### `TC-P-*` — 확인 범위 1 ~ 119, 매핑 119건, 공백 0건
 
-1 ~ 118 번호가 모두 YAML 로 존재합니다. 번호 공백 없음. ✓
+1 ~ 119 번호가 모두 YAML 로 존재합니다. 번호 공백 없음. ✓
 
 > 번호 공백이 0건이라는 것은 **TC ID 가 빠짐없이 존재한다**는 뜻일 뿐입니다.
 > CSV 본문이 DRM 으로 잠겨 있어(6장 참고) 각 YAML 의 내용이 CSV 원본 TC 의
@@ -373,13 +377,17 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 ### 실행 검증 상태
 
 TC ID 커버리지(위)와 **실제 실행 검증**은 별개입니다.
-prompt 레인 118건은 모두 실행 완료입니다
+prompt 레인 119건 중 118건이 실행 완료입니다
 — 최초 41건(커맨드 33 + 가드룰 8) + 2026-08-31 세션의 draft 77건(3회 시도, 77/77 승격).
+`TC-P-119`(`dlog-analyzer.prompt-symptom-routing`, 이슈 #211 — 스킬 이름 없이 CPU 300%·재생 안 됨
+증상만 말해도 `device-manager` 가 아닌 `dlog-analyzer` 로 해석되는지 — `expect` 의 `first_resolved_command` /
+`must_not_resolve_commands` 로 고정)는 2026-09-30 에 작성되어 아직 draft 입니다: 에이전트 세션 3회
+실행(`skills/run-test-suite.md` Option 2, `pass_rate: 3/3`)이 필요합니다.
 
 | status | 케이스 수 |
 | --- | ---: |
-| `draft` | 22 |
-| `approved` | 264 |
+| `draft` | 8 |
+| `approved` | 279 |
 | `candidate` | 0 |
 
 2026-09-22 device 티어 fixture 패스(`scripts/prepare-device-fixtures.mjs` +
@@ -387,11 +395,21 @@ prompt 레인 118건은 모두 실행 완료입니다
 device 4건(install-app ×3 단언 수정, gdb-debug.serial `--serial` 옵션 추가) + prompt 전용 1건
 (에이전트 세션 3회 실행) + mutating 27건(`scripts/run-mutating-tier.mjs --include-drafts`)이
 승격되었고, guard-rule candidate 8건은 미실행이던 cli 레인을 제거해(prompt 전용, 41/41 기록)
-approved 가 되었습니다. 남은 draft 22건은 모두 cli 레인으로, 각 YAML 의 NOTE 와 `requires`
-선언에 사유가 있습니다: packaged CLI(process.pkg)에서만 설치를 수행하거나 SDK 를 재설치하는
-설치 계열 14건(`requires: [sdk, net]`), 삼성 온라인 CA 3건(`samsung-account`), 네트워크
-디바이스 2건(`net-device`), GBS 빌드 2건(`gbs`, 리눅스 전용), `build-project.compiler-flags`
-(플래그 전달 기능 없음) (`tests/README.md`, "Device tier" / "Mutating tier").
+approved 가 되었습니다.
+
+2026-09-28 설치기 패스: `common/lib/core/sdk.js` 의 설치 분기가 packaged CLI(process.pkg)에서만
+실행되던 것을 `TIZEN_SDK_INLINE_INSTALLER=1` 로도 열고(`runsInstallerInline()`),
+`scripts/run-mutating-tier.mjs --with-installers` 가 새 phase `s2-sdk-installers`(USERPROFILE/HOME 을
+일회용 홈으로 돌려 실제 SDK 를 건드리지 않음) / `s3-dotnet-workload` 를 실행하도록 하여 설치 계열
+14건(`sdk-install.force`, `sdk-install-custom-repo.force`, `tv-sdk-install.force`, `update-package` ×3,
+`platform-install.happy`, `download-emulator-package` ×3, `download-mobile-platform` ×2 — 미러에
+MOBILE-7.5 가 사라져 7.0 으로 교체, `install-rootstrap.happy` — 새 fixture `${FIXTURE_ROOTSTRAP_ZIP}`,
+`dotnet-setup.force`)이 승격되었고, `build-project.compiler-flags` 는 존재하지 않는 `--cflags` 가
+`invalid_argument` 로 거부됨을 검증하는 TC 로 재작성해 승격되었습니다. 남은 draft 8건 중 7건은 모두 이
+호스트/CI 가 제공할 수 없는 자원을 요구합니다: 삼성 온라인 CA 3건(`samsung-account`, 실계정
+OAuth·실인증서 발급), GBS 빌드 2건(`gbs`, 리눅스 전용), 네트워크 디바이스 2건(`net-device`);
+나머지 1건은 prompt 전용 `TC-P-119`(위 참고)로, 에이전트 세션 3회 실행 후 승격합니다.
+수동 실행 절차는 `tests/README.md` 의 "Mutating tier" / "Device tier" 에 있습니다.
 
 ---
 

@@ -1,10 +1,10 @@
 ---
 name: tizen-device-manager
-description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill to find connected Tizen devices via sdb or stop/shut down running emulator VMs. For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
+description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill ONLY to find connected Tizen devices via sdb or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to dlog-analyzer even when it mentions the emulator or device (that command detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-09-30"
   keywords:
     - Tizen device manager
     - sdb devices
@@ -25,6 +25,8 @@ metadata:
 The user needs to find a connected Tizen device via sdb, or stop/shut down running emulator VMs. Supports both standard Tizen and Samsung TV emulator profiles.
 
 > **Note:** This skill handles **device discovery** and **emulator stop** only. For **creating** an emulator VM, use `tizen-create-emulator`. For **launching** an existing emulator VM, use `tizen-launch-emulator`. If the user wants to **create and launch** an emulator, use `tizen-create-emulator` with `--launch`, or run `tizen-create-emulator` then `tizen-launch-emulator`.
+
+> **Not a diagnostic command.** A problem report — crash, error, freeze, high CPU usage ("the emulator CPU went to 300%"), memory growth, video/audio not playing, slow emulator, "investigate / analyze this issue", 원인 분석해줘 — is `tizen-cli tizen-sdk dlog-analyzer`'s job even when it mentions the emulator or device: that command detects the device itself and returns `device_not_found` / `multiple_devices` when that is the real problem. Do not run device-manager "first, to find the device" before investigating.
 
 
 ## Command

@@ -12,8 +12,33 @@
  *                                                                # file lists (promotion runs)
  *   node scripts/run-mutating-tier.mjs --yes --phase=<name>     # one phase (its hooks still run)
  *   node scripts/run-mutating-tier.mjs --yes --scratch=<dir>
+ *   node scripts/run-mutating-tier.mjs --yes --with-installers  # also the installer phases s2/s3
+ *                                                                # (60-90 min, ~10 GB download)
+ *   node scripts/run-mutating-tier.mjs --yes --with-installers --keep-scratch-sdk
+ *                                                                # keep <scratch>/home/tizen-sdk for triage
+ *   node scripts/run-mutating-tier.mjs --restore-user-env=<scratch>/user-env.json
+ *                                                                # after a killed installer run: put the
+ *                                                                # User Path/TIZEN_SDK_PATH back, nothing else
  *
- * Ctrl+C during a run stops after the current TC and still runs the teardown.
+ * Ctrl+C during a run stops after the current TC (the whole process tree —
+ * on Windows the PowerShell installer would otherwise keep writing) and
+ * still runs the teardown.
+ *
+ * Installer phases (INSTALLER_PHASES; skipped unless --with-installers or
+ * --phase= names one): s2-sdk-installers runs the real SDK installers with
+ * USERPROFILE/HOME pointed at <scratch>/home (TIZEN_SDK_PATH removed from the
+ * env, TIZEN_SDK_INLINE_INSTALLER=1 so common/lib/core/sdk.js runs the
+ * installer inline instead of returning it as suggested_fix), so everything
+ * lands in <scratch>/home/tizen-sdk and the host's SDK is never opened.
+ * tizen-sdk-install.ps1 still rewrites the USER environment (Path,
+ * TIZEN_SDK_PATH) to that scratch SDK — the driver snapshots both to
+ * <scratch>/user-env.json before the phase and restores them FIRST in the
+ * teardown (after stopping any installer PowerShell still running); if the
+ * process is killed outright, --restore-user-env=<that file> redoes just the
+ * restore. The scratch home carries an ownership marker and is only ever
+ * deleted as exactly <scratch>/home with that marker. s3-dotnet-workload reinstalls the
+ * host's real .NET Tizen workload (no redirect). Both phases run without the
+ * --status=approved filter (their TCs are promoted by this very run).
  *
  * Why not `node runner.mjs --tier=mutating`: readdir order builds a project
  * before the TC that creates it and deletes it before the later builds,
@@ -41,8 +66,11 @@
  * distributor/test-fixture-author.*), rewrites and restores
  * tests/fixtures/profiles/*.xml, empties tests/fixtures/apps/projects, and lets
  * sdk-install / tv-sdk-install take their already-installed path (which may
- * rewrite <sdk>/sdk.info and ~/.tizen.sdk.path.config). It never installs or
- * removes SDK packages. Without --yes nothing is changed.
+ * rewrite <sdk>/sdk.info and ~/.tizen.sdk.path.config). Without
+ * --with-installers it never installs or removes SDK packages; with it, s2
+ * downloads ~10 GB into <scratch>/home/tizen-sdk (deleted afterwards unless
+ * --keep-scratch-sdk), rewrites and restores the User Path / TIZEN_SDK_PATH,
+ * and s3 reinstalls the .NET Tizen workload. Without --yes nothing is changed.
  *
  * Windows-first: everything is spawned as `node <script>` directly (no .cmd
  * shims). Works the same on POSIX.
@@ -52,11 +80,14 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   rmSync,
+  statfsSync,
+  writeFileSync,
 } from "node:fs";
 import { spawn, spawnSync } from "node:child_process";
-import { join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import { parse as parseYaml } from "yaml";
@@ -64,20 +95,29 @@ import { parseFixturesEnv } from "../runner.mjs";
 import {
   REPO,
   TESTS,
+  USER_ENV_KEYS,
   bad,
   checkDistFresh,
   checkDoctor,
   color,
+  createScratchHome,
   emptyDir,
   guardedScratchDir,
+  killTree,
   loadFixtureEnv,
   log,
   logChunk,
   note,
   ok,
+  powershell,
+  readUserEnv,
+  removeScratchHome,
   resolvePaths,
+  restoreUserEnv,
   setLogFile,
   step,
+  stopOrphanedInstallers,
+  validateUserEnvSnapshot,
   warn,
 } from "./lib/driver-common.mjs";
 
@@ -86,7 +126,13 @@ const ORDER = join(TESTS, "policy", "mutating-run-order.yaml");
 const PROFILES_DIR = join(TESTS, "fixtures", "profiles");
 const PROFILE_FIXTURES = ["with-profile.xml", "with-profile-for-removal.xml"];
 const PREPARE_HINT =
-  "node scripts/prepare-device-fixtures.mjs --only=tmp,projects";
+  "node scripts/prepare-device-fixtures.mjs --only=tmp,projects,rootstrap";
+
+/** Phases that install for real; opt-in (see the header). */
+const INSTALLER_PHASES = ["s2-sdk-installers", "s3-dotnet-workload"];
+/** The one phase that runs against the throwaway home. */
+const HOME_PHASE = "s2-sdk-installers";
+const INSTALL_MIN_FREE_GB = 15; // what sdk.js checkDiskSpace() demands of the home drive
 
 /**
  * The only files cleanKeystore may delete under <sdk-data>/keystore: what the
@@ -111,10 +157,22 @@ const KEYSTORE_FILES = {
 // ── CLI ───────────────────────────────────────────────────────────────────
 
 function parseArgs(argv) {
-  const opts = { yes: false, includeDrafts: false, phase: null, scratch: null };
+  const opts = {
+    yes: false,
+    includeDrafts: false,
+    phase: null,
+    scratch: null,
+    withInstallers: false,
+    keepScratchSdk: false,
+    restoreUserEnv: null,
+  };
   for (const a of argv) {
     if (a === "--yes") opts.yes = true;
     else if (a === "--include-drafts") opts.includeDrafts = true;
+    else if (a === "--with-installers") opts.withInstallers = true;
+    else if (a === "--keep-scratch-sdk") opts.keepScratchSdk = true;
+    else if (a.startsWith("--restore-user-env="))
+      opts.restoreUserEnv = resolve(a.slice(19));
     else if (a.startsWith("--phase=")) opts.phase = a.slice(8);
     else if (a.startsWith("--scratch=")) opts.scratch = resolve(a.slice(10));
     else if (a === "--help" || a === "-h") {
@@ -189,6 +247,114 @@ function reportSdkState(paths, selected) {
   note(
     `s1 --repo-url TCs validate ${repo} over the network (pkg_list download) before the short-circuit`,
   );
+}
+
+// ── Installer phases: host checks ─────────────────────────────────────────
+
+const pkgListName = () =>
+  ({ win32: "pkg_list_windows-64", darwin: "pkg_list_macos-64" })[
+    process.platform
+  ] || "pkg_list_ubuntu-64";
+
+/**
+ * What the real installers need from this host, beyond the normal preflight:
+ * the throwaway home is fresh, its drive has the space sdk.js will demand,
+ * the repository answers, and on Windows long paths are already enabled —
+ * otherwise tizen-sdk-install.ps1 opens a UAC prompt and a headless run
+ * hangs on it.
+ */
+async function checkInstallerHost(scratchHome, s2Selected) {
+  let fine = true;
+  if (process.platform === "win32") {
+    let enabled = null;
+    try {
+      enabled = powershell(
+        "(Get-ItemProperty 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem' -Name LongPathsEnabled -ErrorAction SilentlyContinue).LongPathsEnabled",
+      );
+    } catch (e) {
+      warn(`LongPathsEnabled not readable: ${e.message}`);
+    }
+    if (enabled === "1")
+      ok("Windows LongPathsEnabled = 1 (installer will not ask for elevation)");
+    else {
+      bad(
+        `Windows LongPathsEnabled is ${enabled || "unset"} — tizen-sdk-install.ps1 would open a UAC prompt; enable it first (admin: New-ItemProperty HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem -Name LongPathsEnabled -Value 1 -PropertyType DWORD)`,
+      );
+      fine = false;
+    }
+  }
+  if (s2Selected) {
+    if (existsSync(scratchHome) && readdirSync(scratchHome).length) {
+      bad(`scratch home ${scratchHome} exists and is not empty`);
+      fine = false;
+    } else ok(`scratch home ${scratchHome} (fresh)`);
+    try {
+      const probe = existsSync(scratchHome)
+        ? scratchHome
+        : dirname(scratchHome);
+      const st = statfsSync(probe);
+      const freeGb = (Number(st.bavail) * Number(st.bsize)) / 1024 ** 3;
+      (freeGb >= INSTALL_MIN_FREE_GB ? ok : bad)(
+        `${freeGb.toFixed(1)} GB free on the scratch drive (installer needs ${INSTALL_MIN_FREE_GB})`,
+      );
+      if (freeGb < INSTALL_MIN_FREE_GB) fine = false;
+    } catch (e) {
+      warn(`free space not measurable (${e.message}) — sdk.js will check it`);
+    }
+    const fx = parseFixturesEnv(
+      readFileSync(join(TESTS, "fixtures", "fixtures.env"), "utf-8"),
+    );
+    const repo = (
+      process.env.TC_CUSTOM_REPO_URL ||
+      fx.TC_CUSTOM_REPO_URL ||
+      ""
+    ).replace(/\/+$/, "");
+    const url = `${repo}/${pkgListName()}`;
+    try {
+      const res = await fetch(url, {
+        method: "HEAD",
+        signal: AbortSignal.timeout(15_000),
+      });
+      (res.ok ? ok : warn)(`${url} → HTTP ${res.status}`);
+    } catch (e) {
+      // A proxy-only network makes this probe fail while PowerShell's
+      // downloads still work, so it is a warning, not a gate.
+      warn(
+        `${url} not reachable from node (${e.cause?.message || e.message}) — the installer will tell`,
+      );
+    }
+  }
+  return fine;
+}
+
+/**
+ * Environment for one phase. Installer phases get the inline-installer toggle
+ * and a longer script timeout (execPluginScript defaults to 30 min); the home
+ * phase additionally moves the home directory to the scratch dir and drops
+ * TIZEN_SDK_PATH, which Get-SdkPath (common/scripts/lib/common.ps1) would
+ * otherwise resolve to the host's SDK. createScratchHome() also creates
+ * AppData\Roaming and AppData\Local under the scratch home: PowerShell 5.1
+ * resolves LocalAppData as %USERPROFILE%\AppData\Local and, when that folder
+ * is missing, writes its ModuleAnalysisCache relative to the runner's cwd
+ * (tests/Microsoft/...). APPDATA/LOCALAPPDATA are moved as well for tools
+ * that read the variables directly.
+ */
+function phaseEnv(name, base, scratchHome) {
+  if (!INSTALLER_PHASES.includes(name)) return base;
+  const env = {
+    ...base,
+    TIZEN_SDK_INLINE_INSTALLER: "1",
+    TIZEN_TOOL_TIMEOUT: "3600000",
+  };
+  if (name === HOME_PHASE) {
+    createScratchHome(scratchHome); // also drops the ownership marker the teardown requires
+    env.APPDATA = join(scratchHome, "AppData", "Roaming");
+    env.LOCALAPPDATA = join(scratchHome, "AppData", "Local");
+    env.USERPROFILE = scratchHome;
+    env.HOME = scratchHome;
+    delete env.TIZEN_SDK_PATH;
+  }
+  return env;
 }
 
 function keystoreDir(paths) {
@@ -283,7 +449,7 @@ function onInterrupt(signal) {
       `\n! ${signal} — stopping after the current TC, then tearing down`,
     ),
   );
-  if (currentChild) currentChild.kill();
+  killTree(currentChild);
 }
 
 /** Installed only while the teardown runs: log and keep restoring. */
@@ -293,10 +459,13 @@ function shieldTeardown(signal) {
 
 function runPhase(name, env, includeDrafts) {
   return new Promise((done) => {
+    // Installer phases never filter on status: they only run when asked for,
+    // and their TCs are the ones this run promotes.
+    const drafts = includeDrafts || INSTALLER_PHASES.includes(name);
     const args = [
       RUNNER,
       "--tier=mutating",
-      ...(includeDrafts ? [] : ["--status=approved"]),
+      ...(drafts ? [] : ["--status=approved"]),
       `--order=${ORDER}`,
       `--phase=${name}`,
     ];
@@ -335,13 +504,25 @@ function attempt(label, fn) {
 
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
+  if (opts.restoreUserEnv) {
+    // Recovery after a killed installer run: only the User environment.
+    step(`restore User environment from ${opts.restoreUserEnv}`);
+    process.exitCode = restoreUserEnv(opts.restoreUserEnv) ? 0 : 1;
+    return;
+  }
   const order = parseYaml(readFileSync(ORDER, "utf-8"));
   const phases = order.phases.map((p) => p.name);
-  const selected = opts.phase ? phases.filter((p) => p === opts.phase) : phases;
+  const selected = opts.phase
+    ? phases.filter((p) => p === opts.phase)
+    : phases.filter(
+        (p) => opts.withInstallers || !INSTALLER_PHASES.includes(p),
+      );
   if (opts.phase && !selected.length) {
     console.error(`unknown phase ${opts.phase}; have ${phases.join(", ")}`);
     process.exit(2);
   }
+  const installerPhases = selected.filter((p) => INSTALLER_PHASES.includes(p));
+  const s2Selected = selected.includes(HOME_PHASE);
 
   const scratch =
     opts.scratch ||
@@ -350,12 +531,14 @@ async function main() {
       `tizen-mutating-run-${new Date().toISOString().replace(/[:.]/g, "-")}`,
     );
   mkdirSync(scratch, { recursive: true });
+  const scratchHome = join(scratch, "home");
+  const userEnvSnapshot = join(scratch, "user-env.json");
   const logFile = join(scratch, "run.log");
   setLogFile(logFile);
   log(
     color(
       "cyan",
-      `tizen-sdk mutating-tier run — ${opts.yes ? "LIVE" : "plan only (no --yes)"}${opts.includeDrafts ? ", drafts included" : ""}`,
+      `tizen-sdk mutating-tier run — ${opts.yes ? "LIVE" : "plan only (no --yes)"}${opts.includeDrafts ? ", drafts included" : ""}${installerPhases.length ? `, installers: ${installerPhases.join(" ")}` : ""}`,
     ),
   );
   note(`scratch/log: ${scratch}`);
@@ -369,6 +552,8 @@ async function main() {
   const fixtureEnv = loadFixtureEnv(selected, { prepareHint: PREPARE_HINT });
   fine = !!fixtureEnv && fine;
   fine = checkProfileFixturesClean() && fine;
+  if (installerPhases.length)
+    fine = (await checkInstallerHost(scratchHome, s2Selected)) && fine;
   if (!fine) {
     bad("preflight failed — nothing was changed");
     process.exitCode = 2;
@@ -385,9 +570,33 @@ async function main() {
   step("plan");
   log(`  phases: ${selected.join(" → ")}`);
   log(
-    `  TC filter: --tier=mutating${opts.includeDrafts ? " (drafts included — the order file may list draft ids)" : " --status=approved"}`,
+    `  TC filter: --tier=mutating${opts.includeDrafts ? " (drafts included — the order file may list draft ids)" : " --status=approved"}${installerPhases.length ? ` (installer phases always run their drafts)` : ""}`,
   );
+  if (!opts.withInstallers && !opts.phase)
+    note(
+      `installer phases skipped: ${INSTALLER_PHASES.join(", ")} (--with-installers)`,
+    );
   log(`  runner cwd: ${TESTS}`);
+  if (installerPhases.length) {
+    log(
+      `  installer env: TIZEN_SDK_INLINE_INSTALLER=1 TIZEN_TOOL_TIMEOUT=3600000`,
+    );
+    if (s2Selected) {
+      log(
+        `  ${HOME_PHASE}: USERPROFILE/HOME=${scratchHome}, TIZEN_SDK_PATH removed → SDK installs into ${join(scratchHome, "tizen-sdk")} (~10 GB, 60-90 min)`,
+      );
+      log(
+        `  backup: User ${USER_ENV_KEYS.join("/")} → ${userEnvSnapshot}; restored in the teardown (tizen-sdk-install.ps1 rewrites them)`,
+      );
+      log(
+        `  teardown: ${opts.keepScratchSdk ? `keep ${scratchHome} (--keep-scratch-sdk)` : `delete ${scratchHome}`}`,
+      );
+    }
+    if (installerPhases.includes("s3-dotnet-workload"))
+      log(
+        `  s3-dotnet-workload: reinstalls the host's real .NET Tizen workload (no redirect)`,
+      );
+  }
   for (const name of selected) {
     const hooks = PHASE_HOOKS[name];
     if (hooks) log(`  before ${name}: ${hooks.map((h) => h.name).join(", ")}`);
@@ -428,6 +637,24 @@ async function main() {
     copyFileSync(join(PROFILES_DIR, f), join(backupDir, f));
     ok(`backed up ${f}`);
   }
+  let userEnvSaved = false;
+  if (s2Selected) {
+    const snap = readUserEnv();
+    if (snap) {
+      const invalid = validateUserEnvSnapshot(snap);
+      if (invalid) {
+        bad(`User environment snapshot unusable (${invalid}) — not starting`);
+        process.exitCode = 2;
+        return;
+      }
+      writeFileSync(userEnvSnapshot, JSON.stringify(snap, null, 2), "utf-8");
+      userEnvSaved = true;
+      ok(`backed up User ${USER_ENV_KEYS.join("/")} → ${userEnvSnapshot}`);
+      note(
+        `if this process is killed before its teardown: node scripts/run-mutating-tier.mjs --restore-user-env="${userEnvSnapshot}"`,
+      );
+    } else note("User environment snapshot: not applicable on this platform");
+  }
 
   // 4. Phases
   const results = [];
@@ -450,7 +677,11 @@ async function main() {
       if (aborted) break;
       step(`phase ${name}`);
       const t0 = Date.now();
-      const code = await runPhase(name, runnerEnv, opts.includeDrafts);
+      const code = await runPhase(
+        name,
+        phaseEnv(name, runnerEnv, scratchHome),
+        opts.includeDrafts,
+      );
       results.push({ name, code, sec: Math.round((Date.now() - t0) / 1000) });
       (code === 0 ? ok : bad)(
         `phase ${name} exit ${code} (${results.at(-1).sec}s)`,
@@ -470,8 +701,34 @@ async function main() {
     const td = (label, fn) => {
       if (!attempt(label, fn)) teardownFailures.push(label);
     };
+    // Host-visible state first: an installer PowerShell that outlived its
+    // runner (timeout, Ctrl+C) would rewrite the User environment after the
+    // restore, so stop those before putting Path/TIZEN_SDK_PATH back. The
+    // profile fixtures and keystore are recoverable from git either way.
+    if (s2Selected)
+      td("stop orphaned installer scripts", () => {
+        const stopped = stopOrphanedInstallers();
+        if (!stopped.length) {
+          ok("no installer PowerShell process left running");
+          return true;
+        }
+        warn(`stopped ${stopped.length} installer PowerShell process(es):`);
+        for (const { pid, commandLine } of stopped)
+          note(`  pid ${pid}: ${commandLine.slice(0, 200)}`);
+        return true;
+      });
+    if (userEnvSaved)
+      td("restore User environment", () => restoreUserEnv(userEnvSnapshot));
     td("restore profile fixtures", () => resetProfileFixtures(ctx));
     td("clean keystore", () => cleanKeystore(ctx));
+    if (s2Selected) {
+      if (opts.keepScratchSdk)
+        note(`scratch home kept (--keep-scratch-sdk): ${scratchHome}`);
+      else
+        td("remove scratch home", () =>
+          removeScratchHome(scratchHome, scratch),
+        );
+    }
     // Self-check of the invariant the driver promises: the committed fixtures
     // are byte-identical to git after the run.
     td("fixtures/profiles clean in git", () => checkProfileFixturesClean());

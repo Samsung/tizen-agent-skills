@@ -155,7 +155,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 | `create-emulator` | Device | 커스텀 Tizen 에뮬레이터 VM 생성 |
 | `launch-emulator` | Device | 기존 에뮬레이터 VM 실행 |
 | `emulator-manager` | Device | em-cli 전체 기능 (생성/삭제/실행/조회/수정/리셋/캡처) |
-| `device-manager` | Device | 디바이스 탐지 또는 에뮬레이터 중지 |
+| `device-manager` | Device | 디바이스 탐지 또는 에뮬레이터 중지 (문제 보고는 `dlog-analyzer`로) |
 | `install-app` | Device | .tpk/.wgt/.rpm 설치 (및 선택적 실행) |
 | `sdb-helper` | Device | 자연어 요청으로 sdb 명령 실행 |
 | `screenshot` | Device | 에뮬레이터 또는 디바이스 스크린샷 캡처 |
@@ -164,7 +164,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 | `gdb-debug` | Debug | Native 앱 원격 GDB 디버깅 설정 |
 | `dotnet-debug` | Debug | .NET 앱 원격 netcoredbg 디버깅 설정 |
 | `webapp-debug` | Debug | 웹 앱 원격 디버깅 설정 (RWI/CDP) |
-| `dlog-analyzer` | Debug | 디바이스 로그 보기/저장/지우기 (`log-dump`, `log-clear`), dlog 수집, 크래시/예외 감지, 근본 원인 제안 |
+| `dlog-analyzer` | Debug | 디바이스 로그 보기/저장/지우기 (`log-dump`, `log-clear`), 증상 조사 (`investigate`, `probe`, `kernel`), dlog 수집, 크래시/예외 감지, 근본 원인 제안 |
 | `playwright-test` | Test | Tizen 웹 앱에 대한 Playwright 테스트 실행/스캐폴드 |
 | `certificate-manager` | Certificate | Tizen 인증서 및 서명 프로필 관리 |
 
@@ -271,7 +271,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 ### 프로젝트 현황
 
-2026-09-23, v1.3.1 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
+2026-09-30, v1.4.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
 있으며, 스킬·에이전트·커맨드·테스트 스위트가 추가될 때마다 이 표를 갱신합니다.
 
 | 항목 | 수치 | 재측정 방법 |
@@ -281,12 +281,12 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI 커맨드 | 35개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 61개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
-| 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 12개 | `common/hooks/` |
-| 단위 테스트 (`common/lib/tests/`) | 72 파일, 어설션 약 2,430개 | `node common/lib/tests/run-all.js` |
+| 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 13개 | `common/hooks/` |
+| 단위 테스트 (`common/lib/tests/`) | 80 파일, 어설션 약 2,890개 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 118 케이스 | `cd vscode && npm test` |
-| 훅 테스트 | 66 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 286 TC / 279 YAML — safe 66 / mutating 79 / device 141; approved 264 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| 문서 | Markdown 212개 (`docs/` 91개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
+| 훅 테스트 | 122 케이스 | `bash common/hooks/hooks.test.sh` |
+| 통합 TC (`tests/tc/`) | 290 TC / 283 YAML — safe 69 / mutating 79 / device 142; approved 282 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 문서 | Markdown 217개 (`docs/` 93개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
 
@@ -323,6 +323,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 **아키텍처 & 레퍼런스**
 
 - [Tizen SDK Skills 상세 문서](docs/README.md)
+- [아키텍처 다이어그램](docs/ARCHITECTURE_DIAGRAMS.md) — 저장소 전체를 10개 Mermaid 다이어그램으로 설명
 - [스킬 레퍼런스](docs/SKILLS_REFERENCE.md)
 - [스킬 ↔ 커맨드 맵핑](docs/SKILLS_COMMANDS_MAPPING.md)
 - [SDK Commands 아키텍처](docs/SDK_COMMANDS_ARCHITECTURE.md)

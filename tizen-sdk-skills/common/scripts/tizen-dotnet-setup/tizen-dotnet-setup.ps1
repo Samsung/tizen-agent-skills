@@ -19,13 +19,17 @@
 #
 # Usage:
 #   .\tizen-dotnet-setup.ps1 [-Force] [-Version <ver>] [-NoInstallSdk]
-#                            [-SdkChannel <chan>] [-Help]
+#                            [-SdkChannel <chan>] [-DotnetRoot <dir>] [-PersistEnv] [-Help]
 #
 # Options:
 #   -Force              Reinstall the Tizen workload even if it is already present
 #   -Version <ver>      Tizen workload version to pass to the Samsung installer
 #   -NoInstallSdk       Do not auto-install a missing .NET SDK (guidance + exit 2)
 #   -SdkChannel <chan>  .NET SDK channel for the auto-install (default: 8.0)
+#   -DotnetRoot <dir>   Use the .NET SDK at this install root instead of discovering one
+#   -PersistEnv         Also persist a Tizen-extension-bundled dotnet into the User
+#                       DOTNET_ROOT/PATH (official install roots are always persisted;
+#                       bundled ones are process-scope only unless this is given)
 #   -Help               Show this help
 
 param(
@@ -33,6 +37,8 @@ param(
     [string]$Version = "",
     [switch]$NoInstallSdk,
     [string]$SdkChannel = "8.0",
+    [string]$DotnetRoot = "",
+    [switch]$PersistEnv,
     [switch]$Help
 )
 
@@ -47,23 +53,31 @@ if ($Help) {
     Write-Host @"
 Tizen .NET development environment setup (Windows)
 
-Usage: .\tizen-dotnet-setup.ps1 [-Force] [-Version <ver>] [-NoInstallSdk] [-SdkChannel <chan>] [-Help]
+Usage: .\tizen-dotnet-setup.ps1 [-Force] [-Version <ver>] [-NoInstallSdk] [-SdkChannel <chan>]
+                                [-DotnetRoot <dir>] [-PersistEnv] [-Help]
 
 Options:
   -Force              Reinstall the Tizen workload even if it is already present
   -Version <ver>      Tizen workload version to pass to the Samsung installer
   -NoInstallSdk       Do not auto-install a missing .NET SDK (guidance + exit 2)
   -SdkChannel <chan>  .NET SDK channel for the auto-install (default: 8.0)
+  -DotnetRoot <dir>   Use the .NET SDK at this install root instead of discovering one
+  -PersistEnv         Also persist a Tizen-extension-bundled dotnet into the User
+                      DOTNET_ROOT/PATH (see below)
   -Help               Show this help
 
 What it does:
-  1) Checks whether the .NET SDK (dotnet) is on PATH
-  2) If not on PATH: searches known locations (incl. Tizen SDK-bundled dotnets);
-     if found, wires it up persistently (User DOTNET_ROOT + User PATH). If no SDK
-     exists anywhere, auto-installs one user-scope via the official
-     dotnet-install.ps1 into %LOCALAPPDATA%\Microsoft\dotnet (no admin rights
-     needed). Only if that is skipped (-NoInstallSdk) or fails does it print
-     guidance + $DotnetDownloadUrl and exit 2
+  1) Checks whether the .NET SDK (dotnet) is on PATH (or uses -DotnetRoot)
+  2) If not on PATH: ranks every installed SDK (DOTNET_ROOT, official install roots,
+     Tizen-extension-bundled dotnets) and picks the best one. Official roots and an
+     explicit -DotnetRoot are wired up persistently (User DOTNET_ROOT + User PATH);
+     a dotnet bundled inside a Tizen extension tree is used for this run only unless
+     -PersistEnv is given, because an extension update can move or delete it and
+     leave a dangling DOTNET_ROOT behind. If no SDK exists anywhere, auto-installs
+     one user-scope via the official dotnet-install.ps1 into
+     %LOCALAPPDATA%\Microsoft\dotnet (no admin rights needed). Only if that is
+     skipped (-NoInstallSdk) or fails does it print guidance + $DotnetDownloadUrl
+     and exit 2
   3) Installs the Tizen workload via Samsung's workload-install.ps1 PINNED to the
      dotnet resolved in step 1/2 (-d), falling back to 'dotnet workload install tizen'
   4) Verifies with that same dotnet, and on failure prints [DIAG] lines naming the
@@ -83,33 +97,68 @@ Exit codes:
 Write-Step "=== Tizen .NET environment setup (Windows) ==="
 
 # ---------------------------------------------------------------------------
-# Helper: make a discovered dotnet usable now and for future shells.
-#   1) persist the User-level DOTNET_ROOT and prepend its dir to the User PATH
-#      (idempotent - survives new shells), and
-#   2) update the current session so the workload step below works.
+# Helpers: make a discovered dotnet usable.
+#
+# Use-DotnetForThisRun only touches the current process. Enable-Dotnet also
+# persists the User-level DOTNET_ROOT and prepends the dir to the User PATH.
+# Persistence policy (step 1 below): official install roots and an explicit
+# -DotnetRoot are persisted; a dotnet bundled inside a Tizen extension tree is
+# NOT unless -PersistEnv is given - an extension update can move or delete it,
+# leaving a dangling DOTNET_ROOT that silently breaks every later build.
 # ---------------------------------------------------------------------------
-function Enable-Dotnet {
+$script:PersistedRoot = $null
+$script:PersistedPathEntry = $null
+
+function Use-DotnetForThisRun {
     param([string]$DotnetExe)
+    $droot = Split-Path -Parent $DotnetExe
+    $env:DOTNET_ROOT = $droot
+    $env:PATH = "$droot;$env:PATH"
+}
+
+function Enable-Dotnet {
+    param([string]$DotnetExe, [string]$StaleRoot = "")
 
     $droot = Split-Path -Parent $DotnetExe
 
     [Environment]::SetEnvironmentVariable('DOTNET_ROOT', $droot, 'User')
+    $script:PersistedRoot = $droot
     Write-Success "Set User DOTNET_ROOT = $droot"
 
     $userPath = [Environment]::GetEnvironmentVariable('PATH', 'User')
     if ([string]::IsNullOrWhiteSpace($userPath)) { $userPath = "" }
-    $parts = $userPath -split ';' | Where-Object { $_ -ne '' }
-    if ($parts -notcontains $droot) {
-        $newUserPath = if ($userPath -ne "") { "$droot;$userPath" } else { $droot }
-        [Environment]::SetEnvironmentVariable('PATH', $newUserPath, 'User')
-        Write-Success "Added dotnet to your User PATH (effective in new shells): $droot"
-    } else {
-        Write-Info "dotnet dir already on your User PATH - leaving it as is."
+    $parts = @($userPath -split ';' | Where-Object { $_ -ne '' })
+    $changed = $false
+
+    # A stale DOTNET_ROOT this script once persisted also left its dir on the User PATH.
+    if (-not [string]::IsNullOrWhiteSpace($StaleRoot)) {
+        $stale = $StaleRoot.TrimEnd('\', '/')
+        $kept = @($parts | Where-Object { $_.TrimEnd('\', '/') -ine $stale })
+        if ($kept.Count -lt $parts.Count) {
+            $parts = $kept
+            $changed = $true
+            Write-Info "Removed the stale dotnet dir from your User PATH: $StaleRoot"
+        }
     }
 
-    # Effective for the rest of THIS run.
-    $env:DOTNET_ROOT = $droot
-    $env:PATH = "$droot;$env:PATH"
+    # The persisted root must be the FIRST dotnet dir on the User PATH, or a
+    # bundled dotnet sitting ahead of it keeps winning `Get-Command dotnet`.
+    $rootKey = $droot.TrimEnd('\', '/')
+    $others = @($parts | Where-Object { $_.TrimEnd('\', '/') -ine $rootKey })
+    if ($parts.Count -gt 0 -and $parts[0].TrimEnd('\', '/') -ieq $rootKey -and $others.Count -eq $parts.Count - 1) {
+        Write-Info "dotnet dir already first on your User PATH - leaving it as is."
+    } else {
+        $verb = if ($others.Count -eq $parts.Count) { 'Added' } else { 'Moved' }
+        $parts = @($droot) + $others
+        $changed = $true
+        Write-Success "$verb dotnet to the front of your User PATH (effective in new shells): $droot"
+    }
+    if ($changed) {
+        [Environment]::SetEnvironmentVariable('PATH', ($parts -join ';'), 'User')
+    }
+    $script:PersistedPathEntry = $droot
+
+    Use-DotnetForThisRun $DotnetExe
 }
 
 # ---------------------------------------------------------------------------
@@ -162,57 +211,6 @@ function Install-DotnetSdk {
 }
 
 # ---------------------------------------------------------------------------
-# Helper: SDK feature band, computed exactly the way Samsung's installer does
-#   (major.minor.<first digit of patch>00): 10.0.302 -> 10.0.300, 9.0.304 -> 9.0.300
-# Returns $null when the version string is not parseable.
-# ---------------------------------------------------------------------------
-function Get-SdkBand {
-    param([string]$SdkVersion)
-    if ([string]::IsNullOrWhiteSpace($SdkVersion)) { return $null }
-    $parts = $SdkVersion.Split('.')
-    if ($parts.Count -lt 3 -or $parts[2].Length -lt 1) { return $null }
-    return "$($parts[0]).$($parts[1]).$($parts[2][0])00"
-}
-
-# ---------------------------------------------------------------------------
-# Helper: follow symlinks / reparse points to the real executable.
-#
-# `dotnet` on PATH is often NOT the real binary: Windows app-execution aliases
-# under %LOCALAPPDATA%\Microsoft\WindowsApps, and plain symlinks, both resolve
-# to an install root elsewhere. Taking Split-Path of the alias would pin -d at a
-# directory with no sdk/ or sdk-manifests/ at all, which is worse than letting
-# the Samsung installer pick its own target. The .sh side already does this via
-# `readlink -f`; keep the two in step.
-# ---------------------------------------------------------------------------
-function Resolve-RealPath {
-    param([string]$Path)
-    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
-    try {
-        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
-
-        # PowerShell 7+ / .NET 6+: resolves a whole chain of links.
-        if ($item.PSObject.Methods.Name -contains 'ResolveLinkTarget') {
-            $final = $item.ResolveLinkTarget($true)
-            if ($final -and $final.FullName) { return $final.FullName }
-        }
-
-        # Windows PowerShell 5.1: .Target holds the reparse point destination.
-        $target = @($item.Target) | Where-Object { $_ } | Select-Object -First 1
-        if ($target) {
-            if (-not [System.IO.Path]::IsPathRooted($target)) {
-                $target = Join-Path (Split-Path -Parent $item.FullName) $target
-            }
-            $resolved = Resolve-Path -LiteralPath $target -ErrorAction SilentlyContinue
-            if ($resolved) { return $resolved.Path }
-        }
-
-        return $item.FullName
-    } catch {
-        return $Path
-    }
-}
-
-# ---------------------------------------------------------------------------
 # Helper: is the Tizen workload installed in a SPECIFIC dotnet?
 # Always ask the dotnet we are going to verify against - never whatever `dotnet`
 # happens to resolve to, which is how the install/verify targets drift apart.
@@ -227,17 +225,75 @@ function Test-TizenWorkload {
 # 1) Detect the .NET SDK
 # ---------------------------------------------------------------------------
 Write-Step "=== Checking for the .NET SDK ==="
-$dotnet = Get-Command dotnet -ErrorAction SilentlyContinue
+
+# Facts captured BEFORE anything is changed - both are reported in the envelope.
+$envDotnetRootRaw = $env:DOTNET_ROOT
+$userDotnetRoot = [Environment]::GetEnvironmentVariable('DOTNET_ROOT', 'User')
+
+# A DOTNET_ROOT with no dotnet.exe under it is stale - typically a bundled dotnet
+# that an extension update moved or removed. MSBuild and the Samsung installer
+# both honour DOTNET_ROOT, so it silently breaks builds until it is cleared.
+$danglingRoot = ""
+foreach ($r in @($envDotnetRootRaw, $userDotnetRoot)) {
+    if ([string]::IsNullOrWhiteSpace($r)) { continue }
+    if (-not (Test-Path -LiteralPath (Join-Path $r 'dotnet.exe'))) { $danglingRoot = $r; break }
+}
+if ($danglingRoot) {
+    Write-Warn "DOTNET_ROOT ($danglingRoot) points to a directory with no dotnet.exe - it is stale."
+    Write-Warn "Clear it with: [Environment]::SetEnvironmentVariable('DOTNET_ROOT', `$null, 'User')  (then open a new terminal)."
+}
+
+$candidates = @(Get-DotnetCandidates)
+$pathCandidate = $candidates | Where-Object { $_.Tier -eq 'path' } | Select-Object -First 1
 $dotnetExe = $null
-if ($dotnet) {
-    $dotnetExe = $dotnet.Source
+$selectedTier = $null
+
+if ($DotnetRoot -ne "") {
+    $explicitExe = Join-Path $DotnetRoot 'dotnet.exe'
+    if (-not (Test-Path -LiteralPath $explicitExe)) {
+        Write-Err "-DotnetRoot '$DotnetRoot' has no dotnet.exe - pass the .NET install root (the directory that contains dotnet.exe and sdk\)."
+        exit 1
+    }
+    $dotnetExe = Resolve-RealPath $explicitExe
+    $selectedTier = 'explicit'
+    $explicitRoot = (Split-Path -Parent $dotnetExe).TrimEnd('\', '/')
+    $known = $candidates | Where-Object { $_.Root.TrimEnd('\', '/') -ieq $explicitRoot } | Select-Object -First 1
+    if ($known) {
+        $known.Tier = 'explicit'
+    } else {
+        $c = Test-DotnetCandidate 'explicit' $dotnetExe @{}
+        if ($c) { $candidates += $c }
+    }
+    Write-Info "Using the .NET SDK from -DotnetRoot: $dotnetExe"
+} elseif ($pathCandidate) {
+    $dotnetExe = $pathCandidate.Path
+    $selectedTier = 'path'
 } else {
     # Not on PATH - it may still be installed (e.g. bundled in a Tizen SDK tree).
     Write-Warn "dotnet is not on PATH - searching for an existing .NET SDK install..."
-    $dotnetExe = Find-DotnetSdk
-    if ($dotnetExe) {
+    $best = Select-DotnetCandidate $candidates
+    if ($best) {
+        $dotnetExe = $best.Path
+        $selectedTier = $best.Tier
         Write-Success "Found an installed .NET SDK not on PATH: $dotnetExe"
-        Enable-Dotnet $dotnetExe
+    }
+}
+
+# Make the chosen dotnet reachable. Nothing to do when it is the one already on
+# PATH. Otherwise official roots and an explicit -DotnetRoot are wired up
+# persistently; a Tizen-bundled dotnet only for this process unless -PersistEnv.
+if ($dotnetExe) {
+    $chosenRoot = (Split-Path -Parent $dotnetExe).TrimEnd('\', '/')
+    $alreadyOnPath = $pathCandidate -and ($pathCandidate.Root.TrimEnd('\', '/') -ieq $chosenRoot)
+    if (-not $alreadyOnPath) {
+        $kind = Get-DotnetRootKind $chosenRoot
+        if ($kind -ne 'bundled' -or $PersistEnv) {
+            Enable-Dotnet $dotnetExe -StaleRoot $danglingRoot
+        } else {
+            Use-DotnetForThisRun $dotnetExe
+            Write-Warn "This dotnet is bundled inside a Tizen extension tree ($chosenRoot). It was NOT added to your User DOTNET_ROOT/PATH: an extension update can move or delete it."
+            Write-Warn "Builds in other shells will not see it. Install an official .NET SDK, or re-run this setup with -PersistEnv to wire it up anyway."
+        }
     }
 }
 
@@ -245,9 +301,29 @@ if ($dotnet) {
 if (-not $dotnetExe -and -not $NoInstallSdk) {
     $installed = Install-DotnetSdk -Channel $SdkChannel
     if ($installed) {
-        Enable-Dotnet $installed
+        Enable-Dotnet $installed -StaleRoot $danglingRoot
         $dotnetExe = $installed
+        $selectedTier = 'official'
+        $c = Test-DotnetCandidate 'official' $installed @{}
+        if ($c) { $candidates += $c }
     }
+}
+
+# ---------------------------------------------------------------------------
+# 1a) Facts for the envelope - printed on EVERY path, success included (the
+# [DIAG] block at the end is failure-only). lib/core/dotnet.js parses both:
+#   [ENV] key=value
+#   [CANDIDATE] <tier>|<tizen_workload>|<version>|<selected>|<path>
+# The path comes last because it may contain spaces (C:\Program Files\dotnet).
+# ---------------------------------------------------------------------------
+$selectedRoot = if ($dotnetExe) { (Split-Path -Parent $dotnetExe).TrimEnd('\', '/') } else { '' }
+Write-Host "[ENV] env_dotnet_root=$(if ([string]::IsNullOrWhiteSpace($envDotnetRootRaw)) { '(unset)' } else { $envDotnetRootRaw })"
+Write-Host "[ENV] dangling_dotnet_root=$(if ($danglingRoot) { $danglingRoot } else { '(none)' })"
+Write-Host "[ENV] persisted_dotnet_root=$(if ($script:PersistedRoot) { $script:PersistedRoot } else { '(none)' })"
+Write-Host "[ENV] persisted_path_entry=$(if ($script:PersistedPathEntry) { $script:PersistedPathEntry } else { '(none)' })"
+foreach ($c in $candidates) {
+    $isSelected = ($c.Root.TrimEnd('\', '/') -ieq $selectedRoot)
+    Write-Host "[CANDIDATE] $($c.Tier)|$($c.TizenWorkload.ToString().ToLower())|$($c.Version)|$($isSelected.ToString().ToLower())|$($c.Path)"
 }
 
 if (-not $dotnetExe) {
@@ -326,15 +402,14 @@ $installedBands = @(
         Select-Object -Unique
 )
 
-$envDotnetRootRaw = $env:DOTNET_ROOT
-$envDotnetRootMismatch = $false
-if (-not [string]::IsNullOrWhiteSpace($envDotnetRootRaw)) {
-    $envTrimmed = $envDotnetRootRaw.TrimEnd('\', '/')
-    $rootTrimmed = $dotnetRoot.TrimEnd('\', '/')
-    if ($envTrimmed -ne $rootTrimmed) {
-        $envDotnetRootMismatch = $true
-        Write-Warn "DOTNET_ROOT ($envDotnetRootRaw) does not match the dotnet being used ($dotnetRoot)."
-        Write-Warn "The dotnet on PATH wins. Overriding DOTNET_ROOT for this run only (your saved value is left alone)."
+if (-not [string]::IsNullOrWhiteSpace($envDotnetRootRaw) -and
+    ($envDotnetRootRaw.TrimEnd('\', '/') -ine $dotnetRoot.TrimEnd('\', '/'))) {
+    Write-Warn "DOTNET_ROOT ($envDotnetRootRaw) does not match the dotnet being used ($dotnetRoot)."
+    if ($script:PersistedRoot) {
+        Write-Info "Your User DOTNET_ROOT now points at $dotnetRoot (effective in new shells)."
+    } else {
+        $winner = if ($selectedTier -eq 'explicit') { '-DotnetRoot' } else { 'The dotnet on PATH' }
+        Write-Warn "$winner wins. Overriding DOTNET_ROOT for this run only (your saved value is left alone)."
         Write-Warn "If builds keep failing to see the Tizen workload, unset DOTNET_ROOT or point it at $dotnetRoot."
     }
 }

@@ -399,7 +399,7 @@ STEP 3: Set a breakpoint and press F5
 
 Note: The app is SUSPENDED before Main() and shows no window until F5 starts the VS Code debug
 session — this is expected, not a failed launch. Startup breakpoints will hit.
-(The app, netcoredbg DAP server, and port forward stay in place — you can disconnect and reconnect.)
+(Stopping the VS Code session ends the app AND the netcoredbg DAP server; only the sdb port forward stays. Re-run this setup — or let the generated 'tizen: netcoredbg launch' preLaunchTask do it — before the next F5.)
 
 EOF
   exit 0

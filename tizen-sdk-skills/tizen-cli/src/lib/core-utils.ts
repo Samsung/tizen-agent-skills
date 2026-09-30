@@ -31,10 +31,15 @@ const {
 
 // ─── Output Functions ───────────────────────────────────────────────────────
 
-function outputEnvelope(obj: any): void {
-  process.stdout.write(
-    JSON.stringify(maskEnvelopeSecrets(obj), null, 2) + "\n",
-  );
+/**
+ * Write one envelope to stdout. Sensitive FIELDS are masked by name unless
+ * `mask: false` — the `--schema` catalog needs that: its option keys are
+ * literally "--password" etc. and hold metadata objects, not secrets, which
+ * the field-name masker would otherwise collapse to "***".
+ */
+function outputEnvelope(obj: any, opts: { mask?: boolean } = {}): void {
+  const body = opts.mask === false ? obj : maskEnvelopeSecrets(obj);
+  process.stdout.write(JSON.stringify(body, null, 2) + "\n");
 }
 
 function outputSuccess(data: any): void {

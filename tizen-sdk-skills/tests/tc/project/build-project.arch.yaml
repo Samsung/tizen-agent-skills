@@ -23,6 +23,7 @@ requires:
 # NOTE (2026-09-23): capability gbs declared — GBS/platform builds need a Linux host with gbs and
 # ~/GBS-ROOT; tizen-build-project.ps1 has no GBS path (fails 'Could not detect project type').
 # Not runnable on the Windows host of this pass; stays draft.
+# NOTE (2026-09-28): out of scope of the installer pass on this Windows host — stays draft.
 lanes:
   cli:
     argv: ["tizen-sdk", "build-project", "--project", "/tmp/tizen-apps/MyPlatformApp01", "--arch", "armv7l"]

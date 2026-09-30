@@ -96,7 +96,17 @@ function registerCommand(program: Command, spec: CommandSpec): void {
   });
 }
 
-export function buildProgram(): Command {
+/**
+ * Build the Commander program.
+ *
+ * Commander's own output (help / version text) goes to stderr so that stdout
+ * stays reserved for the single JSON envelope. When `capture` is given the
+ * same text is also appended to `capture.text`, which lets `--help` /
+ * `--version` / `<cmd> --help` be wrapped in a success envelope
+ * (dispatchCommand in index.ts). Subcommands inherit configureOutput, so a
+ * subcommand's help is captured too.
+ */
+export function buildProgram(capture?: { text: string }): Command {
   const program = new Command();
   program
     .name("tizen-sdk")
@@ -106,7 +116,10 @@ export function buildProgram(): Command {
     .version(pkg.version)
     .exitOverride()
     .configureOutput({
-      writeOut: (str: string) => process.stderr.write(str),
+      writeOut: (str: string) => {
+        if (capture) capture.text += str;
+        process.stderr.write(str);
+      },
       writeErr: (str: string) => process.stderr.write(str),
       outputError: (str: string, write: (_s: string) => void) => write(str),
     });

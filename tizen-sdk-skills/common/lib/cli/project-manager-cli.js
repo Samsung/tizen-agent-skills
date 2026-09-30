@@ -40,7 +40,9 @@
  *     --type <type>           (required) native | dotnet | webapp | rpk | tv | platform
  *     --template <name>       (required) Template name (use list-templates to discover)
  *     --parent-path <dir>     (required) Workspace (parent) directory — app folder is created inside it
- *     --name <appName>        (required) App name (folder to be created)
+ *     --name <appName>        (required) App name (folder to be created); at least 10 ASCII
+ *                             letters/digits (A-Za-z0-9, nothing else is counted) — Tizen
+ *                             derives the 10-char package ID from them
  *     --force                 (optional) Replace the target folder if it already exists
  *                             (only when empty or a Tizen project — never an arbitrary dir)
  *     --open                  (optional) Open the generated .code-workspace in VS Code

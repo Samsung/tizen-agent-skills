@@ -34,8 +34,22 @@ import {
 import {
   FIXTURE_NEEDS,
   GENERATED_FIXTURE_KEYS,
+  SCRATCH_HOME_MARKER,
+  USER_ENV_KEYS,
+  createScratchHome,
   guardedScratchDir,
+  scratchHomeRemovable,
+  userEnvValue,
+  validateUserEnvSnapshot,
 } from "./lib/driver-common.mjs";
+import {
+  cpSync,
+  mkdirSync,
+  mkdtempSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { spawnSync } from "node:child_process";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -471,6 +485,123 @@ check(
   },
 );
 
+// ── Installer-phase safeguards (run-mutating-tier.mjs teardown) ───────────
+
+check("validateUserEnvSnapshot: every key present, string or null", () => {
+  assert(
+    validateUserEnvSnapshot({ Path: "C:\\x;C:\\y", TIZEN_SDK_PATH: null }) ===
+      null,
+    "a complete snapshot was rejected",
+  );
+  assert(
+    validateUserEnvSnapshot({ Path: "C:\\x", TIZEN_SDK_PATH: "C:\\sdk" }) ===
+      null,
+    "a complete string snapshot was rejected",
+  );
+  // A missing key is the dangerous case: $e.<key> would be $null in
+  // PowerShell and SetEnvironmentVariable(..., $null, 'User') deletes the
+  // variable — a truncated snapshot must never reach the restore.
+  for (const bad of [
+    null,
+    undefined,
+    [],
+    "{}",
+    {},
+    { Path: "C:\\x" },
+    { TIZEN_SDK_PATH: null },
+    { Path: 5, TIZEN_SDK_PATH: null },
+    { Path: "C:\\x", TIZEN_SDK_PATH: undefined },
+  ]) {
+    assert(
+      typeof validateUserEnvSnapshot(bad) === "string",
+      `${JSON.stringify(bad)} was accepted`,
+    );
+  }
+  assert(
+    USER_ENV_KEYS.length === 2 &&
+      USER_ENV_KEYS.includes("Path") &&
+      USER_ENV_KEYS.includes("TIZEN_SDK_PATH"),
+    "USER_ENV_KEYS drifted — the restore touches exactly these two values",
+  );
+});
+
+check("userEnvValue treats an absent and an empty variable alike", () => {
+  assert(userEnvValue(null) === null, "null");
+  assert(userEnvValue(undefined) === null, "undefined");
+  assert(userEnvValue("") === null, "empty string");
+  assert(userEnvValue("C:\\x") === "C:\\x", "value kept");
+});
+
+check(
+  "scratchHomeRemovable allows only the marked <scratch>/home the driver made",
+  () => {
+    const scratch = mkdtempSync(join(tmpdir(), "tizen-scratch-test-"));
+    try {
+      const home = join(scratch, "home");
+      // Nothing there yet: nothing to refuse (the delete is a no-op) — the
+      // same holds for an unreachable path, which is why that is not in the
+      // refusal list below.
+      assert(scratchHomeRemovable(home, scratch) === null, "absent home");
+      // A plain directory named home WITHOUT the marker: not ours.
+      mkdirSync(home);
+      assert(
+        /marker/.test(scratchHomeRemovable(home, scratch) || ""),
+        "unmarked home was allowed",
+      );
+      // Created by the driver: allowed.
+      createScratchHome(home);
+      assert(
+        existsSync(join(home, SCRATCH_HOME_MARKER)),
+        "createScratchHome wrote no marker",
+      );
+      assert(
+        scratchHomeRemovable(home, scratch) === null,
+        "marked home refused",
+      );
+      // Wrong name, nested path, the scratch dir itself, a sibling, another drive.
+      const other = join(scratch, "other");
+      createScratchHome(other);
+      for (const [dir, base] of [
+        [other, scratch],
+        [join(home, "AppData"), scratch],
+        [scratch, scratch],
+        [home, join(scratch, "other")],
+        [home, dirname(scratch)],
+        ["", scratch],
+        [home, ""],
+      ]) {
+        let why;
+        try {
+          why = scratchHomeRemovable(dir, base);
+        } catch (e) {
+          why = `threw: ${e.message}`; // unreachable drive — still refused
+        }
+        assert(
+          typeof why === "string",
+          `${JSON.stringify(dir)} under ${JSON.stringify(base)} was allowed`,
+        );
+      }
+      // A symlink named home pointing at a marked directory: refused.
+      const linkScratch = mkdtempSync(join(tmpdir(), "tizen-scratch-link-"));
+      try {
+        symlinkSync(home, join(linkScratch, "home"), "junction");
+        assert(
+          /symbolic link/.test(
+            scratchHomeRemovable(join(linkScratch, "home"), linkScratch) || "",
+          ),
+          "symlinked home was allowed",
+        );
+      } catch (e) {
+        if (!/EPERM|EACCES|ENOSYS/.test(e.message)) throw e; // no symlink rights: skip
+      } finally {
+        rmSync(linkScratch, { recursive: true, force: true });
+      }
+    } finally {
+      rmSync(scratch, { recursive: true, force: true });
+    }
+  },
+);
+
 // ── Repo-level placeholder consistency ────────────────────────────────────
 
 check("real fixtures.env parses and defines FIXTURE_CERT_UNLOCK", () => {
@@ -513,6 +644,216 @@ check("every ${NAME} in every TC argv resolves against fixtures.env", () => {
     `unresolved placeholders: ${unresolved.join(", ")}`,
   );
 });
+
+// ── verify-doc-stats.mjs: the README regexes bind to the current wording ──
+//
+// The gate reports a regex that no longer matches as "pattern not found" and
+// a wrong number as "documented X, actual Y". Perturb one number per README
+// pattern in a temp copy of the docs and require the latter for each — that
+// proves every pattern still matches the real README.md / README.ko.md text
+// (a stale pattern would surface as the former).
+
+check(
+  "verify-doc-stats: perturbed README numbers are reported per pattern",
+  () => {
+    const tmp = mkdtempSync(join(tmpdir(), "tizen-doc-stats-"));
+    try {
+      for (const p of [
+        "tc",
+        "policy",
+        "README.md",
+        "README.ko.md",
+        "CSV-YAML-MAPPING.md",
+      ])
+        cpSync(join(ROOT, p), join(tmp, p), { recursive: true });
+
+      // [pattern in the current doc, replacement, expected failure line prefix]
+      const edits = {
+        "README.md": [
+          [
+            /\*\*\d+ test cases\*\* across/,
+            "**900 test cases** across",
+            "README.md intro total: documented 900",
+          ],
+          [
+            /\d+ Test Cases \(\d+ YAML files\)/,
+            "901 Test Cases (902 YAML files)",
+            "README.md diagram total: documented 901",
+          ],
+          [
+            /"safe \(\d+ cmds \/ \d+ TCs\)/,
+            '"safe (903 cmds / 904 TCs)',
+            "README.md diagram safe cmds: documented 903",
+          ],
+          [
+            /\| \*\*cli lane\*\*\s*\| \d+ \|/,
+            "| **cli lane**    | 905 |",
+            "README.md lane cli: documented 905",
+          ],
+          [
+            /add up to the \d+ TCs/,
+            "add up to the 906 TCs",
+            "README.md lane sum: documented 906",
+          ],
+          [
+            /\d+ test cases in \d+ YAML files/,
+            "907 test cases in 908 YAML files",
+            "README.md tree total: documented 907",
+          ],
+        ],
+        "README.ko.md": [
+          [
+            /\*\*\d+개 테스트 케이스\*\*가 있으며/,
+            "**910개 테스트 케이스**가 있으며",
+            "README.ko.md intro total: documented 910",
+          ],
+          [
+            /\| \*\*cli 레인\*\*\s*\| \d+ \|/,
+            "| **cli 레인**    | 911 |",
+            "README.ko.md lane cli: documented 911",
+          ],
+          [
+            /전체 \d+개가 됩니다/,
+            "전체 912개가 됩니다",
+            "README.ko.md lane sum: documented 912",
+          ],
+          [
+            /\d+개 YAML 파일에 \d+개 테스트 케이스/,
+            "913개 YAML 파일에 914개 테스트 케이스",
+            "README.ko.md tree files: documented 913",
+          ],
+        ],
+      };
+      const wanted = [];
+      for (const [file, list] of Object.entries(edits)) {
+        let text = readFileSync(join(tmp, file), "utf8");
+        for (const [re, repl, label] of list) {
+          assert(
+            re.test(text),
+            `${file}: fixture pattern ${re} not in the doc`,
+          );
+          text = text.replace(re, repl);
+          wanted.push(label);
+        }
+        writeFileSync(join(tmp, file), text);
+      }
+
+      const r = spawnSync(
+        process.execPath,
+        [join(ROOT, "scripts", "verify-doc-stats.mjs")],
+        { env: { ...process.env, DOC_STATS_ROOT: tmp }, encoding: "utf8" },
+      );
+      assert(
+        r.status === 1,
+        `expected exit 1, got ${r.status}\n${r.stdout}${r.stderr}`,
+      );
+      for (const w of wanted)
+        assert(r.stderr.includes(w), `missing "${w}" in:\n${r.stderr}`);
+      assert(
+        !r.stderr.includes("pattern not found"),
+        `a README regex no longer matches the doc wording:\n${r.stderr}`,
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  },
+);
+
+// ── verify-doc-stats.mjs: tiers.yaml ↔ plugin.json gate ───────────────────
+//
+// An unclassified command defaults to `skip`, so its TCs never run (how
+// import-wgt shipped without a tier). The gate must name a plugin.json command
+// missing from tiers.yaml, and must stay quiet when the CLI tree is absent
+// while DOC_STATS_ROOT is set (the perturbation test above has no tizen-cli).
+
+check(
+  "verify-doc-stats: plugin.json command missing from tiers.yaml fails",
+  () => {
+    const tmp = mkdtempSync(join(tmpdir(), "tizen-doc-stats-cli-"));
+    try {
+      for (const p of [
+        "tc",
+        "policy",
+        "README.md",
+        "README.ko.md",
+        "CSV-YAML-MAPPING.md",
+      ])
+        cpSync(join(ROOT, p), join(tmp, p), { recursive: true });
+      const tiers = parseAllDocuments(
+        readFileSync(join(ROOT, "policy", "tiers.yaml"), "utf-8"),
+      )[0].toJS();
+      const classified = Object.keys(tiers.commands).map((k) =>
+        k.replace(/^[^.]+\./, ""),
+      );
+      const cli = join(tmp, "cli");
+      mkdirSync(cli, { recursive: true });
+      writeFileSync(
+        join(cli, "plugin.json"),
+        JSON.stringify({ commands: [...classified, "bogus-cmd"] }),
+      );
+      const env = {
+        ...process.env,
+        DOC_STATS_ROOT: tmp,
+        DOC_STATS_CLI_DIR: cli,
+      };
+      const r = spawnSync(
+        process.execPath,
+        [join(ROOT, "scripts", "verify-doc-stats.mjs")],
+        {
+          env,
+          encoding: "utf8",
+        },
+      );
+      assert(
+        r.status === 1,
+        `expected exit 1, got ${r.status}\n${r.stdout}${r.stderr}`,
+      );
+      assert(
+        r.stderr.includes('plugin.json command "bogus-cmd" is not classified'),
+        `missing bogus-cmd finding in:\n${r.stderr}`,
+      );
+      // …and a classified command the CLI no longer registers is reported too.
+      writeFileSync(
+        join(cli, "plugin.json"),
+        JSON.stringify({ commands: classified.slice(1) }),
+      );
+      const r2 = spawnSync(
+        process.execPath,
+        [join(ROOT, "scripts", "verify-doc-stats.mjs")],
+        {
+          env,
+          encoding: "utf8",
+        },
+      );
+      assert(r2.status === 1, `expected exit 1, got ${r2.status}`);
+      assert(
+        r2.stderr.includes(
+          `"${classified[0]}" is classified but is not a plugin.json command`,
+        ),
+        `missing stale-classification finding in:\n${r2.stderr}`,
+      );
+      // No plugin.json under DOC_STATS_ROOT → the gate is skipped, docs still pass.
+      const r3 = spawnSync(
+        process.execPath,
+        [join(ROOT, "scripts", "verify-doc-stats.mjs")],
+        {
+          env: {
+            ...process.env,
+            DOC_STATS_ROOT: tmp,
+            DOC_STATS_CLI_DIR: join(tmp, "no-cli"),
+          },
+          encoding: "utf8",
+        },
+      );
+      assert(
+        r3.status === 0,
+        `expected exit 0 without a CLI tree, got ${r3.status}\n${r3.stderr}`,
+      );
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  },
+);
 
 // ── Report ────────────────────────────────────────────────────────────────
 

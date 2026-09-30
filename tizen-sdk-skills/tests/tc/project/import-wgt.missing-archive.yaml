@@ -1,0 +1,32 @@
+# Input validation: the .wgt archive is checked BEFORE the SDK / tz profile is
+# touched (common/lib/core/project.js importWgt), so this runs without an SDK.
+# A path that does not exist is io_error / TIZEN_SDK_IO_E001 and names the path.
+id: tizen-sdk.import-wgt.missing-archive
+plugin: tizen-sdk
+command: import-wgt
+tier: safe
+status: approved
+since_cli: 1.3.1
+description: "import-wgt fails with io_error when --wgt-path does not exist"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "import-wgt",
+        "--wgt-path",
+        "/nonexistent/tizen-tc/MissingArchive.wgt",
+        "--profile",
+        "tizen",
+        "--platform-version",
+        "10.0",
+        "--working-dir",
+        "/nonexistent/tizen-tc",
+      ]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: "io_error"
+          error_code: "TIZEN_SDK_IO_E001"

@@ -84,7 +84,7 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 lines above will NOT run there. Follow the 2-step procedure:
 
 **Step 1 — Find the runner path:**
-- cmd: `cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js"`
+- cmd: `cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & ver >nul`
 - PowerShell: `$h = ".cline"; if ($env:CODEX_THREAD_ID -or $env:CODEX_SANDBOX_NETWORK_DISABLED -or $env:CODEX_SANDBOX -or $env:CODEX_VERSION) { $h = ".codex" }; if ($env:GEMINI_CLI) { $h = ".gemini" }; if ($env:CLAUDECODE) { $h = ".claude" }; $CLI = $null; foreach ($d in @($h, ".claude", ".cline", ".codex", ".gemini")) { $CLI = Get-ChildItem "$env:USERPROFILE\$d\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\dotnet-debug-cli.js" -ErrorAction SilentlyContinue | Sort-Object { [version]$_.Directory.Parent.Parent.Name } | Select-Object -Last 1 -ExpandProperty FullName; if ($CLI) { break } }`
 - Pick the highest-version path from the results (the PowerShell form already resolved `$CLI`).
 
@@ -190,12 +190,18 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
      `Main()`; a blank screen after a success envelope is expected, not a failed launch
      (issue #97). Lead your report with that sentence.
 
-2. **Run the CLI runner** with the resolved app ID, mode, and breakpoints:
+2. **Run the CLI runner** with the resolved app ID, mode, and breakpoints — and, whenever the
+   project directory is known (the user named it, or it is the open workspace / the folder the
+   app was just built from), **`--project <dir>`** so the runner writes
+   `<dir>/.vscode/launch.json` itself. Never hand-write launch.json when the path is available:
+   the runner resolves `program`/`cwd` from the `.csproj` (TargetFramework, AssemblyName) and
+   emits the right `coreclr` type; hand-written copies are where wrong types / hard-coded TFMs
+   crept in.
    ```bash
    BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
    CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dotnet-debug-cli.js 2>/dev/null | sort -V | tail -1) || true
    [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dotnet-debug-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-   node "$CLI" org.tizen.example.MyApp launch "Program.cs:25"
+   node "$CLI" org.tizen.example.MyApp launch "Program.cs:25" 4711 emulator-26101 --project "/path/to/MyApp"
    ```
 
 3. **Check the JSON envelope for critical scenarios:**
@@ -214,9 +220,24 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    - **Success** (exit 0): Relay the envelope's `result` to the user VERBATIM:
      - **Launch mode**: `result.note` first — it begins with "The app is running under
        netcoredbg but SUSPENDED before Main(): it shows NO window until VS Code connects" —
-       then `result.launch_config`: create `.vscode/launch.json`, replace `<APP_FOLDER_NAME>`,
-       open the project in VS Code, set a breakpoint, press F5. `result.app_state` is
-       `suspended_under_debugger`; `result.launch_app_id` is the id actually launched.
+       then `result.launch_config`:
+       - If it has `launch_json_path` (you passed `--project`): the file is already written
+         (`launch_json_action` = created/updated/unchanged) — tell the user to open that
+         project in VS Code, pick the "Tizen .NET (netcoredbg)" configuration, set a
+         breakpoint, press F5. Do NOT create or edit launch.json yourself. It also
+         wrote `.vscode/tasks.json` (`tasks_json_path`/`tasks_json_action`) and wired the
+         `tizen: netcoredbg launch` task in as `pre_launch_task`: stopping the session ends
+         the app and the DAP server (netcoredbg exits on disconnect), so every F5 re-runs
+         this runner first — stop → F5 just works. Relay `result.note`'s sentence about this.
+         If `warnings[]` has `tasks.json not written: …`, tell the user to re-run this agent
+         before each F5 instead.
+       - Otherwise (no `--project`, or a `warnings[]` entry starting `launch.json not written:`
+         — e.g. the existing file has comments/trailing commas): relay the template with
+         `<APP_FOLDER_NAME>` and the warning verbatim so the user adds it by hand.
+       - The `coreclr` type needs the VS Code C# extension (`ms-dotnettools.csharp`); if the
+         user reports "debug type 'coreclr' is not supported", that extension is missing.
+       `result.app_state` is `suspended_under_debugger`; `result.launch_app_id` is the id
+       actually launched.
      - **Attach mode**: `result.debug_command` — BOTH the `powershell` and `cmd` forms with
        their labels intact. The leading `&` is PowerShell-only (it **fails in cmd.exe**).
        Also relay `result.note` and `result.breakpoints`.

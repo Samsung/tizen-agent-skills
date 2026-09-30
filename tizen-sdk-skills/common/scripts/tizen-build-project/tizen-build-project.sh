@@ -107,7 +107,7 @@ fi
 has_project_config() {
     local path="$1"
     # Standard Tizen SDK project types
-    [[ -f "$path/tizen_native_project.yaml" || -f "$path/tizen_dotnet_project.yaml" || -f "$path/tizen_resource_project.yaml" || -f "$path/config.xml" || ( -f "$path/tizen-manifest.xml" && -f "$path/CMakeLists.txt" ) ]] && return 0
+    [[ -f "$path/tizen_native_project.yaml" || -f "$path/tizen_dotnet_project.yaml" || -f "$path/tizen_resource_project.yaml" || -f "$path/config.xml" || -n "$(ls "$path"/*.csproj 2>/dev/null)" || ( -f "$path/tizen-manifest.xml" && -f "$path/CMakeLists.txt" ) ]] && return 0
     # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject)
     [[ -f "$path/CMakeLists.txt" && -d "$path/packaging" && -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]] && return 0
     return 1

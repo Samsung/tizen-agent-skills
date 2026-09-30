@@ -179,6 +179,17 @@
           "properties": {
             "must_call_tool": { "type": "string", "minLength": 1 },
             "must_resolve_command": { "type": "string", "minLength": 1 },
+            "first_resolved_command": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The FIRST must_call_tool invocation of the run must resolve to this command. Routing TCs use it: must_resolve_command alone passes when the right command shows up anywhere, even after a detour through the wrong one."
+            },
+            "must_not_resolve_commands": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "string", "minLength": 1 },
+              "description": "Commands that must not be resolved at ANY point of the run (before or after the expected one). One such call fails the attempt."
+            },
             "must_pass_args": {
               "type": "object",
               "minProperties": 1,

@@ -91,7 +91,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `file-transfer` | `--direction` (`push`\|`pull`), `--remote` | `--local` (push 시 필수, pull 시 기본 `.`), `--serial`, `--with-utf8` |
 | `remote-device` | — | `--action` (기본: `scan`, enum: `scan`\|`connect`\|`disconnect`\|`list`\|`add`\|`remove`\|`edit`\|`list-saved`), `--ip`, `--subnet`, `--port` (기본: `26101`), `--timeout` (기본: `3000`), `--name`, `--new-ip`, `--new-port` |
 | `gdb-debug` | `--app-id`, `--binary` | `--mode` (기본: `attach`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `5039`), `--timeout` (기본: `30`) |
-| `dotnet-debug` | `--app-id` | `--mode` (기본: `attach`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `4711`), `--serial`, `--force-install`, `--timeout` (기본: `30`) |
+| `dotnet-debug` | `--app-id` | `--mode` (기본: `launch`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `4711`), `--serial`, `--force-install`, `--timeout` (기본: `30`), `--project <dir>` (launch 모드: `<dir>/.vscode/launch.json` 자동 생성) |
 | `webapp-debug` | `--app-id` | `--port` (기본: `9222`), `--serial`, `--timeout` (기본: `30`) |
 | `dlog-analyzer` | `--action` | `--subcommand` (기본: `start-monitoring`), `--app-id`, `--format`, `--output-dir`, `--filter` / `--lines` / `--output` (log-dump), `--confirm` (log-clear) |
 | `playwright-test` | — | `--app-id`, `--test-file`, `--project-dir`, `--port` (기본: `9222`), `--serial`, `--setup-timeout` (기본: `30`), `--timeout` (기본: `120`), `--no-setup`, `--scaffold`, `--force` |

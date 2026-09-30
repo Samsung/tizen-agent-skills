@@ -259,6 +259,61 @@ function Get-TvTemplateTzType {
     return 'web'
 }
 
+function Align-SyncedManifestApiVersion {
+    # Rewrite api-version in <DestDir>/project/tizen-manifest.xml to the numeric
+    # part of $TZ_PROFILE (tizen-11.0 -> 11.0).
+    #
+    # The plugin ships ONE template tree that Sync-CustomTemplates copies under
+    # every tizen-X.Y profile, so its manifest carries a single fixed api-version
+    # (10.0). `tz new -p tizen-11.0` writes tizen_native_project.yaml / .tproject
+    # from the profile but copies tizen-manifest.xml verbatim, so a project
+    # created from the unpatched copy had api_version 11.0 next to
+    # api-version="10.0" and tz build could not resolve a consistent rootstrap.
+    #
+    # Only a copy that is still byte-identical to the local template's manifest
+    # is touched - an SDK-shipped template or a user-edited manifest is left
+    # alone. That also repairs copies made by earlier plugin versions.
+    param([string]$LocalDir, [string]$DestDir, [string]$Name)
+
+    # Profile -> version. Anything but tizen-X[.Y] (tv-samsung-*, wearable-*)
+    # is not ours to rewrite.
+    $ver = $TZ_PROFILE -creplace '^tizen-', ''
+    if ($ver -cnotmatch '^[0-9]+(\.[0-9]+)*$') { return }
+    $src = Join-Path $LocalDir 'project\tizen-manifest.xml'
+    $dst = Join-Path $DestDir 'project\tizen-manifest.xml'
+    if (-not ((Test-Path $src) -and (Test-Path $dst))) { return }
+
+    # Guard: only a byte-identical copy of the plugin's own template (the .sh
+    # twin uses `cmp -s`). Any read/hash failure means "not proven identical":
+    # skip rather than rewrite.
+    try {
+        $srcBytes = [System.IO.File]::ReadAllBytes($src)
+        $dstBytes = [System.IO.File]::ReadAllBytes($dst)
+        if ($srcBytes.Length -ne $dstBytes.Length) { return }
+        if (-not [System.Linq.Enumerable]::SequenceEqual([byte[]]$srcBytes, [byte[]]$dstBytes)) { return }
+        $content = [System.IO.File]::ReadAllText($dst)
+    } catch {
+        return
+    }
+
+    # Scope: the api-version attribute of the <manifest ...> root element only,
+    # first match only - the same anchored pattern and count as the .sh twin's
+    # `sed -E` without `g`. Nothing to do when the element has no such
+    # attribute or already carries the profile's version.
+    $attrRe = [regex]'(<manifest\s[^>]*api-version=")[0-9.]+(")'
+    if (-not $attrRe.IsMatch($content)) { return }
+    if ($content.Contains('api-version="' + $ver + '"')) { return }
+    $updated = $attrRe.Replace($content, ('${1}' + $ver + '${2}'), 1)
+    if ($updated -ceq $content) { return }
+    try {
+        # No BOM: the manifest declares encoding="utf-8" and tz reads it as-is.
+        [System.IO.File]::WriteAllText($dst, $updated, (New-Object System.Text.UTF8Encoding $false))
+        Write-Host "[INFO] Set api-version=""$ver"" in synced template '$Name' for profile $TZ_PROFILE"
+    } catch {
+        Write-Host "[WARN] Could not set api-version=""$ver"" in synced template '$Name' ($dst): $($_.Exception.Message) - projects created from it keep the template's api-version."
+    }
+}
+
 function Sync-CustomTemplates {
     # Sync custom templates from the plugin's templates/ directory into the SDK
     # so that `tz list templates` discovers them and `tz new` can create them.
@@ -268,7 +323,8 @@ function Sync-CustomTemplates {
     # sample.xml (the marker file that identifies a Tizen template).
     # For each one found:
     #   1. Copy the folder into the SDK's sample template directory.
-    #   2. Register it in templates.yaml (if not already present).
+    #   2. Match the copied manifest's api-version to $TZ_PROFILE.
+    #   3. Register it in templates.yaml (if not already present).
 
     if (-not (Test-Path $LOCAL_TEMPLATES_PATH)) { return }
 
@@ -322,7 +378,10 @@ function Sync-CustomTemplates {
                 }
             }
 
-            # 2. Register in templates.yaml (native only for now)
+            # 2. The copy sits under platforms/$TZ_PROFILE - make its manifest say so.
+            Align-SyncedManifestApiVersion -LocalDir $folder.FullName -DestDir $destPath -Name $templateName
+
+            # 3. Register in templates.yaml (native only for now)
             if ($typeKey -eq 'native' -and (Test-Path $sdkTemplateYaml)) {
                 $yamlContent = Get-Content $sdkTemplateYaml -Raw -ErrorAction SilentlyContinue
                 $entryName = "name: $templateName"

@@ -455,7 +455,9 @@ async function jobStatus(id, command = "tizen-sdk job status") {
   // runner's stderr header lines.
   const runnerLogs = meta.log_file ? [] : listRunnerScriptLogs(id);
   const latestLog = meta.log_file || runnerLogs[runnerLogs.length - 1] || null;
-  const progressTail = readTail(latestLog || paths.stderr, 5);
+  const progressTail = latestLog
+    ? readTail(latestLog, 5)
+    : [...readTail(paths.stdout, 5), ...readTail(paths.stderr, 5)];
 
   if (meta.state === "running") {
     const sb = detectSandbox();

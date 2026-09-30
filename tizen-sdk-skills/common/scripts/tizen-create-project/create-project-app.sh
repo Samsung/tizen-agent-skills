@@ -220,6 +220,59 @@ validate_project_name() {
     fi
 }
 
+# Rewrite api-version in <dest>/project/tizen-manifest.xml to the numeric part
+# of $TZ_PROFILE (tizen-11.0 -> 11.0).
+#
+# The plugin ships ONE template tree that sync_custom_templates copies under
+# every tizen-X.Y profile, so its manifest carries a single fixed api-version
+# (10.0). `tz new -p tizen-11.0` writes tizen_native_project.yaml / .tproject
+# from the profile but copies tizen-manifest.xml verbatim, so a project created
+# from the unpatched copy had api_version 11.0 next to api-version="10.0" and
+# tz build could not resolve a consistent rootstrap.
+#
+# Only a copy that is still byte-identical to the local template's manifest is
+# touched — an SDK-shipped template or a user-edited manifest is left alone.
+# That also repairs copies made by earlier plugin versions (they still match).
+#   $1 = local template dir, $2 = SDK copy dir, $3 = template name
+align_synced_manifest_api_version() {
+    local local_dir="$1" dest_dir="$2" name="$3"
+    # Profile -> version. Anything but tizen-X[.Y] (tv-samsung-*, wearable-*)
+    # is not ours to rewrite; the check also keeps $ver safe inside the sed
+    # expression below.
+    local ver="${TZ_PROFILE#tizen-}"
+    echo "$ver" | grep -Eq '^[0-9]+(\.[0-9]+)*$' || return 0
+    local src="${local_dir%/}/project/tizen-manifest.xml"
+    local dst="${dest_dir%/}/project/tizen-manifest.xml"
+    { [ -f "$src" ] && [ -f "$dst" ]; } || return 0
+    # Guard: only a byte-identical copy of the plugin's own template.
+    cmp -s "$src" "$dst" || return 0
+    # Scope: the api-version attribute of the <manifest …> root element only
+    # (the .ps1 twin uses the same anchored pattern). Nothing to do when the
+    # element has no such attribute or already carries the profile's version.
+    local attr_re='(<manifest[[:space:]][^>]*api-version=")[0-9.]+(")'
+    grep -Eq "$attr_re" "$dst" || return 0
+    grep -Fq "api-version=\"${ver}\"" "$dst" && return 0
+    # No `sed -i`: its in-place flag differs between GNU and BSD/macOS sed.
+    # No `g`: first match only, matching the .ps1 twin's count-1 replace.
+    local tmp="${dst}.tmp.$$"
+    if ! sed -E "s/${attr_re}/\\1${ver}\\2/" "$dst" > "$tmp" 2>/dev/null; then
+        rm -f "$tmp" 2>/dev/null || true
+        echo "[WARN] Could not set api-version=\"${ver}\" in synced template '${name}' (${dst}) — projects created from it keep the template's api-version." >&2
+        return 0
+    fi
+    if cmp -s "$dst" "$tmp"; then
+        # Pattern matched nothing sed would change: leave the file untouched.
+        rm -f "$tmp" 2>/dev/null || true
+        return 0
+    fi
+    if mv -f "$tmp" "$dst" 2>/dev/null; then
+        echo "[INFO] Set api-version=\"${ver}\" in synced template '${name}' for profile ${TZ_PROFILE}" >&2
+    else
+        rm -f "$tmp" 2>/dev/null || true
+        echo "[WARN] Could not set api-version=\"${ver}\" in synced template '${name}' (${dst}) — projects created from it keep the template's api-version." >&2
+    fi
+}
+
 # Sync custom templates from the plugin's templates/ directory into the SDK
 # so that `tz list templates` discovers them and `tz new` can create them.
 #
@@ -228,7 +281,8 @@ validate_project_name() {
 # sample.xml (the marker file that identifies a Tizen template).
 # For each one found:
 #   1. Copy the folder into the SDK's sample template directory.
-#   2. Register it in templates.yaml (if not already present).
+#   2. Match the copied manifest's api-version to $TZ_PROFILE.
+#   3. Register it in templates.yaml (if not already present).
 sync_custom_templates() {
     if [ ! -d "$LOCAL_TEMPLATES_PATH" ]; then return; fi
 
@@ -276,7 +330,10 @@ sync_custom_templates() {
             fi
         fi
 
-        # 2. Register in templates.yaml (native only)
+        # 2. The copy sits under platforms/$TZ_PROFILE — make its manifest say so.
+        align_synced_manifest_api_version "$folder" "$dest_path" "$template_name"
+
+        # 3. Register in templates.yaml (native only)
         if [ -f "$sdk_template_yaml" ]; then
             local entry_name="name: $template_name"
             if ! grep -qF "$entry_name" "$sdk_template_yaml" 2>/dev/null; then

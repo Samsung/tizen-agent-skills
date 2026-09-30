@@ -273,5 +273,82 @@ if [ "$tool" != "PowerShell" ] && has '(^|[[:space:]])[A-Za-z]:[\][\][[:alnum:]_
   deny "Unquoted Windows path with backslashes in a Bash command — Bash strips the backslashes (cd C:(backslash)Users(backslash)x becomes C:Usersx: No such file or directory). Put the path in quotes, or use forward slashes: cd C:/Users/... or /c/Users/... (Git Bash). For PowerShell -File args, quote the path or convert with cygpath -w."
 fi
 
+# Rule 17 — kernel log by hand over sdb (issue #213). After `dlog-collect` the model
+# went on to `sdb shell dmesg` / `cat /proc/kmsg` / `dlogutil -b kmsg` instead of the
+# analyzer's own kernel commands. Kernel logs are collected by the dlog-analyzer
+# runner: `kernel collect [serial]` starts the native collector in the background,
+# `kernel stop` ends it, `kernel analyze` prints the deduplicated findings. The
+# runner / wrapper (their command line names dlog-analyzer) are exempt.
+# (The `case` pre-checks below are bash builtins — they keep the three sdb/sleep
+# rules from spawning grep on the many commands that mention neither.)
+case "$cmd" in *[sS][dD][bB]*) cmd_has_sdb=1 ;; *) cmd_has_sdb=0 ;; esac
+if [ "$cmd_has_sdb" -eq 1 ] && ! has 'dlog-analyzer' \
+   && has_i '(dmesg|/proc/kmsg|/dev/kmsg|journalctl|dlogutil[^;&|]*(kmsg|-b[[:space:]]+kernel))'; then
+  deny "Do not collect the kernel log with sdb by hand (dmesg, /proc/kmsg, dlogutil kmsg). Kernel logs belong to the tizen-dlog-analyzer runner: node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect [serial] starts the native collector in the background (it writes <sdk-data>/dloganalyzer/app/kernel/kernel.hot.log); ask the user to reproduce the issue, then run kernel stop and kernel analyze for the deduplicated findings. Report the runner's JSON envelope."
+fi
+
+# Rule 18 — hand-typed diagnostic probes over sdb shell (issue #214): top / ps / free /
+# vmstat / memps / uptime / /proc/meminfo, loadavg, stat, cpuinfo, /proc/<pid>/status.
+# While investigating a symptom (high CPU, memory, freeze, video not playing) the model
+# skipped the analyzer's evidence probes and typed these itself. They are what
+# `investigate --symptoms "<the user's words>" [app-id]` runs (bundled per symptom
+# profile), and `probe list` / `probe run <probe-id>` run one on demand. Exempt: every
+# skill runner and debug wrapper whose own scripts may legitimately query the device
+# (their command line names the runner), and `app_launcher` / `pkgcmd` style commands
+# that merely happen to sit on the same line are not matched — the diagnostic token
+# must stand as its own word inside the sdb shell segment.
+case "$cmd" in *[sS][dD][bB]*shell*) cmd_has_sdb_shell=1 ;; *) cmd_has_sdb_shell=0 ;; esac
+if [ "$cmd_has_sdb_shell" -eq 1 ] \
+   && ! has '(dlog-analyzer|sdb-helper|gdb-debug|dotnet-debug|webapp-debug|playwright-test|screenshot|remote-device|file-transfer|project-manager|install-app)' \
+   && has '[sS][dD][bB][^;&|]*shell[^;&|]*((^|[[:space:]"])(top|ps|free|vmstat|memps|uptime)([[:space:]"\\;&|]|$)|/proc/(meminfo|loadavg|stat|cpuinfo|[0-9]+/(status|stat|smaps|maps)))'; then
+  deny "Do not run diagnostic probes (top, ps, free, vmstat, memps, uptime, /proc/meminfo, /proc/loadavg, /proc/<pid>/status) over sdb shell by hand while investigating a Tizen issue. The tizen-dlog-analyzer runner owns evidence collection: node <plugin>/lib/cli/dlog-analyzer-cli.js investigate --symptoms \"<the user's words>\" [app-id] runs the probe bundles matching the symptom (CPU, memory, freeze, media, ...) and correlates them with the collected dlog; node <plugin>/lib/cli/dlog-analyzer-cli.js probe list shows the catalog and probe run <probe-id> runs one probe. Report the runner's JSON envelope; do not type sdb yourself."
+fi
+
+# Rule 19 — waiting on a timer instead of asking the user to reproduce (issue #212).
+# After `dlog-collect <app-id>` / `start start-monitoring` / `kernel collect` the model
+# ran `sleep 30 && node "$CLI" stop-collect` (or a bare `sleep 60`, then analyzed in the
+# next call) instead of ending its turn with the two-option question ("done, the
+# issue occurred" / "nothing happened") and waiting for the user. Denied when the
+# command sleeps AND runs one of the runner's stop/analyze actions, when it sleeps
+# 5 s or more and names the runner at all, or when it is a bare sleep of 5 s or more
+# while one of the runner's collectors is alive (PID files under
+# <tmp>/tizen-dlog-analyzer/; liveness via kill -0, or `ps -W` on Git Bash where
+# kill cannot see Windows PIDs). A short sleep (< 5 s) that pads an app launch
+# before dlog-collect is left alone.
+sleep_secs=""
+case "$cmd" in
+  *sleep*|*Sleep*)
+    sleep_secs="$(printf '%s' "$cmd" | sed -nE 's/.*(^|[;&|[:space:](])(sleep|Start-Sleep([[:space:]]+-[Ss][A-Za-z]*)?)[[:space:]]+([0-9]+).*/\4/p' | tail -1)" ;;
+esac
+if [ -n "$sleep_secs" ]; then
+  dlog_collector_alive() {
+    local d f pid
+    for d in "${TMPDIR:-}" "${TEMP:-}" "${TMP:-}" /tmp; do
+      [ -n "$d" ] && [ -d "$d/tizen-dlog-analyzer" ] || continue
+      for f in analyzer.pid app-collect.pid kernel-collect.pid; do
+        [ -f "$d/tizen-dlog-analyzer/$f" ] || continue
+        pid="$(tr -d '[:space:]' < "$d/tizen-dlog-analyzer/$f")"
+        [ -n "$pid" ] || continue
+        if kill -0 "$pid" 2>/dev/null; then return 0; fi
+        if command -v ps >/dev/null 2>&1 \
+           && ps -W 2>/dev/null | awk -v p="$pid" '$1==p || $4==p {found=1} END {exit found?0:1}'; then
+          return 0
+        fi
+      done
+    done
+    return 1
+  }
+  # The runner is almost always invoked as node "$CLI" <action>, so its file name
+  # is not on the command line — recognise it by its actions as well.
+  names_dlog_runner=0
+  if has '(dlog-analyzer|stop-collect|error-analyze|dlog-collect|start-monitoring|exception-detect|kernel[[:space:]]+(collect|stop|analyze)|app-log|CLI["\\]*[[:space:]]+(check|stop|status|start|investigate|probe|snapshot|timeline|log-dump))'; then
+    names_dlog_runner=1
+  fi
+  if { [ "$names_dlog_runner" -eq 1 ] && has '(stop-collect|error-analyze|app-log|kernel[[:space:]]+(stop|analyze)|[[:space:]"](stop|check)([[:space:]"]|$))'; } \
+     || { [ "$sleep_secs" -ge 5 ] && { [ "$names_dlog_runner" -eq 1 ] || dlog_collector_alive; }; }; then
+    deny "Do not wait on a timer while tizen-dlog-analyzer is collecting. Log collection is interactive: after dlog-collect / start start-monitoring / kernel collect, END YOUR TURN and ask the user to browse the app and reproduce the issue, offering two options - (1) done, the error/crash occurred, (2) nothing happened - then wait for the reply. Only after the user answers run stop-collect (or stop / kernel stop) and error-analyze / check / kernel analyze. No sleep, no Start-Sleep, no polling loop, and no stop/analyze in the same command as the start."
+  fi
+fi
+
 # No rule matched — allow the command.
 exit 0

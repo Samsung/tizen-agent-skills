@@ -37,7 +37,8 @@ export const PROJECT_SPECS: CommandSpec[] = [
       },
       {
         flags: "--name <appName>",
-        description: "App name (folder to be created)",
+        description:
+          "App name (folder to be created). Needs at least 10 ASCII letters/digits (A-Za-z0-9; other characters are not counted) — Tizen derives the 10-character package ID from them (e.g. MyTizenWebApp)",
         required: true,
       },
       {

@@ -27,6 +27,17 @@ json_val() {
   printf '%s' "$1" | sed -nE 's/.*"'"$2"'"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
 }
 
+# Same, but for the FIRST occurrence of the key. Inside a JSON string every
+# quote is escaped (\"), so an unescaped "key" can only be a structural key —
+# the first hit is the tool parameter no matter where "content"/"diff" sit or
+# what the file body contains. (json_val's greedy .* takes the LAST match,
+# which a body containing the key name could hijack.)
+json_first() {
+  rest="${1#*\"$2\"}"
+  [ "$rest" = "$1" ] && return 0
+  printf '%s' "$rest" | sed -nE 's/^[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)".*/\1/p'
+}
+
 tool="$(printf '%s' "$input" | sed -nE 's/.*"toolName"[[:space:]]*:[[:space:]]*"([^"]*)".*/\1/p')"
 
 # Map the Cline tool call onto the Cline payload shape the guards expect.
@@ -37,13 +48,20 @@ case "$tool" in
     payload='{"tool_name":"Bash","tool_input":{"command":"'"$cmd"'"}}'
     ;;
   write_to_file|replace_in_file)
-    # Cut everything from "content"/"diff" on before extracting "path", so a
-    # file body that itself contains a "path":"..." string cannot win the
-    # greedy match and hijack the extraction.
-    head_part="${input%%\"content\"*}"
-    head_part="${head_part%%\"diff\"*}"
-    fp="$(json_val "$head_part" path)"
-    [ -n "$fp" ] || allow
+    # First structural "path" key — see json_first. (The previous approach cut
+    # the payload at "content"/"diff" first; when the model emitted the body
+    # BEFORE the path, the path was cut away and the write slipped through.)
+    # Scope the search to the tool parameters: a structural "path" key that
+    # some other part of the hook payload carries (host metadata before
+    # "preToolUse") must not be mistaken for the write target.
+    scope="${input#*\"parameters\"}"
+    [ "$scope" = "$input" ] && scope="$input"
+    fp="$(json_first "$scope" path)"
+    if [ -z "$fp" ]; then
+      # A file write whose target we cannot determine is refused, not guessed.
+      printf '{"cancel": true, "errorMessage": "tizen-sdk-skills guard: could not determine the target path of %s - retry with an explicit path parameter."}\n' "$tool"
+      exit 0
+    fi
     payload='{"tool_name":"Write","tool_input":{"file_path":"'"$fp"'"}}'
     ;;
   *)

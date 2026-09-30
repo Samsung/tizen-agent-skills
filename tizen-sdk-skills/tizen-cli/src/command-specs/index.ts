@@ -24,6 +24,7 @@ import { DEBUG_SPECS } from "./debug";
 import { TEST_SPECS } from "./test";
 import { CERTIFICATE_SPECS } from "./certificate";
 import { DLOG_ANALYZER_SPECS } from "./dlog-analyzer";
+import { loadInternalSpecs } from "./internal-specs";
 
 export type { CommandSpec, OptionSpec } from "./types";
 
@@ -36,4 +37,7 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...TEST_SPECS,
   ...CERTIFICATE_SPECS,
   ...DLOG_ANALYZER_SPECS,
+  // Groups that exist only in the internal repository (./internal/, absent
+  // from the public tree) — empty when the directory is not there.
+  ...loadInternalSpecs(),
 ];

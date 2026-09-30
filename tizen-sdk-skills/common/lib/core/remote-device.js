@@ -30,9 +30,13 @@ const path = require("path");
 
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
+// resolveSdbBinary (configured <sdk>/tools/sdb on disk, else the sdb on PATH)
+// follows the same order as resolveSdkDataPath, which locates the bookmark
+// list — so `sdb connect` and the bookmarks always belong to the same SDK.
 const {
-  resolveSdb,
+  resolveSdbBinary,
   runSdb,
+  ensureSdbServer,
   parseDevices,
   resolveSdkDataPath,
 } = require("./sdb");
@@ -169,7 +173,7 @@ async function sweepSubnet(subnet, port, timeoutMs) {
  * need the SDK, so a missing/failing sdb only degrades status info.
  */
 function readRemoteConnections() {
-  const resolved = resolveSdb();
+  const resolved = resolveSdbBinary();
   if (resolved.error) {
     return {
       connections: [],
@@ -177,6 +181,8 @@ function readRemoteConnections() {
     };
   }
   try {
+    // A cold sdb server would hold the pipe open until the timeout (sdb.js).
+    ensureSdbServer(resolved.sdbPath);
     const output = runSdb(resolved.sdbPath, "devices");
     return { connections: parseRemoteConnections(output) };
   } catch (error) {
@@ -322,10 +328,11 @@ async function connectRemoteDevice(
       );
     }
 
-    const resolved = resolveSdb();
+    const resolved = resolveSdbBinary();
     if (resolved.error) {
       return formatError(command, "sdk_path_not_set", resolved.error);
     }
+    ensureSdbServer(resolved.sdbPath);
 
     const target = `${ip}:${portNum}`;
     console.error(`[tizen-remote-device] Connecting to ${target}`);
@@ -405,10 +412,11 @@ async function disconnectRemoteDevice(
       );
     }
 
-    const resolved = resolveSdb();
+    const resolved = resolveSdbBinary();
     if (resolved.error) {
       return formatError(command, "sdk_path_not_set", resolved.error);
     }
+    ensureSdbServer(resolved.sdbPath);
 
     const target = `${ip}:${portNum}`;
     console.error(`[tizen-remote-device] Disconnecting ${target}`);
@@ -468,10 +476,11 @@ async function disconnectRemoteDevice(
 async function listRemoteDevices(command = "tizen-sdk remote-device list") {
   const startTime = Date.now();
   try {
-    const resolved = resolveSdb();
+    const resolved = resolveSdbBinary();
     if (resolved.error) {
       return formatError(command, "sdk_path_not_set", resolved.error);
     }
+    ensureSdbServer(resolved.sdbPath);
     let output;
     try {
       output = runSdb(resolved.sdbPath, "devices");

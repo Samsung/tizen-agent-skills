@@ -30,7 +30,12 @@ const {
   describeSdkInfoRepair,
   describeChildExit,
 } = require("./sdk");
-const { resolveSdbBinary, resolveSerial, ensureSdbServer } = require("./sdb");
+const {
+  resolveSdbBinary,
+  resolveSerial,
+  ensureSdbServer,
+  describeSerialFailure,
+} = require("./sdb");
 const {
   detectAppType,
   rdsStateExists,
@@ -352,7 +357,7 @@ async function createProject(
         command,
         "invalid_parameters",
         "Missing required parameters: type, template, parentPath, appName",
-        'createProject("dotnet", "TizenNUITemplate", "/path/to", "MyApp")',
+        'createProject("dotnet", "TizenNUITemplate", "/path/to", "MyTizenDotnetApp")',
       );
     }
 
@@ -408,6 +413,11 @@ async function createProject(
         startTime,
       );
     }
+    // Whether an existing target must be removed before `tz new` runs. The
+    // removal itself happens only after EVERY remaining validation below has
+    // passed — a rejected app name / template / parent path / missing script
+    // must never cost the user the project they asked to replace.
+    let replaceExisting = false;
     if (fs.existsSync(targetPath)) {
       // A symlink here is ambiguous (replace the link? the target?) and rmSync
       // would only unlink the link anyway — make the caller resolve it.
@@ -455,10 +465,7 @@ async function createProject(
           startTime,
         );
       }
-      console.error(
-        `[tizen-project] ${force ? "--force: removing" : "Removing empty"} existing folder: ${targetPath}`,
-      );
-      fs.rmSync(targetPath, { recursive: true, force: true });
+      replaceExisting = true;
     }
 
     // These values are interpolated into a shell command line below — reject
@@ -496,6 +503,24 @@ async function createProject(
       return formatError(command, "io_error", resolved.error);
     }
 
+    // All validation passed — now (and only now) clear the existing target.
+    if (replaceExisting) {
+      console.error(
+        `[tizen-project] ${force ? "--force: removing" : "Removing empty"} existing folder: ${targetPath}`,
+      );
+      try {
+        fs.rmSync(targetPath, { recursive: true, force: true });
+      } catch (error) {
+        return formatError(
+          command,
+          "io_error",
+          `Could not remove existing folder ${targetPath}: ${error.message}`,
+          null,
+          startTime,
+        );
+      }
+    }
+
     console.error(
       `[tizen-project] Creating ${type} project: ${appName} at ${normalizedParentPath}`,
     );
@@ -513,8 +538,11 @@ async function createProject(
     } catch (error) {
       return formatError(
         command,
-        "build_failed",
-        `Project creation failed: ${error.message}`,
+        "project_creation_failed",
+        `Project creation failed: ${error.message}` +
+          (replaceExisting
+            ? " (the previous folder was removed as requested before the scaffold ran)"
+            : ""),
         null,
         startTime,
       );
@@ -1624,6 +1652,13 @@ const NO_DEVICE_MESSAGE =
   "No connected device or emulator. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it, then retry the install with its device_serial.";
 
 /**
+ * How install-app takes an explicit serial, for describeSerialFailure() and
+ * the script-output fallback: the two harnesses spell the option differently.
+ */
+const INSTALL_SERIAL_OPTION =
+  "--serial <serial> in tizen-cli, --device-serial <serial> in the plugin runner";
+
+/**
  * Turn a non-zero exit of the install script into the right failure envelope.
  *
  * Every branch classifies on the script's OUTPUT only. The generic fallback
@@ -1660,8 +1695,7 @@ function classifyInstallFailure(command, combined, error, startTime) {
     return formatError(
       command,
       "multiple_devices",
-      `Multiple devices connected${listed.length ? ` (${listed.join(", ")})` : ""}. Pick one and re-run with its serial ` +
-        "(--serial <serial> in tizen-cli, --device-serial <serial> in the plugin runner).",
+      `Multiple devices connected${listed.length ? ` (${listed.join(", ")})` : ""}. Pick one and re-run with ${INSTALL_SERIAL_OPTION}.`,
       null,
       startTime,
     );
@@ -1930,26 +1964,23 @@ async function installApp(
     let resolvedSerial = deviceSerial || null;
     if (!resolvedSerial) {
       const deviceResolution = resolveInstallTargetDevice();
-      if (deviceResolution.errorCategory === "device_not_found") {
+      if (
+        deviceResolution.errorCategory === "device_not_found" ||
+        deviceResolution.errorCategory === "multiple_devices"
+      ) {
+        const failure = describeSerialFailure(deviceResolution, {
+          serialOption: INSTALL_SERIAL_OPTION,
+        });
         return formatError(
           command,
-          "device_not_found",
-          NO_DEVICE_MESSAGE,
-          null,
+          failure.category,
+          // install-app's own no-device text names the retry (device_serial).
+          failure.category === "device_not_found"
+            ? NO_DEVICE_MESSAGE
+            : failure.message,
+          failure.suggestedFix,
           startTime,
-        );
-      }
-      if (deviceResolution.errorCategory === "multiple_devices") {
-        const serials = (deviceResolution.devices || [])
-          .filter((d) => d.state === "device")
-          .map((d) => d.serial);
-        return formatError(
-          command,
-          "multiple_devices",
-          `Multiple devices connected (${serials.join(", ")}). Pick one and re-run with its serial ` +
-            "(--serial <serial> in tizen-cli, --device-serial <serial> in the plugin runner).",
-          null,
-          startTime,
+          failure.detailLines,
         );
       }
       // io_error (sdb itself failed) or no sdb binary: fall through and let the

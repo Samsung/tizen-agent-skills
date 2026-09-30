@@ -42,10 +42,11 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 ### Phase 1: Pre-check
 1. **Validate ZIP file path** — Security checks for path traversal, symlinks, file existence
 2. **Verify Tizen SDK is installed** — Checks for `sdk.info` in SDK root. Aborts with error if SDK not found.
-3. **Extract ZIP to temporary directory** — Location: `{SDK_TOOLS_PATH}/server/sdktools/rootstrap/extract-*`
-4. **Detect ZIP structure** — Identifies `data/` or `tizen-studio/` layout
-5. **Parse rootstrap XML metadata** — Extracts profile, version, device from `{profile}-{version}-{device}.core.xml` (SDK repository format, e.g. `tizen-10.0-device.core.xml`) or `{profile}-{version}-{device}.core.{public|private}.{timestamp}.xml` (custom builds; type and timestamp are informational)
-6. **Return installer command** — In non-pkg mode, returns the install script command as `suggested_fix` for Phase 2
+3. **Check `.rootstrap-installed` marker** — If `{SDK_PATH}/.rootstrap-installed` exists and `--force` was not given, returns the **success** envelope built from the marker (installed rootstraps + structure type). This is what the post-Phase-2 re-run relies on; `--force` skips this check and hands back the installer command with `-Force` / `--force`.
+4. **Extract ZIP to temporary directory** — Location: `{SDK_TOOLS_PATH}/server/sdktools/rootstrap/extract-*`
+5. **Detect ZIP structure** — Identifies `data/` or `tizen-studio/` layout
+6. **Parse rootstrap XML metadata** — Extracts profile, version, device from `{profile}-{version}-{device}.core.xml` (SDK repository format, e.g. `tizen-10.0-device.core.xml`) or `{profile}-{version}-{device}.core.{public|private}.{timestamp}.xml` (custom builds; type and timestamp are informational)
+7. **Return installer command** — In non-pkg mode, returns the install script command as `suggested_fix` for Phase 2
 
 ### Phase 2: Install (executed by agent via Bash)
 1. **Copy tools folder** — `{SDK_PATH}/tools/`

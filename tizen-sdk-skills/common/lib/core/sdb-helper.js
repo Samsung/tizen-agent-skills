@@ -28,8 +28,10 @@ const {
   resolveSdb,
   resolveSdbBinary,
   runSdb,
+  ensureSdbServer,
   parseDevices,
   resolveSerial,
+  describeSerialFailure,
 } = require("./sdb");
 
 const execFileAsync = promisify(execFile);
@@ -65,7 +67,10 @@ const INTENT_PATTERNS = [
     handoff: "tizen-remote-device",
   },
 
-  // Package lifecycle (handoff to tizen-install-app)
+  // Package lifecycle. Install is handed off to tizen-install-app (package
+  // discovery, RPK/RPM handling, --run). Uninstall is handled HERE: no other
+  // skill implements it, so the former handoff sent the user nowhere.
+  // (\binstall\b does not match "uninstall" — no word boundary after "un".)
   {
     id: "install",
     regex: /\binstall\b/i,
@@ -74,13 +79,20 @@ const INTENT_PATTERNS = [
   },
   {
     id: "uninstall",
-    regex: /\buninstall\b/i,
+    regex: /\b(uninstall|remove\s+(the\s+)?(app|package))\b/i,
     gated: true,
-    handoff: "tizen-install-app",
   },
   {
     id: "list-packages",
-    regex: /\b(list|show).*(packages?|apps?)\b.*installed\b/i,
+    // Both word orders: "list packages installed" and "list installed
+    // packages" (the natural phrasing — the docs and the uninstall note use
+    // it, and it used to fall through to "Could not match request"), plus
+    // "which/what packages are installed" and "application(s)". "installed"
+    // is required in every branch so "list running apps" (list-running) and
+    // "install this tpk" (install — \binstall\b never matches "installed")
+    // are untouched.
+    regex:
+      /\b(?:(?:list|show|which|what)\b.*\b(?:packages?|apps?|applications?)\b.*\binstalled\b|\binstalled\s+(?:packages?|apps?|applications?)\b)/i,
     gated: false,
   },
   { id: "package-info", regex: /\b(package info|pkginfo)\b/i, gated: false },
@@ -132,6 +144,18 @@ const INTENT_PATTERNS = [
   // purpose: the bare /\b(logs?|dlog|tail)\b/ catch-all must not steal an
   // explicit shell request such as "run shell command tail -n 20 /var/log/x".
   {
+    // Kernel log (dmesg / kmsg) — collected and analyzed by the dlog-analyzer
+    // runner's `kernel collect` → `kernel stop` → `kernel analyze`; typed over
+    // sdb shell it bypasses classification (issue #213). Before the generic log
+    // catch-all so "kernel log" is not answered with a plain dlog dump.
+    id: "kernel-log",
+    regex: /\b(dmesg|kmsg|kernel[\s-]*logs?)\b/i,
+    gated: false,
+    handoff: "tizen-dlog-analyzer",
+    handoffHint:
+      "Run the dlog-analyzer runner: kernel collect [serial] starts the kernel-log collector in the background; ask the user to reproduce the issue, then kernel stop and kernel analyze for the deduplicated findings.",
+  },
+  {
     id: "log-clear",
     regex: /\b(clear|flush).*(logs?|dlog)\b/i,
     gated: true, // documentation only — the handoff short-circuits before the gate
@@ -175,6 +199,21 @@ const INTENT_PATTERNS = [
   },
 
   // Device power / state
+  {
+    // Restarting an EMULATOR is not a guest `reboot`: under WHPX (Windows
+    // Hyper-V) the vCPU reset kills the QEMU process ("WHPX: Unexpected VP
+    // exit code 4 / Failed to emulate MMIO access") and the VM never comes
+    // back. The safe path is tizen-device-manager (stop the VM) followed by
+    // tizen-launch-emulator (cold start). Before the bare /\breboot\b/ so
+    // "reboot the emulator" is handed off instead of gated.
+    id: "emulator-restart",
+    regex:
+      /\b(?:reboot|restart)\b.*\bemulator\b|\bemulator\b.*\b(?:reboot|restart)\b/i,
+    gated: false,
+    handoff: "tizen-device-manager",
+    handoffHint:
+      "Do not reboot the emulator from inside the guest — on Windows (WHPX) the vCPU reset crashes the QEMU VM. Restart it in two steps: tizen-device-manager (stop the emulator VM), then tizen-launch-emulator (cold start the same VM).",
+  },
   { id: "reboot", regex: /\breboot\b/i, gated: true },
   { id: "shutdown", regex: /\b(shutdown|power off)\b/i, gated: true },
   { id: "factory-reset", regex: /\b(factory\s*reset)\b/i, gated: true },
@@ -201,25 +240,92 @@ function matchIntent(request) {
   return null;
 }
 
+// A device clause the user tacks onto a shell request — "… on emulator-26101",
+// "… on the device", "on my TV …". It names WHERE to run, not WHAT to run,
+// and must never reach the device as extra arguments.
+//
+// Two serial shapes, by how much context backs them up:
+//   - after a device noun ("on device R3CN30ABCDE", "on the tv 192.168.0.5")
+//     the noun already says this is a device clause, so any serial-looking
+//     token is accepted: emulator-<port>, IPv4[:port], or an 8+ char mix of
+//     letters and digits (dots allowed — "host.local:26101").
+//   - a BARE "on <token>" has no such backing, and "on" is a perfectly
+//     ordinary command argument ("grep -i on file1.txt", "echo on
+//     backup2024"). Only an unmistakable serial is stripped there:
+//     emulator-<port>, IPv4[:port], or a hardware serial — 8+ letters and
+//     digits with NO dot or underscore (file names have extensions and
+//     underscores; serials such as R3CN30ABCDE do not) and not a word with a
+//     number glued on one end ("backup2024", "2024report") — real serials
+//     interleave letters and digits.
+//   Plain words never qualify, so "grep -i on file.txt" and "echo on" are
+//   left alone. The exact resolved serial is stripped separately, whatever
+//   it looks like (see extractShellCommand).
+const EMULATOR_OR_IP_TOKEN =
+  "emulator-\\d+|\\d{1,3}(?:\\.\\d{1,3}){3}(?::\\d+)?";
+const NOUN_SERIAL_TOKEN =
+  "(?:" +
+  EMULATOR_OR_IP_TOKEN +
+  "|(?=[A-Za-z0-9._:-]*\\d)(?=[A-Za-z0-9._:-]*[A-Za-z])[A-Za-z0-9._:-]{8,})";
+const BARE_SERIAL_TOKEN =
+  "(?:" +
+  EMULATOR_OR_IP_TOKEN +
+  "|(?![A-Za-z]+\\d+(?![A-Za-z0-9:-]))(?!\\d+[A-Za-z]+(?![A-Za-z0-9:-]))" +
+  "(?=[A-Za-z0-9:-]*\\d)(?=[A-Za-z0-9:-]*[A-Za-z])[A-Za-z0-9:-]{8,})";
+const DEVICE_NOUN =
+  "(?:(?:the|my|this|that)\\s+)?(?:device|emulator|target|tv|board)\\b";
+const DEVICE_CLAUSE =
+  "on\\s+(?:" +
+  DEVICE_NOUN +
+  "(?:\\s+" +
+  NOUN_SERIAL_TOKEN +
+  ")?|" +
+  BARE_SERIAL_TOKEN +
+  ")";
+const LEADING_DEVICE_RE = new RegExp("^" + DEVICE_CLAUSE + "[,\\s]+", "i");
+const TRAILING_DEVICE_RE = new RegExp(
+  "(?:^|\\s+)" + DEVICE_CLAUSE + "\\s*[.!]?$",
+  "i",
+);
+const LEADING_POLITE_RE = /^(?:please|pls|kindly)[,\s]+/i;
+const TRAILING_POLITE_RE =
+  /(?:^|[,\s]+)(?:please|pls|for me|thanks|thank you)\s*[.!]?$/i;
+
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /**
  * Extract the actual shell command from a natural-language request.
  *
- * Strips common intent keywords ("shell", "command", "run", "execute") and
- * returns the remainder as the command to run on the device.
+ * Strips common intent keywords ("shell", "command", "run", "execute"), a
+ * leading/trailing device clause ("on emulator-26101", "on the device"), and
+ * politeness ("please"), and returns the remainder as the command to run on
+ * the device. The device clause used to be passed through verbatim, so
+ * "run shell command ls -la on emulator-26101" ran 'ls -la on emulator-26101'
+ * on the device — harmless, but it printed "ls: cannot access 'on'" noise and
+ * could change the result.
  *
  * Examples:
- *   "run shell command ls -la"       → "ls -la"
- *   "shell command cat /etc/hosts"   → "cat /etc/hosts"
- *   "shell ls"                       → "ls"
- *   "shell"                          → null (no command found)
+ *   "run shell command ls -la"                       → "ls -la"
+ *   "run shell command ls -la on emulator-26101"     → "ls -la"
+ *   "shell df -h /opt on the device"                 → "df -h /opt"
+ *   "on emulator-26101 run shell command ls"         → "ls"
+ *   "please run shell command ls -la please"         → "ls -la"
+ *   "run shell command grep -i on file.txt"          → "grep -i on file.txt"
+ *   "run shell command grep -i on file1.txt"         → "grep -i on file1.txt"
+ *   "run shell command echo on backup2024"           → "echo on backup2024"
+ *   "shell"                                          → null (no command found)
  *
  * @param {string} request - natural-language request
+ * @param {string} [serial] - resolved device serial; a trailing "on <serial>"
+ *   is stripped even when the serial is not serial-shaped
  * @returns {string|null} the extracted command, or null if none found
  */
-function extractShellCommand(request) {
-  // Remove leading intent keywords: "run", "execute", "shell", "command"
-  // These are common phrasings; the remainder is the actual command.
+function extractShellCommand(request, serial) {
   let cmd = request.trim();
+
+  // Preamble: "on emulator-26101, run …", "please run …"
+  cmd = cmd.replace(LEADING_DEVICE_RE, "").replace(LEADING_POLITE_RE, "");
 
   // Remove "run" / "execute" at the start
   cmd = cmd.replace(/^(run|execute)\s+/i, "");
@@ -235,6 +341,26 @@ function extractShellCommand(request) {
     cmd = cmd.replace(/^(shell|command)(\s+|$)/i, "");
     if (cmd === before) break;
   }
+
+  // Tail: "… on the device", "… on emulator-26101", "… please". Politeness
+  // comes off first so a trailing "please" cannot shield the device clause
+  // ("ls on mytv please"); the exact resolved serial is stripped whatever it
+  // looks like, then the generic clause, then any politeness that was
+  // sitting in front of the clause ("ls please on emulator-26101").
+  cmd = cmd.replace(TRAILING_POLITE_RE, "");
+  if (serial) {
+    const exact = new RegExp(
+      "(?:^|\\s+)on\\s+(?:" +
+        DEVICE_NOUN +
+        "\\s+)?" +
+        escapeRegExp(serial) +
+        "\\s*[.!]?$",
+      "i",
+    );
+    cmd = cmd.replace(exact, "");
+  }
+  cmd = cmd.replace(TRAILING_DEVICE_RE, "");
+  cmd = cmd.replace(TRAILING_POLITE_RE, "");
 
   cmd = cmd.trim();
 
@@ -266,6 +392,76 @@ function extractAppId(request) {
   if (!request) return null;
   const match = request.match(/\b[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)+/);
   return match ? match[0] : null;
+}
+
+/**
+ * Extract a Tizen PACKAGE ID for `pkginfo --pkg` / `pkgcmd -u -n`.
+ *
+ * A package id is usually dotted like an app id ("org.tizen.dali-demo"), but
+ * for TPK/WGT apps it is the bare generated prefix of the app id — the
+ * `dZEpxl2iAg` in `dZEpxl2iAg.MyTizenWebApp` — which has no dot at all, so
+ * extractAppId() alone rejected exactly the id `pkgcmd -l` prints.
+ *
+ * Dotted ids win (anywhere in the request). Otherwise take the first token
+ * after the intent keyword, skipping filler words ("for", "the", "package"…).
+ * The token is spliced into `pkginfo --pkg "<id>"` / `pkgcmd -u -n "<id>"`, so
+ * the bare path is deliberately strict:
+ *
+ *   - the filler skip is guarded by a negative lookahead, so when nothing
+ *     follows the fillers the regex cannot backtrack and hand back a filler
+ *     ("uninstall app", "package info id" → null, not "app" / "id");
+ *   - the token must LOOK like an id, not like an English word: a digit, or
+ *     both cases, or `-`/`_` (the SDK's generated pkgids are 10 mixed-case
+ *     alphanumerics such as `dZEpxl2iAg`). A plain lowercase word ("my",
+ *     "from", "please") is refused whatever it is — a whitelist, not a list
+ *     of words we happened to think of;
+ *   - device serials are refused: `emulator-<port>`, the serial passed in,
+ *     and long hex strings (hardware serials are 12+ hex chars; a pkgid is 10).
+ *
+ * Examples:
+ *   "package info dZEpxl2iAg"                    → "dZEpxl2iAg"
+ *   'uninstall "hQaMXc3Qbc"'                     → "hQaMXc3Qbc"
+ *   "package info for the package org.tizen.x"   → "org.tizen.x"
+ *   "package info on emulator-26101"             → null
+ *   "package info on my device"                  → null
+ *   "uninstall app"                              → null
+ *
+ * @param {string} request
+ * @param {string} [serial] - device serial to exclude from bare matches
+ * @returns {string|null}
+ */
+const PKG_FILLER_WORDS =
+  "for|of|on|about|the|a|an|this|that|my|our|its|app|application|package|pkg|id";
+const BARE_PKG_ID_RE = new RegExp(
+  "\\b(?:package info|pkginfo|uninstall|remove\\s+(?:the\\s+)?(?:app|package))\\b" +
+    `(?:\\s+(?:${PKG_FILLER_WORDS})\\b)*` +
+    `\\s+["']?(?!(?:${PKG_FILLER_WORDS})\\b)([A-Za-z0-9][A-Za-z0-9_-]*)["']?`,
+  "i",
+);
+
+function looksLikePackageId(token) {
+  return (
+    /\d/.test(token) ||
+    /[-_]/.test(token) ||
+    (/[a-z]/.test(token) && /[A-Z]/.test(token))
+  );
+}
+
+function extractPackageId(request, serial) {
+  if (!request) return null;
+  const dotted = extractAppId(request);
+  if (dotted) return dotted;
+
+  const bare = request.match(BARE_PKG_ID_RE);
+  if (!bare) return null;
+  const token = bare[1];
+  if (!looksLikePackageId(token)) return null;
+  if (/^emulator-\d+$/i.test(token)) return null;
+  if (/^[0-9a-f]{12,}$/i.test(token)) return null;
+  if (serial && token.toLowerCase() === String(serial).toLowerCase()) {
+    return null;
+  }
+  return token;
 }
 
 /** Bare key words we are willing to normalize to a Tizen KEY_* name. */
@@ -368,6 +564,35 @@ function missingValue(what, example) {
   };
 }
 
+/** sdb names emulator instances `emulator-<port>`; anything else is hardware. */
+function isEmulatorSerial(serial) {
+  return /^emulator-\d+$/i.test(String(serial || ""));
+}
+
+/**
+ * Note attached to a gated `reboot` / `shutdown` aimed at an emulator.
+ *
+ * A guest-side reboot of the Tizen emulator is not a restart: on Windows
+ * hosts the QEMU VM runs under WHPX, and the vCPU reset makes QEMU exit with
+ * "WHPX: Unexpected VP exit code 4 / Failed to emulate MMIO access" — the VM
+ * window dies and sdb loses the device. `shutdown -P now` simply powers the
+ * VM off. Either way the way back is a cold start, so point the user at the
+ * emulator skills instead of the guest command.
+ *
+ * @param {"reboot"|"shutdown"} action
+ * @returns {string}
+ */
+function emulatorPowerNote(action) {
+  return (
+    `The target is an emulator. A guest '${action}' is not a safe way to restart it: ` +
+    'on Windows (WHPX) the vCPU reset crashes the QEMU VM ("WHPX: Unexpected VP exit code 4") and the emulator does not come back. ' +
+    "Recommended instead: stop the VM with tizen-device-manager, then cold-start it with tizen-launch-emulator. " +
+    "Run the gated command only if the user explicitly wants the guest-side " +
+    action +
+    "."
+  );
+}
+
 /**
  * Build the sdb command string for a given intent.
  * @param {string} intentId
@@ -412,9 +637,12 @@ function buildCommand(intentId, serial, request) {
     case "list-packages":
       return { command: `${s} shell pkgcmd -l` };
     case "package-info": {
-      const pkgId = extractAppId(request);
+      const pkgId = extractPackageId(request, serial);
       if (!pkgId) {
-        return missingValue("a package ID", "package info org.tizen.dali-demo");
+        return missingValue(
+          "a package ID",
+          "package info org.tizen.dali-demo (or the bare pkgid, e.g. package info dZEpxl2iAg)",
+        );
       }
       return { command: `${s} shell pkginfo --pkg "${pkgId}"` };
     }
@@ -447,6 +675,22 @@ function buildCommand(intentId, serial, request) {
       }
       return { command: `${s} shell app_launcher -k "${appId}"` };
     }
+    case "uninstall": {
+      // pkgcmd takes the PACKAGE id. For TPK/WGT apps that is usually the
+      // part of the app id before the last dot (pkgid `hQaMXc3Qbc`, app id
+      // `hQaMXc3Qbc.MyApp`), so the note asks the user to confirm which one
+      // they gave; the gated envelope never runs this without confirmation.
+      const pkgId = extractPackageId(request, serial);
+      if (!pkgId) {
+        return missingValue("a package ID", "uninstall org.tizen.dali-demo");
+      }
+      return {
+        command: `${s} shell pkgcmd -u -n "${pkgId}"`,
+        note:
+          "pkgcmd -u takes the package id (not the app id). For a TPK/WGT whose app id is <pkgid>.<name>, pass <pkgid>. " +
+          "Check with 'list installed packages' or 'package info <id>' first if unsure.",
+      };
+    }
     case "list-running":
       return { command: `${s} shell app_launcher -S` };
 
@@ -475,7 +719,7 @@ function buildCommand(intentId, serial, request) {
 
     // Shell
     case "shell-command": {
-      const cmd = extractShellCommand(request);
+      const cmd = extractShellCommand(request, serial);
       if (!cmd) {
         return {
           command: "",
@@ -536,9 +780,19 @@ function buildCommand(intentId, serial, request) {
 
     // Device power / state
     case "reboot":
-      return { command: `${s} shell reboot` };
+      return {
+        command: `${s} shell reboot`,
+        ...(isEmulatorSerial(serial)
+          ? { note: emulatorPowerNote("reboot") }
+          : {}),
+      };
     case "shutdown":
-      return { command: `${s} shell shutdown -P now` };
+      return {
+        command: `${s} shell shutdown -P now`,
+        ...(isEmulatorSerial(serial)
+          ? { note: emulatorPowerNote("shutdown") }
+          : {}),
+      };
     case "factory-reset":
       return { command: `${s} shell factoryreset` };
     case "sendkey": {
@@ -672,6 +926,12 @@ async function runSdbCommand(
       );
     }
 
+    // The first sdb call of a session has to start the sdb server daemon,
+    // which then keeps the stdout pipe open until the timeout (see sdb.js).
+    // Start it once here so every runSdb / resolveSerial below is a plain,
+    // fast call instead of a 30 s hang reported as a false io_error.
+    ensureSdbServer(sdbPath);
+
     // 3. Match intent
     const intent = matchIntent(request);
     if (!intent) {
@@ -702,21 +962,16 @@ async function runSdbCommand(
     if (intent.id === "list-devices") {
       let output;
       try {
+        // ensureSdbServer() above already started the daemon.
         output = runSdb(sdbPath, "devices");
-      } catch (_error) {
-        // Try start-server once
-        try {
-          runSdb(sdbPath, "start-server");
-          output = runSdb(sdbPath, "devices");
-        } catch (e2) {
-          return formatError(
-            command,
-            "io_error",
-            `sdb devices failed: ${e2.message}`,
-            null,
-            startTime,
-          );
-        }
+      } catch (error) {
+        return formatError(
+          command,
+          "io_error",
+          `sdb devices failed: ${error.message}`,
+          null,
+          startTime,
+        );
       }
       const devices = parseDevices(output);
       const envelope = new Envelope(command);
@@ -733,18 +988,16 @@ async function runSdbCommand(
     // 6. Resolve serial if not provided
     const serialResult = resolveSerial(sdbPath, serial);
     if (serialResult.errorCategory) {
-      const suggestedFix =
-        serialResult.errorCategory === "device_not_found"
-          ? "tizen-cli tizen-sdk device-manager"
-          : serialResult.errorCategory === "multiple_devices"
-            ? `Re-run with --serial <one-of: ${(serialResult.devices || []).map((d) => d.serial).join(", ")}>`
-            : null;
+      const failure = describeSerialFailure(serialResult, {
+        noDeviceFix: "tizen-cli tizen-sdk device-manager",
+      });
       return formatError(
         command,
-        serialResult.errorCategory,
-        serialResult.message,
-        suggestedFix,
+        failure.category,
+        failure.message,
+        failure.suggestedFix,
         startTime,
+        failure.detailLines,
       );
     }
     const resolvedSerial = serialResult.serial;

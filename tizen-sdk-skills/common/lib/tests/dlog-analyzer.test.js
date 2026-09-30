@@ -18,19 +18,39 @@
  *     in a raw `sdb dlog` dump are normalised before tailing / writing
  *   - buildLogClearGate: log-clear refuses without --confirm
  *     (user_input_required + suggested_fix), same contract as emulator reset
+ *   - deviceErrorEnvelope: a resolveSerial() failure keeps its category
+ *     (multiple_devices / device_not_found / invalid_parameters / io_error),
+ *     multiple_devices lists only online devices, and device_not_found never
+ *     carries a devices array (PR #192 follow-up)
+ *   - resolveLogBaseDir: the SDK-resolved log directory must follow the
+ *     native binary's sdk_paths.py rule exactly (config file -> sdk.info
+ *     TIZEN_SDK_DATA_PATH or <sdk>-data sibling -> dloganalyzer/), or
+ *     error-analyze / app-log would look for logs the binary never wrote
  *
  * Plus drift guards:
+ *   - no copy of the runner (dlog-analyzer.js, tizen-dlog-analyzer.sh, the
+ *     tizen-cli spec) may pass `--base-dir` or an output directory again — the
+ *     CLI removed the option in TizenDLogAnalyzer PR #155 ("No such option")
  *   - the bilingual REPORT_TEMPLATE.md must be byte-identical between the
  *     common/ skill (Claude/Cline/Codex/Gemini/VS Code) and the tizen-cli skill
  *   - the CLI runner must not pass a third positional to analyzeErrors (its
  *     third parameter is the envelope command label, not a serial)
  *   - the CLI runner and the tizen-cli command spec both expose log-dump /
  *     log-clear (with --confirm), so the two harnesses cannot drift apart
+ *   - the detached collectors run with PYTHONUNBUFFERED, are interrupted
+ *     before being killed, and `stop` returns the captured analysis tail
+ *     (issue #226); `start stop` is answered with "run 'stop'"
+ *   - the final-report skeleton is present in every lane's skill text and
+ *     travels with check / error-analyze / kernel analyze (issue #224)
  */
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const {
+  resolveLogBaseDir,
+  appLogFile,
+  startDlogAnalyzer,
   isValidAppId,
   parseFirstPid,
   extractPidFromPsOutput,
@@ -39,6 +59,18 @@ const {
   tailLines,
   sanitizeDlogOutput,
   buildLogClearGate,
+  deviceErrorEnvelope,
+  appLog,
+  deviceProfile,
+  investigate,
+  runProbe,
+  manageSnapshot,
+  runTimeline,
+  manageKernel,
+  collectorEnv,
+  capturedOutputSummary,
+  REPORT_FORMAT_HINT,
+  STOP_OUTPUT_LINES,
 } = require("../core/dlog-analyzer");
 
 console.log("=== dlog-analyzer Test ===\n");
@@ -347,6 +379,97 @@ check(
   true,
 );
 
+// Test 9b: deviceErrorEnvelope — resolveSerial failure → envelope contract
+console.log("\nTest 9b: deviceErrorEnvelope");
+const twoOnlineOneOffline = [
+  { serial: "emulator-26101", state: "device", name: "T-1080" },
+  { serial: "emulator-26111", state: "device", name: "T-720" },
+  { serial: "0000d1d2", state: "offline", name: "tv" },
+];
+const multi = deviceErrorEnvelope("t", {
+  error: "Multiple devices connected (emulator-26101, emulator-26111).",
+  errorCategory: "multiple_devices",
+  devices: twoOnlineOneOffline,
+});
+check("multiple_devices: status", multi.status, "failure");
+check("multiple_devices: command label", multi.command, "t");
+check(
+  "multiple_devices: category preserved",
+  multi.errors[0].category,
+  "multiple_devices",
+);
+check(
+  "multiple_devices: message names both harnesses' serial option",
+  multi.errors[0].message,
+  "Multiple devices connected (emulator-26101, emulator-26111). Pick one and re-run with the chosen serial (--serial <serial> in tizen-cli, the positional [serial] argument in the plugin runner).",
+);
+check(
+  "multiple_devices: suggested_fix lists the online serials",
+  multi.errors[0].suggested_fix,
+  {
+    command:
+      "Re-run with the chosen serial (--serial <one-of: emulator-26101, emulator-26111> in tizen-cli, the positional [serial] argument in the plugin runner)",
+    auto_fixable: false,
+  },
+);
+check(
+  "multiple_devices: only online devices, only {serial, state}",
+  multi.errors[0].devices,
+  [
+    { serial: "emulator-26101", state: "device" },
+    { serial: "emulator-26111", state: "device" },
+  ],
+);
+
+const noneOnline = deviceErrorEnvelope("t", {
+  error: "No connected Tizen device or emulator found.",
+  errorCategory: "device_not_found",
+  devices: [{ serial: "0000d1d2", state: "offline" }],
+});
+check(
+  "device_not_found: category preserved",
+  noneOnline.errors[0].category,
+  "device_not_found",
+);
+check(
+  "device_not_found: offline-only listing yields no devices array",
+  Object.prototype.hasOwnProperty.call(noneOnline.errors[0], "devices"),
+  false,
+);
+
+check(
+  "device_not_found: undefined devices tolerated",
+  deviceErrorEnvelope("t", {
+    error: "none",
+    errorCategory: "device_not_found",
+  }).errors[0],
+  { category: "device_not_found", message: "none" },
+);
+
+check(
+  "invalid_parameters is not collapsed into device_not_found",
+  deviceErrorEnvelope("t", {
+    error: 'Invalid device serial "emu;rm"',
+    errorCategory: "invalid_parameters",
+  }).errors[0],
+  { category: "invalid_parameters", message: 'Invalid device serial "emu;rm"' },
+);
+
+check(
+  "io_error is not collapsed into device_not_found",
+  deviceErrorEnvelope("t", {
+    error: "sdb devices failed: spawn ENOENT",
+    errorCategory: "io_error",
+  }).errors[0].category,
+  "io_error",
+);
+
+check(
+  "missing sdb binary (no category) defaults to device_not_found",
+  deviceErrorEnvelope("t", { error: "sdb not found" }).errors[0],
+  { category: "device_not_found", message: "sdb not found" },
+);
+
 // Test 10: both harnesses expose the one-shot log actions
 console.log("\nTest 10: log-dump / log-clear surface drift guard");
 check("CLI runner accepts log-dump", cliSource.includes('"log-dump"'), true);
@@ -388,5 +511,681 @@ if (fs.existsSync(tsSpec)) {
   );
 }
 
-console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
-process.exit(failures === 0 ? 0 : 1);
+// Test 11: New v0.1.3 commands — param validation (no device/binary needed)
+console.log("\nTest 11: new v0.1.3 command param validation");
+
+// appLog — requires appId
+(async () => {
+  const r = await appLog(undefined);
+  check("appLog no appId → failure", r.status, "failure");
+  check(
+    "appLog no appId → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "appLog invalid appId → failure",
+    (await appLog("$(id)")).status,
+    "failure",
+  );
+  check(
+    "appLog invalid appId → invalid_parameters",
+    (await appLog("$(id)")).errors[0].category,
+    "invalid_parameters",
+  );
+})();
+
+// deviceProfile — no params to validate; its failure mode on this host
+// depends on the SDK config, the bundled binary and a connected device, so
+// the deterministic check lives in Test 13b (child process, empty home).
+(async () => {
+  const r = await deviceProfile();
+  check("deviceProfile returns envelope", r.command !== undefined, true);
+})();
+
+// investigate — validates appId
+(async () => {
+  const r = await investigate("a b");
+  check("investigate bad appId → failure", r.status, "failure");
+  check(
+    "investigate bad appId → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+})();
+
+// runProbe — validates subcommand
+(async () => {
+  const r = await runProbe("invalid");
+  check("probe bad sub → failure", r.status, "failure");
+  check(
+    "probe bad sub → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  // probe run without probeId
+  const r2 = await runProbe("run");
+  check("probe run no id → failure", r2.status, "failure");
+  check(
+    "probe run no id → invalid_parameters",
+    r2.errors[0].category,
+    "invalid_parameters",
+  );
+})();
+
+// manageSnapshot — validates subcommand
+(async () => {
+  const r = await manageSnapshot("invalid");
+  check("snapshot bad sub → failure", r.status, "failure");
+  check(
+    "snapshot bad sub → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  // snapshot compare without IDs
+  const r2 = await manageSnapshot("compare");
+  check("snapshot compare no ids → failure", r2.status, "failure");
+  check(
+    "snapshot compare no ids → invalid_parameters",
+    r2.errors[0].category,
+    "invalid_parameters",
+  );
+  // snapshot compare with only one ID
+  const r3 = await manageSnapshot("compare", ["only-one"]);
+  check("snapshot compare one id → failure", r3.status, "failure");
+  check(
+    "snapshot compare one id → invalid_parameters",
+    r3.errors[0].category,
+    "invalid_parameters",
+  );
+  // snapshot delete without ID
+  const r4 = await manageSnapshot("delete");
+  check("snapshot delete no id → failure", r4.status, "failure");
+  check(
+    "snapshot delete no id → invalid_parameters",
+    r4.errors[0].category,
+    "invalid_parameters",
+  );
+})();
+
+// manageKernel — validates subcommand; `stop` is idempotent (issue #213:
+// `kernel collect` is a background collector like dlog-collect, so there must
+// be a stop that succeeds even when nothing is running)
+(async () => {
+  const r = await manageKernel("invalid");
+  check("kernel bad sub → failure", r.status, "failure");
+  check(
+    "kernel bad sub → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "kernel bad sub message lists collect, stop, analyze",
+    r.errors[0].message.includes("collect, stop, analyze"),
+    true,
+  );
+  const s = await manageKernel("stop");
+  check("kernel stop with no collector → success", s.status, "success");
+  check(
+    "kernel stop with no collector → was_running false",
+    s.result.was_running,
+    false,
+  );
+})();
+
+// runTimeline — validates subcommand
+(async () => {
+  const r = await runTimeline("invalid");
+  check("timeline bad sub → failure", r.status, "failure");
+  check(
+    "timeline bad sub → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  // timeline with no subcommand defaults to "show" and goes to the binary:
+  // on a host with the bundled pre-#155 binary and no SDK config that used
+  // to "succeed" against ./logs, so its outcome is asserted in Test 13b
+  // (child process, empty home → sdk_path_not_set), not here.
+})();
+
+// Test 12: CLI runner exposes new actions
+console.log("\nTest 12: CLI runner new actions drift guard");
+check("CLI runner accepts app-log", cliSource.includes('"app-log"'), true);
+check(
+  "CLI runner accepts device-profile",
+  cliSource.includes('"device-profile"'),
+  true,
+);
+check(
+  "CLI runner accepts investigate",
+  cliSource.includes('"investigate"'),
+  true,
+);
+check("CLI runner accepts probe", cliSource.includes('"probe"'), true);
+check("CLI runner accepts snapshot", cliSource.includes('"snapshot"'), true);
+check("CLI runner accepts timeline", cliSource.includes('"timeline"'), true);
+check("CLI runner accepts kernel", cliSource.includes('"kernel"'), true);
+check("CLI runner parses --format", cliSource.includes('"--format"'), true);
+check(
+  "CLI runner parses --max-lines",
+  cliSource.includes('"--max-lines"'),
+  true,
+);
+check(
+  "CLI runner parses --max-chars",
+  cliSource.includes('"--max-chars"'),
+  true,
+);
+check("CLI runner parses --tag", cliSource.includes('"--tag"'), true);
+check("CLI runner parses --refresh", cliSource.includes('"--refresh"'), true);
+
+// Test 13: resolveLogBaseDir — mirrors the binary's sdk_paths.py exactly
+console.log("\nTest 13: resolveLogBaseDir (SDK-resolved log directory)");
+{
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-basedir-"));
+  const sdkRoot = path.join(scratch, "tizen-sdk");
+  fs.mkdirSync(sdkRoot, { recursive: true });
+  const configFile = path.join(scratch, ".tizen.sdk.path.config");
+
+  // a) sdk.info names the data path — authoritative, need not be a sibling
+  fs.writeFileSync(configFile, `${sdkRoot}\n`);
+  const customData = path.join(scratch, "elsewhere", "sdk-data");
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `TIZEN_SDK_INSTALLED_PATH=${sdkRoot}\nTIZEN_SDK_DATA_PATH=${customData}\n`,
+  );
+  const viaInfo = resolveLogBaseDir({ configFile });
+  check(
+    "sdk.info TIZEN_SDK_DATA_PATH → <data>/dloganalyzer",
+    viaInfo.baseDir,
+    path.join(customData, "dloganalyzer"),
+  );
+  check("source = sdk.info", viaInfo.source, "sdk.info");
+  check("sdkRoot reported", viaInfo.sdkRoot, sdkRoot);
+  check(
+    "directory is NOT created by the resolver (the binary owns it)",
+    fs.existsSync(viaInfo.baseDir),
+    false,
+  );
+
+  // b) sdk.info without the key → <sdk>-data sibling
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `TIZEN_SDK_INSTALLED_PATH=${sdkRoot}\n`,
+  );
+  const viaSibling = resolveLogBaseDir({ configFile });
+  check(
+    "no key → <sdk>-data sibling",
+    viaSibling.baseDir,
+    path.join(scratch, "tizen-sdk-data", "dloganalyzer"),
+  );
+  check("source = sibling", viaSibling.source, "sibling");
+
+  // c) no sdk.info at all → sibling as well
+  fs.unlinkSync(path.join(sdkRoot, "sdk.info"));
+  check(
+    "no sdk.info → <sdk>-data sibling",
+    resolveLogBaseDir({ configFile }).baseDir,
+    path.join(scratch, "tizen-sdk-data", "dloganalyzer"),
+  );
+
+  // d) config whitespace is trimmed (tizen-sdk-init writes a trailing newline)
+  fs.writeFileSync(configFile, `  ${sdkRoot}  \r\n`);
+  check(
+    "config path is trimmed",
+    resolveLogBaseDir({ configFile }).sdkRoot,
+    sdkRoot,
+  );
+
+  // e) appLogFile is rooted at the resolved base dir
+  check(
+    "appLogFile under <base>/app/<id>/<id>.hot.log",
+    appLogFile("org.example.myapp", viaSibling.baseDir),
+    path.join(
+      viaSibling.baseDir,
+      "app",
+      "org.example.myapp",
+      "org.example.myapp.hot.log",
+    ),
+  );
+
+  // f) stale config: the SDK directory is gone → error, no sibling guess
+  fs.writeFileSync(configFile, path.join(scratch, "removed-sdk"));
+  const stale = resolveLogBaseDir({ configFile });
+  check("stale SDK path → error", "error" in stale, true);
+  check(
+    "stale SDK path error names the path",
+    stale.error.includes("does not exist"),
+    true,
+  );
+
+  // g) config points at a file, not a directory → error
+  fs.writeFileSync(configFile, configFile);
+  check(
+    "config naming a file → error",
+    "error" in resolveLogBaseDir({ configFile }),
+    true,
+  );
+
+  // h) empty config → not configured
+  fs.writeFileSync(configFile, "   \n");
+  const empty = resolveLogBaseDir({ configFile });
+  check("empty config → error", "error" in empty, true);
+  check(
+    "empty config error mentions tizen-sdk-init",
+    empty.error.includes("tizen-sdk-init"),
+    true,
+  );
+
+  // i) missing config → not configured
+  fs.unlinkSync(configFile);
+  check(
+    "missing config → error",
+    "error" in resolveLogBaseDir({ configFile }),
+    true,
+  );
+
+  // The cases below pin the binary's Python string handling (sdk_paths.py
+  // uses str.strip() / str.splitlines()), where JS trim()/split differ.
+
+  // j) a TIZEN_SDK_DATA_PATH= line with an EMPTY value does not stop the
+  //    scan — the binary's loop `continue`s to the next line
+  fs.writeFileSync(configFile, `${sdkRoot}\n`);
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `TIZEN_SDK_DATA_PATH=\nTIZEN_SDK_INSTALLED_PATH=${sdkRoot}\nTIZEN_SDK_DATA_PATH=  ${customData}  \n`,
+  );
+  const afterEmpty = resolveLogBaseDir({ configFile });
+  check(
+    "empty-value line is skipped, later value wins",
+    afterEmpty.baseDir,
+    path.join(customData, "dloganalyzer"),
+  );
+  check("empty-value line: source = sdk.info", afterEmpty.source, "sdk.info");
+
+  // k) CR-only and U+2028 line separators split like Python splitlines()
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `A=1\rTIZEN_SDK_DATA_PATH=${customData}\u2028B=2`,
+  );
+  check(
+    "\\r / U+2028 line separators are honoured",
+    resolveLogBaseDir({ configFile }).baseDir,
+    path.join(customData, "dloganalyzer"),
+  );
+
+  // l) a BOM on the sdk.info line is NOT stripped by the binary, so the key
+  //    does not match → sibling (JS trim() would have matched it)
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `\ufeffTIZEN_SDK_DATA_PATH=${customData}\n`,
+  );
+  check(
+    "BOM-prefixed sdk.info line is not a match → sibling",
+    resolveLogBaseDir({ configFile }).source,
+    "sibling",
+  );
+
+  // m) a BOM-prefixed config file: the binary keeps U+FEFF as the first
+  //    character of the path and fails is_dir() — mirror that, and say why
+  fs.writeFileSync(configFile, `\ufeff${sdkRoot}\r\n`);
+  const bom = resolveLogBaseDir({ configFile });
+  check("BOM-prefixed config → error", "error" in bom, true);
+  check(
+    "BOM error explains the byte-order mark",
+    bom.error.includes("byte-order mark"),
+    true,
+  );
+  check(
+    "BOM error names the path without the BOM in the fix",
+    bom.error.includes(`--sdk-path ${sdkRoot}`),
+    true,
+  );
+
+  fs.rmSync(scratch, { recursive: true, force: true });
+}
+
+// Test 13b: the SDK-path pre-check comes first in every action whose binary
+// command reads or writes the log directory — before the binary and device
+// lookups — so on a host with an empty home the envelope carries
+// sdk_path_not_set and nothing else, whichever binary build is bundled
+// (the pre-#155 build would otherwise "succeed" against ./logs). Runs the
+// real CLI in a child process with USERPROFILE/HOME pointed at an empty
+// directory (that is where sdk.js's CONFIG_FILE is read from). app-launch is
+// the control: it does not touch the log directory and must NOT be gated.
+console.log(
+  "\nTest 13b: sdk_path_not_set is the first error of every log action",
+);
+{
+  const { spawnSync } = require("child_process");
+  const emptyHome = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-nohome-"));
+  const cli = path.join(__dirname, "..", "cli", "dlog-analyzer-cli.js");
+  const env = { ...process.env, USERPROFILE: emptyHome, HOME: emptyHome };
+  delete env.TIZEN_SDK_PATH;
+  const run = (argv) => {
+    const r = spawnSync(process.execPath, [cli, ...argv], {
+      env,
+      encoding: "utf-8",
+      timeout: 60_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    try {
+      return JSON.parse(r.stdout);
+    } catch (_e) {
+      return null;
+    }
+  };
+  for (const argv of [
+    ["start", "start-monitoring"],
+    ["dlog-collect", "org.example.app"],
+    ["error-analyze", "org.example.app"],
+    ["app-log", "org.example.app"],
+    ["device-profile"],
+    ["investigate", "org.example.app"],
+    ["probe", "list"],
+    ["snapshot", "list"],
+    ["timeline"], // defaults to "show"
+    ["timeline", "show"],
+    ["kernel", "analyze"],
+  ]) {
+    const envelope = run(argv);
+    const label = argv.join(" ");
+    check(
+      `${label}: envelope status failure`,
+      envelope && envelope.status,
+      "failure",
+    );
+    check(
+      `${label}: first (and only) error is sdk_path_not_set`,
+      envelope && envelope.errors.map((e) => e.category || e.error_category),
+      ["sdk_path_not_set"],
+    );
+    check(
+      `${label}: message points at tizen-sdk-init`,
+      Boolean(envelope && /tizen-sdk-init/.test(envelope.errors[0].message)),
+      true,
+    );
+  }
+  const control = run(["app-launch", "org.example.app"]);
+  check(
+    "app-launch (control) is not gated on the SDK config",
+    Boolean(
+      control &&
+      control.status === "failure" &&
+      control.errors[0].category !== "sdk_path_not_set",
+    ),
+    true,
+  );
+  fs.rmSync(emptyHome, { recursive: true, force: true });
+}
+
+// Test 14: no runner copy may pass --base-dir / an output dir to the binary
+console.log("\nTest 14: --base-dir removal drift guard");
+const domainSource = fs.readFileSync(
+  path.resolve(__dirname, "..", "core", "dlog-analyzer.js"),
+  "utf-8",
+);
+check(
+  "dlog-analyzer.js never passes the --base-dir flag",
+  /["']--base-dir["']/.test(domainSource),
+  false,
+);
+const shSource = fs.readFileSync(
+  path.resolve(
+    __dirname,
+    "..",
+    "..",
+    "scripts",
+    "tizen-dlog-analyzer",
+    "tizen-dlog-analyzer.sh",
+  ),
+  "utf-8",
+);
+check(
+  "tizen-dlog-analyzer.sh never passes --base-dir",
+  /^[^#]*--base-dir/m.test(shSource),
+  false,
+);
+check(
+  "tizen-dlog-analyzer.sh no longer documents an output_dir argument",
+  shSource.includes("[output_dir]"),
+  false,
+);
+check(
+  "CLI runner usage no longer advertises [output_dir]",
+  cliSource.includes("[output_dir]"),
+  false,
+);
+if (fs.existsSync(tsSpec)) {
+  const tsSource = fs.readFileSync(tsSpec, "utf-8");
+  const startCall = /startDlogAnalyzer\(([\s\S]*?)\)/.exec(tsSource);
+  check("tizen-cli spec calls startDlogAnalyzer", startCall !== null, true);
+  check(
+    "tizen-cli spec does not pass o.outputDir to startDlogAnalyzer",
+    startCall ? startCall[1].includes("o.outputDir") : true,
+    false,
+  );
+}
+
+// Test 15: startDlogAnalyzer refuses a legacy output directory up front
+console.log("\nTest 15: startDlogAnalyzer rejects a custom output directory");
+(async () => {
+  const r = await startDlogAnalyzer("start-monitoring", undefined, "./logs");
+  check("custom output dir → failure", r.status, "failure");
+  check(
+    "custom output dir → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "message explains the SDK-resolved location",
+    r.errors[0].message.includes("dloganalyzer"),
+    true,
+  );
+})();
+
+// Test 16: the live analysis must reach the output file and survive `stop`
+// (issue #226): the collectors are a PyInstaller build, so their stdout must
+// be unbuffered, they must be interrupted (SIGINT) before being killed, and
+// `stop` must hand back what the session captured.
+console.log(
+  "\nTest 16: collector output is unbuffered, flushed and returned by stop",
+);
+const fakeDevice = { serial: "emulator-26101", sdbPath: "/sdk/tools/sdb" };
+const env = collectorEnv(fakeDevice);
+check("PYTHONUNBUFFERED=1 is set", env.PYTHONUNBUFFERED, "1");
+check("SDB_SERIAL is passed through", env.SDB_SERIAL, "emulator-26101");
+check("SDB_PATH is passed through", env.SDB_PATH, "/sdk/tools/sdb");
+check(
+  "every detached collector spawn uses collectorEnv",
+  (domainSource.match(/detached: true/g) || []).length,
+  (domainSource.match(/env: collectorEnv\(device\)/g) || []).length,
+);
+check(
+  "three detached collectors exist",
+  (domainSource.match(/detached: true/g) || []).length,
+  3,
+);
+check(
+  "SIGTERM is only sent by terminateGracefully (after SIGINT)",
+  (domainSource.match(/"SIGTERM"/g) || []).length,
+  1,
+);
+check(
+  "no stop path kills without the graceful sequence",
+  /process\.kill\(pid, "SIGKILL"\)/.test(
+    domainSource.replace(/async function terminateGracefully[\s\S]*?\n}\n/, ""),
+  ),
+  false,
+);
+const capDir = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-cap-"));
+const capFile = path.join(capDir, "analyzer-output.log");
+check("missing output file → null", capturedOutputSummary(capFile, 200), null);
+const capLines = [];
+for (let i = 1; i <= 300; i++) capLines.push(`\x1b[31mline ${i}\x1b[0m`);
+fs.writeFileSync(capFile, capLines.join("\r\n") + "\r\n");
+const cap = capturedOutputSummary(capFile, STOP_OUTPUT_LINES);
+check("stop tail keeps the last 200 lines", cap.returned_lines, 200);
+check("stop tail reports the full length", cap.total_lines, 300);
+check("stop tail is flagged truncated", cap.truncated, true);
+check(
+  "stop tail ends with the last line",
+  cap.output.endsWith("line 300"),
+  true,
+);
+check("stop tail starts at line 101", cap.output.startsWith("line 101"), true);
+check(
+  "ANSI escapes and CRLF are normalised",
+  cap.output.includes("\x1b["),
+  false,
+);
+fs.rmSync(capDir, { recursive: true, force: true });
+check(
+  "stop message tells the agent to run check",
+  /run 'check' for all of it/.test(domainSource),
+  true,
+);
+check(
+  "dlog-collect crash while the monitor runs points at check, not stop",
+  /do not stop the monitor mid-reproduction/.test(domainSource),
+  true,
+);
+// stdout and stderr must share ONE descriptor (`2>&1`): a second open of the
+// capture file has its own offset, and stdout then overwrites what stderr
+// appended — lines of the captured analysis silently disappear.
+check(
+  "every collector shares one fd for stdout and stderr",
+  (domainSource.match(/stdio: \["ignore", outFd, outFd\]/g) || []).length,
+  3,
+);
+check(
+  "the capture file is never opened a second time for stderr",
+  /errFd|openSync\([A-Z_]*OUTPUT_FILE, "a"\)/.test(domainSource),
+  false,
+);
+check(
+  "the capture file is only truncated through openCollectorOutput",
+  (domainSource.match(/openCollectorOutput\([A-Z_]*OUTPUT_FILE\)/g) || [])
+    .length,
+  3,
+);
+// A collector that exits during the 2 s grace window must not leave its PID
+// on disk: once the OS reuses the number, getRunningPid() reports a stranger
+// as the monitor and `stop` signals it. Each "exited immediately" envelope is
+// preceded by the unlink of its own PID file.
+{
+  const crashBlocks = domainSource
+    .split(/exited immediately\. Output:/)
+    .slice(0, -1);
+  check("three immediate-exit paths exist", crashBlocks.length, 3);
+  check(
+    "every immediate-exit path removes its PID file first",
+    crashBlocks.every((block) =>
+      /fs\.unlinkSync\((PID_FILE|APP_COLLECT_PID_FILE|KERNEL_COLLECT_PID_FILE)\)[\s\S]{0,1200}$/.test(
+        block,
+      ),
+    ),
+    true,
+  );
+}
+// An existing but empty capture (nothing printed before `stop`) is reported
+// as "" with zero counts — the stop message must not advertise 0 of 0 lines.
+{
+  const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-cap-empty-"));
+  const emptyFile = path.join(emptyDir, "analyzer-output.log");
+  fs.writeFileSync(emptyFile, "");
+  const empty = capturedOutputSummary(emptyFile, STOP_OUTPUT_LINES);
+  check("empty capture → empty output, zero lines", empty, {
+    output: "",
+    total_lines: 0,
+    returned_lines: 0,
+    truncated: false,
+  });
+  fs.rmSync(emptyDir, { recursive: true, force: true });
+  check(
+    "stop message is gated on a non-empty capture",
+    /summary\.output\s*\?\s*` The analysis captured/.test(domainSource),
+    true,
+  );
+}
+
+// Test 17: `start stop` is a misuse of the CLI, not a subcommand — the error
+// must say "run 'stop'" so the agent does not lose the session guessing
+console.log("\nTest 17: CLI 'start stop' misuse message");
+{
+  const { spawnSync } = require("child_process");
+  const cliPath = path.resolve(__dirname, "..", "cli", "dlog-analyzer-cli.js");
+  const r = spawnSync(process.execPath, [cliPath, "start", "stop"], {
+    encoding: "utf-8",
+  });
+  check("start stop exits 1", r.status, 1);
+  let env2 = null;
+  try {
+    env2 = JSON.parse(r.stdout);
+  } catch {}
+  check("start stop returns an envelope", env2 !== null, true);
+  if (env2) {
+    check(
+      "start stop → invalid_parameters",
+      env2.errors[0].error_category,
+      "invalid_parameters",
+    );
+    check(
+      "start stop → tells the agent to run 'stop' on its own",
+      env2.errors[0].message.includes("run 'stop' on its own"),
+      true,
+    );
+  }
+}
+
+// Test 18: the final-report shape travels with the data and sits in every
+// lane's skill text (issue #224)
+console.log("\nTest 18: report shape hint and skeleton");
+for (const marker of [
+  "## Analysis Report (English)",
+  "## 분석 보고서 (한국어)",
+  "no tables",
+]) {
+  check(
+    `REPORT_FORMAT_HINT mentions ${JSON.stringify(marker)}`,
+    REPORT_FORMAT_HINT.includes(marker),
+    true,
+  );
+}
+check(
+  "check / error-analyze / kernel analyze attach report_format",
+  (domainSource.match(/report_format: REPORT_FORMAT_HINT/g) || []).length,
+  3,
+);
+const skeletonHeading = "## Final report — the only accepted shape";
+for (const rel of [
+  ["..", "..", "skills", "tizen-dlog-analyzer", "SKILL.md"],
+  ["..", "..", "agents", "tizen-dlog-analyzer.md"],
+  ["..", "..", "..", "tizen-cli", "skills", "tizen-dlog-analyzer", "SKILL.md"],
+]) {
+  const file = path.resolve(__dirname, ...rel);
+  const text = fs.readFileSync(file, "utf-8");
+  const label = rel.slice(-2).join("/");
+  check(
+    `${label} carries the report skeleton`,
+    text.includes(skeletonHeading),
+    true,
+  );
+  check(
+    `${label} skeleton names the Korean block`,
+    text.includes("## 분석 보고서 (한국어)"),
+    true,
+  );
+  check(
+    `${label} skeleton lists the Korean sections`,
+    text.includes("### 4. 임시 해결 방법"),
+    true,
+  );
+}
+
+// The async checks above (Tests 11 and 15) settle before this runs: none of
+// them awaits I/O that outlives the current macrotask queue.
+setImmediate(() => {
+  console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
+  process.exit(failures === 0 ? 0 : 1);
+});

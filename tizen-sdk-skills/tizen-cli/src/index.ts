@@ -59,6 +59,10 @@ async function run(args: string[]): Promise<{ status: "success" | "failure" }> {
   try {
     switch (cmd) {
       case "--schema":
+        // The catalog's option keys are the flags themselves ("--password"),
+        // holding {type, description, sensitive} metadata — no secret values.
+        // Field-name masking would replace those objects with "***" and lose
+        // the very `sensitive: true` marker hosts read, so it is skipped here.
         outputEnvelope(
           withUserCommand({
             status: "success",
@@ -70,6 +74,7 @@ async function run(args: string[]): Promise<{ status: "success" | "failure" }> {
             warnings: [],
             errors: [],
           }),
+          { mask: false },
         );
         return { status: "success" };
 
@@ -133,7 +138,10 @@ async function run(args: string[]): Promise<{ status: "success" | "failure" }> {
 async function dispatchCommand(
   args: string[],
 ): Promise<{ status: "success" | "failure" }> {
-  const program = buildProgram();
+  // Commander's help / version text is collected here so it can be returned
+  // inside an envelope — stdout must always carry exactly one JSON object.
+  const capture = { text: "" };
+  const program = buildProgram(capture);
   resetFailure();
 
   try {
@@ -147,6 +155,24 @@ async function dispatchCommand(
       err?.code === "commander.helpDisplayed" ||
       err?.code === "commander.version"
     ) {
+      // `--help`, `<cmd> --help`, `--version`: Commander already printed its
+      // text to stderr; the envelope carries the same text so the stdout
+      // contract ("one JSON envelope") holds for these paths as well.
+      const isVersion = err.code === "commander.version";
+      outputEnvelope(
+        withUserCommand({
+          status: "success",
+          result: {
+            message: isVersion
+              ? `${PLUGIN_NAME} ${PLUGIN_VERSION}`
+              : "Help text (also printed to stderr)",
+            version: PLUGIN_VERSION,
+            help_text: capture.text.trimEnd(),
+          },
+          warnings: [],
+          errors: [],
+        }),
+      );
       return { status: "success" };
     }
     const msg = err?.message || String(err);

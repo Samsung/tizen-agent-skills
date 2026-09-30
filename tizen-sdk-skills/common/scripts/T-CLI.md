@@ -32,7 +32,7 @@ When the plugin is installed, the scripts live under the plugin cache, e.g.:
 **Linux / macOS / WSL2**
 ```bash
 bash /path/to/scripts/t-cli.sh --help
-bash /path/to/scripts/t-cli.sh build -w ~/tizen-apps/MyApp -b Debug
+bash /path/to/scripts/t-cli.sh build -w ~/tizen-apps/MyTizenNativeApp -b Debug
 ```
 
 **Windows (PowerShell)**
@@ -49,7 +49,7 @@ powershell -ExecutionPolicy Bypass -File C:\path\to\scripts\t-cli.ps1 build -w C
 ```bash
 alias t-cli='bash "$HOME/.{claude,cline,codex,gemini}/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/scripts/t-cli.sh"'
 ```
-Then: `t-cli build -w ~/tizen-apps/MyApp -b Debug`
+Then: `t-cli build -w ~/tizen-apps/MyTizenNativeApp -b Debug`
 
 **PowerShell** — add to your profile (`notepad $PROFILE`):
 ```powershell
@@ -103,11 +103,11 @@ t-cli dotnet-setup --force    # reinstall the workload even if present
 ### create
 ```bash
 t-cli create --list-templates
-t-cli create --type native --template ServiceApp --name MyApp
+t-cli create --type native --template ServiceApp --name MyTizenNativeApp
 ```
 ```powershell
 t-cli create -ListTemplates
-t-cli create -Type native -Template ServiceApp -Name MyApp
+t-cli create -Type native -Template ServiceApp -Name MyTizenNativeApp
 ```
 `--type` / `-Type` is one of `native`, `dotnet`, `webapp`, `tv`, `platform`.
 Platform projects are built with GBS and produce `.rpm` packages (see
@@ -116,8 +116,8 @@ Omit the path to create under the current workspace (or `~/tizen-apps`).
 
 ### build
 ```bash
-t-cli build -w ~/tizen-apps/MyApp -b Debug          # -b: Debug (default) | Release | Test
-t-cli build -w ~/tizen-apps/MyApp -b Release -s myprofile
+t-cli build -w ~/tizen-apps/MyTizenNativeApp -b Debug          # -b: Debug (default) | Release | Test
+t-cli build -w ~/tizen-apps/MyTizenNativeApp -b Release -s myprofile
 ```
 Produces a `.tpk` (Native/DotNET), `.wgt` (WebApp), or `.rpm` (Platform via GBS) under the build-type directory.
 
@@ -148,10 +148,10 @@ t-cli debug -a <app-id> -b <host-binary> -l -x "main,service_app_create" -N
 ```bash
 t-cli install                                             # 1. SDK
 t-cli dotnet-setup                                        # 1b. (DotNET projects only)
-t-cli create --type native --template ServiceApp --name MyApp   # 2. project
-t-cli build -w ~/tizen-apps/MyApp -b Debug               # 3. build + package
+t-cli create --type native --template ServiceApp --name MyTizenNativeApp   # 2. project
+t-cli build -w ~/tizen-apps/MyTizenNativeApp -b Debug               # 3. build + package
 t-cli device                                             # 4. device/emulator
-t-cli app-install -p ~/tizen-apps/MyApp/Debug/*.tpk      # 5. install
+t-cli app-install -p ~/tizen-apps/MyTizenNativeApp/Debug/*.tpk      # 5. install
 t-cli debug -a <app-id> -b <host-binary> -N             # 6. debug (optional)
 ```
 

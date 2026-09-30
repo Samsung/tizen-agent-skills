@@ -109,7 +109,11 @@ During the actual SDK install (Phase 2), the installer script automatically sele
 | UTC-12 .. UTC-5  | Global     | `https://usa.sdk-dl.tizen.org/sdk/tizenstudio/official`        |
 | UTC-4  .. UTC-1  | Brazil     | `https://brazil.sdk-dl.tizen.org/sdk/tizenstudio/official`      |
 | UTC+0  .. UTC+4  | Official   | `https://download.tizen.org/sdk/tizenstudio/official`           |
-| UTC+5  .. UTC+12 | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`   |
+| UTC+5  .. UTC+8  | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`   |
+| UTC+9            | Official   | `https://download.tizen.org/sdk/tizenstudio/official`           |
+| UTC+10 .. UTC+12 | Singapore  | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official`   |
+
+UTC+9 (Korea / Japan) is routed to the official server because `download.tizen.org` is hosted in AWS Seoul (ap-northeast-2), the closest origin for those regions.
 
 After a successful install, the selected mirror URL is written to `{SDK_PATH}/.package/repository.info`. The package updater (`tizen-update-package`) reads this file to download updates from the same mirror — no further timezone check is needed during updates.
 

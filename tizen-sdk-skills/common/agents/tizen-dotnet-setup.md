@@ -8,7 +8,7 @@ maxTurns: 30
 
 You set up the .NET development environment for Tizen DotNET projects: ensure the .NET SDK is usable, then install the Tizen .NET workload.
 
-If `dotnet` is not on PATH, the script first **searches for an already-installed SDK** (well-known locations plus Tizen SDK-bundled dotnets). When it finds one it makes it usable **persistently** so later `tz build` runs find it — on Linux/macOS via a `~/.local/bin` symlink plus `DOTNET_ROOT`/`PATH` exports in `~/.bashrc`; on Windows via the User-level `DOTNET_ROOT` and `PATH` environment variables. If no SDK exists anywhere, the script **auto-installs one user-scope** with the official dotnet-install script — Linux/macOS into `~/.dotnet`, Windows into `%LOCALAPPDATA%\Microsoft\dotnet` — which needs **no sudo/admin rights** (and, because the SDK dir is then user-owned, the workload step needs none either). Only when that auto-install is skipped (`--no-install-sdk`) or fails (offline/proxy) does it fall back to install guidance (exit 2).
+If `dotnet` is not on PATH, the script first **ranks every already-installed SDK** — `DOTNET_ROOT`, then official install roots (Program Files, `%LOCALAPPDATA%\Microsoft\dotnet`, `~/.dotnet`, …), then Tizen-extension-bundled dotnets (`…/sdktools/dotnet`) — and picks the best one. An SDK in an official root is made usable **persistently** so later `tz build` runs find it — on Linux/macOS via a `~/.local/bin` symlink plus `DOTNET_ROOT`/`PATH` exports in `~/.bashrc`; on Windows via the User-level `DOTNET_ROOT` and `PATH` environment variables. A dotnet **bundled inside a Tizen extension tree** is used for this run only (an extension update can move or delete it, leaving a dangling `DOTNET_ROOT`) unless the user asks for `--persist-env`; the envelope then carries a warning saying so — relay it and offer the two fixes (an official SDK install, or a re-run with `--persist-env`). `--dotnet-root <dir>` pins a specific SDK when the user names one. If no SDK exists anywhere, the script **auto-installs one user-scope** with the official dotnet-install script — Linux/macOS into `~/.dotnet`, Windows into `%LOCALAPPDATA%\Microsoft\dotnet` — which needs **no sudo/admin rights** (and, because the SDK dir is then user-owned, the workload step needs none either). Only when that auto-install is skipped (`--no-install-sdk`) or fails (offline/proxy) does it fall back to install guidance (exit 2).
 
 > **Windows note:** a User `PATH` change does not reach already-running processes. On Linux/macOS the `~/.local/bin` symlink is picked up immediately by the next shell, so a follow-up build works right away; on Windows, if a build still can't find `dotnet` right after setup, **open a new terminal** (or restart the IDE) so it inherits the updated environment, then re-run the build.
 >
@@ -38,6 +38,8 @@ node "$CLI"
 #   arg 2 - Tizen workload version for the Samsung installer ("-" = skip)
 #   --no-install-sdk  - do NOT auto-install a missing .NET SDK
 #   --sdk-channel <c> - .NET SDK channel for the auto-install (default 8.0)
+#   --dotnet-root <d> - use the .NET SDK at this install root instead of discovering one
+#   --persist-env     - also persist a Tizen-extension-bundled dotnet (only when the user asks)
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
@@ -48,12 +50,12 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 
 1. ✅ **Parameter validation** — safe workload version / SDK channel strings
 2. ✅ **OS detection** — Windows/Linux/macOS automatically
-3. ✅ **dotnet discovery** — if not on PATH, finds an installed SDK (incl. Tizen-SDK-bundled) and wires it up persistently
+3. ✅ **dotnet discovery** — if not on PATH, ranks every installed SDK (DOTNET_ROOT > official roots > Tizen-extension-bundled) and wires the best one up — persistently for official roots / `--dotnet-root`, for this run only for a bundled dotnet unless `--persist-env`
 4. ✅ **SDK auto-install** — if no SDK exists anywhere, installs one user-scope (no sudo/admin) via the official dotnet-install script, unless `--no-install-sdk`
 5. ✅ **Workload install** — Samsung workload-install script first, `dotnet workload install tizen` fallback
 6. ✅ **Idempotency** — already-installed workload is detected and skipped (unless force)
 7. ✅ **Verification** — re-checks the workload after install
-8. ✅ **Standard JSON Envelope** — `dotnet_version`, `workload_status`, `status: "ready"`
+8. ✅ **Standard JSON Envelope** — `dotnet_version`, `dotnet_root`, `workload_status`, every SDK found (`dotnet_candidates`), the environment facts (`env_dotnet_root`, `dangling_dotnet_root`, `persisted_env`), `status: "ready"`
 
 ### Envelope output
 
@@ -64,15 +66,24 @@ Success (`exit 0`):
   "command": "tizen-sdk dotnet-setup",
   "status": "success",
   "result": {
-    "dotnet_version": "8.0.404",
+    "dotnet_version": "9.0.304",
+    "dotnet_root": "C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet",
+    "sdk_band": "9.0.300",
     "workload": "tizen",
-    "workload_status": "installed",
+    "workload_status": "already_installed",
+    "dotnet_candidates": [
+      { "tier": "path", "tizen_workload": true, "version": "9.0.304", "selected": true, "path": "C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet\\dotnet.exe" },
+      { "tier": "official", "tizen_workload": true, "version": "8.0.424", "selected": false, "path": "C:\\Program Files\\dotnet\\dotnet.exe" }
+    ],
+    "env_dotnet_root": "C:\\Users\\me\\.tizen-extension-platform\\server\\sdktools\\dotnet",
+    "dangling_dotnet_root": null,
+    "persisted_env": null,
     "status": "ready"
   }
 }
 ```
 
-(`workload_status` is `already_installed` when nothing had to be installed.)
+(`workload_status` is `already_installed` when nothing had to be installed. `dotnet_candidates` lists every usable SDK discovery found — `tier` is where it came from: `explicit` (`--dotnet-root`), `path`, `dotnet_root`, `official`, `bundled` — with `selected` marking the one this run used; `persisted_env` is `null` unless this run wrote the User `DOTNET_ROOT`/`PATH` (Windows) or `~/.bashrc` (Unix), in which case it holds `{ dotnet_root, path_entry }`; `dangling_dotnet_root` names a `DOTNET_ROOT` that points at a directory with no dotnet.)
 
 Failure (`exit 1`) is a failure/error envelope. Two cases matter:
 - `error_category: "dotnet_sdk_not_found"` — **no .NET SDK anywhere, and the script's

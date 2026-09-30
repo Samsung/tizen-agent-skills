@@ -1,17 +1,19 @@
 # tizen-sdk Test Suite
 
-Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 34 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
+English | [한국어](README.ko.md)
 
-**286 test cases** across 8 domains, covering 33 of the 34 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
+Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 35 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
+
+**290 test cases** across 8 domains, covering 34 of the 35 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TB
     subgraph "Test Suite Components"
-        TC["tc/*.yaml<br/>281 Test Cases (274 YAML files)"]
+        TC["tc/*.yaml<br/>290 Test Cases (283 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
-        POLICY["policy/tiers.yaml<br/>34 commands → tier classification"]
+        POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
         SKILLS["skills/run-test-suite.md<br/>Prompt-lane execution guide"]
     end
@@ -36,21 +38,21 @@ graph TB
     end
 
     subgraph "Tier System"
-        SAFE["safe (6 cmds / 66 TCs)<br/>No side effects<br/>CI gate ✅"]
-        MUTATING["mutating (14 cmds / 79 TCs)<br/>Install/modify/delete<br/>⚠️ With setup"]
-        DEVICE["device (14 cmds / 141 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
+        SAFE["safe (6 cmds / 69 TCs)<br/>No side effects<br/>CI gate ✅"]
+        MUTATING["mutating (15 cmds / 79 TCs)<br/>Install/modify/delete<br/>⚠️ With setup"]
+        DEVICE["device (14 cmds / 142 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
         POLICY --> MUTATING
         POLICY --> DEVICE
     end
 
-    style TC fill:#e1f5fe
-    style RUNNER fill:#c8e6c9
-    style PLUGIN fill:#fff9c4
-    style LLM fill:#f3e5f5
-    style SAFE fill:#c8e6c9
-    style MUTATING fill:#fff9c4
-    style DEVICE fill:#ffcdd2
+    style TC fill:#e1f5fe,stroke:#546e7a,color:#1a1a1a
+    style RUNNER fill:#c8e6c9,stroke:#546e7a,color:#1a1a1a
+    style PLUGIN fill:#fff9c4,stroke:#546e7a,color:#1a1a1a
+    style LLM fill:#f3e5f5,stroke:#546e7a,color:#1a1a1a
+    style SAFE fill:#c8e6c9,stroke:#546e7a,color:#1a1a1a
+    style MUTATING fill:#fff9c4,stroke:#546e7a,color:#1a1a1a
+    style DEVICE fill:#ffcdd2,stroke:#546e7a,color:#1a1a1a
 ```
 
 ### CLI Lane Flow (runner.mjs)
@@ -121,29 +123,40 @@ graph LR
     CLI_LANE --> CLI_CONTENT["argv: command + args<br/>timeout_sec<br/>expect: status, jsonpath[], errors[]"]
     PROMPT_LANE --> PROMPT_CONTENT["text: natural language<br/>timeout_sec, max_tool_calls<br/>expect: must_call_tool,<br/>must_resolve_command,<br/>envelope_status<br/>pass_rate: 2/3"]
 
-    style META fill:#e1f5fe
-    style CLI_LANE fill:#c8e6c9
-    style PROMPT_LANE fill:#f3e5f5
+    style META fill:#e1f5fe,stroke:#546e7a,color:#1a1a1a
+    style CLI_LANE fill:#c8e6c9,stroke:#546e7a,color:#1a1a1a
+    style PROMPT_LANE fill:#f3e5f5,stroke:#546e7a,color:#1a1a1a
 ```
 
 ## Quick Start
 
 ```bash
-cd tests
+cd tizen-cli && pnpm install && pnpm build && cd ../tests   # the runner executes tizen-cli/dist/tizen-sdk.js (not needed for --dry-run)
 npm install
-node runner.mjs              # run all TCs
+node runner.mjs --dry-run    # validate TCs without executing (no build, no SDK needed)
 node runner.mjs --tier=safe  # only safe-tier (no side effects)
-node runner.mjs --dry-run    # validate TCs without executing
+node runner.mjs              # run all TCs — includes the mutating and device tiers, which a bare
+                             # run cannot pass and which overwrite ~/.tizen.sdk.path.config and
+                             # consume fixtures; read "Device tier" / "Mutating tier" below first
 ```
+
+The step-by-step order for running the safe, mutating and device tiers is in [RUN-ORDER.md](RUN-ORDER.md).
+
+Rebuild `tizen-cli/dist/` after every change under `common/lib`, `common/scripts` or
+`tizen-cli/src` (and after a `git checkout` / `git pull` that touches them). Only the tier
+drivers and the fixture script check for this (`checkDistFresh()` in
+`scripts/lib/driver-common.mjs` compares the bundle's mtime with those trees and refuses to
+start); `runner.mjs` and the launcher only check that `dist/tizen-sdk.js` exists
+(`PLUGIN_NOT_BUILT` otherwise), so a stale bundle runs the old code without any warning.
 
 ## What This Tests
 
 | Layer           | TCs | What                                   | How                                                                                      |
 | --------------- | --- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **cli lane**    | 171 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
-| **prompt lane** | 118 | LLM resolves prompt to correct command | Cline/Claude reads TC, sends prompt, verifies tool call (see `skills/run-test-suite.md`) |
+| **cli lane**    | 170 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
+| **prompt lane** | 120 | LLM resolves prompt to correct command | Cline/Claude reads TC, sends prompt, verifies tool call (see `skills/run-test-suite.md`) |
 
-8 TCs define both lanes, so the lane counts sum to more than 281.
+Every TC defines exactly one lane, so the two counts add up to the 290 TCs.
 
 ### vs. Existing Unit Tests (`common/lib/tests/`)
 
@@ -158,7 +171,8 @@ node runner.mjs --dry-run    # validate TCs without executing
 
 ```
 tests/
-  README.md               ← this file
+  README.md               ← this file (README.ko.md: Korean)
+  RUN-ORDER.md            ← step-by-step run order for the safe / mutating / device tiers (RUN-ORDER.ko.md: Korean)
   TEST-SUITE-PLAN.md      ← design document
   CSV-YAML-MAPPING.md     ← CSV TC ID ↔ YAML traceability table
   package.json            ← dependencies (yaml, ajv)
@@ -166,7 +180,7 @@ tests/
   schema/
     tc-schema.json        ← TC YAML JSON Schema
   policy/
-    tiers.yaml            ← 34 commands classified by tier
+    tiers.yaml            ← 35 commands classified by tier
     device-run-order.yaml    ← phased run order for the device tier (see "Device tier")
     mutating-run-order.yaml  ← phased run order for the mutating tier (see "Mutating tier")
   fixtures/               ← committed state files (test cert, profiles.xml) for mutating TCs
@@ -176,11 +190,12 @@ tests/
   scripts/
     verify-doc-stats.mjs  ← CI gate: doc statistics must match actual TC files
     runner-helpers.test.mjs      ← unit tests for runner.mjs helpers + order-file consistency
+    cdn-mirror-selection.test.mjs ← installer .sh/.ps1 timezone → CDN mirror mapping must agree
     prepare-device-fixtures.mjs  ← builds/signs the fixture apps, tmp/ + projects/ dirs, playwright project
     run-device-tier.mjs          ← ordered, self-cleaning device-tier run (see "Device tier")
     run-mutating-tier.mjs        ← ordered, self-cleaning mutating-tier run (see "Mutating tier")
     lib/driver-common.mjs        ← shared helpers of the three scripts above (incl. FIXTURE_NEEDS)
-  tc/                     ← 286 test cases in 279 YAML files
+  tc/                     ← 290 test cases in 283 YAML files
     device/               ← 103 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
@@ -190,13 +205,13 @@ tests/
                                      download-emulator-package, download-mobile-platform,
                                      install-rootstrap, dotnet-setup)
     debug/                ←  32 TCs (gdb-debug, dotnet-debug, webapp-debug)
-    project/              ←  26 TCs (create-project, build-project, project-delete,
+    project/              ←  28 TCs (create-project, build-project, project-delete,
                                      list-templates)
     certificate/          ←  25 TCs (certificate-manager actions)
-    meta/                 ←  16 TCs (--capabilities, --doctor, --schema, list-commands,
+    meta/                 ←  17 TCs (--capabilities, --doctor, --schema, list-commands,
                                      no-args, guard-rules)
     test/                 ←  15 TCs (playwright-test)
-    dlog-analyzer/        ←   3 TCs (dlog-analyzer)
+    dlog-analyzer/        ←   4 TCs (dlog-analyzer)
   skills/
     run-test-suite.md     ← Cline/Claude prompt-lane execution guide
 ```
@@ -255,7 +270,7 @@ than once, e.g. `emulator-manager.delete` between the create TCs), and
 `scripts/run-device-tier.mjs` drives it:
 
 ```bash
-cd tests
+cd tizen-cli && pnpm build && cd ../tests   # preflight refuses a dist/ older than common/lib, common/scripts, tizen-cli/src
 node scripts/prepare-device-fixtures.mjs    # once per host: build the fixture apps (6-12 min, see below)
 node scripts/run-device-tier.mjs            # preflight + print the plan, change nothing
 node scripts/run-device-tier.mjs --yes      # run all phases (~20 min, destructive — see below)
@@ -355,12 +370,15 @@ later builds, `certificate-manager.remove-profile` consumes its fixture `profile
 run without installing anything, and `scripts/run-mutating-tier.mjs` drives it:
 
 ```bash
-cd tests
-node scripts/prepare-device-fixtures.mjs --only=tmp,projects   # scratch dirs + fixtures.generated.env
+cd tizen-cli && pnpm build && cd ../tests   # preflight refuses a dist/ older than common/lib, common/scripts, tizen-cli/src
+node scripts/prepare-device-fixtures.mjs --only=tmp,projects,rootstrap   # scratch dirs, rootstrap ZIP, signing profile myProfile, fixtures.generated.env
 node scripts/run-mutating-tier.mjs            # preflight + plan, changes nothing
 node scripts/run-mutating-tier.mjs --yes      # ~5 min; see "destructive" below
 node scripts/run-mutating-tier.mjs --yes --include-drafts     # promotion run
 node scripts/run-mutating-tier.mjs --yes --phase=k3-cert-profiles
+node scripts/run-mutating-tier.mjs --yes --with-installers    # + phases s2/s3: real SDK installs into a
+                                                              #   throwaway home (60-90 min, ~10 GB) — see below
+node scripts/run-mutating-tier.mjs --yes --with-installers --keep-scratch-sdk   # keep <scratch>/home for triage
 npm run prepare:mutating / npm run test:mutating
 ```
 
@@ -370,7 +388,9 @@ npm run prepare:mutating / npm run test:mutating
 | `k1-cert-readonly` | `list-profiles`, `list-distributors`, `inspect-certificate` | — |
 | `k2-cert-keystore` | `generate-author` ×3, `import-certificate` ×2 | hook `cleanKeystore`: removes `author/{TestDev,Jane-Dev,TestDev-v2,test-fixture-author}.*` and `distributor/test-fixture-author.*` under `<sdk-data>/keystore` (only these names) |
 | `k3-cert-profiles` | `create-profile`, `set-active-profile`, `remove-profile` | hook `resetProfileFixtures`: restores `fixtures/profiles/*.xml` from the run's backup, deletes the scratch `${FIXTURE_TMP_DIR}/profiles/created-profiles.xml` that `create-profile` writes (never the SDK's real `profiles.xml`) |
-| `p1-projects` | `create-project.native-happy/.webapp-happy/.dotnet-happy/.force` (`.force` twice — the second run is the real overwrite), `build-project.happy/.clean/.release`, `project-delete.happy` | hook `resetProjectsDir` empties `${FIXTURE_PROJECTS_DIR}`; the builds target the `MyNativeApp` the first TC creates and sign with the `myProfile` the prepare script made |
+| `p1-projects` | `create-project.native-happy/.webapp-happy/.dotnet-happy/.force` (`.force` twice — the second run is the real overwrite), `build-project.compiler-flags` (parser rejects `--cflags` → `invalid_argument`), `build-project.happy/.clean/.release`, `project-delete.happy` | hook `resetProjectsDir` empties `${FIXTURE_PROJECTS_DIR}`; the builds target the `MyNativeApp` the first TC creates and sign with the `myProfile` the prepare script made |
+| `s2-sdk-installers` (**opt-in**) | `sdk-install-custom-repo.force`, `tv-sdk-install.force`, `platform-install.happy`, `download-emulator-package.specific-version/.happy/.force`, `download-mobile-platform.happy/.iot-headed`, `update-package.dry-run/.happy/.force`, `install-rootstrap.happy`, `sdk-install.force` | `--with-installers`; the runner env gets `USERPROFILE`/`HOME` = `<scratch>/home` (+ `APPDATA`/`LOCALAPPDATA` under it), no `TIZEN_SDK_PATH`, `TIZEN_SDK_INLINE_INSTALLER=1`, `TIZEN_TOOL_TIMEOUT=3600000`; the driver snapshots the User `Path` / `TIZEN_SDK_PATH` first |
+| `s3-dotnet-workload` (**opt-in**) | `dotnet-setup.force` | `--with-installers`; no home redirect (the workload lives in the real dotnet install) |
 
 The driver runs the runner with **cwd = `tests/`** (the certificate TCs use `fixtures/...`
 relative paths), gates on `fixtures.generated.env` per phase like the device driver, refuses to
@@ -384,17 +404,56 @@ driver) goes through `guardedScratchDir()` in `scripts/lib/driver-common.mjs`: t
 must lie strictly inside `tests/fixtures/apps`, must not be a symlink/junction, and may not sit
 on another drive — the values come from a user-editable env file. Destructive with `--yes`: exactly those keystore files and fixture
 rewrites, plus whatever the `sdk-install` / `tv-sdk-install` short-circuits touch
-(`sdk.info`, `~/.tizen.sdk.path.config`). It never installs or removes SDK packages.
+(`sdk.info`, `~/.tizen.sdk.path.config`). Without `--with-installers` it never installs or
+removes SDK packages.
+
+**Installer phases** (`s2-sdk-installers`, `s3-dotnet-workload`; skipped unless
+`--with-installers` or `--phase=` names one). The installer branch of `sdk-install`,
+`tv-sdk-install`, `update-package`, `platform-install`, `download-emulator-package`,
+`download-mobile-platform` and `install-rootstrap` normally runs only inside the pkg-compiled
+tizen-cli — under `node tizen-sdk.js` (which is how the runner executes the plugin) the command
+returns the installer as `suggested_fix` for the agent to run detached. `TIZEN_SDK_INLINE_INSTALLER=1`
+(`runsInstallerInline()` in `common/lib/core/sdk.js`) makes that branch run inline, and the
+driver sets it for both phases. For s2 it also points `USERPROFILE`/`HOME` at `<scratch>/home`
+and drops `TIZEN_SDK_PATH` from the env, so `sdk-install-custom-repo.force` builds a complete
+SDK under `<scratch>/home/tizen-sdk` (that is why it runs first: on an empty home `--force` is
+just the real install), the platform / emulator / mobile installers add to it and write their
+`.*-installed` markers, `update-package` and `install-rootstrap` (fixture
+`${FIXTURE_ROOTSTRAP_ZIP}` from `prepare-device-fixtures.mjs --only=rootstrap`) run against it,
+and `sdk-install.force` is last so it is a real `--force` over an existing SDK. The host's SDK is
+never opened. Two things still leak out of the scratch home and the driver handles them:
+`tizen-sdk-install.ps1` writes the **User** `Path` and `TIZEN_SDK_PATH` to the scratch SDK —
+the driver snapshots both into `<scratch>/user-env.json` before the run and restores them as
+the **first** teardown step (after stopping any installer PowerShell that outlived its runner,
+which would otherwise rewrite them again), refuses a snapshot that lacks either key (a `$null`
+would delete the variable), and re-reads the values to prove the restore; if the process is
+killed outright, `node scripts/run-mutating-tier.mjs --restore-user-env=<scratch>/user-env.json`
+redoes just that step — and Windows' `LongPathsEnabled` must already be `1`, otherwise the
+installer opens a UAC prompt and a headless run hangs (preflight refuses to start). Preflight
+also wants ≥15 GB free on the scratch drive and probes `${TC_CUSTOM_REPO_URL}/pkg_list_<os>` (a
+warning only — proxy-only networks fail the node probe while PowerShell still downloads). Ctrl+C
+kills the runner's whole process tree, not just node. The teardown deletes `<scratch>/home`
+unless `--keep-scratch-sdk` — only when it resolves to exactly `<scratch>/home`, is not a
+symlink and carries the `.tizen-mutating-scratch-home` marker the driver wrote when creating it
+(`scratchHomeRemovable()` in `scripts/lib/driver-common.mjs`, covered by
+`runner-helpers.test.mjs`). s3 reinstalls the host's real .NET Tizen workload (no redirect; a
+redirected home would only send NuGet into the scratch dir). Budget 60-90 min and ~10 GB.
 
 Mutating cli-lane TCs that stay `draft`, with the reason in their `NOTE` and a `requires`
-declaration: the SDK installers that only execute under the packaged CLI (`process.pkg`) or
-reinstall the host's SDK (`sdk-install.force`, `sdk-install-custom-repo.force`,
-`tv-sdk-install.force`, `dotnet-setup.force`, `update-package.*`, `platform-install.happy`,
-`download-emulator-package.*`, `download-mobile-platform.*`, `install-rootstrap.happy` —
-`requires: [sdk, net]`), the Samsung online-CA actions (`samsung-login`,
-`generate-samsung-author/-distributor` — `[sdk, samsung-account]`), the GBS builds
-(`build-project.arch` / `.gbs` — `[sdk, gbs]`, Linux only) and `build-project.compiler-flags`
-(no compiler-flag passthrough exists; the trailing token is silently dropped).
+declaration: the Samsung online-CA actions (`samsung-login`,
+`generate-samsung-author/-distributor` — `[sdk, samsung-account]`) and the GBS builds
+(`build-project.arch` / `.gbs` — `[sdk, gbs]`). Neither can run here:
+
+- *Samsung online CA* — `samsung-login` opens a real OAuth browser login (or reuses a cached
+  token) and the two `generate-samsung-*` actions issue real certificates against that
+  account. Run them by hand, with an operator's sign-off: `certificate-manager --action
+  samsung-login --profile-name myProfile` once (interactive), then the two TC argv as written
+  (`node runner.mjs --tc=generate-samsung --include-drafts` is NOT enough — the runner has no
+  browser), record the envelopes in the TC NOTE and promote.
+- *GBS builds* — need a Linux host with `gbs`, `~/GBS-ROOT` and a `platform`-type project
+  (`create-project --type platform --template dali-demo --parent-path /tmp/tizen-apps --name
+  MyPlatformApp01`); `tizen-build-project.ps1` has no GBS path. Run `node runner.mjs
+  --tc=build-project.arch --status=draft` / `--tc=build-project.gbs` there and promote.
 
 ### CI gate
 
@@ -432,7 +491,7 @@ command above locally with an empty `HOME` (the redirect also keeps
 make the TC pass without an SDK or add the `requires` block.
 
 **Windows:** Node's `os.homedir()` reads `USERPROFILE`, not `HOME`, so redirect that one —
-`USERPROFILE=<throwaway dir> node runner.mjs --tier=safe …` (PowerShell: `$env:USERPROFILE = …`).
+`USERPROFILE=<throwaway dir> node runner.mjs --tier=safe …` (PowerShell: `$env:USERPROFILE = …`). The runner creates `<throwaway dir>AppDataLocal` first: without it PowerShell 5.1 drops its `ModuleAnalysisCache` into `tests/Microsoft/` (gitignored).
 With only `HOME` set, `sdk-init.explicit-path` writes `/tmp` into your real
 `~/.tizen.sdk.path.config` and every later sdb-based command fails with a `\tmp\tools\sdb.exe`
 path; repair with `tizen-sdk sdk-init --sdk-path <your SDK dir>`.
@@ -443,21 +502,32 @@ path; repair with `tizen-sdk sdk-init --sdk-path <your SDK dir>`.
 
 | Status        | Count | Meaning                                                            |
 | ------------- | ----- | ------------------------------------------------------------------ |
-| `draft`       | 22    | Authored, never executed — assertions unproven                     |
+| `draft`       | 8     | Authored, never executed — assertions unproven                     |
 | `candidate`   | 0     | Executed and passing, but not every lane verified yet              |
-| `approved`    | 264   | Every lane executed and passing; a regression is a release blocker |
+| `approved`    | 282   | Every lane executed and passing; a regression is a release blocker |
 | `quarantined` | 0     | Known unstable or environment-broken; excluded by default          |
 
 Schema validation (`--dry-run`) never justifies a promotion — it only checks the YAML shape.
+
+Of the 8 remaining drafts, 7 need something no CI or developer host provides: a Samsung
+account for the online CA (`certificate-manager.samsung-login`, `.generate-samsung-author`,
+`.generate-samsung-distributor`), a Linux GBS toolchain (`build-project.arch`, `.gbs`) or a
+Tizen device on the LAN (`remote-device.connect`, `.connect-custom-port`). See "Mutating tier"
+and "Device tier" for how to run them by hand. The 8th, `dlog-analyzer.prompt-symptom-routing`
+(TC-P-119, issue #211), is prompt-only: it checks that a bare symptom report ("emulator CPU 300%,
+video not playing — investigate") resolves to `dlog-analyzer` rather than `device-manager` — pinned by
+`first_resolved_command` and `must_not_resolve_commands: ["tizen-sdk device-manager"]` in its `expect`
+block, not by prose — and is promoted after three agent-session runs (`skills/run-test-suite.md`,
+Option 2; `pass_rate: 3/3`).
 
 ## Tier Classification
 
 | Tier      | Commands | TCs     | Description              | CI-safe?      |
 | --------- | -------- | ------- | ------------------------ | ------------- |
-| safe      | 6        | 66      | No side effects          | ✅ Yes        |
-| mutating  | 14       | 79      | Install/modify/delete    | ⚠️ With setup |
-| device    | 14       | 141     | Requires emulator/device | ❌ Manual     |
-| **Total** | **34**   | **286** |                          |               |
+| safe      | 6        | 69      | No side effects          | ✅ Yes        |
+| mutating  | 15       | 79      | Install/modify/delete    | ⚠️ With setup |
+| device    | 14       | 142     | Requires emulator/device | ❌ Manual     |
+| **Total** | **35**   | **290** |                          |               |
 
 See `policy/tiers.yaml` for the full classification. CI runs the `approved` safe TCs on
 every PR (see "CI gate" under Runner Options); the device tier is run manually through
@@ -472,9 +542,10 @@ is run manually with `--tier=mutating` plus the fixtures in `fixtures/`.
 4. Validate with `node runner.mjs --dry-run`; for a `safe` TC also run the CI gate command
    (see "CI gate" above) with an empty `HOME` (`USERPROFILE` on Windows), and add `requires.capabilities: [sdk]` or
    `[net]` if the TC cannot pass without an installed SDK or outbound network
-5. Update the counts in this README and `CSV-YAML-MAPPING.md` — CI runs
-   `scripts/verify-doc-stats.mjs`, which fails if the documented statistics
-   drift from the actual TC files
+5. Update the counts in this README, `README.ko.md` and `CSV-YAML-MAPPING.md` — CI runs
+   `scripts/verify-doc-stats.mjs`, which fails if the documented statistics (intro
+   sentence, architecture diagram, lane table, directory tree, tier and status tables)
+   drift from the actual TC files or `policy/tiers.yaml`
 6. Never put passwords or other credential-shaped values literally in `argv`
    (security scanners flag them) — use a `${NAME}` placeholder and define the
    value in `fixtures/fixtures.env` as a base64-encoded `NAME_B64=` entry
@@ -509,7 +580,18 @@ See `skills/run-test-suite.md` for instructions on how Cline or Claude agents ex
 ## Prerequisites
 
 - Node.js >= 20
-- For cli-lane execution, one of:
-  - `tizen-cli` on PATH with the `tizen-sdk` plugin installed, or
-  - the standalone launcher `tizen-sdk` on PATH (`cd tizen-cli && pnpm build && pnpm add -g .`; pnpm 10 removed `pnpm link --global` and pnpm 11 removed the bare `pnpm link`) — the runner falls back to it when `tizen-cli` is absent
-- For `--dry-run` mode: no runtime needed, just Node.js + npm dependencies
+- A built plugin bundle: `cd tizen-cli && pnpm install && pnpm build` → `tizen-cli/dist/tizen-sdk.js`
+  (gitignored; every cli-lane executor below loads it)
+- For cli-lane execution (`resolveExecutor()` in `runner.mjs`):
+  - Windows: PATH is not consulted. The runner runs the launcher `TC_LAUNCHER_JS` points at if
+    that variable is set, else `../tizen-cli/bin/tizen-sdk.js` from the source checkout
+    (`RUNNER_NO_EXECUTOR` when neither file exists). The launcher loads `../dist/tizen-sdk.js`
+    next to itself and prints a `PLUGIN_NOT_BUILT` envelope when it is missing, so on a fresh
+    checkout every cli-lane TC fails with that error until the build above has run.
+  - Linux/macOS: `TC_LAUNCHER_JS` is not used. The runner takes `tizen-cli` on PATH (with the
+    `tizen-sdk` plugin installed) and falls back to a standalone `tizen-sdk` launcher on PATH
+    (`cd tizen-cli && pnpm build && pnpm add -g .`; pnpm 10 removed `pnpm link --global` and
+    pnpm 11 removed the bare `pnpm link`); `RUNNER_NO_EXECUTOR` when neither is found. CI
+    symlinks `tizen-cli/bin/tizen-sdk.js` onto PATH instead of installing it, see
+    `.github/workflows/ci.yml`.
+- For `--dry-run` mode: no build and no runtime needed, just Node.js + npm dependencies

@@ -70,6 +70,41 @@ check(
   /try\s*\{\s*Sync-CustomTemplates\s*\}\s*catch/.test(PS_SRC),
 );
 
+// The api-version alignment of the synced template: the .ps1 twin is held to
+// the .sh behaviour by inspection (the script layer below runs only the .sh).
+//   - both twins anchor the rewrite to the <manifest …> root element and
+//     replace the first match only (sed -E without `g` / Regex.Replace count 1);
+//   - both guard on byte identity with the plugin's template before touching
+//     anything (cmp -s / byte-array SequenceEqual);
+//   - both are called from the sync loop after the copy step.
+check(
+  "both twins anchor the api-version rewrite to the <manifest …> element",
+  SH_SRC.includes(
+    `attr_re='(<manifest[[:space:]][^>]*api-version=")[0-9.]+(")'`,
+  ) &&
+    /sed -E "s\/\$\{attr_re\}\/\\\\1\$\{ver\}\\\\2\/"/.test(SH_SRC) &&
+    PS_SRC.includes(`[regex]'(<manifest\\s[^>]*api-version=")[0-9.]+(")'`) &&
+    /\$attrRe\.Replace\(\$content, \('\$\{1\}' \+ \$ver \+ '\$\{2\}'\), 1\)/.test(
+      PS_SRC,
+    ),
+);
+check(
+  "both twins guard on byte identity with the plugin's template",
+  /cmp -s "\$src" "\$dst" \|\| return 0/.test(SH_SRC) &&
+    /SequenceEqual\(\[byte\[\]\]\$srcBytes, \[byte\[\]\]\$dstBytes\)/.test(
+      PS_SRC,
+    ),
+);
+check(
+  "both twins run the alignment from the sync loop, after the copy step and before templates.yaml registration",
+  /align_synced_manifest_api_version "\$folder" "\$dest_path" "\$template_name"[\s\S]*Register in templates\.yaml/.test(
+    SH_SRC,
+  ) &&
+    /Align-SyncedManifestApiVersion -LocalDir \$folder\.FullName -DestDir \$destPath -Name \$templateName[\s\S]*Register in templates\.yaml/.test(
+      PS_SRC,
+    ),
+);
+
 // ---------------------------------------------------------------------------
 // Script layer (bash)
 // ---------------------------------------------------------------------------
@@ -144,7 +179,10 @@ exit 0
     return { root, sdk, home };
   }
 
-  function runApp(args, { sdkVia, stubEnv = {}, prepare = null }) {
+  function runApp(
+    args,
+    { sdkVia, stubEnv = {}, prepare = null, inspect = null },
+  ) {
     const fx = makeFixture();
     if (prepare) prepare(fx);
     const env = { ...process.env, HOME: fx.home, ...stubEnv };
@@ -161,11 +199,15 @@ exit 0
       timeout: 60000,
       env,
     });
+    // `inspect` reads the fixture (e.g. what the sync wrote into the SDK)
+    // before it is removed.
+    const inspected = inspect ? inspect(fx) : undefined;
     fs.rmSync(fx.root, { recursive: true, force: true });
     return {
       code: typeof r.status === "number" ? r.status : 1,
       stdout: r.stdout || "",
       stderr: r.stderr || "",
+      inspected,
     };
   }
 
@@ -228,6 +270,157 @@ exit 0
       /Using profile: tizen-11\.0/.test(only11.stderr),
     `exit ${only11.code}\n${only11.stdout}\n${only11.stderr}`.slice(-600),
   );
+  // The synced custom template's manifest must carry the api-version of the
+  // profile it was copied under. The plugin's BasicUI ships api-version="10.0";
+  // copied verbatim under tizen-11.0 it produced projects whose
+  // tizen_native_project.yaml / .tproject said 11.0 while tizen-manifest.xml
+  // said 10.0, and tz build failed.
+  const LOCAL_MANIFEST = path.join(
+    SCRIPT_DIR,
+    "templates/native/BasicUI/project/tizen-manifest.xml",
+  );
+  const syncedManifest = (fx, profile) =>
+    path.join(
+      fx.sdk,
+      "platforms",
+      profile,
+      "tizen/samples/Template/Native/BasicUI/project/tizen-manifest.xml",
+    );
+  const readOrNull = (p) =>
+    fs.existsSync(p) ? fs.readFileSync(p, "utf8") : null;
+  const LOCAL_MANIFEST_TEXT = fs.readFileSync(LOCAL_MANIFEST, "utf8");
+  check(
+    'precondition: the plugin\'s BasicUI manifest carries api-version="10.0" exactly once, on the <manifest> element',
+    (LOCAL_MANIFEST_TEXT.match(/api-version="/g) || []).length === 1 &&
+      /<manifest\s[^>]*api-version="10\.0"/.test(LOCAL_MANIFEST_TEXT),
+  );
+  // What the rewrite must produce: the template with ONLY that attribute
+  // value changed — every other byte (xmlns, package, version, whitespace,
+  // line endings) identical.
+  const EXPECTED_11 = LOCAL_MANIFEST_TEXT.replace(
+    'api-version="10.0"',
+    'api-version="11.0"',
+  );
+
+  const synced11 = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_ONLY_11: "1" },
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tizen-11.0")),
+  });
+  check(
+    'a template synced under tizen-11.0 gets api-version="11.0" in its manifest (was the template\'s fixed 10.0)',
+    synced11.code === 0 &&
+      typeof synced11.inspected === "string" &&
+      /api-version="11\.0"/.test(synced11.inspected) &&
+      !/api-version="10\.0"/.test(synced11.inspected) &&
+      /Set api-version="11\.0" in synced template 'BasicUI' for profile tizen-11\.0/.test(
+        synced11.stderr,
+      ),
+    `exit ${synced11.code}\n${synced11.stderr}\n${String(synced11.inspected).slice(0, 200)}`.slice(
+      -700,
+    ),
+  );
+  check(
+    "…and nothing but that attribute value changed (rest of the manifest byte-identical to the template)",
+    synced11.inspected === EXPECTED_11,
+    `got:\n${String(synced11.inspected)}\nexpected:\n${EXPECTED_11}`,
+  );
+
+  const synced10 = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tizen-10.0")),
+  });
+  check(
+    "under tizen-10.0 the synced manifest is byte-identical to the template (nothing to rewrite, no INFO line)",
+    synced10.code === 0 &&
+      synced10.inspected === LOCAL_MANIFEST_TEXT &&
+      !/Set api-version=/.test(synced10.stderr),
+    `exit ${synced10.code}\n${synced10.stderr}`.slice(-400),
+  );
+
+  // A copy left by an earlier plugin version (present, still identical to the
+  // template) is repaired on the next run even though the copy step skips it.
+  const stale11 = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_ONLY_11: "1" },
+    prepare: (fx) => {
+      const dst = syncedManifest(fx, "tizen-11.0");
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.copyFileSync(LOCAL_MANIFEST, dst);
+    },
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tizen-11.0")),
+  });
+  check(
+    'an already-synced copy that still matches the template is repaired to api-version="11.0" (attribute only)',
+    stale11.code === 0 &&
+      stale11.inspected === EXPECTED_11 &&
+      /Set api-version="11\.0" in synced template 'BasicUI'/.test(
+        stale11.stderr,
+      ),
+    `exit ${stale11.code}\n${stale11.stderr}\n${String(stale11.inspected).slice(0, 200)}`.slice(
+      -700,
+    ),
+  );
+
+  // Running again on the repaired copy: it no longer matches the template, so
+  // the guard skips it — no second rewrite, no INFO line, content unchanged.
+  const repairedTwice = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_ONLY_11: "1" },
+    prepare: (fx) => {
+      const dst = syncedManifest(fx, "tizen-11.0");
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, EXPECTED_11);
+    },
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tizen-11.0")),
+  });
+  check(
+    "a copy already repaired to 11.0 is left alone on the next run (idempotent, no INFO line)",
+    repairedTwice.code === 0 &&
+      repairedTwice.inspected === EXPECTED_11 &&
+      !/Set api-version=/.test(repairedTwice.stderr),
+    `exit ${repairedTwice.code}\n${repairedTwice.stderr}`.slice(-400),
+  );
+
+  // A non-tizen-X.Y profile (TV, wearable) is not ours to rewrite: the copy
+  // stays byte-identical to the template.
+  const tvProfile = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    stubEnv: { TIZEN_TZ_PROFILE: "tv-samsung-9.0", STUB_TZ_TV: "1" },
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tv-samsung-9.0")),
+  });
+  check(
+    "under a tv-samsung-* profile the synced manifest is not rewritten",
+    tvProfile.code === 0 &&
+      tvProfile.inspected === LOCAL_MANIFEST_TEXT &&
+      !/Set api-version=/.test(tvProfile.stderr),
+    `exit ${tvProfile.code}\n${tvProfile.stderr}`.slice(-400),
+  );
+
+  // A manifest that differs from the template (SDK-shipped or user-edited) is
+  // never touched, whatever api-version it carries.
+  const EDITED =
+    '<?xml version="1.0"?>\n<manifest api-version="9.0" package="x" edited="yes"/>\n';
+  const edited11 = runApp(["--list-templates", "--type=native"], {
+    sdkVia: "config",
+    stubEnv: { STUB_TZ_ONLY_11: "1" },
+    prepare: (fx) => {
+      const dst = syncedManifest(fx, "tizen-11.0");
+      fs.mkdirSync(path.dirname(dst), { recursive: true });
+      fs.writeFileSync(dst, EDITED);
+    },
+    inspect: (fx) => readOrNull(syncedManifest(fx, "tizen-11.0")),
+  });
+  check(
+    "a manifest that differs from the template is left untouched",
+    edited11.code === 0 &&
+      edited11.inspected === EDITED &&
+      !/Set api-version=/.test(edited11.stderr),
+    `exit ${edited11.code}\n${edited11.stderr}\n${String(edited11.inspected)}`.slice(
+      -600,
+    ),
+  );
+
   check(
     "the highest tizen-X.Y section wins when several are listed (10.0 over 9.0)",
     /^PROFILE=tizen-10\.0$/m.test(viaEnv.stdout) &&

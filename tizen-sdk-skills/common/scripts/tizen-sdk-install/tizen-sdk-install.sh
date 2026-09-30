@@ -30,15 +30,44 @@ source "$SCRIPT_DIR/../lib/common.sh"
 #   UTC-12 .. UTC-5  → Global     (North America)
 #   UTC-4  .. UTC-1  → Brazil     (South America)
 #   UTC+0  .. UTC+4  → Official   (Europe / Africa / Middle East)
-#   UTC+5  .. UTC+12 → Singapore  (India / China / Southeast Asia / Oceania)
+#   UTC+5  .. UTC+8  → Singapore  (India / China / Southeast Asia)
+#   UTC+9 (exact)    → Official   (Korea / Japan)
+#   UTC+10 .. UTC+12 → Singapore  (Oceania)
+#
+# Half-hour zones are rounded away from zero before the range lookup
+# (+05:30 → +6, +09:30 → +10, -03:30 → -4), identically in both installers.
+# UTC+9 is routed to the official server on purpose: download.tizen.org is a
+# single origin in AWS ap-northeast-2 (Seoul), so for Korea/Japan it is the
+# closest host, while the "singapore" name is a CloudFront distribution. It is
+# matched on the exact +09:00 offset, so +08:30 / +09:30 never reach it.
+# Covered by tests/scripts/cdn-mirror-selection.test.mjs.
 select_cdn_repo() {
-  local tz_str tz_sign tz_hours tz_offset
+  local tz_str tz_sign tz_hours tz_mins tz_offset
 
   tz_str=$(date +%z 2>/dev/null || echo "+0000")
   tz_sign="${tz_str:0:1}"
   tz_hours="${tz_str:1:2}"
+  tz_mins="${tz_str:3:2}"
   # Strip leading zero so octal interpretation doesn't happen (e.g. 08 → 8)
   tz_hours=$(( 10#$tz_hours ))
+  tz_mins=$(( 10#${tz_mins:-0} ))
+
+  # Korea / Japan (exactly +09:00): the official origin server is in AWS Seoul
+  # (ap-northeast-2), so it is the closest host. This is matched on the raw
+  # offset BEFORE rounding so that half-hour zones such as +08:30 or +09:30
+  # never land here by being rounded to 9 — they fall through to the ranges below.
+  if [ "$tz_sign" = "+" ] && [ "$tz_hours" -eq 9 ] && [ "$tz_mins" -eq 0 ]; then
+    echo "https://download.tizen.org/sdk/tizenstudio/official"
+    return
+  fi
+
+  # Round half-hour zones to the nearest hour, away from zero, the same way the
+  # PowerShell installer does (MidpointRounding.AwayFromZero) so both scripts
+  # pick the same mirror. The rounding acts on the magnitude, so the sign is
+  # preserved: +05:30 → +6, +09:30 → +10, -03:30 → -4.
+  if [ "$tz_mins" -ge 30 ]; then
+    tz_hours=$(( tz_hours + 1 ))
+  fi
   tz_offset=$(( ${tz_sign}${tz_hours} ))
 
   if [ "$tz_offset" -le -5 ]; then

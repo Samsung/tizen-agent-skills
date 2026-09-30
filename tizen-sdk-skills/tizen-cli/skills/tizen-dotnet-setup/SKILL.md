@@ -29,6 +29,8 @@ tizen-cli tizen-sdk dotnet-setup
 | `--workload-version <version>` | no | latest | Specific Tizen workload version |
 | `--no-install-sdk` | no | off | Do not auto-install a missing .NET SDK (by default one is installed user-scope — Linux/macOS `~/.dotnet`, Windows `%LOCALAPPDATA%\Microsoft\dotnet` — no sudo/admin needed) |
 | `--sdk-channel <channel>` | no | 8.0 | .NET SDK channel for the auto-install |
+| `--dotnet-root <dir>` | no | discovered | Use the .NET SDK at this install root (the directory holding `dotnet` and `sdk/`) instead of discovering one |
+| `--persist-env` | no | off | Also persist a Tizen-extension-bundled dotnet into the user environment. Official install roots are always persisted; a bundled dotnet (`…/sdktools/dotnet`) is used for this run only unless this flag is given, because an extension update can move or delete it |
 
 Workload installation takes several minutes — set the Bash tool timeout to 600000 ms and run in the foreground (the command is idempotent; retrying after a timeout is safe).
 

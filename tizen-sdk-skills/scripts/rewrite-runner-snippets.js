@@ -35,8 +35,11 @@
  *   (c) bash bare form (no host pick at all) —
  *         CLI=$(ls "$HOME"/.{…}/<tail>/<VER>/lib/cli/X.js … | sort | tail -1)
  *       → the full three-line block (a)+(line 2)+(b).
- *   (d) cmd.exe dir args:  "%USERPROFILE%\.claude\…\*X.js" "%USERPROFILE%\.cline\…\*X.js"
- *                          → one quoted arg per host (unchanged behaviour).
+ *   (d) cmd.exe lookup:  dir /s /b "%USERPROFILE%\.claude\…\*X.js" "%USERPROFILE%\.cline\…\*X.js" …
+ *                        → dir /s /b "…\.claude\…" 2>nul & dir /s /b "…\.cline\…" 2>nul & … & ver >nul
+ *       (one dir per host: a single dir with several paths prints nothing
+ *       when any host dir is missing). Only behind `dir /s /b `; a run naming
+ *       several runners gets one chain per runner under a single `ver >nul`.
  *   (e) PowerShell — a fenced cmd.exe lookup block gains a fenced PowerShell
  *       block right after it (skills/agents only): host pick from HOST_MARKERS,
  *       then own host first, then every host, version-sorted with [version].
@@ -139,13 +142,31 @@ const BARE_RE = new RegExp(
 const OLD_BRACE = `.{claude,cline}/${CACHE_TAIL}/`;
 const NEW_BRACE = `.{${names.join(",")}}/${CACHE_TAIL}/`;
 
-// (d) cmd.exe: match the MAXIMAL run of consecutive host cache paths and
-//     canonicalise it to one path per HOST_DOT_DIRS entry — but only when the
-//     run does not already name every host and all paths share the same tail.
+// (d) cmd.exe: `dir` given several paths prints NOTHING (and exits 1) as soon
+//     as one of them sits under a dot-dir that does not exist — and no machine
+//     has all four harnesses installed — so the lookup is one `dir` per host,
+//     chained with `&`, each with its own `2>nul`; the trailing `ver >nul`
+//     resets ERRORLEVEL so a missing last host does not report the listing as
+//     failed (issue #227 review). CMD_RUN_RE matches the old one-dir-many-paths
+//     run, the chained form, or a mix — but only behind `dir /s /b `, so the
+//     same quoted path quoted in prose is left alone. The run is canonicalised
+//     to one `dir` per HOST_DOT_DIRS entry for every runner tail it names
+//     (tails in first-appearance order; a run that looked up two runners at
+//     once becomes two chains under a single `ver >nul`).
 //     Group 1 = host name, group 2 = tail after tizen-sdk-skills\.
 const HOST_ALT = names.join("|");
 const CMD_ARG = `"%USERPROFILE%\\\\\\.(${HOST_ALT})\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)"`;
-const CMD_RE = new RegExp(`${CMD_ARG}(?: ${CMD_ARG})*`, "g");
+const CMD_DIR = "dir /s /b ";
+const CMD_RUN_RE = new RegExp(
+  `${CMD_DIR}${CMD_ARG}(?: 2>nul)?(?: (?:& ${CMD_DIR})?${CMD_ARG}(?: 2>nul)?)*(?: & ver >nul)?`,
+  "g",
+);
+// Every host for one tail, chained: `"…\.claude\…" 2>nul & dir /s /b "…\.cline\…" 2>nul & …`
+const cmdChainDirs = (tail) =>
+  HOST_DOT_DIRS.map(
+    (d) => `"%USERPROFILE%\\${d}\\${CACHE_TAIL_WIN}\\${tail}" 2>nul`,
+  ).join(` & ${CMD_DIR}`);
+const cmdChainArgs = (tail) => `${cmdChainDirs(tail)} & ver >nul`;
 const PS_ARG = `"\\$env:USERPROFILE\\\\\\.(${HOST_ALT})\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)"`;
 // Inline PowerShell lookup: Get-ChildItem <run> -ErrorAction SilentlyContinue
 const PS_INLINE_RE = new RegExp(
@@ -153,16 +174,10 @@ const PS_INLINE_RE = new RegExp(
   "g",
 );
 
-function fanOutCmd(run) {
+function canonicalCmdRun(run) {
   const items = [...run.matchAll(new RegExp(CMD_ARG, "g"))];
-  const tails = new Set(items.map((m) => m[2]));
-  if (tails.size !== 1) return run; // mixed runners — UNCLASSIFIED will show it
-  const hosts = new Set(items.map((m) => `.${m[1]}`));
-  if (HOST_DOT_DIRS.every((d) => hosts.has(d))) return run; // already complete
-  const [tail] = tails;
-  return HOST_DOT_DIRS.map(
-    (d) => `"%USERPROFILE%\\${d}\\${CACHE_TAIL_WIN}\\${tail}"`,
-  ).join(" ");
+  const tails = [...new Set(items.map((m) => m[2]))];
+  return `${CMD_DIR}${tails.map(cmdChainDirs).join(` & ${CMD_DIR}`)} & ver >nul`;
 }
 
 // (e) PowerShell host pick + lookup. Same precedence as the bash line: the
@@ -297,7 +312,7 @@ function rewrite(text, { psBlocks = true } = {}) {
       .join("\n"),
   );
   out = dedupeBaseLines(out);
-  out = out.replace(CMD_RE, fanOutCmd);
+  out = out.replace(CMD_RUN_RE, canonicalCmdRun);
   out = replaceInlinePs(out);
   out = out.replace(CUR_PS_HOST_PICK_RE, PS_HOST_PICK_LINE);
   out = out.replace(CUR_PS_LOOKUP_RE, (_m, tail) => psLookupLine(tail));
@@ -416,6 +431,8 @@ module.exports = {
   NEW_BASE_LINE,
   FALLBACK_LINE,
   OWN_HOST_LINE,
+  cmdChainDirs,
+  cmdChainArgs,
   PS_HOST_PICK_LINE,
   PS_HOST_LIST,
   PS_BLOCK_MARKER,

@@ -287,6 +287,49 @@ function runDotnetCliProc(args) {
   );
 }
 
+// 5e. --dotnet-root is a PATH interpolated into the same shell string, so it
+//     gets the metachar gate too — but spaces are legal ("C:\Program Files").
+{
+  const { r, env } = runDotnetCliProc([
+    "--dotnet-root",
+    'C:\\x"; rm -rf /tmp/x; echo "',
+  ]);
+  check("  metachar dotnet-root: exit code", r.status, 1);
+  check(
+    "  metachar dotnet-root: invalid_parameters",
+    env && env.errors && env.errors[0].error_category,
+    "invalid_parameters",
+  );
+}
+
+// 5f. A root that exists but holds no dotnet binary is rejected up front with a
+//     message naming the fix — not handed to the script as a bogus argument.
+{
+  const { r, env } = runDotnetCliProc(["--dotnet-root", __dirname]);
+  check("  dotnet-less dotnet-root: exit code", r.status, 1);
+  check(
+    "  dotnet-less dotnet-root: invalid_parameters",
+    env && env.errors && env.errors[0].error_category,
+    "invalid_parameters",
+  );
+  check(
+    "  dotnet-less dotnet-root: message names the install root",
+    !!(env && env.errors && /install root/.test(env.errors[0].message)),
+    true,
+  );
+}
+
+// 5g. A trailing --dotnet-root with NO value must fail like --sdk-channel does.
+{
+  const { r, env } = runDotnetCliProc(["--dotnet-root"]);
+  check("  valueless dotnet-root: exit code", r.status, 1);
+  check(
+    "  valueless dotnet-root: invalid_parameters",
+    env && env.errors && env.errors[0].error_category,
+    "invalid_parameters",
+  );
+}
+
 // Test 6: device-manager-cli.js action parsing (spawned; no sdb/SDK access)
 //   `node device-manager-cli.js stop` used to read "stop" as timeoutSec and fail
 //   with "Invalid timeout: stop" (TIZEN_SDK_PARAM_E001) because the runner

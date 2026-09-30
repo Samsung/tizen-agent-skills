@@ -230,6 +230,108 @@ console.log("\nTest 6: invalid-parameter envelopes");
   );
   check("  edit bad new port -> failure", editBadNewPort.status, "failure");
 
+  // Test 7: no sdb anywhere -> sdk_path_not_set before anything is spawned,
+  // for both call sites that were changed (remote-device and screenshot).
+  //
+  // The child process gets an empty home (no ~/.tizen.sdk.path.config, and
+  // the default ~/tizen-sdk does not exist), no TIZEN_SDK_* variables, and a
+  // PATH that is the empty home itself — so `where sdb` / `command -v sdb`
+  // cannot find anything (the shells themselves come from ComSpec / /bin/sh,
+  // not PATH, so the probe fails closed rather than erroring out). Previously
+  // the missing binary was handed to the shell, which answered with a
+  // localized, CP949-encoded "path not found" that surfaced as mojibake
+  // inside an io_error.
+  console.log("\nTest 7: missing sdb -> sdk_path_not_set, no shell error text");
+  {
+    const { spawnSync } = require("child_process");
+    const fs = require("fs");
+    const os = require("os");
+    const pathMod = require("path");
+    const emptyHome = fs.mkdtempSync(pathMod.join(os.tmpdir(), "rd-nosdb-"));
+    const env = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (/^path$/i.test(key) || /^TIZEN_SDK/i.test(key)) continue;
+      env[key] = value;
+    }
+    env.USERPROFILE = emptyHome;
+    env.HOME = emptyHome;
+    env.PATH = emptyHome;
+    const coreDir = pathMod.resolve(__dirname, "../core");
+    const script = [
+      "const rd = require(process.argv[1] + '/remote-device.js');",
+      "const ss = require(process.argv[1] + '/screenshot.js');",
+      "Promise.all([rd.listRemoteDevices(), ss.captureScreenshot()])",
+      "  .then(([remote, screenshot]) =>",
+      "    process.stdout.write(JSON.stringify({ remote, screenshot })));",
+    ].join("\n");
+    const child = spawnSync(process.execPath, ["-e", script, coreDir], {
+      encoding: "utf-8",
+      env,
+      timeout: 30000,
+    });
+    fs.rmSync(emptyHome, { recursive: true, force: true });
+    if (child.status !== 0) {
+      console.log(`  child stderr:\n${(child.stderr || "").trim()}`);
+    }
+    check("  child exited 0", child.status, 0);
+    let envelopes = {};
+    try {
+      envelopes = JSON.parse(child.stdout);
+    } catch (_e) {
+      console.log(`  child stdout was not JSON: ${child.stdout}`);
+    }
+    for (const name of ["remote", "screenshot"]) {
+      const envelope = envelopes[name];
+      const error = envelope?.errors?.[0];
+      check(`  ${name}: status failure`, envelope?.status, "failure");
+      check(
+        `  ${name}: category is sdk_path_not_set`,
+        error?.error_category,
+        "sdk_path_not_set",
+      );
+      check(
+        `  ${name}: message says sdb was not found and PATH was tried`,
+        /sdb not found at .+ and not on PATH/.test(error?.message || ""),
+        true,
+      );
+      check(
+        `  ${name}: message has no shell error / replacement chars`,
+        /Command failed|\uFFFD/.test(error?.message || ""),
+        false,
+      );
+    }
+  }
+
+  // Source guard: every sdb-backed function starts the sdb server once
+  // (ensureSdbServer) right after resolving the binary, before its first
+  // piped runSdb call — a cold daemon otherwise holds the pipe until the
+  // timeout and the first call of a session fails with a false io_error.
+  console.log("\nTest: cold-sdb source guard");
+  {
+    const fs = require("fs");
+    const path = require("path");
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "../core/remote-device.js"),
+      "utf-8",
+    );
+    const resolves = [...src.matchAll(/resolveSdbBinary\(\)/g)].length;
+    const ensures = [...src.matchAll(/ensureSdbServer\(resolved\.sdbPath\)/g)]
+      .length;
+    check("  one ensureSdbServer per resolveSdbBinary", ensures, resolves);
+    // Each runSdb(resolved.sdbPath, …) must be preceded (closer than the
+    // previous resolveSdbBinary) by an ensureSdbServer call.
+    let orderOk = true;
+    for (const m of src.matchAll(/runSdb\(resolved\.sdbPath/g)) {
+      const before = src.slice(0, m.index);
+      if (
+        before.lastIndexOf("ensureSdbServer(resolved.sdbPath)") <
+        before.lastIndexOf("resolveSdbBinary()")
+      )
+        orderOk = false;
+    }
+    check("  every runSdb follows an ensureSdbServer", orderOk, true);
+  }
+
   console.log(
     `\n=== ${failures === 0 ? "ALL TESTS PASSED" : `${failures} TEST(S) FAILED`} ===`,
   );

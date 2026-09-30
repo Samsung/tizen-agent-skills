@@ -52,6 +52,41 @@ function Format-Duration {
 }
 
 # ----------------------------------------------------------------------------
+# Path normalisation
+# ----------------------------------------------------------------------------
+# Canonical Windows form of a path that may have arrived with forward slashes.
+# The Node layer passes install paths as "C:/Users/me/tizen-sdk" because a
+# trailing backslash would escape the closing quote on the command line, and
+# anything a script persists from such a value (User Path entries,
+# TIZEN_SDK_PATH, sdk.info, ~\.tizen.sdk.path.config) must not carry the slash
+# form or a mix of separators - "C:/Users/me/tizen-sdk\bin" is what users saw.
+#   - '/' becomes '\', then GetFullPath collapses "\\", "." and ".." segments
+#   - a relative path is anchored at PowerShell's $PWD (filesystem provider),
+#     not at the process working directory GetFullPath would otherwise use -
+#     the two differ after Set-Location, which is how Join-Path/Test-Path
+#     already resolved it before this helper existed
+#   - the trailing separator is dropped so "$p\bin" never yields "\\bin",
+#     except on a drive root: "C:" alone would mean "current dir on C:", so
+#     "C:\" is kept as is
+#   - a path GetFullPath rejects (invalid characters, too long on .NET
+#     Framework) falls back to the slash-replaced string, which is no worse
+#     than the verbatim value the callers used before
+function ConvertTo-CanonicalWindowsPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
+    $p = $Path.Trim() -replace '/', '\'
+    try {
+        if (-not [System.IO.Path]::IsPathRooted($p)) {
+            $p = Join-Path (Get-Location -PSProvider FileSystem).ProviderPath $p
+        }
+        $p = [System.IO.Path]::GetFullPath($p)
+    } catch { }
+    $trimmed = $p.TrimEnd('\')
+    if ($trimmed -match '^[A-Za-z]:$') { return "$trimmed\" }
+    return $trimmed
+}
+
+# ----------------------------------------------------------------------------
 # SDK path resolution
 #   ~\.tizen.sdk.path.config -> TIZEN_SDK_PATH -> %USERPROFILE%\tizen-sdk -> C:\tizen-sdk
 # The config file is the path saved by sdk-init (the only source the Node lib's
@@ -262,49 +297,186 @@ function Find-TizenTool {
 }
 
 # ----------------------------------------------------------------------------
-# Locate an installed .NET SDK `dotnet` executable, even when it is NOT on PATH.
-# Searches PATH, well-known install locations, and Tizen SDK-bundled dotnets.
-# Returns the path to a usable SDK (preferring one that has the Tizen workload),
-# or $null. Does NOT modify the environment.
+# .NET SDK discovery.
+#
+# Every usable SDK host on the machine is enumerated and ranked by WHERE it came
+# from (lower tier wins):
+#   path        - the `dotnet` already on PATH
+#   dotnet_root - $env:DOTNET_ROOT
+#   official    - Microsoft install roots (Program Files, %LOCALAPPDATA%\Microsoft\dotnet, ~\.dotnet)
+#   bundled     - dotnets shipped inside a Tizen extension / SDK tree (...\sdktools\dotnet)
+# Within a tier, one that already carries the Tizen workload is preferred. The
+# workload is only a tie-breaker: it is what tizen-dotnet-setup installs, so it
+# must not flip the choice of SDK across tiers.
+#
+# Well-known bundled locations are probed directly; the recursive scan of the
+# whole profile is a fallback that runs only when nothing else turned up.
+# None of these functions modify the environment.
 # ----------------------------------------------------------------------------
-function Find-DotnetSdk {
-    $candidates = @()
+$script:DotnetTierOrder = @('path', 'dotnet_root', 'official', 'bundled')
 
-    $onPath = Get-Command dotnet -ErrorAction SilentlyContinue
-    if ($onPath) { $candidates += $onPath.Source }
+function Get-OfficialDotnetRoots {
+    $roots = @()
+    if ($env:ProgramFiles) { $roots += (Join-Path $env:ProgramFiles 'dotnet') }
+    if (${env:ProgramFiles(x86)}) { $roots += (Join-Path ${env:ProgramFiles(x86)} 'dotnet') }
+    if ($env:LOCALAPPDATA) { $roots += (Join-Path $env:LOCALAPPDATA 'Microsoft\dotnet') }
+    if ($env:USERPROFILE) { $roots += (Join-Path $env:USERPROFILE '.dotnet') }
+    return $roots
+}
 
-    if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
-        $candidates += (Join-Path $env:DOTNET_ROOT "dotnet.exe")
-    }
-    if ($env:ProgramFiles) { $candidates += (Join-Path $env:ProgramFiles "dotnet\dotnet.exe") }
-    if (${env:ProgramFiles(x86)}) { $candidates += (Join-Path ${env:ProgramFiles(x86)} "dotnet\dotnet.exe") }
-    $candidates += (Join-Path $env:USERPROFILE ".dotnet\dotnet.exe")
-    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA "Microsoft\dotnet\dotnet.exe") }
-
-    # Tizen SDK-bundled dotnets (…\sdktools\dotnet\dotnet.exe and %USERPROFILE%\tizen-sdk).
+function Get-KnownBundledDotnetRoots {
+    $roots = @()
     if ($env:USERPROFILE) {
+        $roots += (Join-Path $env:USERPROFILE '.tizen-extension-platform\server\sdktools\dotnet')
+    }
+    return $roots
+}
+
+# Classify a dotnet install root: 'official' (Microsoft install locations),
+# 'bundled' (inside a Tizen extension / SDK tree — may vanish on an extension
+# update), or 'other' (anything else, e.g. a custom -DotnetRoot).
+function Get-DotnetRootKind {
+    param([string]$Root)
+    if ([string]::IsNullOrWhiteSpace($Root)) { return 'other' }
+    $r = $Root.TrimEnd('\', '/')
+    foreach ($o in Get-OfficialDotnetRoots) {
+        if ($r -ieq $o.TrimEnd('\', '/')) { return 'official' }
+    }
+    if ($r -like '*\sdktools\dotnet' -or $r -like '*\.tizen-extension-platform\*' -or $r -like '*\tizen-sdk\*') {
+        return 'bundled'
+    }
+    return 'other'
+}
+
+# Follow symlinks / reparse points to the real executable. `dotnet` on PATH is
+# often NOT the real binary (app-execution aliases, symlinks), and Split-Path of
+# the alias would name a directory with no sdk/ at all.
+function Resolve-RealPath {
+    param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $Path }
+    try {
+        $item = Get-Item -LiteralPath $Path -Force -ErrorAction Stop
+
+        # PowerShell 7+ / .NET 6+: resolves a whole chain of links.
+        if ($item.PSObject.Methods.Name -contains 'ResolveLinkTarget') {
+            $final = $item.ResolveLinkTarget($true)
+            if ($final -and $final.FullName) { return $final.FullName }
+        }
+
+        # Windows PowerShell 5.1: .Target holds the reparse point destination.
+        $target = @($item.Target) | Where-Object { $_ } | Select-Object -First 1
+        if ($target) {
+            if (-not [System.IO.Path]::IsPathRooted($target)) {
+                $target = Join-Path (Split-Path -Parent $item.FullName) $target
+            }
+            $resolved = Resolve-Path -LiteralPath $target -ErrorAction SilentlyContinue
+            if ($resolved) { return $resolved.Path }
+        }
+
+        return $item.FullName
+    } catch {
+        return $Path
+    }
+}
+
+# SDK feature band, computed exactly the way Samsung's installer does
+# (major.minor.<first digit of patch>00): 10.0.302 -> 10.0.300, 9.0.304 -> 9.0.300.
+# Returns $null when the version string is not parseable.
+function Get-SdkBand {
+    param([string]$SdkVersion)
+    if ([string]::IsNullOrWhiteSpace($SdkVersion)) { return $null }
+    $parts = $SdkVersion.Split('.')
+    if ($parts.Count -lt 3 -or $parts[2].Length -lt 1) { return $null }
+    return "$($parts[0]).$($parts[1]).$($parts[2][0])00"
+}
+
+# Is the Tizen workload recorded as installed for this SDK band? This is the
+# install record `dotnet workload list` itself reads, minus the ~3 s that
+# command spends per invocation — cheap enough to ask of every candidate.
+function Test-TizenWorkloadRecord {
+    param([string]$Root, [string]$SdkVersion)
+    $band = Get-SdkBand $SdkVersion
+    if (-not $band) { return $false }
+    return (Test-Path -LiteralPath (Join-Path $Root "metadata\workloads\$band\InstalledWorkloads\tizen"))
+}
+
+# Probe one dotnet.exe. Returns a candidate object, or $null when the file is
+# missing, is a runtime-only host, or its root was already seen.
+function Test-DotnetCandidate {
+    param([string]$Tier, [string]$Exe, [hashtable]$Seen)
+    if ([string]::IsNullOrWhiteSpace($Exe) -or -not (Test-Path -LiteralPath $Exe)) { return $null }
+    $real = Resolve-RealPath $Exe
+    $root = Split-Path -Parent $real
+    $key = $root.TrimEnd('\', '/').ToLowerInvariant()
+    if ($Seen.ContainsKey($key)) { return $null }
+    $Seen[$key] = $true
+
+    # Must be a real SDK (lists at least one SDK), not a runtime-only host. The
+    # last line is the highest SDK — what `dotnet --version` resolves to absent a
+    # global.json, without letting a global.json in the CWD skew the answer.
+    $sdks = @((& $real --list-sdks) 2>$null | Where-Object { $_ })
+    if ($sdks.Count -eq 0) { return $null }
+    $version = (($sdks[-1] -split '\s+')[0])
+    $hasTizen = Test-TizenWorkloadRecord $root $version
+
+    return [pscustomobject]@{
+        Tier          = $Tier
+        Path          = $real
+        Root          = $root
+        Version       = $version
+        TizenWorkload = $hasTizen
+    }
+}
+
+function Get-DotnetCandidates {
+    $probes = @()
+    $onPath = Get-Command dotnet -ErrorAction SilentlyContinue
+    if ($onPath) { $probes += @{ tier = 'path'; exe = $onPath.Source } }
+    if (-not [string]::IsNullOrWhiteSpace($env:DOTNET_ROOT)) {
+        $probes += @{ tier = 'dotnet_root'; exe = (Join-Path $env:DOTNET_ROOT 'dotnet.exe') }
+    }
+    foreach ($r in Get-OfficialDotnetRoots) { $probes += @{ tier = 'official'; exe = (Join-Path $r 'dotnet.exe') } }
+    foreach ($r in Get-KnownBundledDotnetRoots) { $probes += @{ tier = 'bundled'; exe = (Join-Path $r 'dotnet.exe') } }
+
+    $seen = @{}
+    $found = @()
+    foreach ($p in $probes) {
+        $c = Test-DotnetCandidate $p.tier $p.exe $seen
+        if ($c) { $found += $c }
+    }
+
+    # Fallback only: walking the whole profile can take tens of seconds.
+    if ($found.Count -eq 0 -and $env:USERPROFILE) {
         try {
-            Get-ChildItem -Path $env:USERPROFILE -Filter "dotnet.exe" -Recurse -Depth 6 -ErrorAction SilentlyContinue |
-                Where-Object { $_.FullName -like "*\sdktools\dotnet\dotnet.exe" } |
-                ForEach-Object { $candidates += $_.FullName }
+            Get-ChildItem -Path $env:USERPROFILE -Filter 'dotnet.exe' -Recurse -Depth 6 -ErrorAction SilentlyContinue |
+                Where-Object { $_.FullName -like '*\sdktools\dotnet\dotnet.exe' } |
+                ForEach-Object {
+                    $c = Test-DotnetCandidate 'bundled' $_.FullName $seen
+                    if ($c) { $found += $c }
+                }
         } catch { }
     }
+    return $found
+}
 
-    $firstSdk = $null
-    foreach ($c in ($candidates | Select-Object -Unique)) {
-        if ([string]::IsNullOrWhiteSpace($c)) { continue }
-        if (-not (Test-Path $c)) { continue }
-        # Must be a real SDK (lists at least one SDK), not a runtime-only host.
-        $sdks = (& $c --list-sdks) 2>$null
-        if (-not $sdks) { continue }
-        if (-not $firstSdk) { $firstSdk = $c }
-        # Prefer one that already has the Tizen workload installed.
-        $wl = (& $c workload list) 2>$null
-        if ($wl | Select-String -Pattern '^\s*tizen' -Quiet) {
-            return $c
-        }
+# Lowest tier first; within a tier prefer one that already has the Tizen workload.
+function Select-DotnetCandidate {
+    param([object[]]$Candidates)
+    foreach ($tier in $script:DotnetTierOrder) {
+        $inTier = @($Candidates | Where-Object { $_.Tier -eq $tier })
+        if ($inTier.Count -eq 0) { continue }
+        $withWorkload = @($inTier | Where-Object { $_.TizenWorkload })
+        if ($withWorkload.Count -gt 0) { return $withWorkload[0] }
+        return $inTier[0]
     }
-    return $firstSdk
+    return $null
+}
+
+# Path of the best usable dotnet.exe on this machine, or $null.
+function Find-DotnetSdk {
+    $best = Select-DotnetCandidate @(Get-DotnetCandidates)
+    if ($best) { return $best.Path }
+    return $null
 }
 
 # ----------------------------------------------------------------------------

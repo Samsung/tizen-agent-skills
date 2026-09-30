@@ -103,6 +103,11 @@ export const DEBUG_SPECS: CommandSpec[] = [
         description: "PID search wait time in seconds (1-300, attach mode)",
         default: "30",
       },
+      {
+        flags: "--project <dir>",
+        description:
+          "Host project (workspace) directory. Launch mode: writes <dir>/.vscode/launch.json with a ready coreclr configuration (program/cwd from the .csproj) so the user only presses F5",
+      },
     ],
     handler: (o) =>
       sdkCommands.setupDotnetDebug(
@@ -114,6 +119,7 @@ export const DEBUG_SPECS: CommandSpec[] = [
           serial: o.serial,
           forceInstall: !!o.forceInstall,
           timeout: o.timeout,
+          projectPath: o.project,
         },
         "tizen-sdk dotnet-debug",
       ),

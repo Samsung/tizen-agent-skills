@@ -51,7 +51,9 @@ metadata:
 
 ### IOT-Headed Extension Download Flow (when --include-iot-headed)
 
-1. Downloads `{PKG_REPO_URL}/extension_info.xml`
+1. Downloads `{PKG_REPO_URL}/extension_info.xml`. If `PKG_REPO_URL` is a custom
+   repository (from `repository.info`) that does not serve this file, falls back to
+   `https://download.tizen.org/sdk/tizenstudio/official/extension_info.xml`
 2. Parses the XML to extract the IoT Headed repository URL:
    - Looks for `<extension name="IoT-Headed"><repository>URL</repository></extension>`
 3. Downloads `{IOT_REPO_URL}/pkg_list_{OS}-{32,64}` from the IoT repository
@@ -70,7 +72,7 @@ This CLI is a **pre-check**, not the installer. It finishes in seconds. Run in f
 
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*download-mobile-platform-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**

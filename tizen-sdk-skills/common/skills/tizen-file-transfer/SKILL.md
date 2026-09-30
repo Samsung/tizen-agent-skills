@@ -29,7 +29,7 @@ metadata:
 
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*file-transfer-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
@@ -57,6 +57,22 @@ node "$CLI" push "<localPath>" "<remotePath>" [serial] [--with-utf8]
 node "$CLI" pull - "<remotePath>" [localOutputPath|serial] [serial] [--with-utf8]
 ```
 
+**Windows Git Bash — the remote path gets MSYS-converted (handled by the runner).** Git Bash
+rewrites any argument that starts with `/` into a path under the Git install root before `node`
+sees it: `"/opt/usr/apps/x"` arrives as `C:/Program Files/Git/opt/usr/apps/x`. The runner
+detects that prefix (from `EXEPATH`, falling back to the well-known Git / msys64 install roots),
+restores `/opt/usr/apps/x`, and says so in `warnings`. So:
+
+- Pass the device path exactly as it is on the device (`"/opt/usr/apps/x"`). Do **not** prefix a
+  second slash (`//opt/...`) and do **not** set `MSYS_NO_PATHCONV=1` — the latter also stops
+  `$CLI` (`/c/Users/...`) from being converted, and Windows `node` cannot open that spelling.
+  A `//opt/...` that arrives anyway is collapsed to `/opt/...` with a warning.
+- A **genuine** Windows path in the remote slot (`C:/Users/me/x`) is refused with
+  `invalid_parameters` — a device path is always POSIX. Only when the install root is unusual
+  (the error names `EXEPATH`) fall back to `//opt/...` or to the PowerShell form.
+- The **local** path is unaffected: MSYS turning `/c/Users/me/out` into `C:\Users\me\out` is
+  exactly what the host-side `sdb pull` needs.
+
 ### Codex CLI — large transfers as a job (one exec call waits ≤ 30 s)
 
 `sdb push`/`pull` of a large file or a directory tree can take minutes; under Codex a tool call
@@ -79,7 +95,7 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 |-----|----------|----------|-------------|
 | direction | 1 | **yes** | `push` (host→device) or `pull` (device→host) |
 | localPath / `-` | 2 | **yes** | **PUSH:** Local file/directory path. **PULL:** Always use `-` (reserved for future use) |
-| remotePath | 3 | **yes** | Remote (device) file/directory path |
+| remotePath | 3 | **yes** | Remote (device) file/directory path — always POSIX (`/opt/usr/apps/x`). In Windows Git Bash the runner undoes MSYS's `C:/Program Files/Git/opt/...` conversion itself; a real Windows path here is `invalid_parameters` |
 | localOutputPath\|serial | 4 | no | **PULL only:** If contains `/` or `\`, treated as output file path; otherwise, device serial. **PUSH:** Device serial. Omit to auto-select. |
 | serial | 5 | no | **PULL only:** Device serial, only if position 4 is a local output path. Omit to auto-select. |
 | --with-utf8 | flag | no | Handle UTF-8 encoded paths (any position) |

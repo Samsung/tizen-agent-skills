@@ -10,8 +10,8 @@
  *
  *   node scripts/prepare-device-fixtures.mjs                 # everything (first run: 6-12 min)
  *   node scripts/prepare-device-fixtures.mjs --skip-build    # re-read ids/artifacts, rewrite the env
- *   node scripts/prepare-device-fixtures.mjs --only=web,tmp  # a subset (native,dotnet,web,tmp,playwright,projects)
- *   node scripts/prepare-device-fixtures.mjs --only=tmp,projects  # minimal prepare for run-mutating-tier.mjs
+ *   node scripts/prepare-device-fixtures.mjs --only=web,tmp  # a subset (native,dotnet,web,tmp,playwright,projects,rootstrap)
+ *   node scripts/prepare-device-fixtures.mjs --only=tmp,projects,rootstrap  # minimal prepare for run-mutating-tier.mjs
  *   node scripts/prepare-device-fixtures.mjs --clean         # delete fixtures/apps/ first
  *   node scripts/prepare-device-fixtures.mjs --replace-profile  # replace a myProfile that points
  *                                                                # at another certificate
@@ -29,6 +29,9 @@
  *                  profiles/ (scratch profiles.xml for create-profile)
  *   projects/      FIXTURE_PROJECTS_DIR: scratch parent dir for the mutating tier's
  *                  create-project / build-project / project-delete TCs
+ *   rootstrap/     FIXTURE_ROOTSTRAP_ZIP: custom-rootstrap.zip — the smallest ZIP
+ *                  tizen-install-rootstrap accepts (data/tools/smart-build-interface/
+ *                  plugins/custom-10.0-fixture.core.xml) for install-rootstrap.happy
  *   fixtures.generated.env
  *
  * Why the apps are built rather than committed: the plugin cannot create a
@@ -121,7 +124,15 @@ const PROJECTS = {
     buildTimeoutSec: 120,
   },
 };
-const ALL_PARTS = ["native", "dotnet", "web", "tmp", "playwright", "projects"];
+const ALL_PARTS = [
+  "native",
+  "dotnet",
+  "web",
+  "tmp",
+  "playwright",
+  "projects",
+  "rootstrap",
+];
 
 // ── CLI ───────────────────────────────────────────────────────────────────
 
@@ -589,6 +600,77 @@ function preparePlaywright(tmp) {
   ok(`playwright installed in ${Math.round((Date.now() - t0) / 1000)}s`);
 }
 
+/**
+ * A minimal rootstrap ZIP for install-rootstrap.happy: the installer only
+ * requires a `data/` (or `tizen-studio/`) root holding
+ * tools/smart-build-interface/plugins/{profile}-{version}-{device}.core.xml;
+ * it copies tools/ into the SDK and records "custom-10.0-fixture" in
+ * <sdk>/.rootstrap-installed. A distinct profile name keeps it from
+ * overwriting one of the SDK's own tizen-*.core.xml definitions.
+ */
+function prepareRootstrapZip() {
+  step("rootstrap: FIXTURE_ROOTSTRAP_ZIP");
+  const dir = join(FIXTURE_APPS_DIR, "rootstrap");
+  const stage = join(dir, "stage");
+  const plugins = join(
+    stage,
+    "data",
+    "tools",
+    "smart-build-interface",
+    "plugins",
+  );
+  rmSync(stage, { recursive: true, force: true });
+  mkdirSync(plugins, { recursive: true });
+  writeFileSync(
+    join(plugins, "custom-10.0-fixture.core.xml"),
+    [
+      '<?xml version="1.0"?>',
+      '<extension point="rootstrapDefinition">',
+      '  <rootstrap id="custom-10.0-fixture.core" name="Fixture Rootstrap 10.0" version="Tizen 10.0" architecture="armel" path="#{SBI_HOME}/../../platforms/tizen-10.0/tizen/rootstraps/custom-10.0-fixture.core" supportToolchainType="tizen.core">',
+      '    <toolchain name="gcc" version="14.2"/>',
+      "  </rootstrap>",
+      "</extension>",
+      "",
+    ].join("\n"),
+  );
+  const zip = join(dir, "custom-rootstrap.zip");
+  rmSync(zip, { force: true });
+  const r =
+    process.platform === "win32"
+      ? spawnSync(
+          "powershell",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `Compress-Archive -Path '${join(stage, "data")}' -DestinationPath '${zip}' -Force`,
+          ],
+          {
+            encoding: "utf-8",
+            timeout: 60_000,
+            stdio: ["ignore", "pipe", "pipe"],
+          },
+        )
+      : spawnSync("zip", ["-qr", zip, "data"], {
+          cwd: stage,
+          encoding: "utf-8",
+          timeout: 60_000,
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+  if (r.error || r.status !== 0 || !existsSync(zip))
+    fail(
+      "rootstrap zip",
+      r.error?.message ||
+        (r.stderr || r.stdout || `exit ${r.status}`)
+          .trim()
+          .split(/\r?\n/)
+          .pop(),
+    );
+  rmSync(stage, { recursive: true, force: true });
+  ok(`${fwd(zip)} (${statSync(zip).size} bytes)`);
+  return zip;
+}
+
 function writeGeneratedEnv(values, { quiet = false } = {}) {
   if (!quiet) step(`write ${relative(TESTS, FIXTURE_GENERATED_ENV)}`);
   // Keep keys from a previous run that this (--only) run did not touch.
@@ -636,8 +718,15 @@ function main() {
 
   preflight();
 
-  const wantsBuild = ["native", "dotnet", "web"].some((k) => opts.only.has(k));
-  if (wantsBuild && !opts.skipBuild) ensureSigningProfile(opts);
+  // The signed builds need myProfile: the app parts here, and `projects`
+  // alone (the mutating tier's minimal prepare) because phase p1-projects
+  // runs build-project.release --sign-profile myProfile. --skip-build means
+  // "the host was prepared before, only re-read it", so it skips this step
+  // for every part alike.
+  const wantsProfile =
+    ["native", "dotnet", "web", "projects"].some((k) => opts.only.has(k)) &&
+    !opts.skipBuild;
+  if (wantsProfile) ensureSigningProfile(opts);
 
   // Persist after every part: a later part failing (typically `npm install`
   // behind a proxy) must not lose the ids the builds just produced.
@@ -689,6 +778,8 @@ function main() {
     persist({ FIXTURE_PROJECTS_DIR: fwd(projects) });
     ok(fwd(projects));
   }
+  if (opts.only.has("rootstrap"))
+    persist({ FIXTURE_ROOTSTRAP_ZIP: fwd(prepareRootstrapZip()) });
 
   const merged = writeGeneratedEnv(values);
   step("summary");

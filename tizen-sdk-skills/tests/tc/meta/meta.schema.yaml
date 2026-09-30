@@ -17,3 +17,18 @@ lanes:
         - { path: "$.result.plugin", min_length: 1 }
         - { path: "$.result.version", matches: "^\\d+\\.\\d+\\.\\d+" }
         - { path: "$.result.commands", min_length: 1 }
+        # Password options must be flagged so MCP hosts mask them in their
+        # transcripts, and the entry must stay a schema object (type kept) —
+        # not be collapsed to "***" by the envelope's field-name masking.
+        - {
+            path: "$.result.commands.certificate-manager.args.--password.sensitive",
+            equals: true,
+          }
+        - {
+            path: "$.result.commands.certificate-manager.args.--password.type",
+            equals: "string",
+          }
+        - {
+            path: "$.result.commands.certificate-manager.args.--author-password.sensitive",
+            equals: true,
+          }

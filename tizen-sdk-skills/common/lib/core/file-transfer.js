@@ -80,6 +80,112 @@ function normalizeLocalPath(localPath) {
 // POSIX path on the device, where a backslash is never legitimate.
 const UNSAFE_PATH = /["`$\\;|&<>\n\r]/;
 
+/**
+ * Well-known MSYS / Cygwin install roots, for when EXEPATH is not exported.
+ * Matched against a forward-slash Windows path; the match ends right before
+ * the `/opt/...` part MSYS appended.
+ */
+const KNOWN_MSYS_ROOT_RE =
+  /^[A-Za-z]:\/(?:Program Files(?: \(x86\))?\/Git|Git|msys64|msys32|msys2|cygwin64|cygwin)(?=\/)/i;
+
+/**
+ * Install roots MSYS may have prefixed onto a POSIX path, forward-slashed,
+ * no trailing slash. Git for Windows exports EXEPATH as `C:\Program Files\Git`
+ * or `...\Git\bin` (or `...\usr\bin` / `...\mingw64\bin` under msys2), so the
+ * `bin` tails are stripped to reach the root.
+ *
+ * A root must be a drive plus at least one directory. A bare drive
+ * (`EXEPATH=C:\`) would otherwise match EVERY `C:/...` path and "restore"
+ * genuine Windows paths (`C:/Users/me/x` → `/Users/me/x`) instead of
+ * rejecting them; such a value is ignored and the well-known roots are used.
+ *
+ * @param {NodeJS.ProcessEnv} env
+ * @returns {string[]}
+ */
+function msysRoots(env) {
+  const roots = [];
+  const exe = env && env.EXEPATH;
+  if (exe) {
+    const fwd = String(exe).replace(/\\/g, "/").replace(/\/+$/, "");
+    const root = fwd.replace(/\/(?:(?:usr|mingw64|mingw32)\/)?bin$/i, "");
+    if (/^[A-Za-z]:\/[^/]/.test(root)) roots.push(root);
+  }
+  return roots;
+}
+
+/**
+ * Undo Git Bash (MSYS) argument conversion on the REMOTE path.
+ *
+ * In Claude Code on Windows the Bash tool is Git Bash, and MSYS rewrites any
+ * argument that starts with `/` into a Windows path under the Git install
+ * root before node ever sees it: `/opt/usr/apps/x` arrives as
+ * `C:/Program Files/Git/opt/usr/apps/x`. That is meaningless on a Tizen
+ * device — sdb would fail with "No such file" against a path the user never
+ * typed. The agent's manual workaround was `//opt/...` (a leading double
+ * slash is left alone by MSYS). Both forms are normalized here:
+ *
+ *   "C:/Program Files/Git/opt/usr/apps/x" → "/opt/usr/apps/x"   (+ warning)
+ *   "//opt/usr/apps/x"                     → "/opt/usr/apps/x"   (+ warning)
+ *   "/opt/usr/apps/x"                      → unchanged
+ *   "C:/Users/me/x"                        → error (a Windows path is never
+ *                                             a device path)
+ *
+ * The install root comes from EXEPATH (exported by Git Bash) and falls back
+ * to the well-known install locations. Root matching is case-insensitive
+ * (Windows paths are) and segment-exact: `.../Git/` is a root, `.../Github/`
+ * is not. Anything under a recognised root is restored — including paths
+ * that also exist on the host, such as `<root>/usr/bin/bash.exe` →
+ * `/usr/bin/bash.exe`. That is deliberate: a Windows path is never a valid
+ * device path, so the only sensible reading of `<root>/X` is "MSYS
+ * converted `/X`", and `/X` is exactly what the user typed. The warning
+ * names both spellings so a wrong guess is visible in the envelope.
+ * `MSYS_NO_PATHCONV=1` is deliberately NOT the recommended fix: it would
+ * also stop `/c/Users/.../file-transfer-cli.js` from being converted, and
+ * Windows node cannot open that spelling.
+ *
+ * @param {string} remotePath
+ * @param {NodeJS.ProcessEnv} [env=process.env]
+ * @returns {{path: string, warning?: string, error?: string}}
+ */
+function normalizeRemotePath(remotePath, env = process.env) {
+  if (!remotePath) return { path: remotePath };
+  const original = String(remotePath);
+
+  if (/^\/\//.test(original)) {
+    const collapsed = original.replace(/^\/+/, "/");
+    return {
+      path: collapsed,
+      warning: `Remote path "${original}" had a doubled leading slash (the manual MSYS workaround); using "${collapsed}". The runner restores MSYS-converted paths itself — a plain "/opt/..." is fine.`,
+    };
+  }
+
+  if (!/^[A-Za-z]:[\\/]/.test(original)) return { path: original };
+
+  const fwd = original.replace(/\\/g, "/");
+  for (const root of msysRoots(env)) {
+    if (root && fwd.toLowerCase().startsWith(`${root.toLowerCase()}/`)) {
+      const restored = fwd.slice(root.length);
+      return {
+        path: restored,
+        warning: `Remote path "${original}" was a Git Bash (MSYS) conversion of "${restored}" — restored to the device path. Pass device paths as plain "/opt/..."; no "//" prefix or MSYS_NO_PATHCONV needed.`,
+      };
+    }
+  }
+  const known = fwd.match(KNOWN_MSYS_ROOT_RE);
+  if (known) {
+    const restored = fwd.slice(known[0].length);
+    return {
+      path: restored,
+      warning: `Remote path "${original}" was a Git Bash (MSYS) conversion of "${restored}" — restored to the device path. Pass device paths as plain "/opt/..."; no "//" prefix or MSYS_NO_PATHCONV needed.`,
+    };
+  }
+
+  return {
+    path: original,
+    error: `Remote path must be a POSIX path on the device (e.g. /opt/usr/apps/x), got a Windows path: ${original}. If you typed "/opt/..." in Git Bash, MSYS converted it under an install root the runner does not recognise (EXEPATH=${(env && env.EXEPATH) || "unset"}); re-run with the device path spelled "//opt/..." or from PowerShell.`,
+  };
+}
+
 /** sdb's wording when the remote object does not exist (pull) */
 const REMOTE_MISSING_RE =
   /^REMOTE_NOT_FOUND=|cannot stat\b|No such file or directory|does not exist|remote object .* does not exist/im;
@@ -165,6 +271,24 @@ async function fileTransfer(
       );
     }
 
+    // Git Bash on Windows rewrites a leading-slash argument into a path under
+    // the Git install root before node sees it — restore the device path
+    // (see normalizeRemotePath). A genuine Windows path is never valid here.
+    const remote = normalizeRemotePath(remotePath);
+    if (remote.error) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        remote.error,
+        'Pass the device path as it is on the device, e.g. fileTransfer("pull", undefined, "/opt/usr/apps/x")',
+        startTime,
+      );
+    }
+    const effectiveRemotePath = remote.path;
+    const pathWarnings = remote.warning ? [remote.warning] : [];
+    if (remote.warning)
+      console.error(`[tizen-file-transfer] ${remote.warning}`);
+
     // For push, local path is required
     if (direction === "push" && !localPath) {
       return formatError(
@@ -197,11 +321,11 @@ async function fileTransfer(
         `Local path contains unsupported characters: ${effectiveLocalPath}`,
       );
     }
-    if (UNSAFE_PATH.test(remotePath)) {
+    if (UNSAFE_PATH.test(effectiveRemotePath)) {
       return formatError(
         command,
         "invalid_parameters",
-        `Remote path contains unsupported characters: ${remotePath}`,
+        `Remote path contains unsupported characters: ${effectiveRemotePath}`,
       );
     }
 
@@ -224,12 +348,15 @@ async function fileTransfer(
     }
 
     console.error(
-      `[tizen-file-transfer] ${direction}: ${effectiveLocalPath} <-> ${remotePath}${serial ? ` on ${serial}` : ""}`,
+      `[tizen-file-transfer] ${direction}: ${effectiveLocalPath} <-> ${effectiveRemotePath}${serial ? ` on ${serial}` : ""}`,
     );
 
     // Build script arguments
-    const winFlags = [`-Direction "${direction}"`, `-Remote "${remotePath}"`];
-    const unixFlags = [`-d ${direction}`, `-r "${remotePath}"`];
+    const winFlags = [
+      `-Direction "${direction}"`,
+      `-Remote "${effectiveRemotePath}"`,
+    ];
+    const unixFlags = [`-d ${direction}`, `-r "${effectiveRemotePath}"`];
 
     if (effectiveLocalPath) {
       winFlags.push(`-Local "${effectiveLocalPath}"`);
@@ -301,7 +428,7 @@ async function fileTransfer(
       {
         direction: directionMatch ? directionMatch[1].trim() : direction,
         local_path: localMatch ? localMatch[1].trim() : effectiveLocalPath,
-        remote_path: remoteMatch ? remoteMatch[1].trim() : remotePath,
+        remote_path: remoteMatch ? remoteMatch[1].trim() : effectiveRemotePath,
         device_serial: serialMatch[1].trim(),
         bytes_transferred: bytesMatch
           ? parseInt(bytesMatch[1].trim(), 10)
@@ -309,7 +436,7 @@ async function fileTransfer(
         status: "completed",
       },
       {
-        warnings: summarizeFileTransferOutput(output),
+        warnings: [...pathWarnings, ...summarizeFileTransferOutput(output)],
       },
     );
   } catch (error) {
@@ -327,6 +454,7 @@ module.exports = {
   fileTransfer,
   // exported for unit tests
   normalizeLocalPath,
+  normalizeRemotePath,
   classifyTransferFailure,
   summarizeFileTransferOutput,
 };

@@ -16,7 +16,9 @@ Executes test cases (TCs) from `tests/tc/` against the tizen-sdk plugin. Each TC
 ### Option 1: Automated runner (cli lane only)
 
 ```bash
-cd tizen-sdk-skills/tests
+cd tizen-sdk-skills/tizen-cli && pnpm install && pnpm build   # the runner executes dist/tizen-sdk.js; rebuild after
+                                                              # changes under common/lib, common/scripts, tizen-cli/src
+cd ../tests
 npm install
 node runner.mjs                    # run all TCs
 node runner.mjs --tier=safe        # only safe-tier TCs
@@ -40,10 +42,16 @@ For prompt-lane TCs, you (the AI agent) execute them directly:
 2. Find the `prompt.text` field — this is the user prompt
 3. Find the `prompt.expect` block — this defines what to verify:
    - `must_call_tool`: The MCP tool the LLM must call (e.g., `tizen_cli_run_commands`)
-   - `must_resolve_command`: The command the LLM must resolve to (e.g., `tizen-sdk check-node`)
+   - `must_resolve_command`: The command the LLM must resolve to (e.g., `tizen-sdk check-node`) — satisfied when it appears **anywhere** in the run
+   - `first_resolved_command` (optional): the **first** `must_call_tool` invocation of the run must resolve to this command — a detour through another command first is a FAIL even if the right one follows
+   - `must_not_resolve_commands` (optional): commands that must not be resolved at **any** point of the run — one such call is a FAIL
    - `envelope_status`: The expected envelope status (`success` or `failure`)
-4. Simulate the user prompt and verify the LLM calls the correct tool
-5. Report PASS/FAIL based on the expect criteria
+4. Simulate the user prompt and verify the LLM calls the correct tool. Judge every key from the **tool-call trace** (the ordered list of `tizen_cli_run_commands` calls and their argv), never from the LLM's narrative
+5. Report PASS/FAIL based on the expect criteria — for each attempt list the resolved commands in order so that `first_resolved_command` / `must_not_resolve_commands` verdicts are auditable
+
+Routing TCs (the user does not name the skill; e.g. `dlog-analyzer.prompt-symptom-routing`, TC-P-119) rely on
+the two optional keys: `must_resolve_command` alone would pass a run that first called
+`tizen-sdk device-manager` and only then the analyzer.
 
 ### Example: Running a prompt-lane TC
 
@@ -90,6 +98,8 @@ lanes:
     expect:
       must_call_tool: tizen_cli_run_commands
       must_resolve_command: "tizen-sdk <command>"
+      first_resolved_command: "tizen-sdk <command>"        # optional — routing TCs: the FIRST call must be this
+      must_not_resolve_commands: ["tizen-sdk <other>"]     # optional — never resolved at any point of the run
       envelope_status: success
     pass_rate: "2/3"
 ```
@@ -149,17 +159,25 @@ the previous run's certificates). Use the driver:
 
 ```bash
 cd tizen-sdk-skills/tests
-node scripts/prepare-device-fixtures.mjs --only=tmp,projects   # scratch dirs (once per host)
+node scripts/prepare-device-fixtures.mjs --only=tmp,projects,rootstrap   # scratch dirs + rootstrap ZIP (once per host)
 node scripts/run-mutating-tier.mjs          # preflight + plan, changes nothing
 node scripts/run-mutating-tier.mjs --yes    # ~5 min; deletes the fixture-named test certificates
                                             # under <sdk-data>/keystore, rewrites and restores
                                             # tests/fixtures/profiles/*.xml, empties the projects dir
+node scripts/run-mutating-tier.mjs --yes --with-installers   # + s2/s3: REAL SDK installs into a throwaway
+                                            # home (60-90 min, ~10 GB download), rewrites and restores the
+                                            # Windows User Path/TIZEN_SDK_PATH, reinstalls the .NET Tizen
+                                            # workload. Never pass this without an explicit user request.
 ```
 
 It runs the `approved` mutating TCs of `policy/mutating-run-order.yaml` with cwd = `tests/`
-(the certificate TCs use `fixtures/...` relative paths), only the SDK-installer TCs whose
-already-installed short-circuit makes them idempotent — it never installs or removes SDK
-packages. Ask the user before passing `--yes`. See `tests/README.md`, "Mutating tier".
+(the certificate TCs use `fixtures/...` relative paths). Without `--with-installers` only the
+SDK-installer TCs whose already-installed short-circuit makes them idempotent run — nothing is
+installed or removed. With it, the driver also runs phases `s2-sdk-installers` (the real
+installers, with `USERPROFILE`/`HOME` redirected to `<scratch>/home` and
+`TIZEN_SDK_INLINE_INSTALLER=1`, so the host's SDK is never touched) and `s3-dotnet-workload`.
+Ask the user before passing `--yes`, and again before `--with-installers`. See
+`tests/README.md`, "Mutating tier".
 
 ## Status meanings
 

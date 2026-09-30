@@ -40,7 +40,7 @@ When the project is a WebApp:
 
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
@@ -90,6 +90,7 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 3. **breakpoints** (optional, `-` for none) — C# breakpoints as `File.cs:line`, comma-separated. Ask user which file/line.
 4. **port** (optional, default `4711`, launch mode only) — DAP server port
 5. **serial** (optional) — device serial (default: first connected device)
+6. **`--project <dir>`** (optional, launch mode; may appear anywhere, also `--project=<dir>`) — host project (workspace) directory. The runner then writes `<dir>/.vscode/launch.json` itself: `program`/`cwd` are resolved from the `.csproj` (`TargetFramework`, `AssemblyName`), the entry is named `Tizen .NET (netcoredbg)`, other configurations in an existing file are preserved, and a file that is not strict JSON (comments, trailing commas) is left alone with a `launch.json not written:` warning. It also writes `<dir>/.vscode/tasks.json` with a `tizen: netcoredbg launch` task (this runner, same app/port/serial, `--project ${workspaceFolder}`) and sets it as the configuration's `preLaunchTask` — required because stopping a VS Code session ends the app **and** netcoredbg while the sdb forward keeps accepting connections, so a second F5 without a relaunch terminates immediately. **Pass it whenever the project path is known** — never hand-write launch.json in that case.
 
 **Ask the user for the breakpoint(s)**; confirm the mode only if they mention attach. Fall back to launch mode with no breakpoints if the user has no preference.
 
@@ -99,7 +100,7 @@ Exit code: `0` = success envelope, `1` = failure/error envelope.
 
 ## Result Handling
 
-- **Launch mode (success):** First sentence to the user: *"The app is running under netcoredbg but suspended before `Main()` — it shows no window until you press F5 in VS Code; this is expected."* (`result.note` starts with exactly this; `result.app_state` is `suspended_under_debugger`.) Then relay `result.launch_config` and guide: create `.vscode/launch.json`, set breakpoint, press F5. Never tell the user the launch failed because no window appeared.
+- **Launch mode (success):** First sentence to the user: *"The app is running under netcoredbg but suspended before `Main()` — it shows no window until you press F5 in VS Code; this is expected."* (`result.note` starts with exactly this; `result.app_state` is `suspended_under_debugger`.) Then relay `result.launch_config`: if it carries `launch_json_path`, the file is already written (`launch_json_action`) — open the project in VS Code, pick "Tizen .NET (netcoredbg)", set a breakpoint, press F5; do not edit launch.json yourself. Without `--project` (or when `warnings[]` has `launch.json not written: …`) relay the `<APP_FOLDER_NAME>` template and the warning instead. The `coreclr` type requires the VS Code C# extension (`ms-dotnettools.csharp`). Never tell the user the launch failed because no window appeared.
 - **Attach mode (success):** Relay `result.debug_command` verbatim — BOTH `powershell` and `cmd` forms. The leading `&` is PowerShell-only.
 - **App not installed (failure, `invalid_parameters` "is not installed on the device"):** Do NOT retry with guessed ids. `errors[0].details` lists the ids the device knows — show them, then route to `tizen-install-app` if the app is missing.
 - **Debug launch refused (failure, `io_error` "did not start ... under netcoredbg"):** `errors[0].details` carries the raw `launch_app` output — show it verbatim. The image may not support `__AUL_SDK__` debug launch; do not fall back to raw `sdb shell` commands.

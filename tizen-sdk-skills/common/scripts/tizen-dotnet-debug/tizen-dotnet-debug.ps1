@@ -381,7 +381,7 @@ try {
         Write-Host "  3. VS Code will connect to port $Port and break at your breakpoint"
         Write-Host ""
         Write-Info "Note: The app is SUSPENDED before Main() and shows no window until F5 starts the VS Code debug session - this is expected, not a failed launch. Startup breakpoints will hit."
-        Write-Info "(The app, netcoredbg DAP server, and port forward stay in place - you can disconnect and reconnect.)"
+        Write-Info "(Stopping the VS Code session ends the app AND the netcoredbg DAP server; only the sdb port forward stays. Re-run this setup - or let the generated 'tizen: netcoredbg launch' preLaunchTask do it - before the next F5.)"
     }
     else {
         # Step 4 (attach): start the app normally and resolve its PID.

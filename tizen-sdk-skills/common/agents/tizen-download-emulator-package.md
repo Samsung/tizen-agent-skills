@@ -60,12 +60,23 @@ This agent returns a Standard JSON Envelope with download/install results:
         "version": "emulator"
       }
     ],
+    "installed_images": [
+      { "platform": "9.0", "profile": "tizen", "image": "tizen-9.0-x86_64" },
+      { "platform": "10.0", "profile": "tizen", "image": "tizen-10.0-x86_64" },
+      { "platform": "10.0", "profile": "tv-samsung", "image": "tv-samsung-10.0-x86_64" }
+    ],
     "installation_status": "completed"
   },
-  "warnings": ["Emulator package installation verified at /home/user/tizen-sdk (.emulator-package-installed found). Recorded platform(s): 10.0. To force a reinstall, run with --force. To install another platform's emulator package, pass --platform-version <X.Y>."],
+  "warnings": ["Emulator package installation verified at /home/user/tizen-sdk (.emulator-package-installed found). Recorded by this skill: 10.0. Emulator images on disk: 9.0 (tizen), 10.0 (tizen, tv-samsung). To force a reinstall, run with --force. To install another platform's emulator package, pass --platform-version <X.Y>."],
   "errors": []
 }
 ```
+
+`installed_images` is what is actually under `{SDK_PATH}/platforms/tizen-X.Y/<profile>/emulator-images/`,
+regardless of which installer put it there. The `.emulator-package-installed` marker ("Recorded by
+this skill") only lists installs made by **this** skill — `tizen-sdk-install`, `tizen-tv-sdk-install`
+and `tizen-platform-install` also ship emulator images but never write that marker. When the user
+asks which emulator platforms are installed, answer from `installed_images`, not from the marker.
 
 **Success response (freshly installed):**
 
@@ -82,9 +93,12 @@ This agent returns a Standard JSON Envelope with download/install results:
         "version": "emulator"
       }
     ],
+    "installed_images": [
+      { "platform": "10.0", "profile": "tizen", "image": "tizen-10.0-x86_64" }
+    ],
     "installation_status": "completed"
   },
-  "warnings": ["Emulator package installed successfully at /home/user/tizen-sdk."],
+  "warnings": ["Emulator package installed successfully at /home/user/tizen-sdk. Emulator images on disk: 10.0 (tizen)."],
   "errors": []
 }
 ```
@@ -244,9 +258,12 @@ After successful installation:
         "version": "emulator"
       }
     ],
+    "installed_images": [
+      { "platform": "10.0", "profile": "tizen", "image": "tizen-10.0-x86_64" }
+    ],
     "installation_status": "completed"
   },
-  "warnings": ["Emulator package installed successfully at /home/user/tizen-sdk."],
+  "warnings": ["Emulator package installed successfully at /home/user/tizen-sdk. Emulator images on disk: 10.0 (tizen)."],
   "errors": []
 }
 ```
@@ -266,9 +283,14 @@ If already installed:
         "version": "emulator"
       }
     ],
+    "installed_images": [
+      { "platform": "9.0", "profile": "tizen", "image": "tizen-9.0-x86_64" },
+      { "platform": "10.0", "profile": "tizen", "image": "tizen-10.0-x86_64" },
+      { "platform": "10.0", "profile": "tv-samsung", "image": "tv-samsung-10.0-x86_64" }
+    ],
     "installation_status": "completed"
   },
-  "warnings": ["Emulator package installation verified at /home/user/tizen-sdk (.emulator-package-installed found). Recorded platform(s): 10.0. To force a reinstall, run with --force. To install another platform's emulator package, pass --platform-version <X.Y>."],
+  "warnings": ["Emulator package installation verified at /home/user/tizen-sdk (.emulator-package-installed found). Recorded by this skill: 10.0. Emulator images on disk: 9.0 (tizen), 10.0 (tizen, tv-samsung). To force a reinstall, run with --force. To install another platform's emulator package, pass --platform-version <X.Y>."],
   "errors": []
 }
 ```

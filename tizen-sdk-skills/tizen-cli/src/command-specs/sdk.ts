@@ -355,13 +355,29 @@ export const SDK_SPECS: CommandSpec[] = [
         flags: "--sdk-channel <channel>",
         description: ".NET SDK channel for the auto-install (default: 8.0)",
       },
+      {
+        flags: "--dotnet-root <dir>",
+        description:
+          "Use the .NET SDK at this install root (the directory holding dotnet and sdk/) instead of discovering one",
+      },
+      {
+        flags: "--persist-env",
+        description:
+          "Also persist a Tizen-extension-bundled dotnet into the user environment (official install roots are always persisted; bundled ones only with this flag)",
+        default: false,
+      },
     ],
     handler: (o) =>
       sdkCommands.setupDotnet(
         !!o.force,
         o.workloadVersion,
         "tizen-sdk dotnet-setup",
-        { noInstallSdk: o.installSdk === false, sdkChannel: o.sdkChannel },
+        {
+          noInstallSdk: o.installSdk === false,
+          sdkChannel: o.sdkChannel,
+          dotnetRoot: o.dotnetRoot,
+          persistEnv: !!o.persistEnv,
+        },
       ),
   },
 ];

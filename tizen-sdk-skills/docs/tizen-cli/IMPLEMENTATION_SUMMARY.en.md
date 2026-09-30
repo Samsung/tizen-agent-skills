@@ -149,7 +149,7 @@ runs it in background then rechecks. (Avoids JSON-only stdout blocking 10-15min 
 **Harness-specific execution method:**
 
 - **Claude Code**: `run_in_background: true` → wait for `<task-notification>` → verify
-- **Cline**: `--detach` (Linux/macOS) / `-Detach` (Windows) to launch a detached process → poll `--status` / `-Status` every 60s → verify when `STATUS=done`
+- **Cline**: `--detach` (Linux/macOS) / `-Detach` (Windows) to launch a detached process → poll `--status` / `-Status` after a 25 s sleep with an increasing attempt number in each command (Cline aborts after 5 identical calls), at most 4 polls per turn, then tell the user and end the turn → verify when `STATUS=done`
   - Cline has a 10-minute background timeout, so `run_in_background: true` must NOT be used
   - Foreground execution is not recommended (121-package log floods the context window)
 

@@ -13,7 +13,12 @@ const fs = require("fs");
 const { execFileSync } = require("child_process");
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
-const { resolveSdb, resolveSerial } = require("./sdb");
+const {
+  resolveSdb,
+  resolveSdbBinary,
+  resolveSerial,
+  describeSerialFailure,
+} = require("./sdb");
 const { resolveScript, execPluginScript } = require("./plugin-cache");
 
 /**
@@ -223,8 +228,9 @@ async function captureScreenshot(
   const startTime = Date.now();
 
   try {
-    // Resolve sdb
-    const sdbResult = resolveSdb();
+    // Resolve an sdb that exists on disk (configured SDK, else PATH) — a bare
+    // path handed to the shell fails with a localized, mis-decoded message.
+    const sdbResult = resolveSdbBinary();
     if (sdbResult.error) {
       return formatError(
         command,
@@ -239,12 +245,14 @@ async function captureScreenshot(
     // Resolve serial
     const serialResult = resolveSerial(sdbPath, serial);
     if (serialResult.errorCategory) {
+      const failure = describeSerialFailure(serialResult);
       return formatError(
         command,
-        serialResult.errorCategory,
-        serialResult.message,
-        null,
+        failure.category,
+        failure.message,
+        failure.suggestedFix,
         startTime,
+        failure.detailLines,
       );
     }
     const resolvedSerial = serialResult.serial;

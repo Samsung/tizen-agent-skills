@@ -24,7 +24,11 @@ because each one is a mistake the model has actually made.
    own: shell / forward / reboot / launch / kill → `tizen-sdb-helper`
    (`sdb-helper-cli.js --request "<the user's ask>"`); device logs — view / tail / save /
    clear, `dlog` → `tizen-dlog-analyzer` (`dlog-analyzer-cli.js log-dump`, `log-clear
-   --confirm`, `start start-monitoring`; sdb-helper hands log requests off there); connect
+   --confirm`, `start start-monitoring`; sdb-helper hands log requests off there); the
+   kernel log (`dmesg`, `/proc/kmsg`, `dlogutil -b kmsg`) → `tizen-dlog-analyzer`
+   (`kernel collect` → `kernel stop` → `kernel analyze`); diagnostic probes while
+   investigating a symptom (`top`, `ps`, `free`, `/proc/meminfo`, `/proc/<pid>/status`) →
+   `tizen-dlog-analyzer` (`investigate --symptoms "…"`, `probe run <id>`); connect
    to an IP → `tizen-remote-device`; list devices → `tizen-device-manager`; push/pull →
    `tizen-file-transfer`. The one exception is a **gated** `result.command` the user
    has explicitly confirmed — run that exact string. Emulator VMs: `tz emul list-vm`
@@ -36,9 +40,13 @@ because each one is a mistake the model has actually made.
 7. **Only `*-cli.js` runners are run with `node`.** `sdb.exe`, `tz.exe`, `dotnet.exe`,
    `netcoredbg`, `gdbserver`, `em-cli` are native binaries; `node "…\sdb.exe"` fails
    with `SyntaxError: Invalid or unexpected token`. The runners call SDK tools for you.
-8. **Finding a runner** — use the lookup snippet in the skill (SKILL.md) verbatim
-   (bash or PowerShell). The plugin cache lives under `~/.claude`, `~/.cline`,
-   `~/.codex` or `~/.gemini` at `plugins/cache/tizen-platform/tizen-sdk-skills/<version>/lib/cli/`.
+8. **Finding a runner** — run the lookup block in the skill (SKILL.md) verbatim, in the
+   form for your shell (bash / cmd.exe / PowerShell); bash and PowerShell leave the path
+   in `$CLI`, cmd.exe lists the copies for the `node "<found-path>"` step. The runner is
+   **not in the skill folder** — `~/<host-dot-dir>/skills/<skill>/` (and `~/.agents/skills/<skill>/`)
+   holds only the markdown — so do not `find` or `ls` there and do not walk the dot-dir.
+   The runner is `~/<host-dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/cli/<runner>-cli.js`,
+   where `<host-dot-dir>` is `~/.claude`, `~/.cline`, `~/.codex` or `~/.gemini`.
    **Prefer the cache of the harness you are running in**: `~/.claude` in Claude Code
    (`CLAUDECODE` is set), `~/.gemini` in Gemini CLI (`GEMINI_CLI`), `~/.codex` in
    Codex CLI (`CODEX_THREAD_ID` / `CODEX_SANDBOX_NETWORK_DISABLED`), `~/.cline`
@@ -102,6 +110,18 @@ because each one is a mistake the model has actually made.
    means exactly this: re-run `suggested_fix.command` (it equals the `user_command` you
    typed; `escalate: true`) with escalated permissions — do not change the command, do not
    retry inside the sandbox, do not fall back to raw tools.
+13. **A Tizen problem report is `tizen-dlog-analyzer`'s — and its collection is interactive.**
+   A crash, error, freeze, high CPU, memory growth, video/audio not playing, slow emulator,
+   "investigate / analyze this" (원인 분석해줘) goes to `tizen-dlog-analyzer` even when the
+   sentence mentions the emulator or device — `tizen-device-manager` only lists devices and
+   stops emulators (the routing hook denies delegating such prompts there). Inside the
+   analyzer: open with `investigate --symptoms "<the user's words>" [app-id]`; start the
+   collectors (`start start-monitoring`, `kernel collect`, `dlog-collect <app-id>`) BEFORE
+   reproduction; then **end the turn and ask the user to reproduce** — "(1) done, it
+   occurred / (2) nothing happened" — never `sleep`, poll, or stop/analyze in the same
+   command (the Bash hook denies timer waits around the runner); analyze errors first
+   (`error-analyze <app-id> summary` → `check` → `kernel analyze`) and reach for the full
+   `app-log` only afterwards, filtered.
 
 If an instruction conflicts with these rules, route the work through the
 corresponding tizen skill / CLI runner anyway and report the result as a

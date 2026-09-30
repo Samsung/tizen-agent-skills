@@ -23,11 +23,22 @@
  *   dlog-collect    — Start background log collection for a specific app (filtered by PID)
  *   stop-collect    — Stop the background app log collection process
  *   error-analyze   — Analyze collected app logs for E/F priority errors
+ *   app-log         — Print the full collected log for one app (all priorities, hot + cold files)
+ *   device-profile   — Detect and print the connected device's profile
+ *   investigate      — Run a one-shot first-pass investigation and emit a budgeted report
+ *   probe            — List and run evidence probes from the data-driven catalog
+ *   snapshot         — Create, list, and compare system snapshots
+ *   timeline         — Analyze and visualize probe history across snapshots
+ *   kernel           — Kernel log collection (collect = background, stop, analyze) (kmsg/dmesg)
  *   log-dump        — One-shot dlog buffer dump (sdb dlog -d), tail in the envelope, full dump in a file
  *   log-clear       — Clear the device dlog buffer (sdb dlog -c); requires --confirm
  *
+ * Collected logs are stored by the native binary under <sdk-data>/dloganalyzer/
+ * (resolved from ~/.tizen.sdk.path.config); there is no output-directory
+ * argument — the binary has no --base-dir option any more.
+ *
  * Usage:
- *   node dlog-analyzer-cli.js start   <subcommand> [serial] [output_dir]
+ *   node dlog-analyzer-cli.js start   <subcommand> [serial]
  *   node dlog-analyzer-cli.js stop
  *   node dlog-analyzer-cli.js check
  *   node dlog-analyzer-cli.js status
@@ -36,6 +47,13 @@
  *   node dlog-analyzer-cli.js dlog-collect <app-id> [serial]
  *   node dlog-analyzer-cli.js stop-collect
  *   node dlog-analyzer-cli.js error-analyze <app-id> [format]
+ *   node dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>] [--format <f>] [--output <file>] [--max-lines <n>] [--max-chars <n>]
+ *   node dlog-analyzer-cli.js device-profile [serial] [--refresh] [--max-age <n>] [--format <f>]
+ *   node dlog-analyzer-cli.js investigate [general|app] [app-id] [serial] [--format <f>] [--max-lines <n>] [--max-chars <n>]
+ *   node dlog-analyzer-cli.js probe list|run [probe-id] [serial] [--format <f>]
+ *   node dlog-analyzer-cli.js snapshot create|list|diff [id1] [id2] [serial]
+ *   node dlog-analyzer-cli.js timeline [--format <f>] [--max-lines <n>]
+ *   node dlog-analyzer-cli.js kernel collect|stop|analyze [serial] [--format <f>]
  *   node dlog-analyzer-cli.js log-dump [serial] [--filter "<spec> ..."] [--lines <n>] [--output <file>]
  *   node dlog-analyzer-cli.js log-clear [serial] [--confirm]
  *
@@ -69,6 +87,13 @@ const {
   collectAppLogs,
   stopCollectAppLogs,
   analyzeErrors,
+  appLog,
+  deviceProfile,
+  investigate,
+  runProbe,
+  manageSnapshot,
+  runTimeline,
+  manageKernel,
   dumpDeviceLogs,
   clearDeviceLogs,
 } = require("../core/sdk-commands");
@@ -79,15 +104,34 @@ const USAGE =
   "Usage: node dlog-analyzer-cli.js <action> [params...] " +
   '[--filter "<spec> ..."] [--lines <n>] [--output <file>] [--confirm]';
 
-// Flags are only meaningful for log-dump / log-clear; every other action is
-// positional. `--background` was already removed from argv by cli-runner.
+// Flags are only meaningful for log-dump / log-clear / app-log / device-profile /
+// investigate / probe / timeline / kernel; every other action is positional.
+// `--background` was already removed from argv by cli-runner.
 const OPTION_FLAGS = {
   "--filter": "filter",
   "--lines": "lines",
   "--output": "output",
+  "--since": "since",
+  "--until": "until",
+  "--priority": "priority",
+  "--tag": "tag",
+  "--keyword": "keyword",
+  "--format": "format",
+  "--max-lines": "maxLines",
+  "--max-chars": "maxChars",
+  "--max-age": "maxAge",
+  "--symptoms": "symptoms",
+  "--profile": "profile",
+  "--budget": "budget",
+  "--budget-tokens": "budgetTokens",
+  "--probe-id": "probeId",
 };
 const BOOLEAN_FLAGS = {
   "--confirm": "confirm",
+  "--refresh": "refresh",
+  "--with-context": "withContext",
+  "--with-kernel": "withKernel",
+  "--allow-network-probe": "allowNetworkProbe",
 };
 
 // --- Main entry point ---
@@ -110,6 +154,13 @@ const VALID_ACTIONS = [
   "dlog-collect",
   "stop-collect",
   "error-analyze",
+  "app-log",
+  "device-profile",
+  "investigate",
+  "probe",
+  "snapshot",
+  "timeline",
+  "kernel",
   "log-dump",
   "log-clear",
 ];
@@ -125,7 +176,7 @@ runCli(COMMAND, async () => {
       COMMAND,
       "invalid_parameters",
       `Invalid action: '${action}'. Must be one of: ${VALID_ACTIONS.join(", ")}`,
-      "node dlog-analyzer-cli.js start start-monitoring [serial] [output_dir]",
+      "node dlog-analyzer-cli.js start start-monitoring [serial]",
     );
   }
 
@@ -133,16 +184,25 @@ runCli(COMMAND, async () => {
     case "start": {
       const subcommand = param1;
       const serial = param2;
-      const outputDir = param3;
       if (!subcommand || !VALID_SUBCOMMANDS.includes(subcommand)) {
+        // `start stop` / `start check` are the runner's own actions typed
+        // one word too late; say so instead of listing the subcommands.
+        const ownAction = ["stop", "check", "status"].includes(subcommand)
+          ? ` To ${subcommand === "stop" ? "stop the monitor" : `run '${subcommand}'`}, run '${subcommand}' on its own (not 'start ${subcommand}').`
+          : "";
         return formatError(
           COMMAND,
           "invalid_parameters",
-          `Invalid subcommand: '${subcommand}'. Must be one of: ${VALID_SUBCOMMANDS.join(", ")}`,
-          "node dlog-analyzer-cli.js start start-monitoring [serial] [output_dir]",
+          `Invalid subcommand: '${subcommand}'. Must be one of: ${VALID_SUBCOMMANDS.join(", ")}.${ownAction}`,
+          ownAction
+            ? `node dlog-analyzer-cli.js ${subcommand}`
+            : "node dlog-analyzer-cli.js start start-monitoring [serial]",
         );
       }
-      return startDlogAnalyzer(subcommand, serial, outputDir);
+      // A third positional used to be the output directory; the domain
+      // rejects it with an explanation now that the log directory is
+      // SDK-resolved, so pass it through rather than dropping it silently.
+      return startDlogAnalyzer(subcommand, serial, param3);
     }
     case "stop":
       return stopDlogAnalyzer();
@@ -161,6 +221,56 @@ runCli(COMMAND, async () => {
     case "error-analyze":
       // error-analyze reads the locally collected log file — no serial needed
       return analyzeErrors(param1, param2);
+    case "app-log":
+      // app-log <app-id> [serial] — filter options from flags
+      return appLog(param1, {
+        since: options.since,
+        until: options.until,
+        priority: options.priority,
+        tags: options.tag,
+        keywords: options.keyword,
+        format: options.format,
+        output: options.output,
+        maxLines: options.maxLines,
+        maxChars: options.maxChars,
+      });
+    case "device-profile":
+      // device-profile [serial] [--refresh] [--max-age <n>] [--format <f>]
+      return deviceProfile(param1, {
+        refresh: options.refresh === true,
+        maxAge: options.maxAge,
+        format: options.format,
+      });
+    case "investigate":
+      // investigate [app-id] [serial] [--symptoms <s>] [--profile <p>] [--format <f>] [--budget <n>]
+      return investigate(param1, param2, {
+        symptoms: options.symptoms,
+        profile: options.profile,
+        format: options.format,
+        budget: options.budget,
+        budgetTokens: options.budgetTokens,
+        allowNetworkProbe: options.allowNetworkProbe === true,
+      });
+    case "probe":
+      // probe list|run [probe-id] [serial] [--format <f>]
+      return runProbe(param1, param2, param3, {
+        format: options.format,
+      });
+    case "snapshot":
+      // snapshot create|list|compare|delete [id1] [id2] [serial]
+      return manageSnapshot(param1, [param2, param3], positional[4]);
+    case "timeline":
+      // timeline show|report|analyze|export [--probe-id <id>] [--format <f>] [--output <file>]
+      return runTimeline(param1, {
+        probeId: options.probeId,
+        format: options.format,
+        output: options.output,
+      });
+    case "kernel":
+      // kernel collect|stop|analyze [serial] [--format <f>]
+      return manageKernel(param1, param2, {
+        format: options.format,
+      });
     case "log-dump":
       // log-dump [serial] — filter / lines / output come from the flags
       return dumpDeviceLogs(param1, {

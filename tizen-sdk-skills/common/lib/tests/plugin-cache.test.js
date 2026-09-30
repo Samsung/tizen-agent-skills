@@ -268,6 +268,9 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     }
 
     const cacheTail = "plugins/cache/tizen-platform/tizen-sdk-skills/";
+    // group 1 = tail after tizen-sdk-skills\ (e.g. *\lib\cli\x-cli.js)
+    const CMD_ARG_RE =
+      /"%USERPROFILE%\\\.[a-z]+\\plugins\\cache\\tizen-platform\\tizen-sdk-skills\\([^"]+)"/g;
     const stale = [];
     const incomplete = [];
     let withBase = 0;
@@ -310,6 +313,37 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         for (const dot of HOST_DOT_DIRS) {
           if (!text.includes(`%USERPROFILE%\\${dot}\\plugins\\cache`)) {
             incomplete.push(`${rel} (cmd lookup lacks ${dot})`);
+          }
+        }
+        // Every cmd lookup line is checked on its own, per runner tail, against
+        // the generated chain: one `dir` per host (a single dir given several
+        // paths prints nothing when any host dir is missing), every host in
+        // HOST_DOT_DIRS order with its own `2>nul`, then `& ver >nul`. A
+        // second lookup on the same line, or a run that names two runners,
+        // cannot hide behind one valid chain elsewhere in the file.
+        for (const raw of lines) {
+          if (!raw.includes('dir /s /b "%USERPROFILE%\\')) continue;
+          if (
+            /"%USERPROFILE%\\\.[a-z]+\\plugins\\cache\\[^"]+"\s+"%USERPROFILE%\\/.test(
+              raw,
+            )
+          ) {
+            stale.push(
+              `${rel} (one dir with several paths — prints nothing when a host dir is missing)`,
+            );
+          }
+          const tails = new Set([...raw.matchAll(CMD_ARG_RE)].map((m) => m[1]));
+          for (const tail of tails) {
+            if (!raw.includes(`dir /s /b ${gen.cmdChainDirs(tail)}`)) {
+              incomplete.push(
+                `${rel} (cmd lookup for ${tail} is not one dir per host in HOST_DOT_DIRS order)`,
+              );
+            }
+          }
+          if (!raw.includes(" 2>nul & ver >nul")) {
+            incomplete.push(
+              `${rel} (cmd lookup does not end in \`& ver >nul\`)`,
+            );
           }
         }
         if (!text.includes(gen.PS_HOST_PICK_LINE)) {
@@ -366,6 +400,52 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       r.status,
       0,
     );
+
+    // Test 5: the cmd.exe canonicaliser itself — old, chained, mixed and
+    // two-runner runs all land on the generated chain; a path quoted in prose
+    // (not behind `dir /s /b `) is not a lookup and is left alone.
+    console.log("\nTest 5: cmd.exe lookup canonicalisation");
+    const P = (dot, tail) =>
+      `"%USERPROFILE%\\${dot}\\plugins\\cache\\tizen-platform\\tizen-sdk-skills\\${tail}"`;
+    const X = "*\\lib\\cli\\x-cli.js";
+    const Y = "*\\lib\\cli\\y-cli.js";
+    const chainX = `dir /s /b ${gen.cmdChainArgs(X)}`;
+    const rw = (s) => gen.rewrite(s, { psBlocks: false });
+    check(
+      "  old one-dir-many-paths run → one dir per host",
+      rw(`cmd /c dir /s /b ${P(".claude", X)} ${P(".cline", X)}`),
+      `cmd /c ${chainX}`,
+    );
+    check(
+      "  chained run without `ver >nul` gains it and every host",
+      rw(
+        `dir /s /b ${P(".claude", X)} 2>nul & dir /s /b ${P(".cline", X)} 2>nul`,
+      ),
+      chainX,
+    );
+    check(
+      "  mixed old/chained run is canonicalised",
+      rw(
+        `dir /s /b ${P(".claude", X)} 2>nul & dir /s /b ${P(".cline", X)} ${P(".codex", X)}`,
+      ),
+      chainX,
+    );
+    check(
+      "  run naming two runners → one chain per runner, single `ver >nul`",
+      rw(`dir /s /b ${P(".claude", X)} ${P(".cline", Y)} ${P(".codex", X)}`),
+      `dir /s /b ${gen.cmdChainDirs(X)} & dir /s /b ${gen.cmdChainDirs(Y)} & ver >nul`,
+    );
+    check(
+      "  hosts out of order / repeated are normalised to HOST_DOT_DIRS order",
+      rw(`dir /s /b ${P(".gemini", X)} ${P(".claude", X)} ${P(".gemini", X)}`),
+      chainX,
+    );
+    check(
+      "  a cache path quoted in prose is not rewritten",
+      rw(`the runner lives under ${P(".claude", X)} on Windows`),
+      `the runner lives under ${P(".claude", X)} on Windows`,
+    );
+    check("  the generated chain is a fixed point", rw(chainX), chainX);
   }
 }
 

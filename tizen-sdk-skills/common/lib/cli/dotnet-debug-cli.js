@@ -6,15 +6,20 @@
  * CLI runner for setupDotnetDebug() execution
  *
  * Run directly without the agent having to assemble require paths:
- *   node <plugin>/lib/cli/dotnet-debug-cli.js <appId> [mode] [breakpoints] [port] [serial]
+ *   node <plugin>/lib/cli/dotnet-debug-cli.js <appId> [mode] [breakpoints] [port] [serial] [--project <dir>]
  *
  * Examples:
  *   node .../dotnet-debug-cli.js org.tizen.example.MyApp launch "Program.cs:25,App.cs:10" 4711
  *   node .../dotnet-debug-cli.js org.tizen.example.MyApp - "Program.cs:25"        # launch (default)
  *   node .../dotnet-debug-cli.js org.tizen.example.MyApp attach "Program.cs:25"   # explicit attach
+ *   node .../dotnet-debug-cli.js org.tizen.example.MyApp launch - 4711 emulator-26101 --project "C:\tizen-apps\MyApp"
  *
  * Arguments:
  *   appId       - Tizen package ID (required), e.g. org.tizen.example.MyApp
+ *   --project   - Host project (workspace) directory. Launch mode only: the runner writes
+ *                 <dir>/.vscode/launch.json with a ready coreclr configuration (program/cwd
+ *                 resolved from the .csproj) so the user only presses F5. May appear anywhere
+ *                 in argv, as "--project <dir>" or "--project=<dir>".
  *   mode        - launch (default) | attach. "-" is also treated as launch.
  *                 Launch is the default because on Tizen a normally-launched .NET app has
  *                 no CoreCLR debug transport, so attach cannot work (0x80131c08) — issue #97.
@@ -41,7 +46,21 @@ const { runCli } = require("./cli-runner");
  * @returns {{appId: string|undefined, opts: object}}
  */
 function parseDotnetDebugArgs(argv) {
-  const [appId, modeArg, bpArg, portArg, serialArg] = argv;
+  // "--project <dir>" / "--project=<dir>" may sit anywhere; everything else is positional.
+  let projectPath;
+  const positional = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--project") {
+      projectPath = argv[i + 1];
+      i++;
+    } else if (a.startsWith("--project=")) {
+      projectPath = a.slice("--project=".length);
+    } else {
+      positional.push(a);
+    }
+  }
+  const [appId, modeArg, bpArg, portArg, serialArg] = positional;
   return {
     appId,
     opts: {
@@ -50,6 +69,7 @@ function parseDotnetDebugArgs(argv) {
       breakpoints: bpArg && bpArg !== "-" ? bpArg : "",
       port: portArg || undefined,
       serial: serialArg || undefined,
+      projectPath: projectPath || undefined,
     },
   };
 }
@@ -67,7 +87,7 @@ function main() {
             {
               code: "invalid_parameters",
               message:
-                "Usage: node dotnet-debug-cli.js <appId> [launch|attach] [breakpoints|-] [port] [serial]",
+                "Usage: node dotnet-debug-cli.js <appId> [launch|attach] [breakpoints|-] [port] [serial] [--project <dir>]",
             },
           ],
         },

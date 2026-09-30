@@ -19,13 +19,20 @@
 #
 # Usage:
 #   ./tizen-dotnet-setup.sh [-f|--force] [-v|--version <ver>] [--no-install-sdk]
-#                           [--sdk-channel <chan>] [-h|--help]
+#                           [--sdk-channel <chan>] [--dotnet-root <dir>] [--persist-env]
+#                           [-h|--help]
 #
 # Options:
 #   -f, --force            Reinstall the Tizen workload even if it is already present
 #   -v, --version <ver>    Tizen workload version to pass to the Samsung installer
 #   --no-install-sdk       Do not auto-install a missing .NET SDK (guidance + exit 2)
 #   --sdk-channel <chan>   .NET SDK channel for the auto-install (default: 8.0)
+#   --dotnet-root <dir>    Use the .NET SDK at this install root instead of discovering one
+#   --persist-env          Also persist a Tizen-extension-bundled dotnet (~/.local/bin
+#                          symlink + ~/.bashrc exports). Official install roots are
+#                          always persisted; bundled ones are process-scope only unless
+#                          this is given, because an extension update can move or delete
+#                          them and leave a dangling DOTNET_ROOT behind
 #   -h, --help             Show this help
 #
 # Exit codes:
@@ -49,6 +56,8 @@ FORCE=false
 VERSION=""
 INSTALL_SDK=true
 SDK_CHANNEL="8.0"
+DOTNET_ROOT_OPT=""
+PERSIST_ENV=false
 
 # ---------------------------------------------------------------------------
 # Parse options
@@ -59,8 +68,11 @@ while [ $# -gt 0 ]; do
     -v|--version) VERSION="$2"; shift 2 ;;
     --no-install-sdk) INSTALL_SDK=false; shift ;;
     --sdk-channel)    SDK_CHANNEL="$2"; shift 2 ;;
+    --dotnet-root)    DOTNET_ROOT_OPT="${2%/}"; shift 2 ;;
+    --persist-env)    PERSIST_ENV=true; shift ;;
     -h|--help)
-      sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'
+      # The header comment up to `set -uo pipefail`, uncommented.
+      awk 'NR >= 5 { if (/^set -/) exit; print }' "$0" | sed 's/^# \{0,1\}//'
       exit 0
       ;;
     *) log_error "Unknown option: $1"; exit 1 ;;
@@ -70,15 +82,6 @@ done
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-resolve_path() {
-  local p="$1"
-  if readlink -f "$p" >/dev/null 2>&1; then
-    readlink -f "$p"
-  else
-    echo "$p"
-  fi
-}
-
 # Exact set membership over a comma-separated band list.
 #
 # Deliberately NOT `case ",$list," in *",$needle,"*)`: that is a substring test,
@@ -96,26 +99,30 @@ band_in_list() {
   return 1
 }
 
-# SDK feature band, computed exactly the way Samsung's installer does
-# (major.minor.<first digit of patch>00): 10.0.302 -> 10.0.300.
-sdk_band() {
-  local v="$1"
-  [ -n "$v" ] || return 0
-  local major minor patch
-  IFS='.' read -r major minor patch _ <<<"$v"
-  [ -n "$major" ] && [ -n "$minor" ] && [ -n "$patch" ] || return 0
-  echo "${major}.${minor}.${patch:0:1}00"
+# Make a discovered dotnet usable.
+#
+# use_dotnet_for_this_run only touches the current process. persist_dotnet also
+#   1) symlinks it into ~/.local/bin (typically already on PATH), and
+#   2) writes DOTNET_ROOT/PATH exports to ~/.bashrc (fenced by markers).
+# Persistence policy (step 1 below): official install roots and an explicit
+# --dotnet-root are persisted; a dotnet bundled inside a Tizen extension tree is
+# NOT unless --persist-env is given — an extension update can move or delete it,
+# leaving a dangling DOTNET_ROOT that silently breaks every later build.
+PERSISTED_ROOT=""
+PERSISTED_PATH_ENTRY=""
+
+use_dotnet_for_this_run() {
+  local droot
+  droot="$(cd "$(dirname "$1")" && pwd)"
+  export DOTNET_ROOT="$droot"
+  export PATH="$droot:$PATH"
 }
 
-# Make a discovered dotnet usable now and for future shells:
-#   1) symlink it into ~/.local/bin (typically already on PATH), and
-#   2) append DOTNET_ROOT/PATH exports to ~/.bashrc (idempotent),
-# then export both into the current process so the workload step below works.
 persist_dotnet() {
   local dotnet_bin="$1" droot
   droot="$(cd "$(dirname "$dotnet_bin")" && pwd)"
 
-  # 1) symlink into ~/.local/bin
+  # 1) symlink into ~/.local/bin (-f: a stale link from an earlier run is replaced)
   local localbin="$HOME/.local/bin"
   mkdir -p "$localbin"
   if ln -sf "$dotnet_bin" "$localbin/dotnet"; then
@@ -126,25 +133,49 @@ persist_dotnet() {
     esac
   fi
 
-  # 2) append exports to ~/.bashrc (idempotent, fenced by a marker)
+  # 2) ~/.bashrc export block. An existing block is REPLACED, not skipped:
+  #    skipping it is how a stale DOTNET_ROOT used to survive every re-run.
   local rc="$HOME/.bashrc"
-  local marker="# >>> tizen-dotnet-setup (dotnet on PATH) >>>"
-  if [ -f "$rc" ] && grep -qF "$marker" "$rc"; then
-    log_info "~/.bashrc already exports dotnet — leaving it as is."
-  else
-    {
-      echo ""
-      echo "$marker"
-      echo "export DOTNET_ROOT=\"$droot\""
-      echo "export PATH=\"\$DOTNET_ROOT:\$PATH\""
-      echo "# <<< tizen-dotnet-setup (dotnet on PATH) <<<"
-    } >> "$rc"
-    log_success "Added dotnet exports to $rc (effective in new shells)."
+  local begin="# >>> tizen-dotnet-setup (dotnet on PATH) >>>"
+  local end="# <<< tizen-dotnet-setup (dotnet on PATH) <<<"
+  if [ -f "$rc" ] && grep -qF "$begin" "$rc"; then
+    local tmp
+    tmp="$(mktemp "${TMPDIR:-/tmp}/bashrc-XXXXXX")"
+    # Only a WELL-FORMED block (opening marker, a few lines, closing marker) is
+    # dropped. A naive "skip from begin until end" would delete the rest of the
+    # file when the closing marker is missing, so lines after an opening marker
+    # are buffered and written back untouched unless the closing marker follows
+    # within a few lines (ours is exactly two exports long).
+    # cat > "$rc" (not mv) keeps the file's inode, mode and any symlink intact.
+    if awk -v b="$begin" -v e="$end" '
+        function flush() { for (i = 1; i <= n; i++) print buf[i]; n = 0; inblk = 0 }
+        $0 == b { if (inblk) flush(); inblk = 1; n = 0; buf[++n] = $0; next }
+        inblk   { buf[++n] = $0
+                  if ($0 == e) { n = 0; inblk = 0; next }
+                  if (n > 8) flush()
+                  next }
+        { print }
+        END { if (inblk) flush() }' "$rc" > "$tmp" &&
+       cat "$tmp" > "$rc"; then
+      log_info "Replacing the dotnet export block in $rc."
+      if grep -qF "$begin" "$rc"; then
+        log_warning "$rc still holds an older 'tizen-dotnet-setup' block without its closing marker — it was left untouched; remove those lines by hand."
+      fi
+    fi
+    rm -f "$tmp"
   fi
+  {
+    echo ""
+    echo "$begin"
+    echo "export DOTNET_ROOT=\"$droot\""
+    echo "export PATH=\"\$DOTNET_ROOT:\$PATH\""
+    echo "$end"
+  } >> "$rc"
+  log_success "Added dotnet exports to $rc (effective in new shells)."
+  PERSISTED_ROOT="$droot"
+  PERSISTED_PATH_ENTRY="$droot"
 
-  # Effective for the rest of THIS run.
-  export DOTNET_ROOT="$droot"
-  export PATH="$droot:$PATH"
+  use_dotnet_for_this_run "$dotnet_bin"
 
   # A child process cannot clear the PARENT shell's command hash, so an
   # already-open shell that once resolved dotnet elsewhere (e.g. a removed
@@ -198,18 +229,78 @@ log_info "Detected OS: $OS"
 # 1) Detect the .NET SDK
 # ---------------------------------------------------------------------------
 log_step "=== Checking for the .NET SDK ==="
+
+# Captured BEFORE anything is changed — reported in the envelope.
+ENV_DOTNET_ROOT_RAW="${DOTNET_ROOT:-}"
+
+# A DOTNET_ROOT with no dotnet under it is stale — typically a bundled dotnet
+# that an extension update moved or removed. MSBuild and the Samsung installer
+# both honour DOTNET_ROOT, so it silently breaks builds until it is cleared.
+DANGLING_ROOT=""
+if [ -n "$ENV_DOTNET_ROOT_RAW" ] && [ ! -x "$ENV_DOTNET_ROOT_RAW/dotnet" ]; then
+  DANGLING_ROOT="$ENV_DOTNET_ROOT_RAW"
+  log_warning "DOTNET_ROOT ($DANGLING_ROOT) points to a directory with no dotnet — it is stale."
+  log_warning "Remove its export from your shell profile (the 'tizen-dotnet-setup' block in ~/.bashrc, if present), then open a new terminal."
+fi
+
+CANDIDATES="$(list_dotnet_candidates)"
+PATH_ROOT=""
+l="$(printf '%s\n' "$CANDIDATES" | grep '^path|' | head -n 1)"
+[ -n "$l" ] && PATH_ROOT="$(dirname "${l##*|}")"
+
 DOTNET_BIN=""
-if command -v dotnet >/dev/null 2>&1; then
+SELECTED_TIER=""
+if [ -n "$DOTNET_ROOT_OPT" ]; then
+  if [ ! -x "$DOTNET_ROOT_OPT/dotnet" ]; then
+    log_error "--dotnet-root '$DOTNET_ROOT_OPT' has no dotnet — pass the .NET install root (the directory that contains dotnet and sdk/)."
+    exit 1
+  fi
+  DOTNET_BIN="$(resolve_real_path "$DOTNET_ROOT_OPT/dotnet")"
+  SELECTED_TIER=explicit
+  # Re-label the matching candidate, or add one if discovery did not know it.
+  new="" known=false
+  while IFS= read -r l; do
+    [ -n "$l" ] || continue
+    if [ "${l##*|}" = "$DOTNET_BIN" ]; then l="explicit|${l#*|}"; known=true; fi
+    new="${new:+$new$'\n'}$l"
+  done <<<"$CANDIDATES"
+  CANDIDATES="$new"
+  if [ "$known" != true ]; then
+    seen=" "
+    l="$(_dotnet_emit_candidate explicit "$DOTNET_BIN")"
+    [ -n "$l" ] && CANDIDATES="${CANDIDATES:+$CANDIDATES$'\n'}$l"
+  fi
+  log_info "Using the .NET SDK from --dotnet-root: $DOTNET_BIN"
+elif [ -n "$PATH_ROOT" ]; then
   DOTNET_BIN="$(command -v dotnet)"
+  SELECTED_TIER=path
 else
   # Not on PATH — it may still be installed (e.g. bundled in a Tizen SDK tree).
   log_warning "dotnet is not on PATH — searching for an existing .NET SDK install..."
-  DOTNET_BIN="$(discover_dotnet)"
-  if [ -n "$DOTNET_BIN" ]; then
+  best="$(printf '%s\n' "$CANDIDATES" | select_dotnet_candidate)"
+  if [ -n "$best" ]; then
+    DOTNET_BIN="${best##*|}"
+    SELECTED_TIER="${best%%|*}"
     log_success "Found an installed .NET SDK not on PATH: $DOTNET_BIN"
-    persist_dotnet "$DOTNET_BIN"
-    # Prefer the now-on-PATH entry (e.g. the ~/.local/bin symlink).
-    DOTNET_BIN="$(command -v dotnet || echo "$DOTNET_BIN")"
+  fi
+fi
+
+# Make the chosen dotnet reachable. Nothing to do when it is the one already on
+# PATH. Otherwise official roots and an explicit --dotnet-root are wired up
+# persistently; a Tizen-bundled dotnet only for this process unless --persist-env.
+if [ -n "$DOTNET_BIN" ]; then
+  chosen_root="$(cd "$(dirname "$(resolve_real_path "$DOTNET_BIN")")" && pwd)"
+  if [ -z "$PATH_ROOT" ] || [ "${PATH_ROOT%/}" != "${chosen_root%/}" ]; then
+    kind="$(dotnet_root_kind "$chosen_root")"
+    if [ "$kind" != bundled ] || [ "$PERSIST_ENV" = true ]; then
+      persist_dotnet "$DOTNET_BIN"
+      # Prefer the now-on-PATH entry (e.g. the ~/.local/bin symlink).
+      DOTNET_BIN="$(command -v dotnet || echo "$DOTNET_BIN")"
+    else
+      use_dotnet_for_this_run "$DOTNET_BIN"
+      log_warning "This dotnet is bundled inside a Tizen extension tree ($chosen_root). It was NOT added to your shell profile: an extension update can move or delete it."
+      log_warning "Builds in other shells will not see it. Install an official .NET SDK, or re-run this setup with --persist-env to wire it up anyway."
+    fi
   fi
 fi
 
@@ -219,8 +310,33 @@ if [ -z "$DOTNET_BIN" ] && [ "$INSTALL_SDK" = true ]; then
     persist_dotnet "$HOME/.dotnet/dotnet"
     # Prefer the now-on-PATH entry (e.g. the ~/.local/bin symlink).
     DOTNET_BIN="$(command -v dotnet || echo "$HOME/.dotnet/dotnet")"
+    SELECTED_TIER=official
+    seen=" "
+    l="$(_dotnet_emit_candidate official "$HOME/.dotnet/dotnet")"
+    [ -n "$l" ] && CANDIDATES="${CANDIDATES:+$CANDIDATES$'\n'}$l"
   fi
 fi
+
+# ---------------------------------------------------------------------------
+# 1a) Facts for the envelope — printed on EVERY path, success included (the
+# [DIAG] block at the end is failure-only). lib/core/dotnet.js parses both:
+#   [ENV] key=value
+#   [CANDIDATE] <tier>|<tizen_workload>|<version>|<selected>|<path>
+# The path comes last because it may contain spaces.
+# ---------------------------------------------------------------------------
+selected_root=""
+[ -n "$DOTNET_BIN" ] && selected_root="$(cd "$(dirname "$(resolve_real_path "$DOTNET_BIN")")" && pwd)"
+echo "[ENV] env_dotnet_root=${ENV_DOTNET_ROOT_RAW:-(unset)}"
+echo "[ENV] dangling_dotnet_root=${DANGLING_ROOT:-(none)}"
+echo "[ENV] persisted_dotnet_root=${PERSISTED_ROOT:-(none)}"
+echo "[ENV] persisted_path_entry=${PERSISTED_PATH_ENTRY:-(none)}"
+while IFS= read -r l; do
+  [ -n "$l" ] || continue
+  p="${l##*|}"
+  sel=false
+  [ -n "$selected_root" ] && [ "$(dirname "$p")" = "$selected_root" ] && sel=true
+  echo "[CANDIDATE] ${l%|*}|$sel|$p"
+done <<<"$CANDIDATES"
 
 if [ -z "$DOTNET_BIN" ]; then
   log_error ".NET SDK (dotnet) is not installed or not on PATH."
@@ -271,8 +387,7 @@ fi
 # once, pass it with -d, and mirror it into the child's environment — without
 # touching the user's persisted value.
 # ---------------------------------------------------------------------------
-DOTNET_REAL="$(resolve_path "$DOTNET_BIN")"
-ENV_DOTNET_ROOT_RAW="${DOTNET_ROOT:-}"
+DOTNET_REAL="$(resolve_real_path "$DOTNET_BIN")"
 DOTNET_ROOT="$(cd "$(dirname "$DOTNET_REAL")" && pwd)"
 export DOTNET_ROOT
 
@@ -314,8 +429,13 @@ BAND_COUNT="$(echo $INSTALLED_BANDS | wc -w | tr -d ' ')"
 
 if [ -n "$ENV_DOTNET_ROOT_RAW" ] && [ "${ENV_DOTNET_ROOT_RAW%/}" != "${DOTNET_ROOT%/}" ]; then
   log_warning "DOTNET_ROOT ($ENV_DOTNET_ROOT_RAW) does not match the dotnet being used ($DOTNET_ROOT)."
-  log_warning "The dotnet on PATH wins. Overriding DOTNET_ROOT for this run only (your saved value is left alone)."
-  log_warning "If builds keep failing to see the Tizen workload, unset DOTNET_ROOT or point it at $DOTNET_ROOT."
+  if [ -n "$PERSISTED_ROOT" ]; then
+    log_info "Your shell profile now exports DOTNET_ROOT=$DOTNET_ROOT (effective in new shells)."
+  else
+    winner="The dotnet on PATH"; [ "$SELECTED_TIER" = explicit ] && winner="--dotnet-root"
+    log_warning "$winner wins. Overriding DOTNET_ROOT for this run only (your saved value is left alone)."
+    log_warning "If builds keep failing to see the Tizen workload, unset DOTNET_ROOT or point it at $DOTNET_ROOT."
+  fi
 fi
 
 log_info "Install target: $DOTNET_ROOT (SDK $DOTNET_VERSION, band $SDK_BAND)"

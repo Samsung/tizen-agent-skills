@@ -466,7 +466,9 @@ try {
     const projectSrc = read("common/lib/core/project.js");
     check(
       "project.js: installApp maps the JS-side resolution to multiple_devices before running the script",
-      /deviceResolution\.errorCategory === "multiple_devices"/.test(projectSrc),
+      /deviceResolution\.errorCategory === "multiple_devices"/.test(
+        projectSrc,
+      ) && /describeSerialFailure\(deviceResolution/.test(projectSrc),
     );
     check(
       "project.js: the generic install failure no longer embeds error.message",

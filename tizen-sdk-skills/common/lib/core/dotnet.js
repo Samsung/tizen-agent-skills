@@ -8,6 +8,8 @@
  * so calling agent must set Bash tool timeout to 600000ms.
  */
 
+const fs = require("fs");
+const path = require("path");
 const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { resolveScript, execPluginScript } = require("./plugin-cache");
@@ -81,8 +83,9 @@ function summarizeDotnetSetupOutput(output) {
 
   const logLines = summarizeOutput(output, {
     keep: /warn|error|fail|denied|elevated|administrator|sudo|not found|retry/i,
-    // [DIAG] is skipped here (skip wins over keep) because it is handled above.
-    skip: /\[DIAG\]|\.NET SDK found|already installed|installed successfully/i,
+    // [DIAG] is skipped here (skip wins over keep) because it is handled above;
+    // [ENV]/[CANDIDATE] are structured facts that land in `result`, not warnings.
+    skip: /\[DIAG\]|\[ENV\]|\[CANDIDATE\]|\.NET SDK found|already installed|installed successfully/i,
     max: 16,
   });
 
@@ -177,12 +180,98 @@ function parseDiagLines(output) {
   return diag;
 }
 
-/** A [DIAG] value the script prints when it has nothing to report. */
+/** A [DIAG]/[ENV] value the script prints when it has nothing to report. */
 function diagHas(value) {
   return (
     Boolean(value) &&
     !["(none)", "(unknown)", "(unset)", "(not pinned)"].includes(value)
   );
+}
+
+/**
+ * Parse the `[ENV] key=value` lines both setup scripts print on EVERY path
+ * (success included — unlike [DIAG], which is failure-only): the DOTNET_ROOT
+ * seen at start, a stale one if any, and what this run persisted.
+ *
+ * @param {string} output - script stdout+stderr
+ * @returns {object} { key: value } — empty object when there are no [ENV] lines
+ */
+function parseEnvLines(output) {
+  const env = {};
+  if (!output) return env;
+  for (const line of String(output).split(/\r?\n/)) {
+    const m = line.match(/\[ENV\]\s+([a-z_]+)=(.*)$/i);
+    if (!m) continue;
+    env[m[1]] = m[2].trim();
+  }
+  return env;
+}
+
+/**
+ * Parse the `[CANDIDATE] <tier>|<tizen_workload>|<version>|<selected>|<path>`
+ * lines — every usable .NET SDK the scripts found, in discovery order. The path
+ * is the LAST field because it may contain spaces (C:\Program Files\dotnet).
+ *
+ * @param {string} output - script stdout+stderr
+ * @returns {Array<{tier: string, tizen_workload: boolean, version: string|null, selected: boolean, path: string}>}
+ */
+function parseCandidateLines(output) {
+  const out = [];
+  if (!output) return out;
+  for (const line of String(output).split(/\r?\n/)) {
+    const m = line.match(
+      /\[CANDIDATE\]\s+([a-z_]+)\|(true|false)\|([^|]*)\|(true|false)\|(.+)$/i,
+    );
+    if (!m) continue;
+    out.push({
+      tier: m[1].toLowerCase(),
+      tizen_workload: m[2].toLowerCase() === "true",
+      version: m[3].trim() || null,
+      selected: m[4].toLowerCase() === "true",
+      path: m[5].trim(),
+    });
+  }
+  return out;
+}
+
+/**
+ * Envelope-shaped view of the [ENV] facts: placeholders become null, and the
+ * two persisted_* keys fold into one `persisted_env` object (null when this
+ * run wrote nothing — the common case, and the one callers test for).
+ */
+function describeEnvFacts(env) {
+  const val = (k) => (diagHas(env[k]) ? env[k] : null);
+  const persistedRoot = val("persisted_dotnet_root");
+  const persistedPath = val("persisted_path_entry");
+  return {
+    env_dotnet_root: val("env_dotnet_root"),
+    dangling_dotnet_root: val("dangling_dotnet_root"),
+    persisted_env:
+      persistedRoot || persistedPath
+        ? { dotnet_root: persistedRoot, path_entry: persistedPath }
+        : null,
+  };
+}
+
+/**
+ * `details` entries for a failure envelope: the [DIAG] facts first, then the
+ * [ENV] facts not already covered by [DIAG] (env_dotnet_root is in both), then
+ * one `candidate=` line per SDK found — so a wrong-target failure shows the
+ * caller every dotnet on the machine without a single manual probe.
+ */
+function collectFailureDetails(combined, diag) {
+  const lines = Object.keys(diag).map((k) => `${k}=${diag[k]}`);
+  const env = parseEnvLines(combined);
+  for (const k of Object.keys(env)) {
+    if (k in diag || !diagHas(env[k])) continue;
+    lines.push(`${k}=${env[k]}`);
+  }
+  for (const c of parseCandidateLines(combined)) {
+    lines.push(
+      `candidate=${c.tier}|${c.tizen_workload ? "tizen-workload" : "no-workload"}|${c.version || "?"}|${c.selected ? "selected" : "-"}|${c.path}`,
+    );
+  }
+  return lines.length > 0 ? lines : null;
 }
 
 /**
@@ -324,8 +413,7 @@ function classifyDotnetSetupFailure(
 ) {
   const combined = `${error.stdout || ""}\n${error.stderr || ""}`;
   const diag = parseDiagLines(combined);
-  const diagLines = Object.keys(diag).map((k) => `${k}=${diag[k]}`);
-  const details = diagLines.length > 0 ? diagLines : null;
+  const details = collectFailureDetails(combined, diag);
 
   if (error.status === EXIT_SDK_NOT_FOUND) {
     // Unknown platforms get the linux guidance — the portable dotnet-install.sh
@@ -358,7 +446,9 @@ function classifyDotnetSetupFailure(
           ? ""
           : "Note: a package-manager SDK install (apt/dnf) is root-owned, so the workload step will likely need sudo — the user-scope dotnet-install.sh route to ~/.dotnet needs no sudo at all. ") +
         "Do NOT hand-roll any other install method.",
-      details: null,
+      // No [DIAG] block on this path, but a stale DOTNET_ROOT reported in
+      // [ENV] is often exactly why nothing was found — keep it.
+      details,
       suggested_command: guide.command,
     };
   }
@@ -425,11 +515,14 @@ function classifyDotnetSetupFailure(
 /**
  * Tizen DotNET development environment setup: verify .NET SDK + install Tizen workload
  *
- * Executes scripts/tizen-dotnet-setup: if dotnet not on PATH, search installed SDK
- * and permanently link (Windows: User DOTNET_ROOT/PATH, Unix: ~/.local/bin symlink +
- * ~/.bashrc) → pin the Samsung installer to that same dotnet (-d) → install →
- * verify with that same dotnet. Workload installation takes several minutes, so
- * calling agent must set Bash tool timeout to 600000ms.
+ * Executes scripts/tizen-dotnet-setup: if dotnet not on PATH, rank every installed
+ * SDK (DOTNET_ROOT > official install roots > Tizen-extension-bundled) and pick
+ * the best → wire it up (official roots / --dotnet-root persistently — Windows:
+ * User DOTNET_ROOT/PATH, Unix: ~/.local/bin symlink + ~/.bashrc; a bundled dotnet
+ * only for this run unless --persist-env) → pin the Samsung installer to that
+ * same dotnet (-d) → install → verify with that same dotnet. Workload
+ * installation takes several minutes, so calling agent must set Bash tool
+ * timeout to 600000ms.
  *
  * Script exit convention: 0 = success/already installed, 1 = install failed,
  * 2 = .NET SDK not found anywhere AND the user-scope auto-install was skipped
@@ -442,6 +535,8 @@ function classifyDotnetSetupFailure(
  * @param {object} [opts]
  * @param {boolean} [opts.noInstallSdk] - do NOT auto-install a missing .NET SDK
  * @param {string} [opts.sdkChannel] - .NET SDK channel for the auto-install (script default: 8.0)
+ * @param {string} [opts.dotnetRoot] - use the .NET SDK at this install root instead of discovering one
+ * @param {boolean} [opts.persistEnv] - also persist a Tizen-bundled dotnet into the user environment
  * @returns {object} Standard JSON Envelope
  */
 async function setupDotnet(
@@ -476,13 +571,43 @@ async function setupDotnet(
       );
     }
 
+    // The root is interpolated into a double-quoted shell argument, so reject
+    // anything the shell (cmd.exe or bash) would interpret inside the quotes.
+    // Trailing separators are dropped: a backslash right before the closing
+    // quote would escape it on Windows. Existence is checked HERE — the script
+    // runs on this same host — so a typo comes back as invalid_parameters
+    // instead of a generic script failure.
+    let explicitRoot;
+    if (opts.dotnetRoot != null) {
+      explicitRoot = String(opts.dotnetRoot).replace(/[\\/]+$/, "");
+      if (
+        explicitRoot === "" ||
+        /^-/.test(explicitRoot) ||
+        /["`$;&|<>^%\r\n\0]/.test(explicitRoot)
+      ) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `Invalid dotnet root: "${opts.dotnetRoot}". Pass a plain directory path (no quotes or shell metacharacters).`,
+        );
+      }
+      const exe = process.platform === "win32" ? "dotnet.exe" : "dotnet";
+      if (!fs.existsSync(path.join(explicitRoot, exe))) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `--dotnet-root "${explicitRoot}" has no ${exe} — pass the .NET install root (the directory that contains ${exe} and sdk/).`,
+        );
+      }
+    }
+
     const resolved = resolveScript("tizen-dotnet-setup");
     if (resolved.error) {
       return formatError(command, "io_error", resolved.error);
     }
 
     console.error(
-      `[tizen-dotnet] Setting up .NET environment${force ? " (force reinstall)" : ""}${version ? ` (workload ${version})` : ""}`,
+      `[tizen-dotnet] Setting up .NET environment${force ? " (force reinstall)" : ""}${version ? ` (workload ${version})` : ""}${explicitRoot ? ` (dotnet root ${explicitRoot})` : ""}`,
     );
 
     const winArgs = [
@@ -490,6 +615,8 @@ async function setupDotnet(
       version ? `-Version "${version}"` : "",
       opts.noInstallSdk ? "-NoInstallSdk" : "",
       opts.sdkChannel ? `-SdkChannel "${opts.sdkChannel}"` : "",
+      explicitRoot ? `-DotnetRoot "${explicitRoot}"` : "",
+      opts.persistEnv ? "-PersistEnv" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -498,6 +625,8 @@ async function setupDotnet(
       version ? `--version "${version}"` : "",
       opts.noInstallSdk ? "--no-install-sdk" : "",
       opts.sdkChannel ? `--sdk-channel "${opts.sdkChannel}"` : "",
+      explicitRoot ? `--dotnet-root "${explicitRoot}"` : "",
+      opts.persistEnv ? "--persist-env" : "",
     ]
       .filter(Boolean)
       .join(" ");
@@ -527,6 +656,7 @@ async function setupDotnet(
     const versionMatch = output.match(/\.NET SDK found: dotnet\s+(\S+)/i);
     const { dotnet_root: dotnetRoot, sdk_band: sdkBand } =
       parseInstallTarget(output);
+    const envFacts = describeEnvFacts(parseEnvLines(output));
 
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
@@ -537,6 +667,12 @@ async function setupDotnet(
         sdk_band: sdkBand,
         workload: "tizen",
         workload_status: parseWorkloadStatus(output),
+        // Every SDK discovery found, so "why not the Program Files one?" is
+        // answerable from the envelope alone.
+        dotnet_candidates: parseCandidateLines(output),
+        env_dotnet_root: envFacts.env_dotnet_root,
+        dangling_dotnet_root: envFacts.dangling_dotnet_root,
+        persisted_env: envFacts.persisted_env,
         status: "ready",
       },
       {
@@ -560,6 +696,9 @@ module.exports = {
   setupDotnet,
   // Exported for tests
   parseDiagLines,
+  parseEnvLines,
+  parseCandidateLines,
+  describeEnvFacts,
   parseInstallTarget,
   parseWorkloadStatus,
   summarizeSuccessWarnings,

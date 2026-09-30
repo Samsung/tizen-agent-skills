@@ -4,7 +4,9 @@
 # safe default: nothing runs until a human classifies it.
 #
 # Source: tizen-cli/src/command-specs/*.ts
-# 34 commands total across 8 domain modules (safe 6 / mutating 14 / device 14).
+# 35 commands total across 8 domain modules (safe 6 / mutating 15 / device 14).
+# scripts/verify-doc-stats.mjs fails when this list and tizen-cli/plugin.json
+# (minus the internal-only command group) disagree.
 
 defaults:
   tier: skip
@@ -30,6 +32,7 @@ commands:
   tizen-sdk.install-rootstrap: { tier: mutating }
   tizen-sdk.dotnet-setup: { tier: mutating }
   tizen-sdk.create-project: { tier: mutating }
+  tizen-sdk.import-wgt: { tier: mutating }
   tizen-sdk.project-delete: { tier: mutating }
   tizen-sdk.build-project: { tier: mutating }
   tizen-sdk.certificate-manager: { tier: mutating }

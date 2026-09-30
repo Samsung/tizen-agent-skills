@@ -70,6 +70,50 @@ test("breakpoints '-' means none; port/serial pass through", () => {
   assert.strictEqual(opts.breakpoints, "");
   assert.strictEqual(opts.port, "4712");
   assert.strictEqual(opts.serial, "emulator-26101");
+  assert.strictEqual(opts.projectPath, undefined);
+});
+
+console.log("\n=== parseDotnetDebugArgs — --project <dir> ===");
+
+test("--project <dir> after the positionals", () => {
+  const { appId, opts } = parseDotnetDebugArgs([
+    "org.tizen.example.MyApp",
+    "launch",
+    "-",
+    "4711",
+    "emulator-26101",
+    "--project",
+    "C:\\tizen-apps\\MyApp",
+  ]);
+  assert.strictEqual(appId, "org.tizen.example.MyApp");
+  assert.strictEqual(opts.serial, "emulator-26101");
+  assert.strictEqual(opts.projectPath, "C:\\tizen-apps\\MyApp");
+});
+
+test("--project=<dir> form, placed before the positionals", () => {
+  const { appId, opts } = parseDotnetDebugArgs([
+    "--project=/home/me/MyApp",
+    "org.tizen.example.MyApp",
+    "attach",
+  ]);
+  assert.strictEqual(appId, "org.tizen.example.MyApp");
+  assert.strictEqual(opts.launch, false);
+  assert.strictEqual(opts.projectPath, "/home/me/MyApp");
+});
+
+test("--project does not shift the positional slots", () => {
+  const { opts } = parseDotnetDebugArgs([
+    "org.tizen.example.MyApp",
+    "--project",
+    "/p",
+    "launch",
+    "Program.cs:25",
+    "4712",
+  ]);
+  assert.strictEqual(opts.launch, true);
+  assert.strictEqual(opts.breakpoints, "Program.cs:25");
+  assert.strictEqual(opts.port, "4712");
+  assert.strictEqual(opts.projectPath, "/p");
 });
 
 console.log("\n=== runner process: usage error without appId ===");
@@ -84,6 +128,7 @@ test("no appId → invalid_parameters on stderr, exit 1, usage names launch firs
   const err = JSON.parse(r.stderr);
   assert.strictEqual(err.errors[0].code, "invalid_parameters");
   assert.match(err.errors[0].message, /\[launch\|attach\]/);
+  assert.match(err.errors[0].message, /--project <dir>/);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

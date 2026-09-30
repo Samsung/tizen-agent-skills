@@ -1314,6 +1314,13 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js app-terminate <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
+node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]
+node <plugin>/lib/cli/dlog-analyzer-cli.js device-profile [--refresh]
+node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js snapshot create|list|compare|delete [id1] [id2]
+node <plugin>/lib/cli/dlog-analyzer-cli.js timeline show|report|analyze|export
+node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 ```
 
 **워크플로우:**
@@ -1338,6 +1345,13 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 | `dlog-collect`  | 앱 PID로 필터링된 dlog를 백그라운드로 수집 시작 (앱이 실행 중이어야 함) |
 | `stop-collect`  | 백그라운드 앱 dlog 수집 프로세스 종료                         |
 | `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함)   |
+| `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일)  |
+| `device-profile`| 연결된 디바이스의 프로필 감지 및 출력 (타입, 버전, 아키텍처, 루트, 도구) |
+| `investigate`   | 일회성 1차 조사 실행 및 예산화된 보고서 출력 (general/app)   |
+| `probe`         | 데이터 기반 카탈로그에서 증거 프로브 목록 조회 및 실행        |
+| `snapshot`      | 시스템 스냅샷 생성, 목록 조회, 비교                          |
+| `timeline`      | 스냅샷 간 프로브 히스토리 분석 및 시각화                    |
+| `kernel`        | 커널 로그 수집 및 분석 (kmsg/dmesg)                          |
 
 **참고:** 한 번에 하나의 인스턴스만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`(및 `stop-collect`)으로 종료해야 함. 분석 완료 시 보고서는 영문 → 한글 순서로 항상 두 언어로 렌더링됨.
 

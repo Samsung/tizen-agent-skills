@@ -63,7 +63,7 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 6. **Create marker** — Creates `.mobile-platform-installed` with version info
 
 ### IOT-Headed Extension (when `--include-iot-headed` is specified)
-1. **Download extension_info.xml** — Fetches from main repository
+1. **Download extension_info.xml** — Fetches from main repository; falls back to the official Tizen repo when a custom repository does not serve it
 2. **Parse IoT repository URL** — Extracts `<extension name="IoT-Headed"><repository>URL</repository></extension>`
 3. **Download IoT pkg_list** — Fetches `pkg_list_{OS}-{64,32}` from IoT repository
 4. **Auto-detect or use specified IOT-Headed-{version}** — Finds latest IOT-Headed-X.Y or uses `--iot-headed-version`
@@ -187,7 +187,7 @@ node "$CLI" --force
 | SDK not installed | Run `tizen-cli tizen-sdk sdk-install` first |
 | Script not found | Reinstall plugin or check plugin cache path |
 | Download failed | Check network connection, verify repository URL |
-| extension_info.xml not found | Repository may not support IOT-Headed; retry without `--include-iot-headed` |
+| extension_info.xml not found | Custom repositories usually lack it; the script falls back to the official Tizen repo automatically. If that also fails, check network access to download.tizen.org or retry without `--include-iot-headed` |
 
 ## Follow-up actions
 

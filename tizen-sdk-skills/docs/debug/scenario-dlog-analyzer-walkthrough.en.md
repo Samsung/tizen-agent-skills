@@ -16,11 +16,31 @@ When following this workflow, always adhere to these rules:
 
 1. **Always collect logs via `dlog-collect`** — never use raw commands like `sdb shell dlog`. Whether system-wide (`start dlog-collect` / `start start-monitoring`) or app-specific (`dlog-collect <app-id>`), you must use `dlog-collect`.
 2. **Always analyze via `error-analyze` (app-specific) or `check` (system monitoring)** — never read the log file directly. These commands handle deduplication, classification, and formatting.
-3. **After any continuous command, present the user with a choice** — after starting `start-monitoring`, `dlog-collect <app-id>`, etc., ask the user to choose one of:
-   - **Continue collecting** — keep the background process running while they use the app
-   - **Stop and analyze now** — stop the collection (`stop` or `stop-collect`) and immediately run `check` / `error-analyze`
+3. **After any continuous command, hand the device to the user and end the turn** — after starting `start-monitoring`, `dlog-collect <app-id>`, `kernel collect`, etc., ask the user to browse the app and reproduce the issue, then choose one of:
+   - **Done — the error/crash/symptom occurred** (or **Continue collecting** for an open-ended session)
+   - **Nothing happened** / **Stop and analyze now** — stop the collection (`stop`, `stop-collect`, `kernel stop`) and run `check` / `error-analyze` / `kernel analyze`
    
-   **Do NOT poll or loop** — wait for the user's choice.
+   **Do NOT poll, loop, or `sleep`** — the reproduction window belongs to the user; a timer is not a substitute for their answer, and the guard hook denies `sleep … && stop-collect` (issue #212).
+4. **A problem report is this skill's job, even when it mentions the emulator** — "the emulator CPU went to 300% and the video does not play in com.samsung.fh.youtube, investigate" is not a `tizen-device-manager` task (that skill only lists devices / stops emulators); route it here (issue #211).
+5. **Kernel logs go through `kernel collect` → `kernel stop` → `kernel analyze`** — never `sdb shell dmesg` / `cat /proc/kmsg` (issue #213).
+6. **Evidence probes go through `investigate --symptoms "…"` and `probe run <id>`** — never a hand-typed `sdb shell top / ps / free / cat /proc/meminfo` (issue #214).
+7. **Analyze errors first, the full log last** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; only if the symptom is still unexplained `error-analyze … details` → filtered `app-log` → `probe run` (issue #215).
+
+---
+
+## Symptom Investigation (CPU / freeze / video not playing) — the short path
+
+When the user reports a symptom rather than a crash — e.g. *"While playing a video in com.samsung.fh.youtube the emulator's CPU went to 300% and the video is not playing. Investigate."* — the agent runs this sequence:
+
+| Step | Agent action | tizen-cli command |
+|------|--------------|-------------------|
+| 1 | First pass: symptom → probe bundles → correlated report | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
+| 2 | Start the collectors **before** reproduction | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` · `--action dlog-collect --app-id …` |
+| 3 | **Stop and ask** — "Please reproduce the issue now. (1) Done, it occurred / (2) Nothing happened" — and **end the turn** | (agent interaction — no `sleep`, no polling) |
+| 4 | After the reply: stop the collectors | `--action stop-collect` · `--action kernel --subcommand stop` |
+| 5 | Analyze, errors first | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
+| 6 | Escalate only if still unexplained | `--action error-analyze --format details` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 7 | Bilingual report, next-step prompt, cleanup | `--action stop` |
 
 ---
 
@@ -304,17 +324,15 @@ Start collecting logs for my app org.example.myapp
 tizen-cli tizen-sdk dlog-analyzer --action dlog-collect --app-id org.example.myapp
 ```
 
-This starts collecting dlog filtered by the app's PID as a **background process**. The app **must be running** — the tool looks up the PID via `pgrep`. Logs are continuously written to `$TMPDIR/tizen-dlog-analyzer/app/<app-id>/<app-id>.hot.log`.
+This starts collecting dlog filtered by the app's PID as a **background process**. The app **must be running** — the tool looks up the PID via `pgrep`. Logs are continuously written to `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the SDK data path comes from `~/.tizen.sdk.path.config` → `TIZEN_SDK_DATA_PATH` in `sdk.info`, or the `<sdk>-data` sibling; the envelope reports it as `result.log_file`).
 
 ### Step C — Ask User to Choose: Continue Collecting or Analyze Now
 
-The agent tells the user: *"Log collection has started in the background. Please browse the app and try to reproduce the issue."*
+The agent tells the user: *"Log collection has started in the background. Please browse the app and try to reproduce the issue."* — and **ends its turn** right there, presenting two options:
+1. **Done — the error/crash occurred** (or **Continue collecting**, if the user wants to keep testing)
+2. **Nothing happened** / **Stop and analyze now** — stop the collection (`stop-collect`) and immediately run `error-analyze` on the logs collected so far
 
-After the user has tested the app enough, the agent presents two options:
-1. **Continue collecting** — keep the background collection running while the user continues testing the app
-2. **Stop and analyze now** — stop the collection (`stop-collect`) and immediately run `error-analyze` to analyze the logs collected so far
-
-**Do NOT poll or loop.** Wait for the user's choice.
+**Do NOT poll, loop, or `sleep`.** Wait for the user's choice — the reproduction window is theirs. A `sleep 30 && … stop-collect` is exactly the behaviour issue #212 reported, and the guard hook denies it.
 
 ### Step D — Proceed Based on User's Choice
 
@@ -339,7 +357,13 @@ tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id org.example.my
 
 This analyzes the collected logs for Error (E) and Fatal (F) priority entries. It deduplicates errors by tag+message with an occurrence count. Output is plain text (token-efficient, no Rich tables): the summary shows one line per finding (`N. Module=TAG | Repeated=X | Message: ...`), and the details section shows `[Error N]` blocks with `Full log:` lines.
 
-The agent reads the `error-analyze` output and identifies the root cause, then applies a fix.
+The agent reads the `error-analyze` output and identifies the root cause, then applies a fix. Only when the E/F summary (plus `check` and, if collected, `kernel analyze`) does not explain the symptom does it widen the view — `--format details`, then a **filtered** full log:
+
+```bash
+tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id org.example.myapp --priority W --since 10m --max-lines 300
+```
+
+`app-log` is never the first analysis call (issue #215).
 
 **If the user selects "Continue collecting":**
 
@@ -381,6 +405,20 @@ tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id org.example.my
 | Collect app logs | `tizen-cli tizen-sdk dlog-analyzer --action dlog-collect --app-id <id>` |
 | Stop app log collection | `tizen-cli tizen-sdk dlog-analyzer --action stop-collect` |
 | Analyze app errors | `tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id <id> [--format summary\|details]` |
+| Print full app log | `tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id <id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]` |
+| Device profile | `tizen-cli tizen-sdk dlog-analyzer --action device-profile [--refresh]` |
+| Investigate | `tizen-cli tizen-sdk dlog-analyzer --action investigate [--app-id <id>] [--symptoms <text>]` |
+| List probes | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand list` |
+| Run probe | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand run --app-id <probe-id>` |
+| Create snapshot | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand create` |
+| List snapshots | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand list` |
+| Compare snapshots | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand compare --app-id <id1> --output-dir <id2>` |
+| Delete snapshot | `tizen-cli tizen-sdk dlog-analyzer --action snapshot --subcommand delete --app-id <id>` |
+| Timeline show | `tizen-cli tizen-sdk dlog-analyzer --action timeline --subcommand show` |
+| Timeline report | `tizen-cli tizen-sdk dlog-analyzer --action timeline --subcommand report` |
+| Kernel collect (background) | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand collect` |
+| Kernel stop | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand stop` |
+| Kernel analyze | `tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand analyze` |
 | Terminate app | `tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id <id>` |
 
 

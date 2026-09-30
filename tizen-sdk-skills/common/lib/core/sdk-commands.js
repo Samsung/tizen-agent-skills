@@ -45,6 +45,28 @@ const emulator = require("./emulator");
 const dlogAnalyzer = require("./dlog-analyzer");
 const { formatError, Envelope } = require("../envelope/response-formatter");
 
+/**
+ * Domain modules that exist only in the internal repository are absent from
+ * the public tree (scripts/publication/internal-only-paths.txt). Each such
+ * module exports `sdkCommands`, the map of functions it contributes here;
+ * when the module is missing the map is empty and every other command keeps
+ * working. Only MODULE_NOT_FOUND for the module itself is swallowed — a
+ * present but broken module still fails loudly.
+ */
+function internalCommands(id) {
+  try {
+    return require(id).sdkCommands || {};
+  } catch (e) {
+    if (
+      e &&
+      e.code === "MODULE_NOT_FOUND" &&
+      String(e.message).includes(`'${id}'`)
+    )
+      return {};
+    throw e;
+  }
+}
+
 module.exports = {
   // sdk
   initSdk: sdk.initSdk,
@@ -260,6 +282,19 @@ module.exports = {
   collectAppLogs: dlogAnalyzer.collectAppLogs,
   stopCollectAppLogs: dlogAnalyzer.stopCollectAppLogs,
   analyzeErrors: dlogAnalyzer.analyzeErrors,
+  // New v0.1.3 commands
+  appLog: dlogAnalyzer.appLog,
+  deviceProfile: dlogAnalyzer.deviceProfile,
+  investigate: dlogAnalyzer.investigate,
+  runProbe: dlogAnalyzer.runProbe,
+  manageSnapshot: dlogAnalyzer.manageSnapshot,
+  runTimeline: dlogAnalyzer.runTimeline,
+  manageKernel: dlogAnalyzer.manageKernel,
+  // One-shot device-log actions
   dumpDeviceLogs: dlogAnalyzer.dumpDeviceLogs,
   clearDeviceLogs: dlogAnalyzer.clearDeviceLogs,
+
+  // Internal-only domain modules (absent from the public tree) — see
+  // internalCommands() above.
+  ...internalCommands("./vd"),
 };

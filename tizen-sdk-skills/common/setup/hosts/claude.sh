@@ -42,7 +42,7 @@ _claude_hook_entries() {
       "command": "bash \"$dir/check-project-writes.sh\"" }]
   },
   {
-    "matcher": "Skill",
+    "matcher": "Skill|Agent|Task",
     "hooks": [{ "type": "command",
       "command": "bash \"$dir/check-skill-routing.sh\"" }]
   }

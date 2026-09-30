@@ -25,7 +25,7 @@ metadata:
 
 **Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**
 ```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" 2>nul
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-setup-cli.js" 2>nul & ver >nul
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
@@ -75,10 +75,14 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 2. `- <workloadVersion>` — specific workload version (`-` = placeholder)
 3. `--no-install-sdk` — do NOT auto-install a missing .NET SDK
 4. `--sdk-channel <chan>` — .NET SDK channel for the auto-install (default 8.0)
+5. `--dotnet-root <dir>` — use the .NET SDK at this install root (the directory holding `dotnet` and `sdk/`) instead of discovering one. Pass it when the user names a specific SDK ("use the Program Files dotnet").
+6. `--persist-env` — also persist a Tizen-extension-bundled dotnet into the user environment (see below). Pass it only when the user explicitly asks for that.
 
 Exit code: `0` = success envelope, `1` = failure/error envelope.
 
-The runner auto-discovers dotnet even if not on PATH, and if no SDK exists anywhere it auto-installs one user-scope (Linux/macOS `~/.dotnet`, Windows `%LOCALAPPDATA%\Microsoft\dotnet` — no sudo/admin rights needed) before installing the workload. Installation may take a few minutes.
+The runner auto-discovers dotnet even if not on PATH — ranking DOTNET_ROOT, official install roots (Program Files, `%LOCALAPPDATA%\Microsoft\dotnet`, `~/.dotnet`, …) and Tizen-extension-bundled dotnets (`…/sdktools/dotnet`) in that order — and if no SDK exists anywhere it auto-installs one user-scope (Linux/macOS `~/.dotnet`, Windows `%LOCALAPPDATA%\Microsoft\dotnet` — no sudo/admin rights needed) before installing the workload. Installation may take a few minutes.
+
+**Persistence policy.** An SDK in an official install root (or given via `--dotnet-root`) is wired up persistently (Windows: User `DOTNET_ROOT` + User `PATH`; Linux/macOS: `~/.local/bin/dotnet` symlink + `~/.bashrc` exports). A dotnet bundled inside a Tizen extension tree is used **for this run only** — an extension update can move or delete it and leave a dangling `DOTNET_ROOT` — unless `--persist-env` is passed. The success envelope reports every SDK found (`result.dotnet_candidates`), the `DOTNET_ROOT` seen at start (`result.env_dotnet_root`), a stale one if any (`result.dangling_dotnet_root`), and what this run wrote (`result.persisted_env`, `null` when nothing was written). A warning tells the user when a bundled dotnet was used but not persisted; relay it, and offer `--persist-env` or an official SDK install as the two fixes.
 
 **IMPORTANT:** On a failure/error envelope, return it and STOP. Do not run manual diagnostics like `dotnet --list-sdks`, `dotnet workload list`, or inspect directories — the runner already collected all the facts you need in `errors[0].details`. Do not re-run with `force`.
 

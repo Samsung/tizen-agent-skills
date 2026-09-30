@@ -31,11 +31,20 @@ progress lines is NOT the outcome.
 background task finishes, and background processes are killed after 10 minutes.
 Cline's `execute_command` also has a **30-second hard timeout** — `--wait` (which
 sleeps 60 seconds inside the script) will be killed at 30 seconds.
-For Cline, use `nohup` to launch the installer in the background, then poll with
-`sleep 25 && --status` (25-second sleep + instant status check, safely within the
-30-second timeout). Do NOT use `--wait` (60-second sleep exceeds the 30-second
-timeout). Do NOT use `--status` alone (returns instantly, causes tight-loop polling).
-See the SKILL.md for detailed Cline instructions.
+For Cline, use `nohup` (Linux/macOS) / `-Detach` (Windows) to launch the installer
+detached, then poll with `sleep 25 && echo "poll #N" && --status` (25-second sleep +
+instant status check, safely within the 30-second timeout). Put an **increasing attempt
+number** in every poll command — Cline aborts after 5 consecutive identical tool calls
+("Detected 5 consecutive identical calls") and a 10–15 min install needs dozens of polls —
+and stop after **4 polls per turn**: if it is still `STATUS=running`, tell the user that
+the install keeps running in the background, that **no automatic completion notice will
+come — Cline cannot notify them when the install finishes — so when they want to know
+whether it finished they have to ask** ("설치 진행 상태를 알려줘" / "tell me the install
+progress"), at which point you check the status and continue; also give them the
+`--status` / `-Status` command for checking by hand. Then END YOUR TURN and, when they
+ask, run `--status` and continue from there. Do NOT use `--wait`
+(60-second sleep exceeds the 30-second timeout). Do NOT use `--status` alone (returns
+instantly, causes tight-loop polling). See the SKILL.md for detailed Cline instructions.
 
 **⚠️ Windows — do NOT wrap the launch in `Start-Process`.** Backgrounding is done by the
 Bash tool's `run_in_background: true`, NOT by a PowerShell launcher. Specifically:

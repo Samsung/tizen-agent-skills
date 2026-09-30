@@ -51,8 +51,9 @@ TV SDK는 기본 Tizen SDK가 먼저 설치되어야 하는 **확장 패키지**
 nohup bash "<installer.sh 경로>" > /tmp/tizen-sdk-install.log 2>&1 & \
 jobs -p
 
-# 25초마다 상태 폴링하여 STATUS=done 확인
-sleep 25 && bash "<installer.sh 경로>" --status
+# 25초마다 상태 폴링하여 STATUS=done 확인 — 시도 번호(#N)는 호출마다 1씩 증가 (Cline은 동일 호출
+# 5회 연속이면 중단), 한 턴에 최대 4회 폴링 후에도 running이면 사용자에게 알리고 턴 종료
+sleep 25 && echo "poll #1" && bash "<installer.sh 경로>" --status
 ```
 
 **결과:**
@@ -147,7 +148,11 @@ TV SDK 확장은 다음 패키지를 다운로드하고 병합합니다:
 | UTC-12 .. UTC-5 | Global    | `https://usa.sdk-dl.tizen.org/sdk/tizenstudio/official`       |
 | UTC-4 .. UTC-1  | Brazil    | `https://brazil.sdk-dl.tizen.org/sdk/tizenstudio/official`    |
 | UTC+0 .. UTC+4  | Official  | `https://download.tizen.org/sdk/tizenstudio/official`         |
-| UTC+5 .. UTC+12 | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+| UTC+5 .. UTC+8  | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+| UTC+9           | Official  | `https://download.tizen.org/sdk/tizenstudio/official`         |
+| UTC+10 .. UTC+12 | Singapore | `https://singapore.sdk-dl.tizen.org/sdk/tizenstudio/official` |
+
+UTC+9(한국 / 일본)는 `download.tizen.org` 가 AWS 서울 리전(ap-northeast-2)에 있어 가장 가까운 서버이므로 공식 서버로 연결됩니다.
 
 ## TV SDK 설치 확인 방법
 
