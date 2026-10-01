@@ -9,6 +9,8 @@ common/setup/setup.sh   --harness <claude|cline|codex|gemini> [--repo <path>] [-
 common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>] [-SkipValidation] [-NoRestart]
 ```
 
+`setup.ps1` also accepts the `setup.sh` spelling (`--harness … --repo … --skip-validation --no-restart`).
+
 Each harness directory ships thin wrappers so the familiar entry points still work:
 
 | Harness | Linux / macOS / Git Bash | Windows PowerShell | Windows cmd |

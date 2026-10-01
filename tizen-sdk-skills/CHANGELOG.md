@@ -9,6 +9,99 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-10-01
+
+Cline on Windows (PowerShell terminal) could not find the CLI runner — the cmd.exe lookup block
+was headed for both shells (`&` is reserved in PowerShell), and a `node "$CLI"` line pasted on its
+own failed with a misleading `MODULE_NOT_FOUND` (Windows PowerShell 5.1 drops the empty `"$CLI"`
+argument, so node died with `Cannot find module '<cwd>\list-templates'`). The skill headings now
+name the shell each block is for, the generated `node` line guards against an empty `$CLI`, and the
+guard rules (Korean rule 7 / 9, English rule 8 / 10) spell out both failure modes and limit the
+encoding wrapper to commands without `$`.
+
+Two `dlog-analyzer` fixes also land: a `start` refused by a live collector lock no longer reports
+success and deletes the lock file (it returns `already_running` naming the holder), and the runner
+picks the binary it was shipped with (newest cache version otherwise) instead of the first directory
+it finds — and keeps a report the Windows cp949 code page crash cut short instead of returning only
+the traceback.
+
+### Changed
+
+- **dlog-analyzer bundled binaries bumped from v0.2.3a0 to v0.2.5a0**
+  (`common/tools/tizen-dlog-analyzer/linux/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/windows/tizen-dlog-analyzer.exe`,
+  `common/tools/tizen-dlog-analyzer/macos/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/NOTICE.md`). Updated the per-platform
+  PyInstaller one-file bundles for Linux, Windows, and macOS, and refreshed
+  the file sizes and SHA-256 hashes in NOTICE.md to match the new builds.
+
+### Fixed
+
+- **dlog-analyzer `start` refused by a live collector lock reported success and then deleted the lock file**
+  (`common/lib/core/dlog-analyzer.js`, `common/lib/tests/dlog-analyzer.test.js`, `common/agents/tizen-dlog-analyzer.md`,
+  `common/skills/tizen-dlog-analyzer/SKILL.md`, `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`). A `start` refused
+  by the native binary's collector lock came back as `success`: the binary was still alive at the fixed 2 s check
+  and exited a moment later, so the agent saw a dead PID on `stop` and went to delete `_meta/collector.lock` —
+  which a live collector from an earlier session (one that had outlived its PID file) held open on the same dlog
+  stream. The runner now polls the collector through a 3 s window and returns as soon as it exits or prints the
+  refusal; on a refusal it returns `already_running` with the holder PID read from the lock file and the command
+  that stops it (`stop`, `stop-collect`, or terminate the untracked PID). `start` also refuses up front while
+  `dlog-collect` runs. The runner never touches the lock file. Review follow-up: a PID read from `collector.lock`
+  may have been reused by an unrelated process once the real holder exited — the runner now reads its executable
+  name (`tasklist` / `ps`) and only says "terminate PID" for a confirmed `tizen-dlog-analyzer`; a reused PID is
+  reported as a stale lock ("do not terminate"), an unreadable name as "confirm before terminating".
+  `awaitCollectorStartup` judges the new collector from the child-process exit state instead of signalling its
+  PID (which a reused number would fake), and the refusal regex is anchored to the binary's own two lines so a
+  device log line mentioning a lock, copied into the monitor's capture, cannot match.
+- **dlog-analyzer ran the wrong binary version and lost the report on a Windows cp949 crash**
+  (`common/lib/core/dlog-analyzer.js`, `common/lib/core/plugin-cache.js`, `common/lib/tests/dlog-analyzer.test.js`,
+  `common/agents/tizen-dlog-analyzer.md`, `common/skills/tizen-dlog-analyzer/SKILL.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`, `common/tools/tizen-dlog-analyzer/`). `resolveBinary()` walked
+  the plugin caches in directory order and returned the first binary it found, so a cache holding 1.1.1 … 1.4.0
+  ran 1.1.1's binary — which has no `investigate` ("No such command"). The runner's own `tools/` now comes first
+  (an installed plugin always runs the binary it was shipped with) and a cache is searched newest version first,
+  compared numerically. The native binary is frozen Python; piped to the runner on Windows it writes through the
+  system ANSI code page (cp949) and dies with `UnicodeEncodeError` on the em dash in the investigate report's
+  closing notes — after the whole report was already printed. Neither `chcp 65001` nor `PYTHONUTF8` /
+  `PYTHONIOENCODING` reaches a PyInstaller binary (verified), so `runBinary()` and `error-analyze` keep the
+  printed output and return it as a success with a warning that names the code page and rules out those retries,
+  instead of returning only the traceback. Review follow-up: `resolveBinary()` imports `VERSION_DIR_RE` from
+  `plugin-cache` (the rule `findLatestVersionDir` applies) instead of keeping its own copy, sorts with
+  `compareVersions(b, a)` instead of `sort` + `reverse`; the `UnicodeEncodeError` matcher tolerates rich's
+  line-wrapped traceback (tokens may be split across lines) and Buffer stdout/stderr; a recovered result carries
+  `output_truncated: true` so callers can tell a cut-short report from a complete one without parsing the warning
+  text.
+- **PowerShell `node "$CLI" …` line run on its own failed with a misleading `MODULE_NOT_FOUND`**
+  (`scripts/rewrite-runner-snippets.js`, every `common/skills/*/SKILL.md` with a PowerShell lookup block,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `common/lib/tests/plugin-cache.test.js`). With `$CLI` unset — the third line pasted without the two
+  lookup lines, or in a fresh session — Windows PowerShell 5.1 drops the empty `"$CLI"` argument, so
+  `node "$CLI" list-templates --type native` became `node list-templates --type native` and node died with
+  `Cannot find module '<cwd>\list-templates'`, which points at nothing. The generated line now starts
+  with `if (-not $CLI) { throw '… $CLI is empty. Run the two lookup lines above in THIS PowerShell
+  session first …' }; ` on the same line as `node`, so it fires even when only that line is pasted; the
+  block heading says to run all three lines in order in the same session; the generator adds the guard
+  to existing blocks and regenerates an existing one (`--check` stays green); the drift-guard TC fails
+  when a lookup is followed by a bare `node "$CLI"`; the guard rules (Korean rule 7, English rule 8)
+  explain the symptom. Review follow-up: three fenced cmd.exe lookups (`tizen-webapp-debug`,
+  `tizen-playwright-test`: "Cline on Windows ONLY (… cmd.exe / PowerShell …)"; `tizen-create-project`
+  step 2: "Windows:") sat under headings the generator did not know, so they still said
+  "cmd.exe / PowerShell" over the `&` chain — the generator now rewrites those two forms too, and the
+  drift-guard TC requires every fenced cmd.exe lookup / PowerShell block to sit under the generated heading.
+- **Cline on Windows (PowerShell terminal) could not find the CLI runner** (`scripts/rewrite-runner-snippets.js`,
+  every `common/skills/*/SKILL.md` with a Windows lookup, `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`,
+  `cline/hooks/tizen-sdk-skills-guard.md`, `common/hooks/tizen-sdk-skills-guard.md`, the debug walkthroughs
+  under `docs/debug/`). The cmd.exe lookup block was headed "Windows — Cline (cmd.exe / PowerShell)", so in
+  a PowerShell terminal the model ran the `dir … 2>nul & dir …` chain there (`&` is reserved in PowerShell —
+  `AmpersandNotAllowed`), then wrapped the PowerShell block in `powershell -Command "…"`, which let the
+  outer shell expand `$h`, `$CLI`, `$d`, `$env:USERPROFILE` and `$_` first and handed the inner shell
+  ` = ; foreach ( in @(…` ("foreach 뒤에 변수 이름이 없습니다"); guard rule 9's encoding wrapper was the
+  pattern it copied. The headings now say the cmd chain is cmd.exe only and that the PowerShell lines run
+  as-is in the terminal, never inside `powershell -Command "…"`; the generator rewrites the old headings
+  in place (`--check` stays green); the guard rules (Korean rule 7 / 9, English rule 8 / 10) spell out the
+  same two failure modes, tell the model to use the runner file name the skill gives instead of guessing
+  one, and limit the encoding wrapper to commands without `$`.
+
 ## [1.4.0] — 2026-09-30
 
 `dotnet-setup` picks the .NET SDK by where it lives and gains `--dotnet-root` / `--persist-env`;
@@ -1193,7 +1286,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...HEAD
+[1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0
 [1.3.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...tizen-sdk-skills-v1.3.1
 [1.3.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.2.0...tizen-sdk-skills-v1.3.0

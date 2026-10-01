@@ -32,20 +32,62 @@
 
 .EXAMPLE
     .\setup.ps1 -Harness gemini
+    .\setup.ps1 --harness gemini
 #>
 
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [Parameter(Mandatory = $true)]
-    [ValidateSet("claude", "cline", "codex", "gemini")]
+    [Parameter(Mandatory = $true, Position = 0)]
     [string]$Harness,
-    [string]$RepoPath = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent),
+    [string]$RepoPath,
     [switch]$SkipValidation,
-    [switch]$NoRestart
+    [switch]$NoRestart,
+    [Parameter(ValueFromRemainingArguments = $true)]
+    [string[]]$Rest
 )
 
 $ErrorActionPreference = "Stop"
 
 . (Join-Path $PSScriptRoot "setup-lib.ps1")
+
+# setup.sh spelling (--harness X --repo P --skip-validation --no-restart) is not a
+# PowerShell parameter: the tokens arrive as plain strings in $Harness / $Rest.
+# Translate them, merge with whatever did bind, and re-invoke with named parameters.
+$argv = @()
+if ($Harness -like "--*") { $argv += $Harness }
+if ($Rest) { $argv += $Rest }
+if ($argv) {
+    $valueOpts = @{ "--harness" = "Harness"; "--repo" = "RepoPath" }
+    $flagOpts = @{ "--skip-validation" = "SkipValidation"; "--no-restart" = "NoRestart" }
+    $splat = @{}
+    foreach ($p in $PSBoundParameters.GetEnumerator()) {
+        if ($p.Key -eq "Rest" -or ($p.Key -eq "Harness" -and $Harness -like "--*")) { continue }
+        $splat[$p.Key] = $p.Value
+    }
+    for ($i = 0; $i -lt $argv.Count; $i++) {
+        $opt = $argv[$i]
+        if ($valueOpts.ContainsKey($opt)) {
+            if ($i + 1 -ge $argv.Count) { Write-Status "$opt requires a value" "Error"; exit 1 }
+            $splat[$valueOpts[$opt]] = $argv[++$i]
+        } elseif ($flagOpts.ContainsKey($opt)) {
+            $splat[$flagOpts[$opt]] = $true
+        } else {
+            Write-Status "Unknown argument: $opt" "Error"; exit 1
+        }
+    }
+    if (-not $splat.ContainsKey("Harness")) { Write-Status "--harness is required" "Error"; exit 1 }
+    & $PSCommandPath @splat
+    exit $LASTEXITCODE
+}
+
+$harnesses = @(Get-ChildItem (Join-Path $PSScriptRoot "hosts") -Filter "*.ps1" -File | ForEach-Object { $_.BaseName })
+if ($Harness -notin $harnesses) {
+    Write-Status "-Harness must be one of: $($harnesses -join ', ')" "Error"
+    exit 1
+}
+# Resolved here rather than as a param default: $PSScriptRoot is empty inside param
+# defaults when the script is started with powershell.exe -File.
+if (-not $RepoPath) { $RepoPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent }
 
 try {
     if (-not (Test-Path $RepoPath)) { throw "Repository path not found: $RepoPath" }

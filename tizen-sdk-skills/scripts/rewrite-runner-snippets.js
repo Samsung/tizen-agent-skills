@@ -44,17 +44,28 @@
  *       block right after it (skills/agents only): host pick from HOST_MARKERS,
  *       then own host first, then every host, version-sorted with [version].
  *       The old inline `Get-ChildItem "…\.claude\…","…\.cline\…" -ErrorAction
- *       SilentlyContinue` list is replaced by the same two lines.
+ *       SilentlyContinue` list is replaced by the same two lines. The `node`
+ *       line that follows the lookup is prefixed with PS_GUARD (`if (-not $CLI)
+ *       { throw '…' }; `): run on its own — `$CLI` never set — Windows
+ *       PowerShell drops the empty `"$CLI"` argument, node treats the first
+ *       runner argument as the script path and fails with a misleading
+ *       MODULE_NOT_FOUND for `<cwd>\list-templates`; the guard names the real
+ *       cause instead. A bare `node "$CLI"` line after a lookup gains the guard;
+ *       an existing guard is regenerated.
  *   (f) prose: "If neither the `~/.claude` nor the `~/.cline` cache contains the runner"
  *              → "If none of the `~/.claude`, `~/.cline`, … caches contains the runner";
  *       "Pick the highest-version path, then:" → mentions that the PowerShell
- *       form already resolved $CLI.
+ *       form already resolved $CLI;
+ *       the cmd.exe / PowerShell block headings → say the cmd chain is cmd.exe
+ *       only and the PowerShell lines must not be wrapped in
+ *       `powershell -Command "…"` (outer-shell expansion of $CLI / $env:).
  *
  * After rewriting, any remaining line that mentions a host cache path but not
  * every host is printed under "UNCLASSIFIED" for manual review.
  *
- * Exports NEW_BASE_LINE / FALLBACK_LINE / PS_HOST_PICK_LINE / psLookupLine /
- * rewrite for common/lib/tests/plugin-cache.test.js (drift guard).
+ * Exports NEW_BASE_LINE / FALLBACK_LINE / PS_HOST_PICK_LINE / PS_GUARD /
+ * psLookupLine / psNodeLine / rewrite for common/lib/tests/plugin-cache.test.js
+ * (drift guard).
  */
 
 const fs = require("fs");
@@ -199,17 +210,61 @@ const psLookupLine = (tailWin) =>
   `| Sort-Object { [version]$_.Directory.Parent.Parent.Name } | Select-Object -Last 1 -ExpandProperty FullName; ` +
   `if ($CLI) { break } }`;
 
+// Guard in front of the PowerShell `node "$CLI" …` line. With `$CLI` unset
+// (the node line run on its own, or in a fresh session) Windows PowerShell
+// drops the empty `"$CLI"` argument altogether, so node gets
+// `node list-templates --type native`, treats `list-templates` as the script
+// and dies with `Cannot find module '<cwd>\list-templates'` — nothing in that
+// message points at the lookup. The guard sits on the SAME line as `node`, so
+// it fires even when only that line is pasted. Single quotes: PowerShell must
+// not expand anything inside the message.
+const PS_GUARD =
+  "if (-not $CLI) { throw 'tizen-sdk-skills runner not found: $CLI is empty. Run the two lookup lines above in THIS PowerShell session first; if they still find nothing, the tizen-sdk-skills plugin is not installed.' }";
+const psNodeLine = (nodeArgs) => `${PS_GUARD}; node "$CLI"${nodeArgs}`;
+
 // Previously generated PowerShell lines (any marker set / host list) — matched
 // so a change in HOST_MARKERS or HOST_DOT_DIRS regenerates them in place.
 const CUR_PS_HOST_PICK_RE =
   /\$h = "\.[a-z]+"(?:; if \([^)]*\) \{ \$h = "\.[a-z]+" \})*/g;
-const CUR_PS_LOOKUP_RE = new RegExp(
-  `\\$CLI = \\$null; foreach \\(\\$d in @\\(\\$h(?:, "\\.[a-z]+")*\\)\\) \\{ \\$CLI = Get-ChildItem "\\$env:USERPROFILE\\\\\\$d\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)" -ErrorAction SilentlyContinue \\| Sort-Object \\{ \\[version\\]\\$_\\.Directory\\.Parent\\.Parent\\.Name \\} \\| Select-Object -Last 1 -ExpandProperty FullName; if \\(\\$CLI\\) \\{ break \\} \\}`,
+const CUR_PS_LOOKUP_SRC = `\\$CLI = \\$null; foreach \\(\\$d in @\\(\\$h(?:, "\\.[a-z]+")*\\)\\) \\{ \\$CLI = Get-ChildItem "\\$env:USERPROFILE\\\\\\$d\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)" -ErrorAction SilentlyContinue \\| Sort-Object \\{ \\[version\\]\\$_\\.Directory\\.Parent\\.Parent\\.Name \\} \\| Select-Object -Last 1 -ExpandProperty FullName; if \\(\\$CLI\\) \\{ break \\} \\}`;
+const CUR_PS_LOOKUP_RE = new RegExp(CUR_PS_LOOKUP_SRC, "g");
+// A lookup line directly followed by a bare `node "$CLI" …` line (the form
+// generated before the guard existed). Group 1 = lookup line, group 2 = the
+// lookup's runner tail (inner group of CUR_PS_LOOKUP_SRC), group 3 = the node
+// line's indent. Idempotent: once guarded, the next line starts with `if`.
+const UNGUARDED_PS_NODE_RE = new RegExp(
+  `(${CUR_PS_LOOKUP_SRC})\\n([ \\t]*)node "\\$CLI"`,
   "g",
 );
+// An existing guard (any message) — regenerated so a wording change propagates.
+const CUR_PS_GUARD_RE =
+  /if \(-not \$CLI\) \{ throw '[^'\n]*' \}; node "\$CLI"/g;
 
-const PS_BLOCK_HEADING =
+// Headings around the Windows lookup blocks. The cmd.exe chain (`&`, `2>nul`) is a
+// parse error in PowerShell, and a PowerShell block wrapped in
+// `powershell -Command "…"` from PowerShell or Git Bash has `$h` / `$CLI` /
+// `$env:` expanded by the OUTER shell first, so the inner one receives
+// ` = ; foreach ( in @(…` — both seen in Cline on Windows. The headings say so;
+// the OLD_* forms are rewritten in place.
+const OLD_CMD_HEADING =
+  "**Windows — Cline (cmd.exe / PowerShell). Claude Code on Windows runs Git Bash — use the Bash block below:**";
+// Two more legacy headings over a fenced cmd.exe lookup (webapp-debug /
+// playwright-test, and create-project step 2) that the OLD_CMD_HEADING swap
+// missed — they still said "cmd.exe / PowerShell" over the `&` chain.
+const OLD_CMD_HEADING_2 =
+  "**Cline on Windows ONLY (`execute_command` = cmd.exe / PowerShell, no Bash tool):**";
+// `**Windows:**` only when it heads the cmd.exe fence (group 1 = indent,
+// group 2 = the blank line(s) + fence open + `cmd /c dir /s /b ` that follow).
+const OLD_CMD_HEADING_3_RE =
+  /^([ \t]*)\*\*Windows:\*\*(\n+[ \t]*```[a-z]*\n[ \t]*cmd \/c dir \/s \/b )/gm;
+const CMD_BLOCK_HEADING =
+  "**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal). `&` and `2>nul` are cmd.exe syntax — in a PowerShell terminal run the PowerShell block below instead. Claude Code on Windows runs Git Bash — use the Bash block below:**";
+const OLD_PS_BLOCK_HEADING =
   "**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**";
+const OLD_PS_BLOCK_HEADING_2 =
+  '**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness\'s own cache, then the newest version. Run the lines below as-is in the PowerShell terminal; never wrap them in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**';
+const PS_BLOCK_HEADING =
+  '**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness\'s own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**';
 
 function psBlock(runnerJs, nodeArgs) {
   return [
@@ -219,7 +274,7 @@ function psBlock(runnerJs, nodeArgs) {
     "```powershell",
     PS_HOST_PICK_LINE,
     psLookupLine(`*\\lib\\cli\\${runnerJs}`),
-    `node "$CLI"${nodeArgs}`,
+    psNodeLine(nodeArgs),
     "```",
   ].join("\n");
 }
@@ -234,6 +289,13 @@ const CMD_FENCE_RE = new RegExp(
 );
 const PS_BLOCK_MARKER = `foreach ($d in ${PS_HOST_LIST})`;
 const NODE_FOUND_PATH_RE = /```[a-z]*\nnode "<found-path>"([^\n]*)\n```/;
+// How far past the cmd.exe fence an existing PS block's marker can sit:
+// heading + blank line + fence + host-pick line + the start of the lookup line.
+const PS_AHEAD =
+  PS_BLOCK_HEADING.length +
+  PS_HOST_PICK_LINE.length +
+  PS_BLOCK_MARKER.length +
+  200;
 
 function insertPsBlocks(text) {
   let out = "";
@@ -242,7 +304,7 @@ function insertPsBlocks(text) {
     const end = m.index + m[0].length;
     out += text.slice(last, end);
     last = end;
-    const ahead = text.slice(end, end + 700);
+    const ahead = text.slice(end, end + PS_AHEAD);
     if (ahead.includes(PS_BLOCK_MARKER)) continue; // already has the PS block
     const nodeMatch = ahead.slice(0, 500).match(NODE_FOUND_PATH_RE);
     const nodeArgs = nodeMatch ? nodeMatch[1] : "";
@@ -316,8 +378,22 @@ function rewrite(text, { psBlocks = true } = {}) {
   out = replaceInlinePs(out);
   out = out.replace(CUR_PS_HOST_PICK_RE, PS_HOST_PICK_LINE);
   out = out.replace(CUR_PS_LOOKUP_RE, (_m, tail) => psLookupLine(tail));
+  out = out.replace(
+    UNGUARDED_PS_NODE_RE,
+    (_m, lookup, _tail, indent) =>
+      `${lookup}\n${indent}${PS_GUARD}; node "$CLI"`,
+  );
+  out = out.replace(CUR_PS_GUARD_RE, () => `${PS_GUARD}; node "$CLI"`);
   if (psBlocks) out = insertPsBlocks(out);
   out = out.split(OLD_PROSE).join(NEW_PROSE);
+  out = out.split(OLD_CMD_HEADING).join(CMD_BLOCK_HEADING);
+  out = out.split(OLD_PS_BLOCK_HEADING).join(PS_BLOCK_HEADING);
+  out = out.split(OLD_PS_BLOCK_HEADING_2).join(PS_BLOCK_HEADING);
+  out = out.split(OLD_CMD_HEADING_2).join(CMD_BLOCK_HEADING);
+  out = out.replace(
+    OLD_CMD_HEADING_3_RE,
+    (_m, indent, rest) => `${indent}${CMD_BLOCK_HEADING}${rest}`,
+  );
   out = out.split(OLD_PICK_THEN).join(NEW_PICK_THEN);
   out = out.split(OLD_PICK_RESULTS).join(NEW_PICK_RESULTS);
   return out;
@@ -436,7 +512,11 @@ module.exports = {
   PS_HOST_PICK_LINE,
   PS_HOST_LIST,
   PS_BLOCK_MARKER,
+  CMD_BLOCK_HEADING,
+  PS_BLOCK_HEADING,
+  PS_GUARD,
   psLookupLine,
+  psNodeLine,
   rewrite,
 };
 

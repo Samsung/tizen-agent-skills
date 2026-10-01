@@ -69,9 +69,19 @@ const {
   manageKernel,
   collectorEnv,
   capturedOutputSummary,
+  resolveBinary,
+  runBinary,
+  recoverEncodingCrash,
+  BINARY_SUBPATH,
+  awaitCollectorStartup,
+  describeLockHolder,
+  lockedCollectorError,
+  processImageName,
+  LOCK_REFUSAL_RE,
   REPORT_FORMAT_HINT,
   STOP_OUTPUT_LINES,
 } = require("../core/dlog-analyzer");
+const { VERSION_DIR_RE } = require("../core/plugin-cache");
 
 console.log("=== dlog-analyzer Test ===\n");
 
@@ -1183,9 +1193,458 @@ for (const rel of [
   );
 }
 
-// The async checks above (Tests 11 and 15) settle before this runs: none of
-// them awaits I/O that outlives the current macrotask queue.
-setImmediate(() => {
-  console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
-  process.exit(failures === 0 ? 0 : 1);
-});
+// Test 19: the native binary's collector lock. A refused collector used to
+// come back as "success" (alive at the 2 s mark, dead a moment later) and the
+// agent then "fixed" it by deleting the lock — which the live holder had open.
+// The runner must recognise the refusal, name the holder and who stops it,
+// and never touch the lock file itself.
+console.log("\nTest 19: collector lock refusal");
+const LOCK_REFUSAL_OUTPUT =
+  "Existing hot logs will be cleared on start (--fresh)\r\n" +
+  "Starting collection and monitoring -> ./logs\r\n" +
+  "Monitoring category: _general\r\n" +
+  "Could not start collection: base_dir already locked\r\n" +
+  "collection already running for base_dir logs (lock held: logs\\_meta\\collector.lock)\r\n";
+// The same refusal naming a specific lock file — the printed path is relative
+// to the binary's cwd, and the envelope tests must not read whatever lock the
+// test runner's cwd happens to hold.
+const refusalFor = (lockFile) =>
+  LOCK_REFUSAL_OUTPUT.replace("logs\\_meta\\collector.lock", lockFile);
+check(
+  "the binary's refusal is recognised",
+  LOCK_REFUSAL_RE.test(LOCK_REFUSAL_OUTPUT),
+  true,
+);
+check(
+  "a healthy start is not",
+  LOCK_REFUSAL_RE.test(
+    "Starting collection and monitoring -> ./logs\nMonitoring category: _general\n",
+  ),
+  false,
+);
+// The monitor copies device log lines into the same capture: a stray "lock
+// held" inside one of them is not the binary's refusal.
+check(
+  "a device log line mentioning a lock is not",
+  LOCK_REFUSAL_RE.test(
+    "Starting collection and monitoring -> ./logs\n" +
+      "E/KERNEL ( 1234): lockdep: lock held: &mm->mmap_lock, base_dir already locked by someone\n",
+  ),
+  false,
+);
+
+const asCollector = () => "tizen-dlog-analyzer.exe";
+const lockTmp = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-lock-"));
+fs.mkdirSync(path.join(lockTmp, "_meta"));
+const lockPath = path.join(lockTmp, "_meta", "collector.lock");
+fs.writeFileSync(lockPath, `${process.pid}\n`);
+{
+  const h = describeLockHolder("", lockTmp, asCollector);
+  check(
+    "holder read from <log-dir>/_meta/collector.lock",
+    [h.lockFile, h.pid, h.running, h.image, h.isCollector],
+    [lockPath, process.pid, true, "tizen-dlog-analyzer.exe", true],
+  );
+}
+check(
+  "the lock path the binary printed wins over the resolved directory",
+  describeLockHolder(
+    refusalFor(lockPath),
+    path.join(lockTmp, "no"),
+    asCollector,
+  ).lockFile,
+  lockPath,
+);
+check(
+  "a live holder whose PID was reused is not a collector",
+  describeLockHolder("", lockTmp, () => "node.exe").isCollector,
+  false,
+);
+check(
+  "an unreadable executable name leaves isCollector open",
+  describeLockHolder("", lockTmp, () => null).isCollector,
+  null,
+);
+{
+  fs.writeFileSync(lockPath, "2147483646");
+  const h = describeLockHolder("", lockTmp, asCollector);
+  check(
+    "a holder that no longer runs is reported as such, without an image lookup",
+    [h.pid, h.running, h.image, h.isCollector],
+    [2147483646, false, null, null],
+  );
+  fs.writeFileSync(lockPath, `${process.pid}`);
+}
+check(
+  "processImageName reads this process's executable on this platform",
+  /node/i.test(processImageName(process.pid) || ""),
+  true,
+);
+check(
+  "processImageName → null for a PID that does not exist",
+  processImageName(2147483646),
+  null,
+);
+check(
+  "no lock file → no holder",
+  describeLockHolder("", path.join(lockTmp, "none")).pid,
+  null,
+);
+{
+  const e = lockedCollectorError(
+    "tizen-sdk dlog-analyzer start",
+    "'start start-monitoring'",
+    refusalFor(lockPath),
+    lockTmp,
+    { collectPid: process.pid, imageOf: asCollector },
+  );
+  check("locked start → failure", e.status, "failure");
+  check(
+    "locked start → already_running",
+    e.errors[0].category,
+    "already_running",
+  );
+  check(
+    "holder is the dlog-collect session → stop-collect",
+    /'dlog-collect' session[\s\S]*stop-collect/.test(e.errors[0].message),
+    true,
+  );
+}
+{
+  const e = lockedCollectorError(
+    "tizen-sdk dlog-analyzer dlog-collect",
+    "'dlog-collect org.example.app'",
+    refusalFor(lockPath),
+    lockTmp,
+    { monitorPid: process.pid, appId: "org.example.app", imageOf: asCollector },
+  );
+  check(
+    "holder is the monitor → keep it running, analyze with check",
+    /do not stop the monitor mid-reproduction[\s\S]*'check'/.test(
+      e.errors[0].message,
+    ),
+    true,
+  );
+}
+{
+  const e = lockedCollectorError(
+    "tizen-sdk dlog-analyzer start",
+    "'start start-monitoring'",
+    refusalFor(lockPath),
+    lockTmp,
+    { imageOf: asCollector },
+  );
+  const msg = e.errors[0].message;
+  check(
+    "untracked live collector → terminate it by PID",
+    new RegExp(
+      `not tracking[\\s\\S]*Terminate PID ${process.pid} and its child`,
+    ).test(msg),
+    true,
+  );
+  check("the envelope names the lock file", msg.includes(lockPath), true);
+  check(
+    "a live holder's lock is never offered for deletion",
+    /delete|remove|unlink/i.test(msg),
+    false,
+  );
+  check(
+    "the binary output travels in the envelope",
+    msg.includes("base_dir already locked"),
+    true,
+  );
+}
+{
+  // The OS reused the holder's PID for an unrelated process: the one case
+  // that must NOT end in "terminate PID".
+  const e = lockedCollectorError(
+    "tizen-sdk dlog-analyzer start",
+    "'start start-monitoring'",
+    refusalFor(lockPath),
+    lockTmp,
+    { imageOf: () => "node.exe" },
+  );
+  const msg = e.errors[0].message;
+  check(
+    "reused PID → named as a different process, lock called stale",
+    /now belongs to 'node\.exe'[\s\S]*stale/.test(msg),
+    true,
+  );
+  check(
+    "reused PID → explicitly not terminated",
+    new RegExp(`Do not terminate PID ${process.pid}`).test(msg) &&
+      !/Terminate PID/.test(msg),
+    true,
+  );
+}
+{
+  const e = lockedCollectorError(
+    "tizen-sdk dlog-analyzer start",
+    "'start start-monitoring'",
+    refusalFor(lockPath),
+    lockTmp,
+    { imageOf: () => null },
+  );
+  check(
+    "unknown executable → confirm before terminating",
+    /confirm PID \d+ is a tizen-dlog-analyzer process before terminating/.test(
+      e.errors[0].message,
+    ),
+    true,
+  );
+}
+fs.rmSync(lockTmp, { recursive: true, force: true });
+
+{
+  const startBody = domainSource.slice(
+    domainSource.indexOf("async function startDlogAnalyzer("),
+    domainSource.indexOf("async function stopDlogAnalyzer("),
+  );
+  const collectCheck = startBody.indexOf("getCollectPid()");
+  check(
+    "start refuses while dlog-collect runs, before spawning",
+    collectCheck > -1 && collectCheck < startBody.indexOf("spawn("),
+    true,
+  );
+}
+check(
+  "both dlog collectors wait through awaitCollectorStartup",
+  (domainSource.match(/await awaitCollectorStartup\(/g) || []).length,
+  2,
+);
+check(
+  "a locked collector is terminated before its envelope",
+  (
+    domainSource.match(
+      /if \(startup\.alive\) await terminateGracefully\(child\.pid\);/g,
+    ) || []
+  ).length,
+  2,
+);
+check(
+  "the runner never deletes the collector lock",
+  /(unlinkSync|rmSync)\([^)]*collector\.lock/.test(domainSource),
+  false,
+);
+
+// Real timers and real children: an exited collector is noticed in the first
+// poll, a refusal is noticed while the process is still alive, and a healthy
+// collector is left alone until the window ends.
+const lockTests = (async () => {
+  const { spawn } = require("child_process");
+  const startupDir = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-startup-"));
+  const capFile = path.join(startupDir, "out.log");
+  fs.writeFileSync(capFile, "");
+  const dead = spawn(process.execPath, ["-e", "process.exit(0)"]);
+  await new Promise((resolve) => dead.on("exit", resolve));
+  let t0 = Date.now();
+  const r1 = await awaitCollectorStartup(dead, capFile, 3000);
+  check(
+    "an exited collector → alive false, not locked",
+    [r1.alive, r1.locked],
+    [false, false],
+  );
+  check("… noticed before the window ends", Date.now() - t0 < 1500, true);
+
+  const live = spawn(process.execPath, ["-e", "setTimeout(() => {}, 20000)"]);
+  t0 = Date.now();
+  const r3 = await awaitCollectorStartup(live, capFile, 600);
+  check(
+    "a healthy collector → alive, not locked",
+    [r3.alive, r3.locked],
+    [true, false],
+  );
+  check("… only after the whole window", Date.now() - t0 >= 600, true);
+
+  fs.writeFileSync(capFile, LOCK_REFUSAL_OUTPUT);
+  t0 = Date.now();
+  const r2 = await awaitCollectorStartup(live, capFile, 3000);
+  check(
+    "a live collector that printed the refusal → locked",
+    [r2.alive, r2.locked],
+    [true, true],
+  );
+  check("… noticed in the first poll", Date.now() - t0 < 1500, true);
+  check("… with the capture returned", r2.output, LOCK_REFUSAL_OUTPUT);
+  live.kill();
+  await new Promise((resolve) => live.on("exit", resolve));
+  fs.rmSync(startupDir, { recursive: true, force: true });
+})();
+
+// Test 20: the binary is picked from this runner's own tools/ first, and from
+// a plugin cache newest-version-first. Directory order used to win, so a cache
+// holding 1.1.1 … 1.4.0 ran 1.1.1's binary — which has no `investigate`.
+console.log("\nTest 20: binary resolution order");
+{
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-bin-"));
+  const cache = path.join(root, "cache");
+  const own = path.join(root, "own-tools");
+  const place = (base) => {
+    const file = path.join(base, ...BINARY_SUBPATH);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "");
+    return file;
+  };
+  const cached = {};
+  for (const v of ["1.1.1", "1.4.0", "1.10.0", "1.2.0"]) {
+    cached[v] = place(path.join(cache, v, "tools"));
+  }
+  fs.mkdirSync(path.join(cache, "not-a-version", "tools"), {
+    recursive: true,
+  });
+  check(
+    "a cache root yields its newest version, compared numerically",
+    resolveBinary([cache]),
+    cached["1.10.0"],
+  );
+  const ownBinary = place(own);
+  check(
+    "the runner's own tools/ wins over every cache",
+    resolveBinary([own, cache]),
+    ownBinary,
+  );
+  check(
+    "missing bases are skipped",
+    resolveBinary([path.join(root, "nope"), cache]),
+    cached["1.10.0"],
+  );
+  check("nothing found → null", resolveBinary([path.join(root, "nope")]), null);
+  fs.rmSync(root, { recursive: true, force: true });
+  check(
+    "own tools/ precede the caches in the default search",
+    /path\.join\(__dirname, "tools"\),\s*path\.resolve\(__dirname, "\.\.", "\.\.", "tools"\),\s*\.\.\.orderedCacheRoots\(\)/.test(
+      domainSource,
+    ),
+    true,
+  );
+}
+
+// Test 21: a frozen-Python collector killed by the Windows code page
+// (UnicodeEncodeError on an em dash) had already printed its whole report;
+// the runner keeps it and explains the missing tail instead of returning only
+// the traceback. chcp / PYTHONUTF8 do not reach the binary, so the warning
+// must not send the agent down that road.
+console.log("\nTest 21: UnicodeEncodeError recovery");
+{
+  const CRASH =
+    "+--- Traceback (most recent call last) ---+\n| in write_text:402 |\n" +
+    "UnicodeEncodeError: 'cp949' codec can't encode character '\\u2014' in position 26: illegal multibyte sequence\n" +
+    "[PYI-19088:ERROR] Failed to execute script 'main' due to unhandled exception!";
+  const crashing = (stdoutText) => [
+    "-e",
+    `process.stdout.write(${JSON.stringify(stdoutText)}); process.stderr.write(${JSON.stringify(CRASH)}); process.exit(1);`,
+  ];
+  const r = runBinary(
+    "tizen-sdk dlog-analyzer investigate",
+    process.execPath,
+    crashing("=== Investigate Report ===\n  Notes:\n"),
+    { result: { device_serial: "emulator-26101" }, errorCategory: "x" },
+  );
+  check("crash after output → success", r.status, "success");
+  check(
+    "… with the printed report",
+    r.result.output,
+    "=== Investigate Report ===\n  Notes:",
+  );
+  check("… flagged as truncated", r.result.output_truncated, true);
+  check(
+    "… and the extra result fields",
+    r.result.device_serial,
+    "emulator-26101",
+  );
+  check(
+    "… and a warning naming the code page",
+    r.warnings.length === 1 && /'cp949' code page/.test(r.warnings[0]),
+    true,
+  );
+  check(
+    "… that rules out chcp / PYTHONUTF8 retries",
+    /Do not re-run with chcp 65001 or PYTHONUTF8/.test(r.warnings[0]),
+    true,
+  );
+  const empty = runBinary("c", process.execPath, crashing(""), {
+    errorCategory: "investigate_failed",
+    errorPrefix: "Investigation failed",
+  });
+  check(
+    "crash with nothing printed → still a failure",
+    [empty.status, empty.errors[0].category],
+    ["failure", "investigate_failed"],
+  );
+  const other = runBinary(
+    "c",
+    process.execPath,
+    [
+      "-e",
+      "process.stdout.write('partial'); process.stderr.write('boom'); process.exit(2);",
+    ],
+    {
+      errorCategory: "investigate_failed",
+      errorPrefix: "Investigation failed",
+    },
+  );
+  check(
+    "any other crash → failure carrying stderr",
+    [other.status, other.errors[0].message],
+    ["failure", "Investigation failed: boom"],
+  );
+  check(
+    "recoverEncodingCrash ignores errors without stdout/stderr",
+    recoverEncodingCrash(new Error("spawn ENOENT")),
+    null,
+  );
+  // rich wraps the traceback to the console width: the exception line can
+  // break between any two tokens, and stdout/stderr arrive as Buffers when
+  // the caller did not set an encoding.
+  check(
+    "a line-wrapped traceback is still recognised, codec captured",
+    recoverEncodingCrash({
+      stdout: Buffer.from("report\n"),
+      stderr: Buffer.from(
+        "UnicodeEncodeError: 'cp1252'\ncodec can't\nencode character '\\u2014' in position\n26",
+      ),
+    }).warning.includes("'cp1252' code page"),
+    true,
+  );
+  check(
+    "a different Python exception is not recovered",
+    recoverEncodingCrash({
+      stdout: "report",
+      stderr: "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff",
+    }),
+    null,
+  );
+  check(
+    "both binary call sites recover and flag the output",
+    [
+      (domainSource.match(/= recoverEncodingCrash\(error\)/g) || []).length,
+      (domainSource.match(/output_truncated: true/g) || []).length,
+    ],
+    [2, 2],
+  );
+}
+// The version-directory rule is the one findLatestVersionDir() applies, not a
+// second copy that could drift.
+check(
+  "resolveBinary shares VERSION_DIR_RE with plugin-cache",
+  /\{[^}]*VERSION_DIR_RE[^}]*\}\s*=\s*require\("\.\/plugin-cache"\)/.test(
+    domainSource,
+  ) && !/^const VERSION_DIR_RE/m.test(domainSource),
+  true,
+);
+check(
+  "VERSION_DIR_RE accepts X.Y.Z only",
+  ["1.4.0", "1.10.0", "1.4.0-beta", "1.4", "v1.4.0", "1.4.0.1"].map((v) =>
+    VERSION_DIR_RE.test(v),
+  ),
+  [true, true, false, false, false, false],
+);
+
+// The other async checks (Tests 11 and 15) settle within the current
+// macrotask queue; Test 19 polls real timers, so the summary waits for it.
+lockTests.then(() =>
+  setImmediate(() => {
+    console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
+    process.exit(failures === 0 ? 0 : 1);
+  }),
+);

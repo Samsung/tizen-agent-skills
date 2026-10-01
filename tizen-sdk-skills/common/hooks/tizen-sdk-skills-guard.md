@@ -42,7 +42,17 @@ because each one is a mistake the model has actually made.
    with `SyntaxError: Invalid or unexpected token`. The runners call SDK tools for you.
 8. **Finding a runner** — run the lookup block in the skill (SKILL.md) verbatim, in the
    form for your shell (bash / cmd.exe / PowerShell); bash and PowerShell leave the path
-   in `$CLI`, cmd.exe lists the copies for the `node "<found-path>"` step. The runner is
+   in `$CLI`, cmd.exe lists the copies for the `node "<found-path>"` step. Use the runner
+   file name the skill gives (e.g. `project-manager-cli.js`) — never guess one. The cmd.exe
+   chain (`dir … 2>nul & dir … 2>nul`) is cmd.exe only: in PowerShell `&` is a parse error,
+   so run the ```powershell block there. Run that PowerShell block **as-is in the terminal**,
+   never as `powershell -Command "…"` from PowerShell or Git Bash — the outer shell expands
+   `$h`, `$CLI`, `$d`, `$env:USERPROFILE` and `$_` first and the inner shell receives
+   ` = ; foreach ( in @(…` (seen in Cline on Windows). Run **all three lines, in order, in
+   the same session**: the `node` line alone has no `$CLI`, Windows PowerShell drops the
+   empty `"$CLI"` argument, and node fails with `Cannot find module '<cwd>\<first-arg>'`
+   (e.g. `…\list-templates`) — that is a missing lookup, not a missing module; the guard
+   in front of `node` (`if (-not $CLI) { throw … }`) says so. The runner is
    **not in the skill folder** — `~/<host-dot-dir>/skills/<skill>/` (and `~/.agents/skills/<skill>/`)
    holds only the markdown — so do not `find` or `ls` there and do not walk the dot-dir.
    The runner is `~/<host-dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/cli/<runner>-cli.js`,
@@ -63,7 +73,9 @@ because each one is a mistake the model has actually made.
 10. **Windows encoding** — commands that go through a runner already switch the
    console to UTF-8 (`chcp 65001`). When you run a Windows command yourself and
    need non-ASCII output, run it via
-   `powershell -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; <command>"`.
+   `powershell -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; <command>"`
+   — only for a `<command>` with no `$` in it; PowerShell code that uses `$CLI` / `$env:`
+   (the runner lookup of rule 8) runs directly in the terminal, never inside that wrapper.
 11. **Long-running runners — and Codex CLI's 30 s tool window.** A tool result that
    shows only a `[tizen-…]` progress line (e.g. `[tizen-emulator] Action: list-vm, …`)
    and no `{ "status": … }` JSON is **not a result**: the runner is still running. Never

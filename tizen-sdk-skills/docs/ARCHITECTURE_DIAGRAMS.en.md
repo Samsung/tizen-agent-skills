@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (29 skills, 24 agents, 35 commands, 61 error codes, 290 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.4.0). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (29 skills, 24 agents, 35 commands, 61 error codes, 290 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.4.1). Re-measure them with the commands in that table's last column.
 
 ---
 
