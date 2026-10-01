@@ -52,7 +52,11 @@ const {
   describeSerialFailure,
 } = require("./sdb");
 const { CONFIG_FILE: SDK_CONFIG_FILE } = require("./sdk");
-const { orderedCacheRoots } = require("./plugin-cache");
+const {
+  orderedCacheRoots,
+  compareVersions,
+  VERSION_DIR_RE,
+} = require("./plugin-cache");
 
 // --- State files (PID + captured stdout) are kept in the OS temp dir ---
 //
@@ -122,6 +126,179 @@ async function terminateGracefully(pid) {
   } catch (_e) {
     // Process may have already exited
   }
+}
+
+// ---------------------------------------------------------------------------
+// Collector startup — early exit and the native binary's collector lock
+// ---------------------------------------------------------------------------
+
+/**
+ * The native binary serialises its dlog collectors through
+ * <log-dir>/_meta/collector.lock and writes the holder's PID into the file.
+ * A second collector prints this refusal and exits on its own — but not
+ * always inside the old fixed 2 s grace window, which is how a refused
+ * `start` came back as "success" with a PID that was dead a moment later.
+ * Removing the lock is never the fix: the holder is a live collector on the
+ * same `sdb dlog` stream, so the runner names it and who should stop it.
+ */
+// Anchored to the binary's own two lines: the monitor copies device log lines
+// into the same capture, and a bare "lock held" could occur in one of those.
+const LOCK_REFUSAL_RE =
+  /^(?:Could not start collection: base_dir already locked|collection already running for base_dir\b)/m;
+const LOCK_HELD_PATH_RE =
+  /^collection already running for base_dir .*\(lock held: ([^)\r\n]+)\)/m;
+const COLLECTOR_GRACE_MS = 3000;
+const COLLECTOR_IMAGE_RE = /tizen-dlog-analyzer/i;
+
+function readCapture(file) {
+  try {
+    return fs.readFileSync(file, "utf-8");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Poll a freshly spawned collector until it exits, its capture shows the
+ * lock refusal, or the grace window ends. 250 ms steps keep a healthy start
+ * close to the old wait while a crash or refusal returns as soon as it lands.
+ * Liveness comes from the ChildProcess itself (its exit event), not from
+ * signalling the PID: a number the OS has already reused would look alive.
+ */
+async function awaitCollectorStartup(child, outputFile, graceMs) {
+  const deadline = Date.now() + graceMs;
+  for (;;) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const output = readCapture(outputFile);
+    const alive =
+      child.pid !== undefined &&
+      child.exitCode === null &&
+      child.signalCode === null;
+    const locked = LOCK_REFUSAL_RE.test(output);
+    if (!alive || locked || Date.now() >= deadline) {
+      return { alive, locked, output };
+    }
+  }
+}
+
+/**
+ * Executable name of a running process (null when it cannot be read), so a
+ * PID taken from the lock file is confirmed to be a tizen-dlog-analyzer
+ * before anyone is told to terminate it.
+ */
+function processImageName(pid) {
+  try {
+    if (process.platform === "win32") {
+      const out = execFileSync(
+        "tasklist",
+        ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"],
+        { encoding: "utf-8", windowsHide: true, timeout: 5000 },
+      );
+      // No match prints an INFO sentence, never a quoted CSV row.
+      const m = /^"([^"]+)"/.exec(out.trim());
+      return m ? m[1] : null;
+    }
+    const out = execFileSync("ps", ["-p", String(pid), "-o", "comm="], {
+      encoding: "utf-8",
+      timeout: 5000,
+    });
+    const name = path.basename(out.split(/\r?\n/)[0].trim());
+    return name || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Who holds the collector lock, from the path the binary printed (relative to
+ * its cwd, which is ours) or the lock under the resolved log directory.
+ * `isCollector` is true/false when the holder's executable name could be
+ * read, null when it could not (or the holder is not running).
+ */
+function describeLockHolder(output, logBaseDir, imageOf = processImageName) {
+  const printed = LOCK_HELD_PATH_RE.exec(output || "");
+  const candidates = [];
+  if (printed) candidates.push(path.resolve(printed[1].trim()));
+  if (logBaseDir) {
+    candidates.push(path.join(logBaseDir, "_meta", "collector.lock"));
+  }
+  for (const lockFile of candidates) {
+    let text;
+    try {
+      text = fs.readFileSync(lockFile, "utf-8");
+    } catch {
+      continue;
+    }
+    const pid = parseInt(text.trim(), 10);
+    const holderPid = Number.isInteger(pid) && pid > 0 ? pid : null;
+    const running = holderPid ? isProcessRunning(holderPid) : null;
+    const image = running ? imageOf(holderPid) : null;
+    return {
+      lockFile,
+      pid: holderPid,
+      running,
+      image,
+      isCollector: image ? COLLECTOR_IMAGE_RE.test(image) : null,
+    };
+  }
+  return {
+    lockFile: candidates[0] || null,
+    pid: null,
+    running: null,
+    image: null,
+    isCollector: null,
+  };
+}
+
+/**
+ * Failure envelope for a collector the native binary refused because another
+ * one holds the lock. `monitorPid` / `collectPid` are the sessions this
+ * runner tracks; a holder that is neither is a collector from an earlier
+ * session that outlived its PID file (what `stop` / `stop-collect` cannot
+ * reach), and the message says to terminate it by PID — after confirming
+ * the PID still belongs to a tizen-dlog-analyzer, since the OS may have
+ * reused the number for an unrelated process. Only that reused/stale case
+ * may mention removing the lock; a live holder's lock is never touched.
+ */
+function lockedCollectorError(command, what, output, logBaseDir, opts = {}) {
+  const {
+    monitorPid = null,
+    collectPid = null,
+    appId = null,
+    imageOf = processImageName,
+  } = opts;
+  const holder = describeLockHolder(output, logBaseDir, imageOf);
+  const where = holder.lockFile ? ` (${holder.lockFile})` : "";
+  let advice;
+  if (holder.pid && holder.pid === monitorPid) {
+    advice = appId
+      ? `The system-wide 'start' session (PID ${monitorPid}) holds it and already captures this app's lines, so do not stop the monitor mid-reproduction: analyze with 'check' (and 'kernel analyze') instead of 'error-analyze', or run 'stop' first and then 'dlog-collect ${appId}' again.`
+      : `The system-wide 'start' session (PID ${monitorPid}) holds it. Stop it first with: stop`;
+  } else if (holder.pid && holder.pid === collectPid) {
+    advice = `The app-scoped 'dlog-collect' session (PID ${collectPid}) holds it. Stop it first with: stop-collect`;
+  } else if (holder.pid && holder.running && holder.isCollector === true) {
+    advice = `PID ${holder.pid} (${holder.image}) holds it, and this runner is not tracking that process (a collector from an earlier session that outlived its PID file, so 'stop' / 'stop-collect' cannot reach it). Terminate PID ${holder.pid} and its child 'sdb dlog --monitor' process, then re-run ${what}.`;
+  } else if (holder.pid && holder.running && holder.isCollector === false) {
+    advice = `The lock names PID ${holder.pid}, but that PID now belongs to '${holder.image}', not to tizen-dlog-analyzer — the lock is stale (its holder exited and the OS reused the number). Do not terminate PID ${holder.pid}. Check that no tizen-dlog-analyzer process is running; if none is, the stale lock file${where} can be removed, then re-run ${what}.`;
+  } else if (holder.pid && holder.running) {
+    advice = `PID ${holder.pid} holds it, and this runner is not tracking that process (a collector from an earlier session that outlived its PID file, so 'stop' / 'stop-collect' cannot reach it). Its executable name could not be read: confirm PID ${holder.pid} is a tizen-dlog-analyzer process before terminating it (and its child 'sdb dlog --monitor'), then re-run ${what}.`;
+  } else if (holder.pid) {
+    advice = `The lock names PID ${holder.pid}, which is no longer running, yet the binary still refused — check the lock file and the processes named tizen-dlog-analyzer, then re-run ${what}.`;
+  } else {
+    advice = `Find the running tizen-dlog-analyzer collector (stop it with 'stop' or 'stop-collect' if this runner started it, otherwise by PID), then re-run ${what}.`;
+  }
+  return {
+    command,
+    status: "failure",
+    errors: [
+      {
+        category: "already_running",
+        message:
+          `${what} was refused: another dlog collector holds the collector lock${where} — the native binary runs one dlog collector at a time. ${advice}\n` +
+          `Binary output:\n${output}`,
+      },
+    ],
+  };
 }
 
 /**
@@ -553,63 +730,64 @@ function parseErrorCount(output) {
   return 0;
 }
 
-/**
- * Resolve the platform-specific binary path.
- *
- * Search order:
- *   1. Every host plugin cache (~/.claude, ~/.cline, ~/.codex, ~/.gemini —
- *      own host first), versioned subdirs: <root>/<ver>/tools/tizen-dlog-analyzer/<os>/
- *   2. tools/ next to this module's directory — the tizen-cli bundle lives in
- *      dist/ and esbuild copies common/tools to dist/tools/
- *   3. The repo source tree: lib/core -> common/tools
- */
-function resolveBinary() {
+/** <tools dir>/tizen-dlog-analyzer/<os>/<binary> for this platform. */
+const BINARY_SUBPATH = (() => {
   const platform = process.platform;
-  let binOs;
-  if (platform === "linux") binOs = "linux";
-  else if (platform === "darwin") binOs = "macos";
-  else if (platform === "win32") binOs = "windows";
-  else binOs = "linux";
-
-  const searchBases = [
-    ...orderedCacheRoots(),
-    path.join(__dirname, "tools"),
-    path.resolve(__dirname, "..", "..", "tools"),
-  ];
-
+  const binOs =
+    platform === "darwin"
+      ? "macos"
+      : platform === "win32"
+        ? "windows"
+        : "linux";
   const binName =
     platform === "win32" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  return ["tizen-dlog-analyzer", binOs, binName];
+})();
 
+/**
+ * Where to look for the binary, in order:
+ *   1. tools/ shipped with this very runner — next to this module (the
+ *      tizen-cli bundle: esbuild copies common/tools to dist/tools/) and
+ *      lib/core -> <plugin or repo root>/tools. An installed plugin therefore
+ *      runs the binary it was shipped with, never another version's.
+ *   2. Every host plugin cache (~/.claude, ~/.cline, ~/.codex, ~/.gemini —
+ *      own host first), for runners that ship without the binary.
+ */
+function defaultBinarySearchBases() {
+  return [
+    path.join(__dirname, "tools"),
+    path.resolve(__dirname, "..", "..", "tools"),
+    ...orderedCacheRoots(),
+  ];
+}
+
+/**
+ * Resolve the platform-specific binary path. A base is either a tools/
+ * directory holding the binary directly or a plugin cache root holding
+ * <version>/tools/…; a cache keeps every version ever installed, and the
+ * newest one wins — directory order used to pick the oldest (1.1.1 before
+ * 1.4.0), whose binary lacked the newer subcommands.
+ */
+function resolveBinary(searchBases = defaultBinarySearchBases()) {
   for (const base of searchBases) {
     if (!fs.existsSync(base)) continue;
-    // Check versioned subdirectories in cache
+    const direct = path.join(base, ...BINARY_SUBPATH);
+    if (fs.existsSync(direct)) return direct;
     let entries;
     try {
-      entries = fs.readdirSync(base, { withFileTypes: true });
+      entries = fs.readdirSync(base);
     } catch {
       continue;
     }
-    for (const entry of entries) {
-      const candidate = path.join(
-        base,
-        entry.name,
-        "tools",
-        "tizen-dlog-analyzer",
-        binOs,
-        binName,
-      );
+    // Same version-directory rule and comparison as findLatestVersionDir().
+    const versions = entries
+      .filter((name) => VERSION_DIR_RE.test(name))
+      .sort((a, b) => compareVersions(b, a));
+    for (const version of versions) {
+      const candidate = path.join(base, version, "tools", ...BINARY_SUBPATH);
       if (fs.existsSync(candidate)) return candidate;
     }
-    // Also check without version subdir (repo tools)
-    const directCandidate = path.join(
-      base,
-      "tizen-dlog-analyzer",
-      binOs,
-      binName,
-    );
-    if (fs.existsSync(directCandidate)) return directCandidate;
   }
-
   return null;
 }
 
@@ -764,6 +942,21 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
       ],
     };
   }
+  // The binary would refuse anyway (one dlog collector at a time); say so
+  // here with the right stop command instead of after a spawn.
+  const collectPid = getCollectPid();
+  if (collectPid) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "already_running",
+          message: `App dlog collection is running (PID ${collectPid}) and the native binary runs one dlog collector at a time. Stop it first with: node dlog-analyzer-cli.js stop-collect`,
+        },
+      ],
+    };
+  }
 
   // Resolve the log directory before touching the binary or a device: a
   // missing/stale SDK config is the cheapest and most actionable failure,
@@ -805,8 +998,12 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
     fs.closeSync(outFd);
   } catch (_) {}
 
-  // Wait briefly to see if it crashes immediately
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Wait for an immediate crash or the binary's lock refusal
+  const startup = await awaitCollectorStartup(
+    child,
+    OUTPUT_FILE,
+    COLLECTOR_GRACE_MS,
+  );
 
   if (spawnError || child.pid === undefined) {
     return {
@@ -820,12 +1017,22 @@ async function startDlogAnalyzer(subcommand, serial, outputDir, commandLabel) {
       ],
     };
   }
+  if (startup.locked) {
+    // The binary exits by itself after the refusal; make sure of it so no
+    // stray process outlives an envelope that says nothing started.
+    if (startup.alive) await terminateGracefully(child.pid);
+    return lockedCollectorError(
+      command,
+      `'start ${subcommand}'`,
+      readCapture(OUTPUT_FILE),
+      logBase.baseDir,
+      { collectPid: getCollectPid() },
+    );
+  }
   fs.writeFileSync(PID_FILE, String(child.pid));
 
-  if (!isProcessRunning(child.pid)) {
-    const output = fs.existsSync(OUTPUT_FILE)
-      ? fs.readFileSync(OUTPUT_FILE, "utf-8")
-      : "";
+  if (!startup.alive) {
+    const output = startup.output;
     // A dead PID must not stay on disk: once the OS reuses the number,
     // getRunningPid() would report an unrelated process as the monitor and
     // `stop` would signal it (same cleanup as startKernelCollect).
@@ -1364,8 +1571,12 @@ async function collectAppLogs(appId, serial, commandLabel) {
     fs.closeSync(outFd);
   } catch (_) {}
 
-  // Wait briefly to see if it crashes immediately
-  await new Promise((resolve) => setTimeout(resolve, 2000));
+  // Wait for an immediate crash or the binary's lock refusal
+  const startup = await awaitCollectorStartup(
+    child,
+    APP_COLLECT_OUTPUT_FILE,
+    COLLECTOR_GRACE_MS,
+  );
 
   if (spawnError || child.pid === undefined) {
     return {
@@ -1379,32 +1590,34 @@ async function collectAppLogs(appId, serial, commandLabel) {
       ],
     };
   }
+  if (startup.locked) {
+    // Usually the system-wide `start` session holds the lock; the envelope
+    // then says to keep the monitor running and analyze with `check`.
+    if (startup.alive) await terminateGracefully(child.pid);
+    return lockedCollectorError(
+      command,
+      `'dlog-collect ${appId}'`,
+      readCapture(APP_COLLECT_OUTPUT_FILE),
+      logBase.baseDir,
+      { monitorPid: getRunningPid(), appId },
+    );
+  }
   fs.writeFileSync(APP_COLLECT_PID_FILE, String(child.pid));
 
-  if (!isProcessRunning(child.pid)) {
-    const output = fs.existsSync(APP_COLLECT_OUTPUT_FILE)
-      ? fs.readFileSync(APP_COLLECT_OUTPUT_FILE, "utf-8")
-      : "";
+  if (!startup.alive) {
+    const output = startup.output;
     // Dead PID off disk before the OS can reuse the number (see
     // startDlogAnalyzer / startKernelCollect).
     try {
       fs.unlinkSync(APP_COLLECT_PID_FILE);
     } catch {}
-    // The native binary runs one dlog collector at a time; while a system-wide
-    // `start` session holds it, the app-scoped collector cannot start. Its
-    // lines are in the system-wide capture already, so the answer is `check`,
-    // not stopping the monitor in the middle of the reproduction window.
-    const monitorPid = getRunningPid();
-    const monitorHint = monitorPid
-      ? `\nA system-wide 'start' session is running (PID ${monitorPid}). If the output above says another collector holds the lock, do not stop the monitor mid-reproduction: it already captures this app's lines — analyze with 'check' (and 'kernel analyze') instead of 'error-analyze', or run 'stop' first and then 'dlog-collect ${appId}' again.`
-      : "";
     return {
       command,
       status: "failure",
       errors: [
         {
           category: "process_crashed",
-          message: `dlog-collect exited immediately. Output:\n${output}${monitorHint}`,
+          message: `dlog-collect exited immediately. Output:\n${output}`,
         },
       ],
     };
@@ -1531,47 +1744,94 @@ async function analyzeErrors(appId, format, commandLabel) {
   const nativeFormat = format || "both";
   const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
 
+  let output;
+  let warnings;
   try {
-    const output = execFileSync(binaryPath, args, {
+    output = execFileSync(binaryPath, args, {
       encoding: "utf-8",
       stdio: ["pipe", "pipe", "pipe"],
       timeout: 30000,
     });
-
-    // The native binary writes the analysis (summary lines and/or detail entries,
-    // per --format) to stdout. Only the unique-error count is parsed out.
-    const trimmedOutput = output.trim();
-    const errorCount = parseErrorCount(trimmedOutput);
-
-    return {
-      command,
-      status: "success",
-      result: {
-        app_id: appId,
-        format: nativeFormat,
-        log_file: logFile,
-        error_count: errorCount,
-        output: trimmedOutput,
-        report_format: REPORT_FORMAT_HINT,
-        message:
-          errorCount > 0
-            ? `Found ${errorCount} unique runtime errors in logs for app "${appId}".`
-            : `No runtime errors (E/F priority) found in logs for app "${appId}".`,
-      },
-    };
   } catch (error) {
-    const stderr = error.stderr ? error.stderr.toString().trim() : "";
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "error_analyze_failed",
-          message: `Failed to analyze logs for app "${appId}": ${stderr || error.message}`,
-        },
-      ],
-    };
+    const recovered = recoverEncodingCrash(error);
+    if (!recovered) {
+      const stderr = error.stderr ? error.stderr.toString().trim() : "";
+      return {
+        command,
+        status: "failure",
+        errors: [
+          {
+            category: "error_analyze_failed",
+            message: `Failed to analyze logs for app "${appId}": ${stderr || error.message}`,
+          },
+        ],
+      };
+    }
+    output = recovered.output;
+    warnings = [recovered.warning];
   }
+
+  // The native binary writes the analysis (summary lines and/or detail entries,
+  // per --format) to stdout. Only the unique-error count is parsed out.
+  const trimmedOutput = output.trim();
+  const errorCount = parseErrorCount(trimmedOutput);
+
+  return {
+    command,
+    status: "success",
+    result: {
+      app_id: appId,
+      format: nativeFormat,
+      log_file: logFile,
+      error_count: errorCount,
+      output: trimmedOutput,
+      ...(warnings ? { output_truncated: true } : {}),
+      report_format: REPORT_FORMAT_HINT,
+      message:
+        errorCount > 0
+          ? `Found ${errorCount} unique runtime errors in logs for app "${appId}".`
+          : `No runtime errors (E/F priority) found in logs for app "${appId}".`,
+    },
+    ...(warnings ? { warnings } : {}),
+  };
+}
+
+/**
+ * Keep what a Python collector printed before the Windows code page killed it.
+ *
+ * The native binary is a frozen Python program. Piped to this runner on
+ * Windows, its stdout is encoded in the system ANSI code page (cp949 on a
+ * Korean host, cp1252 elsewhere); the first character outside that page —
+ * the em dash the investigate report's closing notes use — raises
+ * UnicodeEncodeError and the process dies with everything before it already
+ * written. Neither `chcp 65001` nor PYTHONUTF8 / PYTHONIOENCODING reaches a
+ * PyInstaller binary (verified), so the runner returns what was printed and
+ * says why the tail is missing; the fix itself belongs in the binary.
+ */
+// rich re-wraps the traceback to the console width, so the tokens may be
+// split across lines; only the codec name (quoted) is captured.
+const PY_ENCODE_CRASH_RE =
+  /UnicodeEncodeError:\s+'([^']+)'\s+codec\s+can't\s+encode/;
+
+/**
+ * Returns `{ output, warning }` when the error is that crash and something
+ * was printed, else null (a crash that printed nothing is still a failure).
+ * Callers must mark the result as `output_truncated` — stdout is sequential,
+ * so what is there is intact, but anything the binary meant to print after
+ * the offending character is missing.
+ */
+function recoverEncodingCrash(error) {
+  const stderr = error.stderr ? error.stderr.toString().trim() : "";
+  const stdout = error.stdout ? error.stdout.toString().trim() : "";
+  const crash = PY_ENCODE_CRASH_RE.exec(stderr);
+  if (!crash || !stdout) return null;
+  return {
+    output: stdout,
+    warning:
+      `tizen-dlog-analyzer crashed while printing the end of its output (UnicodeEncodeError: the host's '${crash[1]}' code page cannot encode a character in it). ` +
+      "The output returned here is complete up to that point; only what came after is missing. " +
+      "Do not re-run with chcp 65001 or PYTHONUTF8 / PYTHONIOENCODING — the binary ignores both; this is fixed in the binary (UTF-8 stdout), not by retrying.",
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1779,6 +2039,19 @@ function runBinary(command, binaryPath, args, opts = {}) {
       result: { output: output.trim(), ...extraResult },
     };
   } catch (error) {
+    const recovered = recoverEncodingCrash(error);
+    if (recovered) {
+      return {
+        command,
+        status: "success",
+        result: {
+          output: recovered.output,
+          output_truncated: true,
+          ...extraResult,
+        },
+        warnings: [recovered.warning],
+      };
+    }
     const stderr = error.stderr ? error.stderr.toString().trim() : "";
     return {
       command,
@@ -2395,6 +2668,16 @@ module.exports = {
   deviceErrorEnvelope,
   collectorEnv,
   capturedOutputSummary,
+  resolveBinary,
+  runBinary,
+  recoverEncodingCrash,
+  BINARY_SUBPATH,
+  awaitCollectorStartup,
+  describeLockHolder,
+  lockedCollectorError,
+  processImageName,
+  LOCK_REFUSAL_RE,
+  COLLECTOR_GRACE_MS,
   REPORT_FORMAT_HINT,
   STOP_OUTPUT_LINES,
 };

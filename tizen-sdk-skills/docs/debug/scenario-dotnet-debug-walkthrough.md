@@ -304,7 +304,7 @@ CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dotnet-
 node "$CLI" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711
 ```
 
-**Windows (cmd.exe / PowerShell):**
+**Windows (cmd.exe terminal — the `&` chain below is cmd.exe syntax; in a PowerShell terminal run the `powershell` block from the skill's SKILL.md instead, as-is, not via `powershell -Command "…"`):**
 ```
 dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dotnet-debug-cli.js" 2>nul & ver >nul
 node "<찾은-경로>" org.tizen.example.MyDotnetApp launch "Program.cs:25" 4711

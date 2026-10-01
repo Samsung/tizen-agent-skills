@@ -9,6 +9,8 @@ common/setup/setup.sh   --harness <claude|cline|codex|gemini> [--repo <path>] [-
 common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>] [-SkipValidation] [-NoRestart]
 ```
 
+`setup.ps1`은 `setup.sh` 표기(`--harness … --repo … --skip-validation --no-restart`)도 그대로 받습니다.
+
 각 하네스 디렉토리에는 기존 진입점이 그대로 동작하도록 얇은 wrapper가 있습니다:
 
 | 하네스 | Linux / macOS / Git Bash | Windows PowerShell | Windows cmd |

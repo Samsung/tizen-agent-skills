@@ -30,12 +30,27 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
 7. **Windows 셸 주의 — bash 문법 금지** — Cline의 Windows 터미널은 **cmd.exe 또는
    PowerShell**입니다. `$( )`, `$HOME`, `ls ... | tail` 같은 bash 문법은 동작하지
    않고 깨진 CP949 오류만 출력됩니다. CLI 러너 실행은 항상 **2단계**로:
-   ① 경로 찾기 — cmd: `cmd /c dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*<러너이름>.js"`
-   / PowerShell: `Get-ChildItem "$env:USERPROFILE\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\<러너이름>.js"`
-   (여러 버전이면 최고 버전 선택). cmd 의 `dir` 에 경로 여러 개를 한꺼번에 넘기지
-   마세요 — 그중 하나의 폴더만 없어도 아무것도 출력하지 않습니다. 여러 호스트를 볼
-   때는 SKILL.md 의 `dir … 2>nul & dir … 2>nul` 체인을 그대로 쓰세요.
-   ② 실행 — `node "<찾은 절대경로>" <인자>` (node 호출부는 어느 셸에서나 동일).
+   ① 경로 찾기 — **터미널 종류를 먼저 확인**하고 SKILL.md 의 "CLI Runners" 블록 중 그 셸의
+   것을 **그대로** 실행합니다. 러너 파일 이름은 SKILL.md 에 적힌 것(예:
+   `project-manager-cli.js`)만 쓰고 추측하지 마세요.
+   · cmd.exe: `cmd /c dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*<러너이름>.js"`
+     (여러 버전이면 최고 버전 선택). `dir` 에 경로 여러 개를 한꺼번에 넘기지 마세요 —
+     그중 하나의 폴더만 없어도 아무것도 출력하지 않습니다. 여러 호스트를 볼 때는 SKILL.md 의
+     `dir … 2>nul & dir … 2>nul` 체인을 그대로 쓰되, **이 체인은 cmd.exe 전용**입니다 —
+     PowerShell 에서는 `&` 가 예약 문자라 파싱 에러(`AmpersandNotAllowed`)가 납니다.
+   · PowerShell: SKILL.md 의 ```powershell 블록(`$h = …` / `$CLI = $null; foreach …`) 두 줄을
+     터미널에 **직접** 실행하면 `$CLI` 에 최고 버전 경로가 담깁니다. 세 번째 줄(`if (-not $CLI)
+     { throw … }; node "$CLI" …`)은 반드시 **같은 세션에서 앞 두 줄에 이어서** 실행하세요 —
+     `node` 줄만 따로 실행하면 `$CLI` 가 비어 있고, Windows PowerShell 은 빈 `"$CLI"` 인자를
+     버리므로 node 가 첫 번째 인자를 스크립트 경로로 받아 `Cannot find module '<cwd>\list-templates'`
+     같은 엉뚱한 MODULE_NOT_FOUND 를 냅니다(모듈이 없는 게 아니라 탐색을 건너뛴 것). 앞의
+     가드는 이때 `$CLI is empty` 메시지로 멈춰 줍니다. **`powershell -Command "…"`
+     로 감싸지 마세요** — 바깥 PowerShell(또는 Git Bash)이 큰따옴표 안의 `$h`, `$CLI`, `$d`,
+     `$env:USERPROFILE`, `$_` 를 먼저 전개해 안쪽 PowerShell 에는 ` = ; foreach ( in @(…` 같은
+     빈 코드가 전달됩니다("foreach 뒤에 변수 이름이 없습니다"). 큰따옴표 중첩
+     (`powershell -Command "Get-ChildItem "$env:USERPROFILE\…""`)도 같은 이유로 깨집니다.
+   ② 실행 — `node "<찾은 절대경로>" <인자>` (node 호출부는 어느 셸에서나 동일; PowerShell 은
+   ```powershell 블록의 세 번째 줄이 이미 이 단계이므로 그 줄을 그대로 쓰면 됩니다).
    bash 계열 셸에서는 따옴표 없는 백슬래시 경로 금지 (백슬래시가 소실됨).
 8. **네이티브 실행 파일을 `node`로 실행 금지** — `sdb.exe`, `tz.exe`, `dotnet.exe`,
    `netcoredbg`, `gdbserver`, `em-cli` 등은 **네이티브 바이너리**이지 Node.js
@@ -58,7 +73,9 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
    ```
    예: `powershell -Command "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; chcp 65001 | Out-Null; Get-Item 'C:\path\to\file' | Format-List Name, Length, LastWriteTime"`
    CLI 러너(`*-cli.js`)를 경유하는 명령은 러너 내부에서 이미 `chcp 65001`을
-   처리하므로 별도 인코딩 조치가 필요 없습니다.
+   처리하므로 별도 인코딩 조치가 필요 없습니다. 이 래퍼는 `$` 가 없는 단순 명령에만
+   쓰세요 — 규칙 7 의 러너 탐색 블록처럼 `$CLI`/`$env:` 를 쓰는 PowerShell 코드는 절대
+   `powershell -Command "…"` 안에 넣지 말고 터미널에서 직접 실행합니다.
 10. **장시간 설치/업데이트는 반드시 포그라운드** — Cline에는 background 작업 완료
     알림이 없습니다. SDK 설치(10–15분)·TV SDK 설치·패키지 업데이트의 installer 명령
     (`suggested_fix.command`)은 포그라운드로 실행하고, 종료 후 **같은 턴에서** pre-check

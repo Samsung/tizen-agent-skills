@@ -346,12 +346,75 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
             );
           }
         }
+        // Every fenced cmd.exe lookup sits under the generated "cmd.exe
+        // terminal only" heading and every fenced PowerShell block under the
+        // generated PowerShell heading: a heading the generator does not know
+        // keeps saying "cmd.exe / PowerShell" over the `&` chain (seen in
+        // webapp-debug / playwright-test / create-project step 2). The cmd
+        // heading is matched on its lead-in — "**Windows — cmd.exe terminal
+        // only" — so a hand-written variant that adds context (dlog-analyzer's
+        // step ①/② note) passes as long as it keeps that claim.
+        const cmdHeadingLead = gen.CMD_BLOCK_HEADING.slice(
+          0,
+          gen.CMD_BLOCK_HEADING.indexOf(" ("),
+        );
+        const headingAbove = (i) => {
+          let j = i - 1;
+          while (
+            j >= 0 &&
+            (lines[j].trim() === "" || lines[j].trim().startsWith("```"))
+          ) {
+            j--;
+          }
+          return j >= 0 ? lines[j].trim() : "";
+        };
+        lines.forEach((raw, i) => {
+          if (/^cmd \/c dir \/s \/b /.test(raw.trim())) {
+            if (!headingAbove(i).startsWith(cmdHeadingLead)) {
+              stale.push(
+                `${rel}:${i + 1} (fenced cmd.exe lookup not under the cmd.exe-only heading)`,
+              );
+            }
+          }
+          if (
+            raw.trim() === "```powershell" &&
+            (lines[i + 1] || "").includes(gen.PS_HOST_PICK_LINE) &&
+            headingAbove(i) !== gen.PS_BLOCK_HEADING
+          ) {
+            stale.push(
+              `${rel}:${i + 1} (fenced PowerShell block not under the generated PowerShell heading)`,
+            );
+          }
+        });
         if (!text.includes(gen.PS_HOST_PICK_LINE)) {
           incomplete.push(`${rel} (PowerShell host pick missing or stale)`);
         }
         if (!text.includes(gen.PS_BLOCK_MARKER)) {
           incomplete.push(`${rel} (PowerShell lookup missing or stale)`);
         }
+        // A `node "$CLI" …` line after a PowerShell lookup carries the
+        // empty-$CLI guard on the SAME line: pasted alone, Windows PowerShell
+        // drops the empty argument and node fails with a misleading
+        // MODULE_NOT_FOUND for `<cwd>\<first-arg>` (seen with
+        // `list-templates --type native`). The inline one-line lookup in the
+        // agents' 2-step procedure is followed by `node "<found-path>"`, not
+        // `node "$CLI"`, and is left alone.
+        lines.forEach((raw, i) => {
+          if (!raw.includes(gen.PS_BLOCK_MARKER)) return;
+          const next = (lines[i + 1] || "").trim();
+          if (next.startsWith('node "$CLI"')) {
+            incomplete.push(
+              `${rel}:${i + 2} (PowerShell node line after the lookup lacks the empty-$CLI guard)`,
+            );
+          } else if (
+            next.includes('node "$CLI"') &&
+            !next.startsWith(`${gen.PS_GUARD}; node "$CLI"`)
+          ) {
+            incomplete.push(
+              `${rel}:${i + 2} (PowerShell node line carries a stale guard)`,
+            );
+          }
+        });
       }
       // (e) the whole file is a fixed point of the generator
       const psBlocks = true; // agents/ and skills/ both get the PS block

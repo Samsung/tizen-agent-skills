@@ -47,17 +47,17 @@ node "$CLI" investigate --symptoms "<the user's words>" <app-id>
 TEMPLATE=$(ls "$HOME"/.{claude,cline,codex,gemini}/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.agents/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md 2>/dev/null | head -1)
 ```
 
-**Windows — Cline (cmd.exe). Claude Code on Windows runs Git Bash — use the Bash block above. Step ① lists the copies; step ② is the `node "<found-path>"` block after the PowerShell form:**
+**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal; `&` and `2>nul` are a parse error in PowerShell — there, run the PowerShell block below instead). Claude Code on Windows runs Git Bash — use the Bash block above. Step ① lists the copies; step ② is the `node "<found-path>"` block after the PowerShell form:**
 ```
 cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & ver >nul
 ```
 
-**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**
+**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**
 
 ```powershell
 $h = ".cline"; if ($env:CODEX_THREAD_ID -or $env:CODEX_SANDBOX_NETWORK_DISABLED -or $env:CODEX_SANDBOX -or $env:CODEX_VERSION) { $h = ".codex" }; if ($env:GEMINI_CLI) { $h = ".gemini" }; if ($env:CLAUDECODE) { $h = ".claude" }
 $CLI = $null; foreach ($d in @($h, ".claude", ".cline", ".codex", ".gemini")) { $CLI = Get-ChildItem "$env:USERPROFILE\$d\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\dlog-analyzer-cli.js" -ErrorAction SilentlyContinue | Sort-Object { [version]$_.Directory.Parent.Parent.Name } | Select-Object -Last 1 -ExpandProperty FullName; if ($CLI) { break } }
-node "$CLI" investigate --symptoms "<the user's words>" <app-id>
+if (-not $CLI) { throw 'tizen-sdk-skills runner not found: $CLI is empty. Run the two lookup lines above in THIS PowerShell session first; if they still find nothing, the tizen-sdk-skills plugin is not installed.' }; node "$CLI" investigate --symptoms "<the user's words>" <app-id>
 ```
 
 Pick the highest-version path (the PowerShell form above already resolved `$CLI`), then:
@@ -144,7 +144,7 @@ Use this for every "my app / the emulator does X" report (crash, freeze, high CP
    ```
    Skip `app-launch` if the app is already running and the user wants to keep its state; skip `kernel collect` only for purely app-level symptoms (a wrong string, a UI glitch). A short pause (`sleep 2`) between `app-launch` and `dlog-collect` is fine; nothing longer.
 
-   The native binary runs **one dlog collector at a time**. If `dlog-collect` returns `process_crashed` saying another collector holds the lock while `start-monitoring` is running, do **not** stop the monitor in the middle of the reproduction window — it already captures this app's lines. Carry on, and in step 5 analyze with `check` (+ `kernel analyze`) instead of `error-analyze`.
+   The native binary runs **one dlog collector at a time**. If `dlog-collect` returns `already_running` saying the `start` session holds the collector lock, do **not** stop the monitor in the middle of the reproduction window — it already captures this app's lines. Carry on, and in step 5 analyze with `check` (+ `kernel analyze`) instead of `error-analyze`.
 
 4. **STOP — hand the device to the user. End your turn.** Say (both languages):
    > Collection is running in the background. Please browse the app and reproduce the issue now (play the video, trigger the action …). When you are done, tell me:
@@ -390,12 +390,14 @@ The first line of the report is `## Analysis Report (English)`; the headings are
 ## Important notes
 
 - **Only one system-wide `start` instance at a time.** If already running, `start` returns an `already_running` error. Stop first. To stop it run `stop` — not `start stop` (that is an invalid subcommand, and the error says so).
+- **One dlog collector overall, enforced by the binary's lock** (`<log-dir>/_meta/collector.lock`, holding the owner's PID). `start` also returns `already_running` while `dlog-collect <app-id>` runs (`stop-collect` first) or when any other collector holds the lock; the envelope names the holder PID and the command that stops it. A holder this runner is not tracking is a collector from an earlier session that outlived its PID file — the runner confirms the PID still belongs to a `tizen-dlog-analyzer` process, then says to terminate it (and its child `sdb dlog --monitor`) and re-run. **Never delete the lock file while its holder runs**: it is live and streaming the same dlog buffer; two collectors on one directory corrupt each other. Only when the envelope says the PID now belongs to a different process (the OS reused the number — the lock is stale) may the lock file be removed, after checking that no `tizen-dlog-analyzer` process is running.
 - **`stop` keeps the session's analysis.** Its envelope carries the last 200 captured lines (`result.output`, `total_lines`, `truncated`) and `check` returns the whole file afterwards — the output file is only truncated by the next `start`. Stopping the monitor never loses what it detected.
-- **Only one app-specific `dlog-collect` instance at a time.** Same rule — `stop-collect` first. The native binary also allows one dlog collector overall: while `start start-monitoring` / `start dlog-collect` runs, `dlog-collect <app-id>` can fail with `process_crashed` ("holds the lock"); the envelope then tells you to analyze the system-wide capture with `check` rather than stop the monitor mid-reproduction.
+- **Only one app-specific `dlog-collect` instance at a time.** Same rule — `stop-collect` first. While `start start-monitoring` / `start dlog-collect` runs, `dlog-collect <app-id>` returns `already_running` naming the monitor as the lock holder; the envelope then tells you to analyze the system-wide capture with `check` rather than stop the monitor mid-reproduction.
 - **Only one `kernel collect` instance at a time.** Same rule — `kernel stop` first.
 - **The binary is platform-specific.** The setup script copies only the matching `linux/`, `macos/`, or `windows/` binary.
 - **All three background processes are detached** and survive the agent session ending. Always `stop` / `stop-collect` / `kernel stop` when done.
 - **Where logs are stored.** The native binary has no `--base-dir` option. Every command resolves one log base directory from the SDK configuration: `~/.tizen.sdk.path.config` names the SDK, `TIZEN_SDK_DATA_PATH` in `<sdk>/sdk.info` (or the `<sdk>-data` sibling) names the data directory, and logs go to `<sdk-data>/dloganalyzer/` — app-specific logs at `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`, the kernel log at `<sdk-data>/dloganalyzer/app/kernel/kernel.hot.log`. The runner reads from the same place (`result.log_base_dir` / `result.log_file`). If the SDK path is not configured or points to a directory that no longer exists, `start`, `dlog-collect`, `kernel collect`, `error-analyze` and `app-log` return `sdk_path_not_set` — run `tizen-sdk-init` first.
+- **A `warnings` entry about `UnicodeEncodeError` is not a failure.** On Windows the native binary writes through the system code page (e.g. cp949) and can crash on a character outside it after it has already printed its whole report; `investigate`, `probe`, `error-analyze` and the other one-shot commands then return `status: success` with the printed output and that warning. Use the output as is. Do **not** retry with `chcp 65001` or `PYTHONUTF8` / `PYTHONIOENCODING` — the binary ignores both.
 - **Temp files** (PID files, captured stdout, the `log-dump` file) live under `$TMPDIR/tizen-dlog-analyzer/` (or `/tmp/tizen-dlog-analyzer/` on Linux). Collected logs are NOT there.
 - **`dlog-collect <app-id>` requires the app to already be running** — the runner resolves the PID via `pgrep`/`ps` (with fallbacks). If the PID cannot be resolved, collection still starts and the native binary resolves it; if the app is truly not running, the collector exits and `process_crashed` is returned.
 - **App IDs are validated** (`[A-Za-z0-9._-]` only) before any app command runs; anything else returns `invalid_parameters`.

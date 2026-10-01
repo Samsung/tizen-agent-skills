@@ -114,6 +114,9 @@ function orderedCacheRoots(env = process.env) {
 
 const CACHE_ROOTS = orderedCacheRoots();
 
+/** A plugin cache entry that is a release version directory (X.Y.Z). */
+const VERSION_DIR_RE = /^\d+\.\d+\.\d+$/;
+
 /** Numeric X.Y.Z comparison — plain sort() puts 10.0.0 before 2.0.0. */
 function compareVersions(a, b) {
   const pa = a.split(".").map(Number);
@@ -165,7 +168,7 @@ function findLatestVersionDir() {
       continue;
     }
     const versions = entries
-      .filter((v) => /^\d+\.\d+\.\d+$/.test(v))
+      .filter((v) => VERSION_DIR_RE.test(v))
       .sort(compareVersions);
     const latest = versions.pop();
     if (latest) {
@@ -324,6 +327,8 @@ module.exports = {
   CACHE_ROOTS,
   detectHostDotDir,
   orderedCacheRoots,
+  compareVersions,
+  VERSION_DIR_RE,
   findLatestVersionDir,
   resolveScript,
   execPluginScript,
