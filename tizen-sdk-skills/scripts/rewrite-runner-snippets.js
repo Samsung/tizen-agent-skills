@@ -40,18 +40,18 @@
  *       (one dir per host: a single dir with several paths prints nothing
  *       when any host dir is missing). Only behind `dir /s /b `; a run naming
  *       several runners gets one chain per runner under a single `ver >nul`.
- *   (e) PowerShell — a fenced cmd.exe lookup block gains a fenced PowerShell
- *       block right after it (skills/agents only): host pick from HOST_MARKERS,
- *       then own host first, then every host, version-sorted with [version].
- *       The old inline `Get-ChildItem "…\.claude\…","…\.cline\…" -ErrorAction
- *       SilentlyContinue` list is replaced by the same two lines. The `node`
- *       line that follows the lookup is prefixed with PS_GUARD (`if (-not $CLI)
- *       { throw '…' }; `): run on its own — `$CLI` never set — Windows
- *       PowerShell drops the empty `"$CLI"` argument, node treats the first
- *       runner argument as the script path and fails with a misleading
- *       MODULE_NOT_FOUND for `<cwd>\list-templates`; the guard names the real
- *       cause instead. A bare `node "$CLI"` line after a lookup gains the guard;
- *       an existing guard is regenerated.
+ *   (e) PowerShell — the fenced PowerShell lookup block (skills/agents only):
+ *       host pick from HOST_MARKERS, then own host first, then every host,
+ *       version-sorted with [version]. The old inline `Get-ChildItem
+ *       "…\.claude\…","…\.cline\…" -ErrorAction SilentlyContinue` list is
+ *       replaced by the same two lines. The `node` line that follows the lookup
+ *       is prefixed with PS_GUARD (`if (-not $CLI) { throw '…' }; `): run on its
+ *       own — `$CLI` never set — Windows PowerShell drops the empty `"$CLI"`
+ *       argument, node treats the first runner argument as the script path and
+ *       fails with a misleading MODULE_NOT_FOUND for `<cwd>\list-templates`; the
+ *       guard names the real cause instead. A bare `node "$CLI"` line after a
+ *       lookup gains the guard; an existing guard is regenerated. A section
+ *       with a fenced cmd.exe lookup but no PowerShell block gets one in (g).
  *   (f) prose: "If neither the `~/.claude` nor the `~/.cline` cache contains the runner"
  *              → "If none of the `~/.claude`, `~/.cline`, … caches contains the runner";
  *       "Pick the highest-version path, then:" → mentions that the PowerShell
@@ -59,6 +59,30 @@
  *       the cmd.exe / PowerShell block headings → say the cmd chain is cmd.exe
  *       only and the PowerShell lines must not be wrapped in
  *       `powershell -Command "…"` (outer-shell expansion of $CLI / $env:).
+ *   (g) block order (skills/agents only) — every lookup section with a fenced
+ *       cmd.exe block is re-emitted in a fixed order: SHELL_PICK_LINE (how to
+ *       pick the block for your shell), Bash, PowerShell, cmd.exe, then the
+ *       `node "<found-path>"` step and the "Runner not found?" note. The model
+ *       tends to run the FIRST block it sees — with cmd.exe first, a Cline
+ *       PowerShell terminal ran the `&` chain (AmpersandNotAllowed) and then
+ *       wrapped the PowerShell block in `powershell -Command "…"` — so the
+ *       blocks come in order of how many hosts they serve. A section is the run
+ *       of recognised chunks (the headings, the three fences, the pick line,
+ *       the note) around the cmd.exe fence, separated only by blank lines;
+ *       anything else ends it, and so does a chunk kind the section already
+ *       has. Boundaries between two adjacent sections are decided by what can
+ *       sit on which side of a cmd.exe fence in BOTH the old (cmd.exe-first)
+ *       and the new layout: the shell-pick line only ever opens a section, the
+ *       pick line / `node "<found-path>"` step / note only ever follow their
+ *       cmd.exe fence, a heading belongs to the fence right after it (and
+ *       moves with it), and a Bash / PowerShell fence that names a different
+ *       runner than the cmd.exe fence belongs to another section. Hand-written
+ *       Bash / cmd.exe headings are canonicalised; a missing PowerShell block
+ *       or `node "<found-path>"` step is generated from the cmd.exe fence's
+ *       runner name and the node arguments found in the section (a section
+ *       whose cmd.exe fence names no `*.js` and has no PowerShell block is
+ *       left as it is rather than given a broken one). The indent of the
+ *       cmd.exe fence (sections inside list items) is kept on generated lines.
  *
  * After rewriting, any remaining line that mentions a host cache path but not
  * every host is printed under "UNCLASSIFIED" for manual review.
@@ -257,8 +281,12 @@ const OLD_CMD_HEADING_2 =
 // group 2 = the blank line(s) + fence open + `cmd /c dir /s /b ` that follow).
 const OLD_CMD_HEADING_3_RE =
   /^([ \t]*)\*\*Windows:\*\*(\n+[ \t]*```[a-z]*\n[ \t]*cmd \/c dir \/s \/b )/gm;
-const CMD_BLOCK_HEADING =
+// Said "PowerShell block below" / "Bash block below" while cmd.exe led the
+// section; (g) now puts cmd.exe last.
+const OLD_CMD_HEADING_4 =
   "**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal). `&` and `2>nul` are cmd.exe syntax — in a PowerShell terminal run the PowerShell block below instead. Claude Code on Windows runs Git Bash — use the Bash block below:**";
+const CMD_BLOCK_HEADING =
+  '**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal). `&` and `2>nul` are cmd.exe syntax — in a PowerShell terminal run the PowerShell block above instead; Claude Code on Windows runs Git Bash — use the Bash block above. cmd.exe cannot version-sort, so this only lists every copy: pick your own host\'s highest version and paste it into the `node "<found-path>"` step below:**';
 const OLD_PS_BLOCK_HEADING =
   "**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version:**";
 const OLD_PS_BLOCK_HEADING_2 =
@@ -266,11 +294,10 @@ const OLD_PS_BLOCK_HEADING_2 =
 const PS_BLOCK_HEADING =
   '**PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness\'s own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**';
 
-function psBlock(runnerJs, nodeArgs) {
+const PS_BLOCK_MARKER = `foreach ($d in ${PS_HOST_LIST})`;
+
+function psFence(runnerJs, nodeArgs) {
   return [
-    "\n",
-    PS_BLOCK_HEADING,
-    "",
     "```powershell",
     PS_HOST_PICK_LINE,
     psLookupLine(`*\\lib\\cli\\${runnerJs}`),
@@ -279,38 +306,226 @@ function psBlock(runnerJs, nodeArgs) {
   ].join("\n");
 }
 
-// A fenced block whose body is exactly one cmd.exe lookup line.
-//   group 1 = fence open (``` or ```text …), group 2 = runner js name
-const CMD_FENCE_RE = new RegExp(
-  "```[a-z]*\\n(cmd /c dir /s /b " +
-    `"%USERPROFILE%\\\\\\.${names[0]}\\\\${esc(CACHE_TAIL_WIN)}\\\\\\*(?:[^"]*\\\\)?([A-Za-z0-9-]+\\.js)"` +
-    "[^\\n]*)\\n```",
-  "g",
+// (g) block order. Bash and PowerShell resolve `$CLI` themselves and between
+//     them cover every host but a cmd.exe terminal, so they lead; the line in
+//     front tells the model how to tell the shells apart instead of taking the
+//     first block.
+const SHELL_PICK_LINE =
+  '**Pick the ONE block for the shell your terminal / tool runs — the prompt tells you: `$` is Bash (Linux, macOS, Claude Code\'s Git Bash on Windows, Codex on Linux / macOS) → Bash block; `PS C:\\…>` is PowerShell (Codex on Windows, Cline PowerShell terminal) → PowerShell block; `C:\\…>` is cmd.exe (Cline cmd.exe terminal) → cmd.exe block. Run that block as-is: a block pasted into another shell, or wrapped in `powershell -Command "…"`, is a parse error.**';
+const BASH_BLOCK_HEADING =
+  "**Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**";
+// Hand-written headings over a Bash lookup fence, canonicalised to BASH_BLOCK_HEADING.
+const BASH_HEADING_RE =
+  /^\*\*(?:Bash — |Linux \/ macOS|Claude Code — Bash tool)[^\n]*:\*\*$/;
+const CMD_HEADING_LEAD = CMD_BLOCK_HEADING.slice(
+  0,
+  CMD_BLOCK_HEADING.indexOf(" ("),
 );
-const PS_BLOCK_MARKER = `foreach ($d in ${PS_HOST_LIST})`;
-const NODE_FOUND_PATH_RE = /```[a-z]*\nnode "<found-path>"([^\n]*)\n```/;
-// How far past the cmd.exe fence an existing PS block's marker can sit:
-// heading + blank line + fence + host-pick line + the start of the lookup line.
-const PS_AHEAD =
-  PS_BLOCK_HEADING.length +
-  PS_HOST_PICK_LINE.length +
-  PS_BLOCK_MARKER.length +
-  200;
+const CMD_FENCE_LINE_RE = /^cmd \/c dir \/s \/b /;
+// The runner a lookup fence names: the first `<name>.js` behind a path
+// separator or the cmd.exe `*` glob (`\*x-cli.js`, `\lib\cli\x-cli.js`,
+// `/lib/cli/x-cli.js`), followed by a quote, whitespace or the end of line.
+const RUNNER_JS_RE = /(?<=[\\/*])([\w-]+\.js)(?=["\s]|$)/m;
+const fenceRunner = (text) => (text.match(RUNNER_JS_RE) || [])[1] || null;
 
-function insertPsBlocks(text) {
-  let out = "";
-  let last = 0;
-  for (const m of text.matchAll(CMD_FENCE_RE)) {
-    const end = m.index + m[0].length;
-    out += text.slice(last, end);
-    last = end;
-    const ahead = text.slice(end, end + PS_AHEAD);
-    if (ahead.includes(PS_BLOCK_MARKER)) continue; // already has the PS block
-    const nodeMatch = ahead.slice(0, 500).match(NODE_FOUND_PATH_RE);
-    const nodeArgs = nodeMatch ? nodeMatch[1] : "";
-    out += psBlock(m[2], nodeArgs);
+// Section grammar. A heading belongs to the fence right after it; `pick`,
+// `nodeFound` and `notFound` only ever follow their cmd.exe fence (old and
+// new layout alike); the shell-pick line only ever opens a section.
+const HEAD_FENCE = {
+  bashHead: "bashFence",
+  psHead: "psFence",
+  cmdHead: "cmdFence",
+};
+const TAIL_KINDS = new Set(["pick", "nodeFound", "notFound"]);
+const RUNNER_FENCES = new Set(["bashFence", "psFence", "cmdFence"]);
+
+// Chunks: a fenced block (kept whole, blank lines inside included), a
+// paragraph (non-blank lines up to a blank line or a fence), or a run of blank
+// lines. Joining the chunk texts with "\n" gives the input back.
+function splitChunks(text) {
+  const lines = text.split("\n");
+  const chunks = [];
+  let i = 0;
+  while (i < lines.length) {
+    let j = i;
+    if (/^[ \t]*```/.test(lines[i])) {
+      j = i + 1;
+      while (j < lines.length && !/^[ \t]*```\s*$/.test(lines[j])) j++;
+      j = Math.min(j + 1, lines.length);
+      chunks.push({ kind: "fence", text: lines.slice(i, j).join("\n") });
+    } else if (lines[i].trim() === "") {
+      while (j < lines.length && lines[j].trim() === "") j++;
+      chunks.push({ kind: "blank", text: lines.slice(i, j).join("\n") });
+    } else {
+      while (
+        j < lines.length &&
+        lines[j].trim() !== "" &&
+        !/^[ \t]*```/.test(lines[j])
+      ) {
+        j++;
+      }
+      chunks.push({ kind: "para", text: lines.slice(i, j).join("\n") });
+    }
+    i = j;
   }
-  return out + text.slice(last);
+  return chunks;
+}
+
+function classifyChunk(c) {
+  if (c.kind === "blank") return "blank";
+  const t = c.text.trim();
+  if (c.kind === "fence") {
+    const ls = c.text.split("\n");
+    const open = ls[0].trim();
+    const body = ls.slice(1, -1);
+    const first = (body[0] || "").trim();
+    if (CMD_FENCE_LINE_RE.test(first)) return "cmdFence";
+    if (first.startsWith('node "<found-path>"')) return "nodeFound";
+    if (
+      open === "```powershell" &&
+      body.some((l) => l.includes(PS_BLOCK_MARKER))
+    ) {
+      return "psFence";
+    }
+    if (open === "```bash" && body.some((l) => l.trim() === NEW_BASE_LINE)) {
+      return "bashFence";
+    }
+    return null;
+  }
+  // The prefix-matched kinds are re-emitted from their canonical text, so a
+  // paragraph that carries more lines under the heading / pick line must not
+  // match (its extra lines would be dropped); it ends the section instead.
+  const oneLine = !t.includes("\n");
+  if (t === SHELL_PICK_LINE) return "shellPick";
+  if (t === PS_BLOCK_HEADING) return "psHead";
+  if (oneLine && t.startsWith(CMD_HEADING_LEAD) && t.endsWith(":**")) {
+    return "cmdHead";
+  }
+  if (BASH_HEADING_RE.test(t)) return "bashHead";
+  if (oneLine && t.startsWith("Pick the highest-version path")) return "pick";
+  if (t.startsWith("> **Runner not found?**")) return "notFound";
+  return null;
+}
+
+// Classify every chunk, record the runner a lookup fence names, and bind each
+// heading to the fence right after it (blank lines between allowed) — a
+// heading with no such fence is not part of any section.
+function annotateChunks(text) {
+  const chunks = splitChunks(text).map((c) => ({
+    ...c,
+    cls: classifyChunk(c),
+  }));
+  for (const c of chunks) {
+    c.runner = RUNNER_FENCES.has(c.cls) ? fenceRunner(c.text) : null;
+  }
+  chunks.forEach((c, j) => {
+    const fence = HEAD_FENCE[c.cls];
+    if (!fence) return;
+    let n = j + 1;
+    while (n < chunks.length && chunks[n].cls === "blank") n++;
+    if (n < chunks.length && chunks[n].cls === fence) c.pair = n;
+    else c.cls = null;
+  });
+  return chunks;
+}
+
+// The text after `prefix` on the first line of `text` that carries it.
+function argsAfter(text, prefix) {
+  if (!text) return null;
+  const line = text.split("\n").find((l) => l.includes(prefix));
+  return line == null ? null : line.slice(line.indexOf(prefix) + prefix.length);
+}
+
+// Re-emit one section (chunks lo..hi, each kind at most once) in canonical
+// order. Returns null when the section cannot be completed — no PowerShell
+// block and no runner name in the cmd.exe fence to generate one from — so
+// the caller leaves it untouched instead of emitting `\lib\cli\undefined`.
+function renderSection(blocks) {
+  const by = {};
+  for (const b of blocks) {
+    if (b.cls !== "blank" && !(b.cls in by)) by[b.cls] = b;
+  }
+  const cmd = by.cmdFence;
+  if (!by.psFence && !cmd.runner) return null;
+  const text = (cls) => (by[cls] ? by[cls].text : null);
+  const nodeArgs =
+    argsAfter(text("nodeFound"), 'node "<found-path>"') ??
+    argsAfter(text("psFence"), 'node "$CLI"') ??
+    argsAfter(text("bashFence"), 'node "$CLI"') ??
+    "";
+  // Generated lines take the cmd.exe fence's indent (sections in list items);
+  // existing chunks already carry their own.
+  const indent = /^[ \t]*/.exec(cmd.text)[0];
+  const ind = (s) =>
+    s
+      .split("\n")
+      .map((l) => indent + l)
+      .join("\n");
+  const parts = [ind(SHELL_PICK_LINE)];
+  if (by.bashFence) parts.push(ind(BASH_BLOCK_HEADING), by.bashFence.text);
+  parts.push(
+    ind(PS_BLOCK_HEADING),
+    text("psFence") ?? ind(psFence(cmd.runner, nodeArgs)),
+  );
+  parts.push(ind(CMD_BLOCK_HEADING), cmd.text);
+  parts.push(
+    ind(NEW_PICK_THEN),
+    text("nodeFound") ?? ind(`\`\`\`\nnode "<found-path>"${nodeArgs}\n\`\`\``),
+  );
+  if (by.notFound) parts.push(by.notFound.text);
+  return parts.join("\n\n");
+}
+
+function reorderLookupSections(text) {
+  const chunks = annotateChunks(text);
+  const out = [];
+  let i = 0;
+  while (i < chunks.length) {
+    let k = i;
+    while (k < chunks.length && chunks[k].cls !== "cmdFence") k++;
+    if (k === chunks.length) break;
+    // Grow the section from the cmd.exe fence over recognised chunks, each
+    // kind at most once. An unknown chunk, a repeat, or a chunk that cannot
+    // sit on this side of the fence (see HEAD_FENCE / TAIL_KINDS) ends it;
+    // the backward pass is also bounded by the previous section (`i - 1`).
+    const runner = chunks[k].runner;
+    const sameRunner = (c) => !runner || !c.runner || c.runner === runner;
+    const seen = new Set(["cmdFence"]);
+    const accepts = (c, step) => {
+      if (!c.cls || seen.has(c.cls)) return false;
+      if (step > 0 && c.cls === "shellPick") return false;
+      if (step < 0 && TAIL_KINDS.has(c.cls)) return false;
+      if (c.kind === "fence") return sameRunner(c);
+      // A heading moves with its fence: going forward, that fence must still
+      // be free for this section; going backward it was taken just before.
+      if (c.cls in HEAD_FENCE && step > 0) {
+        const f = chunks[c.pair];
+        return !seen.has(f.cls) && sameRunner(f);
+      }
+      return true;
+    };
+    const grow = (step, stop) => {
+      let edge = k;
+      for (let j = k + step; j !== stop; j += step) {
+        const c = chunks[j];
+        if (c.cls === "blank") continue;
+        if (!accepts(c, step)) break;
+        seen.add(c.cls);
+        edge = j;
+      }
+      return edge;
+    };
+    const lo = grow(-1, i - 1);
+    const hi = grow(1, chunks.length);
+    out.push(...chunks.slice(i, lo).map((c) => c.text));
+    const section = renderSection(chunks.slice(lo, hi + 1));
+    if (section === null)
+      out.push(...chunks.slice(lo, hi + 1).map((c) => c.text));
+    else out.push(section);
+    i = hi + 1;
+  }
+  out.push(...chunks.slice(i).map((c) => c.text));
+  return out.join("\n");
 }
 
 function replaceInlinePs(text) {
@@ -384,7 +599,6 @@ function rewrite(text, { psBlocks = true } = {}) {
       `${lookup}\n${indent}${PS_GUARD}; node "$CLI"`,
   );
   out = out.replace(CUR_PS_GUARD_RE, () => `${PS_GUARD}; node "$CLI"`);
-  if (psBlocks) out = insertPsBlocks(out);
   out = out.split(OLD_PROSE).join(NEW_PROSE);
   out = out.split(OLD_CMD_HEADING).join(CMD_BLOCK_HEADING);
   out = out.split(OLD_PS_BLOCK_HEADING).join(PS_BLOCK_HEADING);
@@ -394,8 +608,11 @@ function rewrite(text, { psBlocks = true } = {}) {
     OLD_CMD_HEADING_3_RE,
     (_m, indent, rest) => `${indent}${CMD_BLOCK_HEADING}${rest}`,
   );
+  out = out.split(OLD_CMD_HEADING_4).join(CMD_BLOCK_HEADING);
   out = out.split(OLD_PICK_THEN).join(NEW_PICK_THEN);
   out = out.split(OLD_PICK_RESULTS).join(NEW_PICK_RESULTS);
+  // Last: the section parser relies on the headings being canonical.
+  if (psBlocks) out = reorderLookupSections(out);
   return out;
 }
 
@@ -514,6 +731,8 @@ module.exports = {
   PS_BLOCK_MARKER,
   CMD_BLOCK_HEADING,
   PS_BLOCK_HEADING,
+  BASH_BLOCK_HEADING,
+  SHELL_PICK_LINE,
   PS_GUARD,
   psLookupLine,
   psNodeLine,

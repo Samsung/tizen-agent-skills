@@ -386,6 +386,43 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
             );
           }
         });
+        // (g) block order: every fenced cmd.exe lookup is the LAST of the
+        // three shell blocks — its section opens with the shell-pick line,
+        // then Bash, then PowerShell, then cmd.exe (the model tends to run
+        // the first block it sees; Bash and PowerShell serve far more hosts).
+        // Each section has its own shell-pick line (none shared by two
+        // cmd.exe fences), and the section's Bash fence sits under the
+        // generated Bash heading. Inline cmd lookups (the agents' 2-step
+        // list) are not fenced and are not sections.
+        const lastBefore = (i, pred) => {
+          for (let j = i - 1; j >= 0; j--) if (pred(lines[j])) return j;
+          return -1;
+        };
+        lines.forEach((raw, i) => {
+          if (!/^cmd \/c dir \/s \/b /.test(raw.trim())) return;
+          const prevCmd = lastBefore(i, (l) =>
+            /^cmd \/c dir \/s \/b /.test(l.trim()),
+          );
+          const ps = lastBefore(i, (l) => l.includes(gen.PS_BLOCK_MARKER));
+          const bash = lastBefore(i, (l) => l.trim() === gen.NEW_BASE_LINE);
+          const pick = lastBefore(i, (l) => l.trim() === gen.SHELL_PICK_LINE);
+          if (!(prevCmd < pick && pick < bash && bash < ps)) {
+            stale.push(
+              `${rel}:${i + 1} (cmd.exe lookup must follow the shell-pick line, the Bash block and the PowerShell block, in that order)`,
+            );
+          } else {
+            const open = lastBefore(bash, (l) => l.trim().startsWith("```"));
+            if (
+              open < 0 ||
+              lines[open].trim() !== "```bash" ||
+              headingAbove(open) !== gen.BASH_BLOCK_HEADING
+            ) {
+              stale.push(
+                `${rel}:${bash + 1} (the section's Bash lookup is not a fenced block under the generated Bash heading)`,
+              );
+            }
+          }
+        });
         if (!text.includes(gen.PS_HOST_PICK_LINE)) {
           incomplete.push(`${rel} (PowerShell host pick missing or stale)`);
         }
@@ -509,6 +546,204 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       `the runner lives under ${P(".claude", X)} on Windows`,
     );
     check("  the generated chain is a fixed point", rw(chainX), chainX);
+
+    // Test 6: lookup section order — a cmd.exe-first section is re-emitted
+    // as shell-pick → Bash → PowerShell → cmd.exe → node step → note, a
+    // hand-written Bash heading is canonicalised, a section without a
+    // PowerShell block or a `node "<found-path>"` step gains them (node
+    // arguments taken from the Bash block), and the result is a fixed point.
+    console.log("\nTest 6: lookup section order");
+    const rwAll = (s) => gen.rewrite(s, { psBlocks: true });
+    const bashFence = [
+      "```bash",
+      gen.NEW_BASE_LINE,
+      gen.OWN_HOST_LINE("CLI", "lib/cli/x-cli.js"),
+      gen.FALLBACK_LINE("CLI", "lib/cli/x-cli.js"),
+      'node "$CLI" run --flag',
+      "```",
+    ].join("\n");
+    const cmdFence = `\`\`\`\ncmd /c ${chainX}\n\`\`\``;
+    const psFenceX = [
+      "```powershell",
+      gen.PS_HOST_PICK_LINE,
+      gen.psLookupLine(X),
+      gen.psNodeLine(" run --flag"),
+      "```",
+    ].join("\n");
+    const nodeFound = '```\nnode "<found-path>" run --flag\n```';
+    const note = "> **Runner not found?** Install the plugin first.";
+    const pickThen =
+      "Pick the highest-version path (the PowerShell form above already resolved `$CLI`), then:";
+    const section = (withNote) =>
+      [
+        gen.SHELL_PICK_LINE,
+        gen.BASH_BLOCK_HEADING,
+        bashFence,
+        gen.PS_BLOCK_HEADING,
+        psFenceX,
+        gen.CMD_BLOCK_HEADING,
+        cmdFence,
+        pickThen,
+        nodeFound,
+        ...(withNote ? [note] : []),
+      ].join("\n\n");
+    const wrap = (body) => `intro\n\n${body}\n\n### Next`;
+    const oldOrder = wrap(
+      [
+        gen.CMD_BLOCK_HEADING,
+        cmdFence,
+        gen.PS_BLOCK_HEADING,
+        psFenceX,
+        note,
+        pickThen,
+        nodeFound,
+        "**Linux / macOS / Ubuntu:**",
+        bashFence,
+      ].join("\n\n"),
+    );
+    check(
+      "  cmd.exe-first section → shell-pick, Bash, PowerShell, cmd.exe, node step, note",
+      rwAll(oldOrder),
+      wrap(section(true)),
+    );
+    check(
+      "  the reordered section is a fixed point",
+      rwAll(wrap(section(true))),
+      wrap(section(true)),
+    );
+    check(
+      "  a section with only cmd.exe + Bash gains the PowerShell block and the node step",
+      rwAll(wrap([gen.CMD_BLOCK_HEADING, cmdFence, bashFence].join("\n\n"))),
+      wrap(section(false)),
+    );
+    // The Bash block beyond the prose is not part of the section, so the
+    // generated PowerShell / node lines have no node arguments to copy.
+    check(
+      "  a paragraph between the blocks ends the section (nothing beyond it moves)",
+      rwAll(
+        wrap(
+          [gen.CMD_BLOCK_HEADING, cmdFence, "Unrelated prose.", bashFence].join(
+            "\n\n",
+          ),
+        ),
+      ),
+      wrap(
+        [
+          gen.SHELL_PICK_LINE,
+          gen.PS_BLOCK_HEADING,
+          psFenceX.replace(` run --flag\n\`\`\``, "\n```"),
+          gen.CMD_BLOCK_HEADING,
+          cmdFence,
+          pickThen,
+          '```\nnode "<found-path>"\n```',
+          "Unrelated prose.",
+          bashFence,
+        ].join("\n\n"),
+      ),
+    );
+    // Section boundaries. Two sections for different runners that touch
+    // (blank lines only between them) must not share blocks: the X section
+    // has no Bash block, so without the runner check it would take the Y
+    // section's Bash block. The Y section is hand-written in the new order
+    // without the shell-pick line, so the line's uniqueness cannot save it.
+    const cmdFenceY = `\`\`\`\ncmd /c dir /s /b ${gen.cmdChainArgs(Y)}\n\`\`\``;
+    const bashFenceY = bashFence
+      .split("x-cli.js")
+      .join("y-cli.js")
+      .replace(" run --flag", " go");
+    const psFenceY = [
+      "```powershell",
+      gen.PS_HOST_PICK_LINE,
+      gen.psLookupLine(Y),
+      gen.psNodeLine(" go"),
+      "```",
+    ].join("\n");
+    const sectionXNoBash = [
+      gen.SHELL_PICK_LINE,
+      gen.PS_BLOCK_HEADING,
+      psFenceX,
+      gen.CMD_BLOCK_HEADING,
+      cmdFence,
+      pickThen,
+      nodeFound,
+    ].join("\n\n");
+    const sectionY = [
+      gen.SHELL_PICK_LINE,
+      gen.BASH_BLOCK_HEADING,
+      bashFenceY,
+      gen.PS_BLOCK_HEADING,
+      psFenceY,
+      gen.CMD_BLOCK_HEADING,
+      cmdFenceY,
+      pickThen,
+      '```\nnode "<found-path>" go\n```',
+    ].join("\n\n");
+    check(
+      "  adjacent sections for two runners keep their own blocks",
+      rwAll(
+        wrap(
+          [
+            gen.CMD_BLOCK_HEADING,
+            cmdFence,
+            gen.PS_BLOCK_HEADING,
+            psFenceX,
+            pickThen,
+            nodeFound,
+            "**Linux / macOS / Ubuntu:**",
+            bashFenceY,
+            gen.PS_BLOCK_HEADING,
+            psFenceY,
+            gen.CMD_BLOCK_HEADING,
+            cmdFenceY,
+          ].join("\n\n"),
+        ),
+      ),
+      wrap(`${sectionXNoBash}\n\n${sectionY}`),
+    );
+    check(
+      "  two adjacent reordered sections are a fixed point",
+      rwAll(wrap(`${sectionXNoBash}\n\n${sectionY}`)),
+      wrap(`${sectionXNoBash}\n\n${sectionY}`),
+    );
+    // A heading is re-emitted from its canonical text, so a paragraph that
+    // carries more lines under it is not a heading: it stays in place, intact.
+    const headingPlus = `${gen.CMD_BLOCK_HEADING}\nKeep this line.`;
+    check(
+      "  a multi-line paragraph under the cmd.exe heading is kept, not swallowed",
+      rwAll(wrap([headingPlus, cmdFence, bashFence].join("\n\n"))),
+      wrap(`${headingPlus}\n\n${section(false)}`),
+    );
+    // No PowerShell block and no runner name in the cmd.exe fence: nothing to
+    // generate the block from, so the section is left alone (no `undefined`).
+    const noRunner = wrap(
+      [
+        gen.CMD_BLOCK_HEADING,
+        '```\ncmd /c dir /s /b "%USERPROFILE%\\somewhere\\*" & ver >nul\n```',
+      ].join("\n\n"),
+    );
+    check(
+      "  a cmd.exe fence naming no runner and no PowerShell block is left alone",
+      rwAll(noRunner),
+      noRunner,
+    );
+    // Sections inside list items: generated lines take the fence's indent.
+    const indent = (s) =>
+      s
+        .split("\n")
+        .map((l) => (l === "" ? l : `  ${l}`))
+        .join("\n");
+    const indentedOld = `1. Step\n\n${indent([gen.CMD_BLOCK_HEADING, cmdFence, bashFence].join("\n\n"))}\n\n2. Next`;
+    const indentedNew = `1. Step\n\n${indent(section(false))}\n\n2. Next`;
+    check(
+      "  an indented section keeps its indent on generated lines",
+      rwAll(indentedOld),
+      indentedNew,
+    );
+    check(
+      "  the indented section is a fixed point",
+      rwAll(indentedNew),
+      indentedNew,
+    );
   }
 }
 
