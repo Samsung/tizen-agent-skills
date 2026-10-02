@@ -2,10 +2,12 @@
 
 English | [한국어](README.ko.md)
 
-A Tizen SDK automation plugin for **Claude Code**, **Cline**, **Codex CLI**,
-**Gemini CLI** and **VS Code**, plus a standalone **tizen-sdk** CLI — automates SDK installation, project
-creation, building, device management, app installation, remote debugging
-(GDB / netcoredbg / CDP), certificate management, and Playwright testing.
+A Tizen app development automation skill set for AI coding agents.
+
+Supports **Claude Code**, **Cline**, **Codex CLI** and **VS Code**,
+and ships a standalone **tizen-sdk** CLI that works without an AI host — automates SDK
+installation, project creation, building, device management, app installation, remote
+debugging (GDB / netcoredbg / CDP), certificate management, and Playwright testing.
 
 ## Quick Start
 
@@ -106,6 +108,21 @@ tizen-sdk --doctor
 See [tizen-cli/README.md](tizen-cli/README.md#standalone-use-without-the-tizen-cli-host) and
 [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
 
+### First step: install the Tizen SDK
+
+After setup, **start by installing the Tizen SDK**. Project creation, building, emulators,
+app installation and debugging all run the SDK's tools, so they need the SDK in place first.
+
+```
+Install the Tizen SDK
+```
+
+This request runs the `tizen-sdk-install` skill. With the standalone tool, run
+`tizen-sdk sdk-install` — it checks first and, when the SDK is missing, returns the installer
+command to run. If the SDK is already installed somewhere other than the default `~/tizen-sdk`,
+register that path instead: ask "Set the Tizen SDK path to …" (`tizen-sdk-init` skill) or run
+`tizen-sdk sdk-init --sdk-path <path>`.
+
 ### Using natural language
 
 Once installed, no commands need to be memorised — just describe what you want in
@@ -119,7 +136,6 @@ Build this project and install it on the emulator
 Launch the emulator and show me the connected devices
 Debug this native app with GDB
 The app crashed — analyse the dlog
-타이젠 SDK 설치해줘
 웹앱 만들어서 에뮬레이터에 설치해줘
 ```
 

@@ -2,9 +2,11 @@
 
 [English](README.md) | 한국어
 
-**Claude Code**, **Cline**, **Codex CLI**, **Gemini CLI**, **VS Code**를 위한
-Tizen SDK 자동화 플러그인(독립 실행형 **tizen-sdk** CLI 포함) — SDK 설치, 프로젝트 생성, 빌드, 디바이스 관리, 앱 설치,
-원격 디버깅(GDB / netcoredbg / CDP), 인증서 관리, Playwright 테스트를 자동화합니다.
+AI 코딩 에이전트를 위한 타이젠 앱 개발 자동화 스킬셋입니다.
+
+**Claude Code**, **Cline**, **Codex CLI**, **VS Code**를 지원하며,
+AI 호스트 없이 쓸 수 있는 독립 실행형 **tizen-sdk** CLI도 함께 제공합니다 — SDK 설치, 프로젝트 생성,
+빌드, 디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서 관리, Playwright 테스트를 자동화합니다.
 
 ## 빠른 시작
 
@@ -102,13 +104,27 @@ tizen-sdk --doctor
 [tizen-cli/README.ko.md](tizen-cli/README.ko.md#독립-실행-tizen-cli-호스트-없이),
 [docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.
 
+### 첫 단계: Tizen SDK 설치
+
+셋업이 끝나면 **Tizen SDK 설치부터 시작하세요**. 프로젝트 생성, 빌드, 에뮬레이터, 앱 설치,
+디버깅은 모두 SDK 도구를 실행하므로 SDK가 먼저 설치되어 있어야 합니다.
+
+```
+타이젠 SDK 설치해줘
+```
+
+이 요청은 `tizen-sdk-install` 스킬이 처리합니다. 독립 실행 도구에서는
+`tizen-sdk sdk-install`을 실행하세요 — 먼저 사전 확인을 하고, SDK가 없으면 실행할 설치 명령을
+돌려줍니다. SDK가 이미 기본 경로(`~/tizen-sdk`)가 아닌 곳에 설치되어 있다면 대신 그 경로를
+등록하세요: "타이젠 SDK 경로를 …로 설정해줘"라고 요청하거나(`tizen-sdk-init` 스킬)
+`tizen-sdk sdk-init --sdk-path <경로>`를 실행합니다.
+
 ### 자연어로 사용하기
 
 설치가 끝나면 명령어를 외울 필요 없이, AI 코딩 어시스턴트에 원하는 작업을 한국어나 영어로
 그대로 말하면 됩니다. 요청에 맞는 스킬·에이전트가 알아서 Tizen SDK 도구를 실행합니다:
 
 ```
-타이젠 SDK 설치해줘
 HelloTizen이라는 이름으로 타이젠 웹앱 만들어줘
 이 프로젝트 빌드해서 에뮬레이터에 설치해줘
 에뮬레이터 켜고 연결된 디바이스 보여줘
