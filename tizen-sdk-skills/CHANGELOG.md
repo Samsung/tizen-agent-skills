@@ -1,5 +1,7 @@
 # Changelog
 
+English | [한국어](CHANGELOG.ko.md)
+
 All notable changes to **tizen-sdk-skills** are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
@@ -8,6 +10,35 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 [tizen-agent-skills](https://github.com/Samsung/tizen-agent-skills) repository.
 
 ## [Unreleased]
+
+### Changed
+
+- **Runner lookup sections lead with Bash and PowerShell; cmd.exe comes last, behind a shell-pick line**
+  (`scripts/rewrite-runner-snippets.js`, every `common/skills/*/SKILL.md` with a Windows lookup,
+  `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`, `common/hooks/tizen-sdk-skills-guard.md`,
+  `cline/hooks/tizen-sdk-skills-guard.md`, `common/lib/tests/plugin-cache.test.js`). In a Cline PowerShell
+  terminal the model took the FIRST block of the section — the cmd.exe `dir … 2>nul & dir …` chain
+  (`AmpersandNotAllowed`) — and then wrapped the PowerShell block in `powershell -Command "…"` (the outer
+  shell expanded `$h` / `$CLI` / `$env:…`, so the inner one received ` = '.cline'; if ( -or -or ) …`),
+  although the 1.4.1 headings already said which shell each block is for. Every section now opens with one
+  line that tells the shells apart by the prompt (`$` / `PS C:\…>` / `C:\…>`) and says to run that one block
+  as-is, and the blocks follow in order of how many hosts they serve: Bash (Linux, macOS, Claude Code's Git
+  Bash on Windows, Codex on Linux/macOS), PowerShell (Codex on Windows, Cline PowerShell terminal), then
+  cmd.exe with its `node "<found-path>"` step and the "Runner not found?" note; the cmd.exe heading now
+  points at the blocks *above*. The generator performs the reorder (a section parser over the headings, the
+  three fences, the pick line and the note — anything else ends the section; hand-written Bash / cmd.exe
+  headings are canonicalised; a section without a PowerShell block or a `node "<found-path>"` step gains
+  one) and stays a fixed point (`--check` green). Section boundaries are explicit (review of #247): a
+  heading moves with the fence right after it, the pick line / node step / note only follow their cmd.exe
+  fence, the shell-pick line only opens a section, and a Bash / PowerShell fence naming another runner
+  belongs to another section — so two touching sections never trade blocks; a multi-line paragraph under a
+  heading is kept intact (it is not a heading), a cmd.exe fence naming no `*.js` without a PowerShell block
+  is left alone instead of gaining a `\lib\cli\undefined` lookup, and generated lines keep the fence's
+  indent inside list items. `tizen-screenshot`'s separate "do not wrap" note is
+  folded into the shell-pick line. The drift-guard TC fails when a cmd.exe lookup is not preceded by the
+  shell-pick line, the Bash block and the PowerShell block in that order, or when a Bash lookup fence sits
+  under another heading. The agents' Cline 2-step list puts the PowerShell line before the cmd line, and
+  the guard rules (Korean rule 7, English rule 8) say to pick by shell, never the first block by position.
 
 ## [1.4.1] — 2026-10-01
 
@@ -304,6 +335,12 @@ mutating tier run against a throwaway home.
   serials on `multiple_devices`; the `multiple_devices` message no longer says "Specify --serial" to
   the plugin dlog runner, which takes the serial positionally. `sdb-serial-failure.test.js` covers the
   helper and guards that every `resolveSerial()` caller goes through it.
+  <!-- internal-only:begin -->
+  The same applies to `vd-remove-app` (`common/lib/core/vd.js`), which used to list devices through a
+  full `runSdbCommand("list devices")` round-trip and never screened an explicit serial: it now
+  resolves the target through `resolveSerial()` + the shared helper, so a bad serial is rejected
+  before it reaches `sdb -s` and `multiple_devices` carries the same listing and `suggested_fix`.
+  <!-- internal-only:end -->
 - **`dlog-analyzer` follows the native CLI's SDK-resolved log directory** (`common/lib/core/dlog-analyzer.js`,
   `common/lib/cli/dlog-analyzer-cli.js`, `common/scripts/tizen-dlog-analyzer/tizen-dlog-analyzer.sh`,
   `tizen-cli/src/command-specs/dlog-analyzer.ts`). TizenDLogAnalyzer PR #155/#157 removed `--base-dir`
@@ -347,6 +384,11 @@ mutating tier run against a throwaway home.
   path** (`common/lib/core/samsung-auth.js`). It listened on every interface, so any host on the LAN
   could POST a fabricated `code` to `/signin/callback`; requests for other paths (favicon probes) hung
   without a response.
+  <!-- internal-only:begin -->
+- **`vd-nuget-setup --bixby-source` is screened with `shellSafe()`** like every other value that reaches
+  a plugin-script command line, and the AppSign endpoint can be overridden with `TIZEN_VD_APPSIGN_URL`
+  (`common/lib/core/vd.js`).
+  <!-- internal-only:end -->
 - **Cline / Gemini hook adapters no longer let a write through when the body precedes the path**
   (`cline/hooks/PreToolUse`, `gemini/hooks/BeforeTool`). The adapters cut the payload at the first
   `"content"` / `"diff"` / `"old_string"` before extracting the path, so a tool call that emitted the
@@ -595,6 +637,65 @@ mutating tier run against a throwaway home.
   new `import-wgt.*` and `meta.help` TCs are approved, TC-P-119 stays draft until three agent-session
   runs.
 
+<!-- internal-only:begin -->
+
+- **VD AppSign re-sign never produced a package on Windows** (`tizen-vd-resign.ps1`). The script
+  saved the AppSign response to `appsign-response.zip` but then opened the undefined variable
+  `$response`, so `ZipFile::OpenRead($null)` threw after every successful AppSign request. The
+  response path is now a single variable used for both the download and the extraction. A second
+  blocker sat before it: `New-Object System.Net.Http.ByteArrayContent($bytes)` unrolls the `byte[]`
+  into one constructor argument per element ("Cannot find an overload … argument count: N"), so the
+  multipart body could never be built; the content objects are created with `[Type]::new()` now.
+  Third, `-IncludeAuthor 0` was ignored: the converted `$false` was assigned back to the
+  `[string]`-typed parameter, which stores the string `"False"` — truthy — so the author signature
+  was always required and sent. The flag is converted into a separate boolean now. Fourth,
+  `-ProxyUrl` was accepted but never used; it is now applied through `HttpClientHandler.Proxy`.
+  The multipart parts are emitted with the same headers `curl -F` produces
+  (`name="…"; filename="…"`, `Content-Type: text/xml`) instead of .NET's unquoted
+  `name=…; filename*=utf-8''…`, which strict parsers reject.
+  Verified end to end on Windows PowerShell 5.1 against a local fake AppSign endpoint through both
+  `tizen-cli tizen-sdk vd-resign` and `vd-build-cli.js resign`: the request carries `distCertID`,
+  `distributor`, `authCertID`, `author` as quoted form fields, the returned signatures replace the
+  originals in the `.tpk` with the payload intact and the original kept as `.vd-original`,
+  `--no-author` / `--distributor-only` send only the distributor pair, a second run refuses to
+  overwrite the backup, and `--proxy-url` routes the request through the proxy.
+- **Transport failures of the AppSign request were reported as `AppSign request failed:  `**
+  (`tizen-vd-resign.ps1`). A faulted task's `.Result` surfaces as a non-terminating property
+  error in PowerShell 5.1, so the script continued with a `$null` response and printed an empty
+  status. The request now uses `.GetAwaiter().GetResult()` inside a `try`, unwraps to the innermost
+  exception and reports it (`SocketException: … refused 127.0.0.1:9`, `WebException: … could not
+be resolved`, or `timed out after 120 s`), together with the URL and proxy used; an HTTP error
+  is reported as `HTTP <code> <reason>`.
+- `vd-resign` / `vd-build` parameter validation now names the offending value (AppSign URL,
+  package path or proxy URL) and the characters it refuses on this OS, and requires `--proxy-url`
+  to start with `http://` or `https://` — curl accepts a bare `host:port`, .NET's `WebProxy` does
+  not, and both platforms must reject the same input.
+- **VD NuGet setup failed whenever a source was already registered** (`tizen-vd-nuget.ps1` / `.sh`).
+  The "already registered" check matched the source _name_ against
+  `dotnet nuget list source --format short`, which prints only `E <url>` — never a name — so every
+  run re-added the source and failed with "already been added". The scripts now parse the names
+  from the default (detailed) listing with an exact match.
+- **`tizen-cli tizen-sdk vd-build --no-author` / `vd-resign --no-author` were no-ops**
+  (`tizen-cli/src/command-specs/vd.ts`). Commander parses a negated flag into `opts.author === false`,
+  not `opts.noAuthor`; the handlers read the wrong key and always re-signed the author signature.
+- **`dotnet restore` output no longer corrupts the JSON envelope** (`common/lib/core/vd.js`).
+  `vd-build` ran restore with `stdio: "inherit"`, so its progress was written to the same stdout as
+  the envelope. Restore now runs without a shell (`spawnSync` argv, so the path needs no quoting),
+  its output is captured — streamed into the job's script log under `--background` so
+  `job-cli.js status/wait` still shows it — and the failure reason (last lines) goes into
+  `warnings[]`. `maxBuffer` is raised to 64 MiB (spawnSync's 1 MiB default kills a large restore
+  with ENOBUFS) and a job log that cannot be opened falls back to pipe capture.
+- **`shellSafe()` now screens per shell** (`common/lib/core/vd.js`). The AppSign package path, sign
+  URL and proxy URL are interpolated into a double-quoted command line; only `"` and newlines were
+  refused, leaving command substitution open. It now also rejects `$` and the backtick on
+  Linux/macOS (`/bin/sh`) and a `%NAME%` pair on Windows (`cmd.exe`), while a single `%` (percent-
+  encoded URLs) and `$` under `powershell -File` (literal arguments) stay allowed. Both branches are
+  covered by `common/lib/tests/vd.test.js` with an explicit platform argument.
+- `vd-build --arch` no longer restricts the value to `arm | x86` (the build already validates the
+  token); `--build-type` accepts `Test` like `build-project`.
+
+<!-- internal-only:end -->
+
 ### Removed
 
 - `CI_TEST_FIX.md` and `SECURITY_FIXES_SUMMARY.md` — working notes with personal paths that were
@@ -622,6 +723,17 @@ mutating tier run against a throwaway home.
   diagram, the lane table, `tiers.yaml` and `README.ko.md`, and fails loudly on `tiers.yaml` key drift;
   the stale TC / lane counts it did not cover (281 → 286 at the time, cli 171 / prompt 118 → 167 / 119)
   are fixed.
+
+<!-- internal-only:begin -->
+
+- `tizen-vd-build` agent and skill (common + tizen-cli): the tizen-cli skill now documents the
+  `vd-build` / `vd-resign` / `vd-nuget-setup` / `vd-remove-app` commands instead of the runner;
+  the common skill gets the standard runner-lookup snippets, Codex `--background` section and
+  결과 보고 rules; the troubleshooting section is rewritten around `error_category` (the previous
+  one referred to personal paths, a plugin cache directory and PowerShell errors the scripts can no
+  longer raise).
+
+<!-- internal-only:end -->
 
 ## [1.3.1] — 2026-09-23
 

@@ -42,7 +42,10 @@ because each one is a mistake the model has actually made.
    with `SyntaxError: Invalid or unexpected token`. The runners call SDK tools for you.
 8. **Finding a runner** — run the lookup block in the skill (SKILL.md) verbatim, in the
    form for your shell (bash / cmd.exe / PowerShell); bash and PowerShell leave the path
-   in `$CLI`, cmd.exe lists the copies for the `node "<found-path>"` step. Use the runner
+   in `$CLI`, cmd.exe lists the copies for the `node "<found-path>"` step. The section
+   opens with a line that tells the shells apart by the prompt (`$` / `PS C:\…>` / `C:\…>`)
+   and lists the blocks Bash → PowerShell → cmd.exe — pick by shell, never the first
+   block by position. Use the runner
    file name the skill gives (e.g. `project-manager-cli.js`) — never guess one. The cmd.exe
    chain (`dir … 2>nul & dir … 2>nul`) is cmd.exe only: in PowerShell `&` is a parse error,
    so run the ```powershell block there. Run that PowerShell block **as-is in the terminal**,

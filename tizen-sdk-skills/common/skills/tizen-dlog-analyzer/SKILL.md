@@ -35,6 +35,8 @@ The runner is **not inside this skill folder**. The skill folder (`~/<host-dot-d
 
 All three blocks resolve the **same file**: `<host-dot-dir>` is the harness you run in (`.claude` when `CLAUDECODE` is set, `.gemini` for `GEMINI_CLI`, `.codex` for `CODEX_*`, otherwise `.cline`), falling back to the other hosts' caches only when yours has no copy, and `<VERSION>` is the highest **numeric** version directory (`1.10.0` > `1.3.1`). Bash and PowerShell make both choices for you and leave the path in `$CLI`; cmd.exe cannot version-sort, so it only lists every copy — you pick your own host's highest version and paste it into the `node "<found-path>"` step.
 
+**Pick the ONE block for the shell your terminal / tool runs — the prompt tells you: `$` is Bash (Linux, macOS, Claude Code's Git Bash on Windows, Codex on Linux / macOS) → Bash block; `PS C:\…>` is PowerShell (Codex on Windows, Cline PowerShell terminal) → PowerShell block; `C:\…>` is cmd.exe (Cline cmd.exe terminal) → cmd.exe block. Run that block as-is: a block pasted into another shell, or wrapped in `powershell -Command "…"`, is a parse error.**
+
 **Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**
 
 ```bash
@@ -47,11 +49,6 @@ node "$CLI" investigate --symptoms "<the user's words>" <app-id>
 TEMPLATE=$(ls "$HOME"/.{claude,cline,codex,gemini}/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.agents/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md 2>/dev/null | head -1)
 ```
 
-**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal; `&` and `2>nul` are a parse error in PowerShell — there, run the PowerShell block below instead). Claude Code on Windows runs Git Bash — use the Bash block above. Step ① lists the copies; step ② is the `node "<found-path>"` block after the PowerShell form:**
-```
-cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & ver >nul
-```
-
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**
 
 ```powershell
@@ -60,7 +57,14 @@ $CLI = $null; foreach ($d in @($h, ".claude", ".cline", ".codex", ".gemini")) { 
 if (-not $CLI) { throw 'tizen-sdk-skills runner not found: $CLI is empty. Run the two lookup lines above in THIS PowerShell session first; if they still find nothing, the tizen-sdk-skills plugin is not installed.' }; node "$CLI" investigate --symptoms "<the user's words>" <app-id>
 ```
 
+**Windows — cmd.exe terminal only (Cline with a cmd.exe terminal). `&` and `2>nul` are cmd.exe syntax — in a PowerShell terminal run the PowerShell block above instead; Claude Code on Windows runs Git Bash — use the Bash block above. cmd.exe cannot version-sort, so this only lists every copy: pick your own host's highest version and paste it into the `node "<found-path>"` step below:**
+
+```
+cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.codex\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & dir /s /b "%USERPROFILE%\.gemini\plugins\cache\tizen-platform\tizen-sdk-skills\*dlog-analyzer-cli.js" 2>nul & ver >nul
+```
+
 Pick the highest-version path (the PowerShell form above already resolved `$CLI`), then:
+
 ```
 node "<found-path>" investigate --symptoms "<the user's words>" <app-id>
 ```

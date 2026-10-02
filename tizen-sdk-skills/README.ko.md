@@ -310,7 +310,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 [release.yml](../.github/workflows/release.yml)이 실행되어
 `tizen-sdk-vX.Y.Z.zip`(독립 실행형 tizen-sdk CLI `dist/`)과
 `tizen-ai-extension-vX.Y.Z.vsix`(VS Code 확장)를 GitHub Release에 첨부합니다.
-버전별 변경 사항은 [CHANGELOG.md](CHANGELOG.md)에 기록됩니다. 플러그인이 이 저장소로
+버전별 변경 사항은 [CHANGELOG.md](CHANGELOG.md)([한국어](CHANGELOG.ko.md))에 기록됩니다. 플러그인이 이 저장소로
 옮겨오기 전의 릴리즈는 여기에 다시 게시되지 않습니다.
 
 ## 문서

@@ -31,7 +31,9 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
    PowerShell**입니다. `$( )`, `$HOME`, `ls ... | tail` 같은 bash 문법은 동작하지
    않고 깨진 CP949 오류만 출력됩니다. CLI 러너 실행은 항상 **2단계**로:
    ① 경로 찾기 — **터미널 종류를 먼저 확인**하고 SKILL.md 의 "CLI Runners" 블록 중 그 셸의
-   것을 **그대로** 실행합니다. 러너 파일 이름은 SKILL.md 에 적힌 것(예:
+   것을 **그대로** 실행합니다. 블록은 Bash → PowerShell → cmd.exe 순서로 놓여 있고 맨 위
+   한 줄이 프롬프트(`$` / `PS C:\…>` / `C:\…>`)로 셸을 고르는 법을 적어 두었습니다 — 첫
+   번째 블록이 내 셸의 것이라고 가정하지 마세요. 러너 파일 이름은 SKILL.md 에 적힌 것(예:
    `project-manager-cli.js`)만 쓰고 추측하지 마세요.
    · cmd.exe: `cmd /c dir /s /b "%USERPROFILE%\.cline\plugins\cache\tizen-platform\tizen-sdk-skills\*<러너이름>.js"`
      (여러 버전이면 최고 버전 선택). `dir` 에 경로 여러 개를 한꺼번에 넘기지 마세요 —
