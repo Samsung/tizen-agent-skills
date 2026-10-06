@@ -6,11 +6,11 @@ redistributed here so that the skill works without a Python toolchain on the hos
 
 | File | Platform | Size (bytes) | SHA-256 |
 |---|---|---|---|
-| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,271,120 | `3ee7700b326392e8bc4025c2c92ee8383b5dfaf31fdecb9a0223c26878f8407a` |
-| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,597,165 | `6a408e42512a71ce2e87626c5f6fe41b5297a79f329cfeaa37549b6521909a51` |
-| `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 17,904,064 | `abf2bdfdd4b75ca505ceae45ebe953a790a4a1881879dcfe644c45e2d4ed795f` |
+| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 16,711,200 | `47f9d163292e2e2bdb7a22506337b066451000b385898eb1bb2be960045f1c0d` |
+| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,618,773 | `2b57b06c105a1972974068cfe545b1f04df723f9ed228a8a19417f2fb150fb6b` |
+| `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 17,927,392 | `7a1d7c3d2101097204ef9c05783e708f58f165fd0f8a85885dedfa80cc19da15` |
 
-- **Version:** tizen-dlog-analyzer `0.2.5a0`
+- **Version:** tizen-dlog-analyzer `0.2.7a0`
 - **Packaging:** [PyInstaller](https://pyinstaller.org/) one-file bundles. The Linux build embeds
   CPython 3.12 and was linked on Ubuntu 18.04 (GCC 7.5); the Windows build embeds CPython 3.13;
   the macOS build embeds CPython 3.14.
@@ -18,7 +18,7 @@ redistributed here so that the skill works without a Python toolchain on the hos
   <!-- TODO(open-source release): add the public URL of the tizen-dlog-analyzer source repository
        (or the release page these binaries were downloaded from). -->
 - **License of the analyzer itself:** Apache License 2.0, Copyright 2026 Samsung Electronics Co., Ltd.
-  (a copy is included inside the bundle as of `0.2.5a0`; see the project `LICENSE`).
+  (a copy is included inside the bundle as of `0.2.7a0`; see the project `LICENSE`).
 
 Verify a download with:
 
