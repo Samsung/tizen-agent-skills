@@ -24,21 +24,6 @@ metadata:
     - tz build webapp
 ---
 
-<!-- internal-only:begin -->
-## ⚠️ VD DotNET in-house projects — use `tizen-vd-build` instead
-
-Before building, check the project's Tizen manifest (`tizen-manifest.xml`). If it declares
-`type="dotnet-inhouse"`, **stop and route to the `tizen-vd-build` skill** — do NOT use
-`project-manager-cli.js build`. VD in-house apps require:
-
-- `dotnet restore` with VD NuGet sources (nuget.org, VD_nuget, tizen_bixby)
-- AppSign re-signing with `VDStorePlatform` / `VDInHouse` certificates
-- A dedicated runner: `vd-build-cli.js` (not `project-manager-cli.js`)
-
-Using `project-manager-cli.js build` on a VD project will fail or produce an incorrectly
-signed package. Route to `tizen-vd-build` and use `vd-build-cli.js`.
-<!-- internal-only:end -->
-
 ### Claude Code (서브에이전트 위임)
 
 > Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
@@ -174,6 +159,15 @@ Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error
 > retrying; do not run the build unchanged.
 >
 > **NEVER run `tz build` or `tz pack` directly** — the CLI runner handles both internally.
+
+> **Build method by project type.** The runner picks the method from markers, top-down:
+> `tizen_resource_project.yaml` → RPK (`tizen package -t rpk`); `tizen_dotnet_project.yaml` /
+> `*.csproj` → DotNET, `tizen_native_project.yaml` / `project_def.prop` → Native,
+> `config.xml` / `index.html` → WebApp (all three: `tz build` + `tz pack`);
+> `CMakeLists.txt` + `packaging/*.spec` → Platform (**GBS**, Linux only). **GBS is used ONLY
+> for Platform projects.** A Native/DotNET/WebApp/RPK build never runs GBS — `tizen-manifest.xml`
+> is present in every Native app and is not a Platform marker. A native build that takes a
+> minute is `tz build` compiling, not GBS; do not describe it as a GBS build.
 
 > **RPK:** A standalone resource project is marked by `tizen_resource_project.yaml` and
 > is packaged internally with `tizen package -t rpk -- <project>`, not `tz build`.

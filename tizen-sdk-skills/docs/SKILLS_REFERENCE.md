@@ -1370,7 +1370,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 2. **재현 전에 수집기 시작** — `start start-monitoring`, `kernel collect`(CPU / 멈춤 / 메모리 / 그래픽 / 드라이버 증상), 필요하면 `app-launch <app-id>`, `dlog-collect <app-id>`
 3. **멈추고 사용자에게 재현 요청 — 턴 종료** — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요"
 4. **중지 후 순서대로 분석** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; 설명되지 않을 때만 확대 (`error-analyze … details` → 필터를 건 `app-log` → `probe list` / `probe run <probe-id>`)
-5. **보고서**(2개 언어 템플릿) → 다음 단계 안내 → 완료 시 `stop`
+5. **보고서**(사용자 언어 템플릿) → 다음 단계 안내 → 완료 시 `stop`
 
 커널 로그는 항상 `kernel collect` → `kernel stop` → `kernel analyze` (`sdb shell dmesg` 금지); 프로브는 `investigate` / `probe run` (`sdb shell top / ps / free` 직접 입력 금지).
 
@@ -1395,7 +1395,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 | `timeline`      | 스냅샷 간 프로브 히스토리 분석 및 시각화                    |
 | `kernel`        | 커널 로그 `collect`(백그라운드) / `stop` / `analyze` (kmsg/dmesg — `sdb shell dmesg` 대체) |
 
-**참고:** 백그라운드 인스턴스는 한 번에 하나만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`으로 종료해야 함. 앱별 로그는 `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장됨 (네이티브 바이너리에 `--base-dir` 옵션 없음; SDK 경로 미설정 시 `sdk_path_not_set` 반환). `dlog-collect`는 앱이 실행 중이어야 함 (`pgrep`으로 PID 조회). `error-analyze`는 `dlog-collect` → `stop-collect` 이후 실행해야 함. 로그 분석은 항상 `error-analyze`로 — 로그 파일을 직접 읽지 않음. 분석 완료 시 보고서는 `REPORT_TEMPLATE.md` 구조로 영문 → 한글 순서로 항상 두 언어로 렌더링됨.
+**참고:** 백그라운드 인스턴스는 한 번에 하나만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`으로 종료해야 함. 앱별 로그는 `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장됨 (네이티브 바이너리에 `--base-dir` 옵션 없음; SDK 경로 미설정 시 `sdk_path_not_set` 반환). `dlog-collect`는 앱이 실행 중이어야 함 (`pgrep`으로 PID 조회). `error-analyze`는 `dlog-collect` → `stop-collect` 이후 실행해야 함. 로그 분석은 항상 `error-analyze`로 — 로그 파일을 직접 읽지 않음. 분석 완료 시 보고서는 사용자가 작성한 언어로 한 번만 렌더링됨 (한국어로 작성 시 한국어, 그 외에는 영어) — `REPORT_TEMPLATE.md` 구조를 따름.
 
 
 **의존성:** `tizen-launch-emulator` 또는 `tizen-device-manager` (실행 중인 디바이스/에뮬레이터 필요)

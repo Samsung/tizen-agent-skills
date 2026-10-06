@@ -1391,7 +1391,7 @@ A problem report belongs here even when it mentions the emulator or device (`tiz
 2. **Start the collectors before reproduction** — `start start-monitoring`, `kernel collect` (CPU / freeze / memory / graphics / driver symptoms), `app-launch <app-id>` if needed, `dlog-collect <app-id>`
 3. **Stop and ask the user to reproduce — end the turn** — "(1) done, it occurred / (2) nothing happened"
 4. **Stop, then analyze in order** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; escalate only if unexplained (`error-analyze … details` → filtered `app-log` → `probe list` / `probe run <probe-id>`)
-5. **Report** (bilingual template) → next-step prompt → `stop` when done
+5. **Report** (template, in the user's language) → next-step prompt → `stop` when done
 
 Kernel logs always go through `kernel collect` → `kernel stop` → `kernel analyze` (never `sdb shell dmesg`); probes through `investigate` / `probe run` (never a hand-typed `sdb shell top / ps / free`).
 
@@ -1414,7 +1414,7 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 | `kernel`        | `collect` the kernel log in the background / `stop` it / `analyze` it (replaces `sdb shell dmesg`) |
 | `device-profile` / `snapshot` / `timeline` | Device profile; system snapshots (create/list/compare/delete); probe history across snapshots |
 
-**Notes:** Only one background instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` when done. App-specific logs are stored in `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the native binary has no `--base-dir` option; an unconfigured SDK path returns `sdk_path_not_set`). `dlog-collect` requires the app to be running (uses `pgrep` to find PID). `error-analyze` requires `dlog-collect` → `stop-collect` to have been run first. Always use `error-analyze` to analyze logs — do not read the log file directly. When the analysis is complete, the report is always rendered in both languages (English first, then Korean) following `REPORT_TEMPLATE.md`.
+**Notes:** Only one background instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` when done. App-specific logs are stored in `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the native binary has no `--base-dir` option; an unconfigured SDK path returns `sdk_path_not_set`). `dlog-collect` requires the app to be running (uses `pgrep` to find PID). `error-analyze` requires `dlog-collect` → `stop-collect` to have been run first. Always use `error-analyze` to analyze logs — do not read the log file directly. When the analysis is complete, the report is rendered once in the user's language (Korean if the user wrote in Korean, English otherwise) following `REPORT_TEMPLATE.md`.
 
 
 **Dependencies:** `tizen-launch-emulator` or `tizen-device-manager` (a running device/emulator is required)

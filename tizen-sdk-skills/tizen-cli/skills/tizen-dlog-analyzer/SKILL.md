@@ -94,7 +94,7 @@ tizen-cli tizen-sdk dlog-analyzer --action <log-dump|log-clear|start|stop|check|
 | Save / export the logs | `tizen-cli tizen-sdk dlog-analyzer --action log-dump --output <file> --lines 0` | Report `result.dump_file`. |
 | Clear the logs | `tizen-cli tizen-sdk dlog-analyzer --action log-clear [--serial <s>]` → `user_input_required` | Ask the user; after an explicit yes run `errors[0].suggested_fix.command` (same line with `--confirm`). |
 
-These are not analysis tasks: no bilingual report, no background session unless the user asked to monitor.
+These are not analysis tasks: no report, no background session unless the user asked to monitor.
 
 ## v0.1.3 commands (app-log, device-profile, investigate, probe, snapshot, timeline, kernel)
 
@@ -302,7 +302,9 @@ These commands leverage the binary's v0.1.3 capabilities for deeper investigatio
 
 ## Final report — the only accepted shape
 
-The report is `REPORT_TEMPLATE.md` (next to this SKILL.md; severity guide and English→Korean label mapping are there). Its skeleton, so the shape is never improvised (the `check` / `error-analyze` / `kernel analyze` envelopes restate it in `result.report_format`):
+The report is `REPORT_TEMPLATE.md` (next to this SKILL.md; severity guide and English→Korean label mapping are there). Render **one block only** — the Korean block if the user wrote in Korean, the English block otherwise. Its skeleton, so the shape is never improvised (the `check` / `error-analyze` / `kernel analyze` envelopes restate it in `result.report_format`):
+
+English block — when the user wrote in English or in any non-Korean language:
 
 ```markdown
 ## Analysis Report (English)
@@ -320,8 +322,12 @@ The report is `REPORT_TEMPLATE.md` (next to this SKILL.md; severity guide and En
 - **Code available:** … / - **Code not available:** …
 ### 4. Workarounds
 
----
+Next step? (a) keep monitoring, (b) apply the suggested fix and retest, (c) stop and clean up.
+```
 
+Korean block — when the user wrote in Korean. Render this **instead of** the English block, never after it:
+
+```markdown
 ## 분석 보고서 (한국어)
 
 ### 0. 요약 (날짜 / 에뮬레이터/디바이스 / 앱 / 이슈)
@@ -330,11 +336,10 @@ The report is `REPORT_TEMPLATE.md` (next to this SKILL.md; severity guide and En
 ### 3. 해결 방안 제안 (코드가 있는 경우 / 코드가 없는 경우)
 ### 4. 임시 해결 방법
 
-Next step? (a) keep monitoring, (b) apply the suggested fix and retest, (c) stop and clean up.
 다음 단계를 선택해 주세요: (a) 모니터링 계속, (b) 제안된 수정 적용 후 재테스트, (c) 종료 및 정리.
 ```
 
-The first line of the report is `## Analysis Report (English)`; the headings are exactly these; every finding is a bullet; the Korean block always follows. **Not** this (issue #224): a title of your own (`## 🔍 Investigation Report: …`), emoji or "Root Causes Identified" headings, a `| Finding | Source | Severity |` table, a trailing "Summary" section, an English-only report.
+The first line of the report is `## Analysis Report (English)` or `## 분석 보고서 (한국어)` depending on the user's language; the headings are exactly these; every finding is a bullet. **Not** this: a title of your own (`## 🔍 Investigation Report: …`), emoji or "Root Causes Identified" headings, a `| Finding | Source | Severity |` table, a trailing "Summary" section, a bilingual (English + Korean) report. Exactly one language block is rendered, never both.
 
 ## Rules
 
@@ -347,9 +352,9 @@ The first line of the report is `## Analysis Report (English)`; the headings are
    (for an open-ended monitoring session: **Continue** vs **Stop and analyze now**). Do not poll, loop or `sleep` waiting for a crash, and do not run `stop-collect` / `stop` / `kernel stop` / `check` / `error-analyze` in the same turn as the start — present the choice and wait for the user's reply. The reproduction window belongs to the user; a timer is not a substitute for their answer.
 4. Prefer `start-monitoring` for general "something's wrong with my app" reports (it self-detects crashes). Use the app-specific `dlog-collect --app-id` + `error-analyze --app-id` pair when the user names a specific app and wants non-fatal runtime-error triage; for a named app with a symptom run **both** plus `kernel collect`.
 5. Start monitoring/collection **before** launching or reproducing the issue in the app, so startup and early failures are captured.
-6. **Once the analysis task is fully complete** — the last planned `check`/`error-analyze` call has returned and no further collection/analysis step remains before handing control back to the user — read `REPORT_TEMPLATE.md` (next to this SKILL.md) and render the report in that exact structure — the skeleton under "Final report — the only accepted shape" above — **twice: the full English report first, then a `---` line, then the full Korean (한국어) translation of the same report — always both, regardless of the language the user wrote in.** Technical identifiers (app IDs, device serials, dlog tags, quoted log lines, file paths, function names, code) stay verbatim in both blocks. Do not paste raw tool output or improvise a format (no own title, no emoji headings, no tables). A `check`/`error-analyze` result that is only an intermediate step in a larger in-progress sequence (e.g. still deciding whether to relaunch the app and collect again) does not by itself trigger the report. Re-render the full bilingual report (not a diff) on each subsequent analysis pass, e.g. after the user applies a fix and reproduces the issue again. If `REPORT_TEMPLATE.md` cannot be found, use this section order in both languages: Summary/요약 (Date/날짜, Emulator-Device/에뮬레이터·디바이스, App/앱, Issue/이슈), Root Cause/근본 원인, Additional Findings/추가 발견 사항, Solution Suggestions/해결 방안 제안, Workarounds/임시 해결 방법.
+6. **Once the analysis task is fully complete** — the last planned `check`/`error-analyze` call has returned and no further collection/analysis step remains before handing control back to the user — read `REPORT_TEMPLATE.md` (next to this SKILL.md) and render the report in that exact structure — the skeleton under "Final report — the only accepted shape" above — **once, in the language the user wrote in: Korean (한국어) if the user wrote in Korean, English otherwise (including any third language).** Technical identifiers (app IDs, device serials, dlog tags, quoted log lines, file paths, function names, code) stay verbatim. Do not paste raw tool output or improvise a format (no own title, no emoji headings, no tables). A `check`/`error-analyze` result that is only an intermediate step in a larger in-progress sequence (e.g. still deciding whether to relaunch the app and collect again) does not by itself trigger the report. Re-render the full report (not a diff) on each subsequent analysis pass, e.g. after the user applies a fix and reproduces the issue again. If `REPORT_TEMPLATE.md` cannot be found, use this section order: Summary (Date, Emulator/Device, App, Issue), Root Cause, Additional Findings, Solution Suggestions, Workarounds — or in Korean: 요약 (날짜, 에뮬레이터/디바이스, 앱, 이슈), 근본 원인, 추가 발견 사항, 해결 방안 제안, 임시 해결 방법.
 7. **Build the report only from the tool result already returned and prior conversation context.** Do not run additional commands (device info, sdb, system diagnostics, etc.) to gather more evidence before rendering — if something isn't already known, say so in the relevant field/section rather than fetching it. Never invent a value (e.g. a device name) that isn't already known.
-8. **After presenting the report**, end with a short next-step prompt to the user (continue monitoring, apply a suggested fix and retest, or stop) **given in English and then in Korean**. A plain one-shot request (`log-dump` / `log-clear`) is not an analysis task and does not trigger the report.
+8. **After presenting the report**, end with a short next-step prompt to the user (continue monitoring, apply a suggested fix and retest, or stop) **in the same language as the report**. A plain one-shot request (`log-dump` / `log-clear`) is not an analysis task and does not trigger the report.
 9. **`log-clear` is confirmation-gated.** Without `--confirm` the command refuses with `user_input_required` and does nothing. Ask the user, and only after an explicit "yes" re-run `errors[0].suggested_fix.command` (the same line with `--confirm`). Never pass `--confirm` pre-emptively, never run `sdb dlog -c` yourself.
 10. **Kernel logs go through `--action kernel --subcommand collect` → `stop` → `analyze`.** Start the kernel collector together with `start-monitoring` for CPU, freeze, memory, graphics/video and other platform-level symptoms; analyze it with the rest. Never `sdb shell dmesg` / `cat /proc/kmsg` / `dlogutil -b kmsg`.
 11. **Evidence comes from `investigate` and `probe`, not from hand-typed `sdb shell` diagnostics.** Every symptom investigation opens with `--action investigate --symptoms "<the user's words>" [--app-id <id>]`; one more measurement is `--action probe --subcommand run --app-id <probe-id>` (`--subcommand list` shows the catalog). `top`, `ps`, `free`, `/proc/meminfo`, `/proc/<pid>/status` over sdb — directly or via an `sdb-helper` shell request — are the detour this rule forbids.

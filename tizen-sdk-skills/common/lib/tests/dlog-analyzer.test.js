@@ -31,7 +31,7 @@
  *   - no copy of the runner (dlog-analyzer.js, tizen-dlog-analyzer.sh, the
  *     tizen-cli spec) may pass `--base-dir` or an output directory again — the
  *     CLI removed the option in TizenDLogAnalyzer PR #155 ("No such option")
- *   - the bilingual REPORT_TEMPLATE.md must be byte-identical between the
+ *   - the REPORT_TEMPLATE.md must be byte-identical between the
  *     common/ skill (Claude/Cline/Codex/Gemini/VS Code) and the tizen-cli skill
  *   - the CLI runner must not pass a third positional to analyzeErrors (its
  *     third parameter is the envelope command label, not a serial)
@@ -41,7 +41,7 @@
  *     before being killed, and `stop` returns the captured analysis tail
  *     (issue #226); `start stop` is answered with "run 'stop'"
  *   - the final-report skeleton is present in every lane's skill text and
- *     travels with check / error-analyze / kernel analyze (issue #224)
+ *     travels with check / error-analyze / kernel analyze
  */
 
 const fs = require("fs");
@@ -234,7 +234,8 @@ check("empty", parseErrorCount(""), 0);
 check("non-string", parseErrorCount(undefined), 0);
 
 // Test 5: REPORT_TEMPLATE.md drift guard — same bytes on every lane, and the
-// bilingual contract (English block, separator, Korean block) is present
+// template carries both language blocks (English and Korean) so the agent can
+// render the one matching the user's language
 console.log("\nTest 5: REPORT_TEMPLATE.md drift guard");
 const commonTemplate = path.resolve(
   __dirname,
@@ -1149,7 +1150,7 @@ console.log("\nTest 17: CLI 'start stop' misuse message");
 }
 
 // Test 18: the final-report shape travels with the data and sits in every
-// lane's skill text (issue #224)
+// lane's skill text
 console.log("\nTest 18: report shape hint and skeleton");
 for (const marker of [
   "## Analysis Report (English)",

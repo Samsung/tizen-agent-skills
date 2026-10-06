@@ -135,5 +135,12 @@ Installation on a cold emulator can be slow — set the Bash tool timeout to 600
 
 ## Follow-ups
 
+- Log collection and analysis (any executable package) → `tizen-cli tizen-sdk dlog-analyzer`.
+  Pick one path (one dlog collector at a time): with the app already running,
+  `--action dlog-collect --app-id <result.app_id>` → end your turn, user exercises the app →
+  `--action stop-collect` → `--action error-analyze --app-id <id> --format summary`; to capture
+  startup, `--action start --subcommand start-monitoring` → relaunch (`--action app-launch
+  --app-id <id>`) → end your turn → `--action stop` → `--action check`. If `result.app_id` is
+  `null`, ask the user for the app ID.
 - Native debugging → `tizen-cli tizen-sdk gdb-debug`
 - .NET debugging → `tizen-cli tizen-sdk dotnet-debug`

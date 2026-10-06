@@ -326,13 +326,15 @@ function capturedOutputSummary(file, limit) {
  * Attached to every analysis result the agent renders from (check,
  * error-analyze, kernel analyze), so the shape of the final report travels
  * with the data instead of depending on a separate `cat REPORT_TEMPLATE.md`
- * the agent may skip (issue #224).
+ * the agent may skip.
  */
 const REPORT_FORMAT_HINT =
-  "Final report = REPORT_TEMPLATE.md rendered twice: '## Analysis Report (English)' " +
+  "Final report = REPORT_TEMPLATE.md rendered once in the user's language " +
+  "(Korean if the user wrote in Korean, English otherwise): " +
+  "'## Analysis Report (English)' " +
   "with '### 0. Summary' (Date / Emulator/Device / App / Issue), '### 1. Root Cause', " +
   "'### 2. Additional Findings', '### 3. Solution Suggestions', '### 4. Workarounds'; " +
-  "then a '---' line; then '## 분석 보고서 (한국어)' with the same sections " +
+  "OR '## 분석 보고서 (한국어)' with the same sections " +
   "(0. 요약 / 1. 근본 원인 / 2. 추가 발견 사항 / 3. 해결 방안 제안 / 4. 임시 해결 방법). " +
   "Bullets only — no tables, no emoji headings, no improvised title.";
 

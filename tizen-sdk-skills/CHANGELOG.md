@@ -11,8 +11,68 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **`tizen-install-app` suggests `tizen-dlog-analyzer` as the next step after a successful install + run**
+  (`common/skills/tizen-install-app/SKILL.md`, `common/agents/tizen-install-app.md`,
+  `tizen-cli/skills/tizen-install-app/SKILL.md`). The "Suggested next steps" list only offered Playwright
+  (web apps), a re-run, and the debuggers, so after a native BasicUI app was installed and launched on the
+  emulator the model's summary had nowhere to point for "now watch what the app does". The list now opens
+  with log collection and analysis for every executable package: with the app already running
+  (`app_running: true`) start `dlog-collect <result.app_id>`, let the user exercise the app, then
+  `stop-collect` → `error-analyze <app-id> summary`; or, to capture startup, `start start-monitoring`
+  first, relaunch, then `stop` → `check` — i.e. the dlog-analyzer skill's existing "monitoring an app the
+  user is about to test" workflow, reached from the install side. The two paths are presented as a
+  choice (one dlog collector runs at a time), the agent ends its turn after starting a collector (that
+  skill's Rule 3), the app ID is `result.app_id` from the install envelope with a fallback to asking the
+  user when it is `null`, the tizen-cli copy uses its `--action … --app-id … --format …` syntax, a sample
+  Korean prompt is included, and `sdb dlog` is never typed by hand.
+
+### Fixed
+
+- **`tizen-manifest.xml` + `CMakeLists.txt` no longer classifies a project as Platform (GBS)**
+  (`common/scripts/tizen-build-project/tizen-build-project.{sh,ps1}`,
+  `common/skills/tizen-build-project/SKILL.md`, `tizen-cli/skills/tizen-build-project/SKILL.md`,
+  `docs/platform-gbs-build{,.en}.md`, `docs/figma2dali/dali-template-build-e2e{,.en}.md`). The GBS
+  support commit (2026-07-22) detected Platform projects by `tizen-manifest.xml` + `CMakeLists.txt`;
+  the follow-up that added the real marker, `CMakeLists.txt` + `packaging/*.spec` (2026-07-28), left the
+  old rule in the Bash script's `has_project_config()` / `detect_project_type()`, in the PowerShell
+  `Test-HasProjectConfig`, and in the tizen-cli SKILL.md detection table — while `isPlatformProject()`
+  in `lib/core/project.js` only ever checked for `packaging/*.spec`. Every Native app carries a
+  `tizen-manifest.xml`, so the table read as "native = GBS": in a Cline session the model, waiting on a
+  50-second `tz build` of a BasicUI project, told the user "native builds use GBS, so this takes a while"
+  although no `gbs` command ran. The three implementations now agree on `CMakeLists.txt` +
+  `packaging/*.spec` only; a directory with just `tizen-manifest.xml` + `CMakeLists.txt` is rejected as
+  "Project configuration not found" instead of being sent to GBS. While aligning them, the config
+  check in both scripts gains `project_def.prop` (the Tizen Studio native marker that
+  `detect_project_type()` / `Detect-ProjectType` already classified as Native but the config check
+  did not accept), and the PowerShell `Test-HasProjectConfig` now returns an explicit `[bool]`
+  instead of letting a bare `Get-ChildItem *.csproj` result (nothing, one `FileInfo`, or an array)
+  be the function's value. Both SKILL.md files gain a build-method-by-type note that says GBS is
+  used ONLY for Platform projects and that a slow native build is `tz build` compiling, not GBS.
+
 ### Changed
 
+- **`tizen-dlog-analyzer` renders the final analysis report once, in the user's language, instead of
+  always English then Korean** (#253 and its follow-up: `common/lib/core/dlog-analyzer.js`
+  `REPORT_FORMAT_HINT`, `common/skills/tizen-dlog-analyzer/{SKILL.md,REPORT_TEMPLATE.md}`,
+  `common/agents/tizen-dlog-analyzer.md`, `tizen-cli/skills/tizen-dlog-analyzer/{SKILL.md,REPORT_TEMPLATE.md}`,
+  `docs/SKILLS_REFERENCE{,.en}.md`, `common/lib/tests/dlog-analyzer.test.js`). The report, the
+  "collection is running — reproduce now" prompt and the closing next-step prompt are given in Korean when
+  the user wrote in Korean and in English otherwise (including any third language); the one-shot
+  `log-dump` / `log-clear` actions still produce no report. `REPORT_TEMPLATE.md` keeps both language blocks
+  so the agent can pick one (Test 5 still checks both are present; Test 18 still checks the hint names both
+  headings — the hint now says "once … OR"). The follow-up removes what the first pass left behind: the
+  template's "Korean labels in block B" and its "copy the English block's content" instruction (there is no
+  English block to copy when only the Korean one is rendered — the Korean block is now written directly, in
+  the same structure), the skeleton annotations that sat *inside* the ```` ```markdown ```` fence in all
+  three lanes (`## Analysis Report (English)            ← render this block when …` and
+  `---  (Korean block below — …)`, which a literal copy would have emitted into the report; the skeleton is
+  now two fences introduced by prose), and the anti-pattern wording "a bilingual report when the user wrote
+  in one language", which two reviewers read as a condition for a bilingual report — it now says "a
+  bilingual (English + Korean) report. Exactly one language block is rendered, never both." The label
+  mapping is introduced as the fixed section and field names of the Korean block, so "write the Korean
+  block directly" and "use these Korean labels" do not read as contradictory.
 - **Runner lookup sections lead with Bash and PowerShell; cmd.exe comes last, behind a shell-pick line**
   (`scripts/rewrite-runner-snippets.js`, every `common/skills/*/SKILL.md` with a Windows lookup,
   `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`, `common/hooks/tizen-sdk-skills-guard.md`,
@@ -335,12 +395,6 @@ mutating tier run against a throwaway home.
   serials on `multiple_devices`; the `multiple_devices` message no longer says "Specify --serial" to
   the plugin dlog runner, which takes the serial positionally. `sdb-serial-failure.test.js` covers the
   helper and guards that every `resolveSerial()` caller goes through it.
-  <!-- internal-only:begin -->
-  The same applies to `vd-remove-app` (`common/lib/core/vd.js`), which used to list devices through a
-  full `runSdbCommand("list devices")` round-trip and never screened an explicit serial: it now
-  resolves the target through `resolveSerial()` + the shared helper, so a bad serial is rejected
-  before it reaches `sdb -s` and `multiple_devices` carries the same listing and `suggested_fix`.
-  <!-- internal-only:end -->
 - **`dlog-analyzer` follows the native CLI's SDK-resolved log directory** (`common/lib/core/dlog-analyzer.js`,
   `common/lib/cli/dlog-analyzer-cli.js`, `common/scripts/tizen-dlog-analyzer/tizen-dlog-analyzer.sh`,
   `tizen-cli/src/command-specs/dlog-analyzer.ts`). TizenDLogAnalyzer PR #155/#157 removed `--base-dir`
@@ -384,11 +438,6 @@ mutating tier run against a throwaway home.
   path** (`common/lib/core/samsung-auth.js`). It listened on every interface, so any host on the LAN
   could POST a fabricated `code` to `/signin/callback`; requests for other paths (favicon probes) hung
   without a response.
-  <!-- internal-only:begin -->
-- **`vd-nuget-setup --bixby-source` is screened with `shellSafe()`** like every other value that reaches
-  a plugin-script command line, and the AppSign endpoint can be overridden with `TIZEN_VD_APPSIGN_URL`
-  (`common/lib/core/vd.js`).
-  <!-- internal-only:end -->
 - **Cline / Gemini hook adapters no longer let a write through when the body precedes the path**
   (`cline/hooks/PreToolUse`, `gemini/hooks/BeforeTool`). The adapters cut the payload at the first
   `"content"` / `"diff"` / `"old_string"` before extracting the path, so a tool call that emitted the
@@ -637,65 +686,6 @@ mutating tier run against a throwaway home.
   new `import-wgt.*` and `meta.help` TCs are approved, TC-P-119 stays draft until three agent-session
   runs.
 
-<!-- internal-only:begin -->
-
-- **VD AppSign re-sign never produced a package on Windows** (`tizen-vd-resign.ps1`). The script
-  saved the AppSign response to `appsign-response.zip` but then opened the undefined variable
-  `$response`, so `ZipFile::OpenRead($null)` threw after every successful AppSign request. The
-  response path is now a single variable used for both the download and the extraction. A second
-  blocker sat before it: `New-Object System.Net.Http.ByteArrayContent($bytes)` unrolls the `byte[]`
-  into one constructor argument per element ("Cannot find an overload … argument count: N"), so the
-  multipart body could never be built; the content objects are created with `[Type]::new()` now.
-  Third, `-IncludeAuthor 0` was ignored: the converted `$false` was assigned back to the
-  `[string]`-typed parameter, which stores the string `"False"` — truthy — so the author signature
-  was always required and sent. The flag is converted into a separate boolean now. Fourth,
-  `-ProxyUrl` was accepted but never used; it is now applied through `HttpClientHandler.Proxy`.
-  The multipart parts are emitted with the same headers `curl -F` produces
-  (`name="…"; filename="…"`, `Content-Type: text/xml`) instead of .NET's unquoted
-  `name=…; filename*=utf-8''…`, which strict parsers reject.
-  Verified end to end on Windows PowerShell 5.1 against a local fake AppSign endpoint through both
-  `tizen-cli tizen-sdk vd-resign` and `vd-build-cli.js resign`: the request carries `distCertID`,
-  `distributor`, `authCertID`, `author` as quoted form fields, the returned signatures replace the
-  originals in the `.tpk` with the payload intact and the original kept as `.vd-original`,
-  `--no-author` / `--distributor-only` send only the distributor pair, a second run refuses to
-  overwrite the backup, and `--proxy-url` routes the request through the proxy.
-- **Transport failures of the AppSign request were reported as `AppSign request failed:  `**
-  (`tizen-vd-resign.ps1`). A faulted task's `.Result` surfaces as a non-terminating property
-  error in PowerShell 5.1, so the script continued with a `$null` response and printed an empty
-  status. The request now uses `.GetAwaiter().GetResult()` inside a `try`, unwraps to the innermost
-  exception and reports it (`SocketException: … refused 127.0.0.1:9`, `WebException: … could not
-be resolved`, or `timed out after 120 s`), together with the URL and proxy used; an HTTP error
-  is reported as `HTTP <code> <reason>`.
-- `vd-resign` / `vd-build` parameter validation now names the offending value (AppSign URL,
-  package path or proxy URL) and the characters it refuses on this OS, and requires `--proxy-url`
-  to start with `http://` or `https://` — curl accepts a bare `host:port`, .NET's `WebProxy` does
-  not, and both platforms must reject the same input.
-- **VD NuGet setup failed whenever a source was already registered** (`tizen-vd-nuget.ps1` / `.sh`).
-  The "already registered" check matched the source _name_ against
-  `dotnet nuget list source --format short`, which prints only `E <url>` — never a name — so every
-  run re-added the source and failed with "already been added". The scripts now parse the names
-  from the default (detailed) listing with an exact match.
-- **`tizen-cli tizen-sdk vd-build --no-author` / `vd-resign --no-author` were no-ops**
-  (`tizen-cli/src/command-specs/vd.ts`). Commander parses a negated flag into `opts.author === false`,
-  not `opts.noAuthor`; the handlers read the wrong key and always re-signed the author signature.
-- **`dotnet restore` output no longer corrupts the JSON envelope** (`common/lib/core/vd.js`).
-  `vd-build` ran restore with `stdio: "inherit"`, so its progress was written to the same stdout as
-  the envelope. Restore now runs without a shell (`spawnSync` argv, so the path needs no quoting),
-  its output is captured — streamed into the job's script log under `--background` so
-  `job-cli.js status/wait` still shows it — and the failure reason (last lines) goes into
-  `warnings[]`. `maxBuffer` is raised to 64 MiB (spawnSync's 1 MiB default kills a large restore
-  with ENOBUFS) and a job log that cannot be opened falls back to pipe capture.
-- **`shellSafe()` now screens per shell** (`common/lib/core/vd.js`). The AppSign package path, sign
-  URL and proxy URL are interpolated into a double-quoted command line; only `"` and newlines were
-  refused, leaving command substitution open. It now also rejects `$` and the backtick on
-  Linux/macOS (`/bin/sh`) and a `%NAME%` pair on Windows (`cmd.exe`), while a single `%` (percent-
-  encoded URLs) and `$` under `powershell -File` (literal arguments) stay allowed. Both branches are
-  covered by `common/lib/tests/vd.test.js` with an explicit platform argument.
-- `vd-build --arch` no longer restricts the value to `arm | x86` (the build already validates the
-  token); `--build-type` accepts `Test` like `build-project`.
-
-<!-- internal-only:end -->
-
 ### Removed
 
 - `CI_TEST_FIX.md` and `SECURITY_FIXES_SUMMARY.md` — working notes with personal paths that were
@@ -723,17 +713,6 @@ be resolved`, or `timed out after 120 s`), together with the URL and proxy used;
   diagram, the lane table, `tiers.yaml` and `README.ko.md`, and fails loudly on `tiers.yaml` key drift;
   the stale TC / lane counts it did not cover (281 → 286 at the time, cli 171 / prompt 118 → 167 / 119)
   are fixed.
-
-<!-- internal-only:begin -->
-
-- `tizen-vd-build` agent and skill (common + tizen-cli): the tizen-cli skill now documents the
-  `vd-build` / `vd-resign` / `vd-nuget-setup` / `vd-remove-app` commands instead of the runner;
-  the common skill gets the standard runner-lookup snippets, Codex `--background` section and
-  결과 보고 rules; the troubleshooting section is rewritten around `error_category` (the previous
-  one referred to personal paths, a plugin cache directory and PowerShell errors the scripts can no
-  longer raise).
-
-<!-- internal-only:end -->
 
 ## [1.3.1] — 2026-09-23
 

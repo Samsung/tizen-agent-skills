@@ -245,7 +245,7 @@ When the GBS build succeeds, `.rpm` packages are generated at:
 
 The Platform build flow in `tizen-build-project.sh`:
 
-1. **Detect project type** — check for `tizen-manifest.xml` + `CMakeLists.txt` → Platform
+1. **Detect project type** — check for `CMakeLists.txt` + `packaging/*.spec` → Platform (`tizen-manifest.xml` is not a Platform marker; ordinary Native apps have one too)
 2. **DALi C++17 preflight** — if a `dali2-*` dependency is present, verify C++17 is selected; exit 4 if not
 3. **Resolve GBS executable** — 3-level fallback (tizen-cli plugin → system gbs → error)
 4. **Verify Git repository** — auto-initialize if `.git` is missing

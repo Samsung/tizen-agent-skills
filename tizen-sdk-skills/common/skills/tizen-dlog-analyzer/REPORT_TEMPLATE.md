@@ -1,31 +1,31 @@
 ---
 name: tizen-dlog-analyzer-report
-description: Structured, bilingual (English + Korean) report format for presenting a completed dlog analysis (check / error-analyze) result to the user.
+description: Structured report format for presenting a completed dlog analysis (check / error-analyze) result to the user. Rendered once in the user's language (Korean if the user wrote in Korean, English otherwise).
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-07"
+  last-updated: "2026-10-06"
   used-by: tizen-dlog-analyzer
   languages: [en, ko]
 ---
 
 # DLog Analysis Report Format
 
-Every report is rendered **twice**, in this order, separated by a `---` line:
+Every report is rendered **once**, in the language the user prompted the agent
+in:
 
-1. the full **English** report (block A), then
-2. the full **Korean (한국어)** report (block B) — a faithful translation of
-   block A with the same sections, the same number of bullets, in the same
-   order.
+1. **Korean (한국어)** — if the user wrote their request in Korean.
+2. **English** — for every other language (including when the user wrote in
+   English or in any third language).
 
-Always render both blocks, regardless of the language the user wrote in.
+Pick the block that matches the user's language and render only that block.
 
-Technical identifiers stay **verbatim in both blocks** — never translate or
-transliterate them: app IDs, package names, device serials, dlog tags, quoted
-log messages, file paths, function names, error codes, and code snippets.
+Technical identifiers stay **verbatim** — never translate or transliterate
+them: app IDs, package names, device serials, dlog tags, quoted log messages,
+file paths, function names, error codes, and code snippets.
 
 Use plain bullet lists (`-`) throughout — never tables.
 
-## Severity guide (applies to both blocks)
+## Severity guide (applies to either language block)
 
 - **Critical / 심각** — app crash, fatal signal, unhandled exception that
   terminates the process
@@ -36,7 +36,10 @@ Use plain bullet lists (`-`) throughout — never tables.
 
 ## Label mapping (English → Korean)
 
-Use exactly these Korean labels in block B — do not improvise translations.
+These are the fixed section and field names of the Korean block. Use exactly
+these Korean labels for them — do not improvise translations. (They name the
+structure only; the findings themselves are written in Korean directly, not
+translated from an English draft.)
 
 - Analysis Report → 분석 보고서
 - Summary → 요약
@@ -59,7 +62,7 @@ Use exactly these Korean labels in block B — do not improvise translations.
 
 ---
 
-## Block A — `## Analysis Report (English)`
+## English block — `## Analysis Report (English)`
 
 ### 0. Summary
 
@@ -116,10 +119,12 @@ required."
 
 ---
 
-## Block B — `## 분석 보고서 (한국어)`
+## Korean block — `## 분석 보고서 (한국어)`
 
-Block A의 내용을 아래 구조로 그대로 옮긴다. 섹션 수, 불릿 수, 순서는 Block A와
-동일해야 한다.
+사용자가 한국어로 질문했을 때 영어 블록 대신 렌더링하는 블록이다. 영어 초안을
+먼저 쓰고 번역하는 것이 아니라, 분석 결과를 아래 구조로 바로 한국어로 작성한다.
+섹션 구성과 순서는 영어 블록과 같고, 섹션·필드 이름은 위 라벨 매핑의 한국어
+라벨을 그대로 쓴다 (라벨 매핑은 구조의 이름만 정하며, 내용 번역 지시가 아니다).
 
 ### 0. 요약
 
@@ -171,11 +176,11 @@ Block A의 내용을 아래 구조로 그대로 옮긴다. 섹션 수, 불릿 �
 
 ---
 
-## Closing prompt (after block B)
+## Closing prompt (after the report)
 
-End with a short next-step prompt, English first, then Korean:
+End with a short next-step prompt in the same language as the report:
 
-- "Next step? (a) keep monitoring, (b) apply the suggested fix and retest,
-  (c) stop and clean up."
-- "다음 단계를 선택해 주세요: (a) 모니터링 계속, (b) 제안된 수정 적용 후
+- English: "Next step? (a) keep monitoring, (b) apply the suggested fix and
+  retest, (c) stop and clean up."
+- Korean: "다음 단계를 선택해 주세요: (a) 모니터링 계속, (b) 제안된 수정 적용 후
   재테스트, (c) 종료 및 정리."
