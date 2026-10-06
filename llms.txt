@@ -1,0 +1,31 @@
+# tizen-agent-skills
+
+> Samsung's open-source collection of Tizen development skills and plugins for AI coding agents. Each plugin covers one area of Tizen platform development and is installed on its own. Apache-2.0. Repository: https://github.com/Samsung/tizen-agent-skills
+
+Each top-level directory of the repository is one independently versioned plugin. The first plugin, tizen-sdk-skills (29 skills, 24 agents, a standalone `tizen-sdk` CLI with 35 commands and a VS Code extension), lets an AI assistant install the Tizen SDK, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run Tizen and Samsung TV emulators, manage devices over sdb, sign packages with Tizen certificates, debug remotely with GDB / netcoredbg / Chrome DevTools (CDP), analyse dlog output and run Playwright tests. More Tizen-related plugins will be added.
+
+## Plugins
+
+- [tizen-sdk-skills README](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/README.md): Overview, quick start for every host, the 35 commands, architecture and troubleshooting
+- [tizen-sdk-skills README (Korean)](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/README.ko.md): Korean version of the plugin README
+- [Skills reference](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md): Every skill with its trigger phrases, inputs and outputs
+- [All-in-one guide](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/TIZEN_SDK_SKILLS_ALL_IN_ONE.en.md): Single-document description of the whole plugin
+- [Skills to commands mapping](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/SKILLS_COMMANDS_MAPPING.en.md): How each `tizen-*` skill maps to a `tizen-sdk` CLI command
+- [tizen-sdk standalone CLI](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/tizen-cli/README.md): Run every command from a terminal or CI without an AI host
+- [Tizen AI Extension for VS Code](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/vscode/README.md): Installs and syncs the plugin for Claude Code, Cline and Codex CLI from inside VS Code
+
+## Installation
+
+- [Quick start](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/README.md#quick-start): Clone the repository and run the setup script for Claude Code, Cline, Codex CLI or Gemini CLI, or install the VS Code extension
+- [Harness setup details](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/deployment/HARNESS_SETUP.en.md): What each host installs and where
+- [WSL emulator guide](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/wsl/WSL_EMULATOR_GUIDE.en.md): Running the Tizen emulator under WSL
+
+## Optional
+
+- [Repository README](https://github.com/Samsung/tizen-agent-skills/blob/main/README.md): Hub page listing every plugin
+- [Repository README (Korean)](https://github.com/Samsung/tizen-agent-skills/blob/main/README.ko.md)
+- [Documentation index](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/README.en.md): Full list of guides (certificate, debug, emulator, platform, TV setup)
+- [Usage scenarios](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/usage/usage.en.md): End-to-end walkthroughs
+- [Changelog](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/CHANGELOG.md)
+- [Contributing](https://github.com/Samsung/tizen-agent-skills/blob/main/CONTRIBUTING.md): Repository rules and how to add a new plugin
+- [Releases](https://github.com/Samsung/tizen-agent-skills/releases): `tizen-sdk-vX.Y.Z.zip` (CLI bundle) and `tizen-ai-extension-vX.Y.Z.vsix`

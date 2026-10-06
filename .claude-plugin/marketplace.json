@@ -1,19 +1,60 @@
 {
   "name": "tizen-platform",
-  "displayName": "Tizen Platform Plugins",
   "owner": {
-    "name": "Samsung Electronics"
+    "name": "Samsung Electronics",
+    "url": "https://github.com/Samsung"
   },
-  "description": "Claude Code plugins for Tizen Platform development — build, debug, analyze, and review Tizen projects.",
-  "version": "1.4.1",
+  "description": "Tizen development skills and plugins for AI coding agents — install the Tizen SDK, create, build, debug and test Tizen Web, Native, .NET, RPK, RPM and Samsung TV apps from Claude Code.",
+  "metadata": {
+    "description": "Catalog of the plugins in github.com/Samsung/tizen-agent-skills. Each plugin is versioned independently; this version is the catalog version.",
+    "version": "1.4.1"
+  },
   "plugins": [
     {
       "name": "tizen-sdk-skills",
+      "displayName": "Tizen SDK Skills",
       "source": "./tizen-sdk-skills/common",
-      "description": "Automate Tizen SDK setup, project creation, build, and debugging",
+      "description": "Automate the Tizen SDK end to end for AI coding agents: install the SDK and TV extension, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run emulators and devices over sdb, manage certificates, debug remotely with GDB / netcoredbg / CDP, analyse dlog and run Playwright tests.",
       "version": "1.4.1",
+      "author": {
+        "name": "Samsung Electronics"
+      },
+      "homepage": "https://github.com/Samsung/tizen-agent-skills/tree/main/tizen-sdk-skills",
+      "repository": "https://github.com/Samsung/tizen-agent-skills",
+      "license": "Apache-2.0",
       "category": "Productivity",
-      "keywords": ["tizen", "sdk", "gdb", "debug", "project", "automation"]
+      "keywords": [
+        "tizen",
+        "tizen-sdk",
+        "samsung",
+        "samsung-tv",
+        "smart-tv",
+        "tv-app",
+        "web-app",
+        "wgt",
+        "native-app",
+        "tpk",
+        "rpk",
+        "rpm",
+        "dotnet",
+        "nui",
+        "emulator",
+        "sdb",
+        "gdb",
+        "netcoredbg",
+        "cdp",
+        "playwright",
+        "certificate",
+        "claude-code",
+        "cline",
+        "codex",
+        "gemini",
+        "vscode",
+        "agent-skills",
+        "ai-agent",
+        "automation",
+        "debug"
+      ]
     }
   ]
 }
