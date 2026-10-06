@@ -279,5 +279,6 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 
 **Suggested next steps (only when the user asks):**
 
+- Collect and analyze the app's logs → `tizen-dlog-analyzer` (any executable package: `.tpk`/`.wgt`/`.rpm`). Right after install + run is the best moment to start. Follow that skill's "Workflow — monitoring an app the user is about to test" and pick **one** of its two paths (one dlog collector runs at a time; `dlog-collect` returns `already_running` while the monitor runs): **app-scoped** (app already running, `app_running: true`) — `dlog-collect <app-id>` → end your turn and let the user exercise the app (its Rule 3) → `stop-collect` → `error-analyze <app-id> summary`; **from startup** (init failures, early crashes) — `start start-monitoring` → relaunch the app (`app-launch <app-id>`, or `--run` through this skill) → end your turn → `stop` → `check`. `<app-id>` is `result.app_id` from the install envelope; if it is `null`, ask the user for the app ID. Never type `sdb dlog` yourself.
 - Run an executable app (re-run with `--run` flag) — **only if the user explicitly asks; valid for `.tpk`/`.wgt`/`.rpm`, never for `.rpk`**
 - For debugging: Native → `tizen-gdb-debug`, DotNET → `tizen-dotnet-debug`

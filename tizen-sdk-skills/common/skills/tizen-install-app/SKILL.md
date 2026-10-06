@@ -4,7 +4,7 @@ description: Tizen install app, 타이젠 앱 설치, tpk 설치, wgt 설치, rp
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-18"
+  last-updated: "2026-10-06"
   keywords:
     - Tizen install app
     - tpk install
@@ -195,6 +195,23 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → the device does not trust the signing certificate. A build with **no signing profile** is signed with the SDK default developer certificates, which only the **emulator** accepts — on a real device this error is expected until a proper profile is used. Hand off to `tizen-certificate-manager` to create a signing profile for the target device (Samsung-certificate flow for Samsung hardware), rebuild with `tizen-build-project` passing the profile name, then retry install. The reverse case is also expected: a package signed with a **Samsung** profile installs only on the **TV emulator** (`--profile tv`) or a registered Samsung TV — on a standard Tizen emulator it fails with the same certificate error. Rebuild with a local profile for that emulator, or install on the TV emulator instead. **NEVER attempt `sdb root on` or manual cert installation.**
 
 **Suggested next steps (only when user asks):**
+
+- **로그 수집 후 분석 (모든 실행형 패키지)** — `tizen-dlog-analyzer`
+  ```
+  <result.app_id> 앱 로그를 수집해서 분석해줘
+  ```
+  설치·실행 직후가 로그 분석을 시작하기 가장 좋은 시점이다. `tizen-dlog-analyzer` 스킬의
+  "Workflow — monitoring an app the user is about to test" 흐름을 따르며, 두 경로 중 **하나만**
+  고른다 (dlog 수집기는 한 번에 하나만 돌고, 모니터가 도는 동안 `dlog-collect`는
+  `already_running`을 돌려준다):
+  - **앱 범위 (앱이 이미 실행 중, `app_running: true`)** — `dlog-collect <app-id>` → 턴을 끝내고
+    사용자가 앱을 조작하게 한다 (그 스킬의 Rule 3) → `stop-collect` → `error-analyze <app-id>
+    summary` (E/F 오류, 중복 제거).
+  - **시작 단계까지 (초기화 실패, 조기 크래시)** — `start start-monitoring` → 앱을 다시 실행한다
+    (`app-launch <app-id>`, 또는 이 스킬로 `--run` 재설치) → 턴을 끝낸다 → `stop` → `check`.
+  `<app-id>`는 이 Envelope의 `result.app_id`를 그대로 쓴다. `null`이면 (ID 줄을 못 읽은 경우)
+  사용자에게 앱 ID를 확인한다. 로그 명령은 모두 그 스킬의 러너로 실행하며 `sdb dlog`를 직접 치지
+  않는다.
 
 - **WebApp 자동화 테스트 (권장)** — `tizen-playwright-test`
   ```

@@ -11,8 +11,63 @@
 
 ## [Unreleased]
 
+### Added
+
+- **`tizen-install-app`가 설치 + 실행 성공 후 다음 단계로 `tizen-dlog-analyzer`를 제시**
+  (`common/skills/tizen-install-app/SKILL.md`, `common/agents/tizen-install-app.md`,
+  `tizen-cli/skills/tizen-install-app/SKILL.md`). "Suggested next steps" 목록에는 Playwright(웹앱), 재실행,
+  디버거만 있어서, 네이티브 BasicUI 앱을 에뮬레이터에 설치·실행한 뒤 모델의 요약이 "이제 앱이 뭘 하는지
+  지켜보자"로 이어질 곳이 없었습니다. 이제 목록은 모든 실행형 패키지에 대한 로그 수집·분석으로 시작합니다:
+  앱이 이미 실행 중이면(`app_running: true`) `dlog-collect <result.app_id>`로 수집을 시작하고, 사용자가
+  앱을 조작한 뒤 `stop-collect` → `error-analyze <app-id> summary`로 분석하거나, 시작 단계까지 잡으려면
+  `start start-monitoring`을 먼저 띄우고 다시 실행한 뒤 `stop` → `check`로 분석합니다 — dlog-analyzer
+  스킬에 이미 있던 "테스트 직전 앱 모니터링" 워크플로를 설치 쪽에서 진입하는 것입니다. 두 경로는 택일로
+  제시하고(dlog 수집기는 한 번에 하나), 수집기를 시작한 뒤에는 턴을 끝내며(그 스킬의 Rule 3), 앱 ID는 설치
+  Envelope의 `result.app_id`를 쓰되 `null`이면 사용자에게 확인하고, tizen-cli 사본은 자체
+  `--action … --app-id … --format …` 문법을 쓰며, 한국어 예시 프롬프트를 포함했고, `sdb dlog`를 직접 치지
+  않습니다.
+
+### Fixed
+
+- **`tizen-manifest.xml` + `CMakeLists.txt` 조합을 더 이상 Platform(GBS) 프로젝트로 판별하지 않음**
+  (`common/scripts/tizen-build-project/tizen-build-project.{sh,ps1}`,
+  `common/skills/tizen-build-project/SKILL.md`, `tizen-cli/skills/tizen-build-project/SKILL.md`,
+  `docs/platform-gbs-build{,.en}.md`, `docs/figma2dali/dali-template-build-e2e{,.en}.md`). GBS 지원
+  커밋(2026-07-22)은 Platform 프로젝트를 `tizen-manifest.xml` + `CMakeLists.txt`로 감지했고, 실제
+  마커인 `CMakeLists.txt` + `packaging/*.spec`을 추가한 후속 커밋(2026-07-28)이 Bash 스크립트의
+  `has_project_config()` / `detect_project_type()`, PowerShell의 `Test-HasProjectConfig`, tizen-cli
+  SKILL.md의 판별 표에 옛 규칙을 남겨 두었습니다 — `lib/core/project.js`의 `isPlatformProject()`는
+  처음부터 `packaging/*.spec`만 확인했는데도요. 모든 Native 앱에 `tizen-manifest.xml`이 있으므로 이 표는
+  "네이티브 = GBS"로 읽혔고, Cline 세션에서 모델이 BasicUI 프로젝트의 50초짜리 `tz build`를 기다리며
+  `gbs` 명령이 전혀 실행되지 않았는데도 "네이티브 빌드는 GBS를 사용하므로 시간이 걸린다"고 사용자에게
+  설명했습니다. 이제 세 구현 모두 `CMakeLists.txt` + `packaging/*.spec`만 Platform으로 보며,
+  `tizen-manifest.xml` + `CMakeLists.txt`만 있는 디렉터리는 GBS로 보내는 대신 "Project configuration not
+  found"로 거부합니다. 맞추는 김에 두 스크립트의 설정 검사에 `project_def.prop`(Tizen Studio 네이티브
+  마커 — `detect_project_type()` / `Detect-ProjectType`은 이미 Native로 분류했지만 설정 검사는 받지
+  않던 파일)을 추가했고, PowerShell `Test-HasProjectConfig`는 `Get-ChildItem *.csproj` 결과(없음,
+  `FileInfo` 하나, 또는 배열)를 함수 값으로 흘려보내는 대신 명시적인 `[bool]`을 반환합니다. 두
+  SKILL.md에는 GBS는 Platform 프로젝트에서만 쓰이고 느린 네이티브 빌드는 GBS가 아니라 `tz build`
+  컴파일이라는 타입별 빌드 방식 안내를 추가했습니다.
+
 ### Changed
 
+- **`tizen-dlog-analyzer`가 최종 분석 보고서를 항상 영어 → 한국어 순으로 두 번 내던 것을 사용자 언어로 한 번만
+  렌더링** (#253과 그 후속: `common/lib/core/dlog-analyzer.js`의 `REPORT_FORMAT_HINT`,
+  `common/skills/tizen-dlog-analyzer/{SKILL.md,REPORT_TEMPLATE.md}`, `common/agents/tizen-dlog-analyzer.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/{SKILL.md,REPORT_TEMPLATE.md}`, `docs/SKILLS_REFERENCE{,.en}.md`,
+  `common/lib/tests/dlog-analyzer.test.js`). 보고서, "수집 중 — 지금 재현해 주세요" 안내, 마지막 다음 단계
+  안내가 사용자가 한국어로 썼으면 한국어로, 그 외(제3의 언어 포함)에는 영어로 나갑니다. 일회성
+  `log-dump` / `log-clear`는 여전히 보고서를 내지 않습니다. `REPORT_TEMPLATE.md`는 에이전트가 하나를 고를 수
+  있도록 두 언어 블록을 모두 유지합니다(Test 5는 두 블록이 있는지, Test 18은 힌트가 두 제목을 모두 언급하는지
+  계속 확인 — 힌트는 이제 "once … OR" 형태). 후속 PR은 1차에서 남은 것을 정리합니다: 템플릿의 "block B의
+  한국어 라벨" 문구와 "영어 블록의 내용을 그대로 옮긴다" 지시(한국어 블록만 렌더링할 때는 옮길 영어 블록이
+  없으므로, 이제 같은 구조로 바로 작성), 세 레인의 ```` ```markdown ```` 펜스 *안*에 들어 있던 스켈레톤
+  주석(`## Analysis Report (English)            ← render this block when …`과 `---  (Korean block below — …)`
+  — 그대로 베끼면 보고서에 출력될 수 있어 산문으로 소개하는 펜스 두 개로 분리), 그리고 리뷰어 두 명이
+  이중 언어 보고서의 조건절로 읽은 anti-pattern 문구 "a bilingual report when the user wrote in one
+  language"를 "a bilingual (English + Korean) report. Exactly one language block is rendered, never both."로 교체.
+  라벨 매핑은 한국어 블록의 고정된 섹션·필드 이름으로 소개해, "한국어 블록을 바로 작성한다"와 "이 한국어
+  라벨을 쓴다"가 모순으로 읽히지 않게 했습니다.
 - **runner 조회 섹션이 Bash와 PowerShell로 시작하고, cmd.exe는 셸 선택 안내 줄 뒤 맨 마지막에 옴**
   (`scripts/rewrite-runner-snippets.js`, Windows 조회 블록이 있는 모든 `common/skills/*/SKILL.md`,
   `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`, `common/hooks/tizen-sdk-skills-guard.md`,
@@ -320,12 +375,6 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   시리얼을 명시하는 `suggested_fix`를 갖게 되었고, 시리얼을 위치 인자로 받는 플러그인 dlog 러너에는
   `multiple_devices` 메시지가 더 이상 "Specify --serial"이라고 안내하지 않습니다. `sdb-serial-failure.test.js`가
   헬퍼를 검증하고 모든 `resolveSerial()` 호출자가 이 헬퍼를 거치는지 감시합니다.
-  <!-- internal-only:begin -->
-  `vd-remove-app`(`common/lib/core/vd.js`)에도 동일하게 적용됩니다. 이 명령은 전체
-  `runSdbCommand("list devices")` 왕복으로 디바이스를 나열했고 명시적 시리얼을 검사하지 않았습니다. 이제
-  `resolveSerial()` + 공유 헬퍼로 대상을 결정하므로, 잘못된 시리얼은 `sdb -s`에 도달하기 전에 거부되고
-  `multiple_devices`도 동일한 목록과 `suggested_fix`를 포함합니다.
-  <!-- internal-only:end -->
 - **`dlog-analyzer`가 네이티브 CLI의 SDK 기반 로그 디렉터리를 따릅니다** (`common/lib/core/dlog-analyzer.js`,
   `common/lib/cli/dlog-analyzer-cli.js`, `common/scripts/tizen-dlog-analyzer/tizen-dlog-analyzer.sh`,
   `tizen-cli/src/command-specs/dlog-analyzer.ts`). TizenDLogAnalyzer PR #155/#157에서 모든 바이너리 명령의
@@ -369,11 +418,6 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   응답합니다** (`common/lib/core/samsung-auth.js`). 이전에는 모든 인터페이스에서 수신했기 때문에 LAN의 어느
   호스트든 `/signin/callback`에 조작된 `code`를 POST할 수 있었고, 다른 경로 요청(favicon 탐색)은 응답 없이
   멈춰 있었습니다.
-  <!-- internal-only:begin -->
-- **`vd-nuget-setup --bixby-source`를 플러그인 스크립트 명령줄에 도달하는 다른 모든 값처럼 `shellSafe()`로
-  검사하며**, AppSign 엔드포인트는 `TIZEN_VD_APPSIGN_URL`로 재정의할 수 있습니다
-  (`common/lib/core/vd.js`).
-  <!-- internal-only:end -->
 - **Cline / Gemini 훅 어댑터가 본문이 경로보다 앞에 올 때 쓰기를 통과시키지 않습니다**
   (`cline/hooks/PreToolUse`, `gemini/hooks/BeforeTool`). 어댑터는 경로를 추출하기 전에 첫 번째
   `"content"` / `"diff"` / `"old_string"`에서 페이로드를 잘랐기 때문에, 파일 본문을 먼저 내보낸 도구 호출은
@@ -605,60 +649,6 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   `import-wgt.*` 및 `meta.help` TC는 approved이며, TC-P-119는 에이전트 세션 실행을 세 번 거칠 때까지 draft로
   유지됩니다.
 
-<!-- internal-only:begin -->
-
-- **Windows에서 VD AppSign 재서명이 패키지를 전혀 생성하지 못하던 문제를 수정했습니다**
-  (`tizen-vd-resign.ps1`). 스크립트가 AppSign 응답을 `appsign-response.zip`에 저장한 뒤 정의되지 않은 변수
-  `$response`를 열었기 때문에, AppSign 요청이 성공할 때마다 `ZipFile::OpenRead($null)`이 예외를
-  던졌습니다. 이제 응답 경로를 하나의 변수로 두고 다운로드와 압축 해제에 모두 사용합니다. 그 앞에도 두
-  번째 차단 요인이 있었습니다. `New-Object System.Net.Http.ByteArrayContent($bytes)`가 `byte[]`를 요소마다
-  하나의 생성자 인자로 펼쳐서("Cannot find an overload … argument count: N") multipart 본문을 만들 수
-  없었습니다. 이제 content 객체를 `[Type]::new()`로 생성합니다. 세 번째로 `-IncludeAuthor 0`이
-  무시되었습니다. 변환된 `$false`가 `[string]` 타입 매개변수에 다시 대입되면서 문자열 `"False"`(참으로
-  평가됨)가 저장되어, author 서명이 항상 요구되고 전송되었습니다. 이제 플래그를 별도의 boolean으로
-  변환합니다. 네 번째로 `-ProxyUrl`은 받기만 하고 사용하지 않았는데, 이제 `HttpClientHandler.Proxy`로
-  적용합니다. multipart 파트는 .NET의 따옴표 없는 `name=…; filename*=utf-8''…`(엄격한 파서가 거부함)
-  대신 `curl -F`가 생성하는 것과 같은 헤더(`name="…"; filename="…"`, `Content-Type: text/xml`)로
-  출력합니다.
-  Windows PowerShell 5.1에서 로컬 가짜 AppSign 엔드포인트를 대상으로 `tizen-cli tizen-sdk vd-resign`과
-  `vd-build-cli.js resign` 양쪽을 통해 처음부터 끝까지 검증했습니다. 요청은 `distCertID`, `distributor`,
-  `authCertID`, `author`를 따옴표 붙은 form 필드로 전달하고, 반환된 서명은 페이로드를 그대로 둔 채
-  `.tpk`의 원본 서명을 대체하며 원본은 `.vd-original`로 보존됩니다. `--no-author` / `--distributor-only`는
-  distributor 쌍만 전송하고, 두 번째 실행은 백업 덮어쓰기를 거부하며, `--proxy-url`은 요청을 프록시로
-  보냅니다.
-- **AppSign 요청의 전송 실패가 `AppSign request failed:  `로 보고되던 문제를 수정했습니다**
-  (`tizen-vd-resign.ps1`). PowerShell 5.1에서는 실패한 task의 `.Result`가 종료되지 않는 속성 오류로
-  나타나므로, 스크립트가 `$null` 응답으로 계속 진행해 빈 상태를 출력했습니다. 이제 요청은 `try` 안에서
-  `.GetAwaiter().GetResult()`를 사용하고, 가장 안쪽 예외까지 풀어서 보고합니다(`SocketException: … refused
-  127.0.0.1:9`, `WebException: … could not be resolved`, 또는 `timed out after 120 s`). 사용한 URL과 프록시도
-  함께 보고하며, HTTP 오류는 `HTTP <code> <reason>`으로 보고합니다.
-- `vd-resign` / `vd-build` 매개변수 검증은 이제 문제가 된 값(AppSign URL, 패키지 경로 또는 프록시 URL)과
-  현재 OS에서 거부하는 문자를 명시하며, `--proxy-url`이 `http://` 또는 `https://`로 시작하도록
-  요구합니다 — curl은 단독 `host:port`를 받지만 .NET의 `WebProxy`는 받지 않으며, 두 플랫폼은 같은 입력을
-  거부해야 합니다.
-- **소스가 이미 등록되어 있으면 VD NuGet 설정이 실패하던 문제를 수정했습니다** (`tizen-vd-nuget.ps1` /
-  `.sh`). "이미 등록됨" 검사가 소스 _이름_을 `dotnet nuget list source --format short`의 출력과
-  비교했는데, 이 출력은 이름 없이 `E <url>`만 표시하므로 매번 소스를 다시 추가하다가 "already been
-  added"로 실패했습니다. 이제 스크립트가 기본(상세) 목록에서 이름을 파싱해 정확히 일치하는지 비교합니다.
-- **`tizen-cli tizen-sdk vd-build --no-author` / `vd-resign --no-author`가 아무 효과가 없던 문제를
-  수정했습니다** (`tizen-cli/src/command-specs/vd.ts`). Commander는 부정 플래그를 `opts.noAuthor`가 아닌
-  `opts.author === false`로 파싱하는데, 핸들러가 잘못된 키를 읽어 항상 author 서명을 다시 서명했습니다.
-- **`dotnet restore` 출력이 더 이상 JSON envelope을 손상시키지 않습니다** (`common/lib/core/vd.js`).
-  `vd-build`가 `stdio: "inherit"`로 restore를 실행해서, 진행 상황이 envelope과 같은 stdout에 기록되었습니다.
-  이제 restore는 셸 없이 실행되고(`spawnSync` argv이므로 경로에 따옴표가 필요 없음), 출력은 캡처되어
-  `--background`에서는 작업의 스크립트 로그로 스트리밍되므로 `job-cli.js status/wait`에서 여전히 볼 수
-  있으며, 실패 원인(마지막 줄들)은 `warnings[]`에 들어갑니다. `maxBuffer`는 64 MiB로 늘렸고(spawnSync의
-  기본값 1 MiB는 큰 restore를 ENOBUFS로 종료시킴), 작업 로그를 열 수 없으면 파이프 캡처로 대체합니다.
-- **`shellSafe()`가 이제 셸별로 검사합니다** (`common/lib/core/vd.js`). AppSign 패키지 경로, 서명 URL, 프록시
-  URL은 큰따옴표로 감싼 명령줄에 삽입되는데, `"`와 줄바꿈만 거부해서 명령 치환이 열려 있었습니다. 이제
-  Linux/macOS(`/bin/sh`)에서는 `$`와 백틱도 거부하고, Windows(`cmd.exe`)에서는 `%NAME%` 쌍을 거부합니다.
-  단일 `%`(퍼센트 인코딩된 URL)와 `powershell -File`(리터럴 인자)에서의 `$`는 계속 허용합니다. 두 분기 모두
-  명시적인 플랫폼 인자로 `common/lib/tests/vd.test.js`에서 테스트합니다.
-- `vd-build --arch`는 더 이상 값을 `arm | x86`으로 제한하지 않으며(빌드가 이미 토큰을 검증함),
-  `--build-type`은 `build-project`처럼 `Test`를 받습니다.
-
-<!-- internal-only:end -->
-
 ### 제거
 
 - `CI_TEST_FIX.md` 및 `SECURITY_FIXES_SUMMARY.md` — 개인 경로가 포함된 작업 메모로, 실수로 저장소 루트에
@@ -685,16 +675,6 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   `verify-doc-stats.mjs`는 이제 README 다이어그램, lane 표, `tiers.yaml`, `README.ko.md`도 검사하며,
   `tiers.yaml` 키가 어긋나면 명확히 실패합니다. 이 스크립트가 검사하지 않던 오래된 TC / lane 수(당시 281 →
   286, cli 171 / prompt 118 → 167 / 119)도 수정했습니다.
-
-<!-- internal-only:begin -->
-
-- `tizen-vd-build` 에이전트 및 스킬(common + tizen-cli): tizen-cli 스킬은 이제 러너 대신
-  `vd-build` / `vd-resign` / `vd-nuget-setup` / `vd-remove-app` 명령을 문서화합니다. common 스킬에는 표준
-  runner-lookup 스니펫, Codex `--background` 섹션, 결과 보고 규칙을 추가했습니다. 문제 해결 섹션은
-  `error_category`를 중심으로 다시 작성했습니다(이전 섹션은 개인 경로, 플러그인 캐시 디렉터리, 그리고
-  스크립트가 더 이상 발생시킬 수 없는 PowerShell 오류를 언급했습니다).
-
-<!-- internal-only:end -->
 
 ## [1.3.1] — 2026-09-23
 

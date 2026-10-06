@@ -106,9 +106,12 @@ fi
 
 has_project_config() {
     local path="$1"
-    # Standard Tizen SDK project types
-    [[ -f "$path/tizen_native_project.yaml" || -f "$path/tizen_dotnet_project.yaml" || -f "$path/tizen_resource_project.yaml" || -f "$path/config.xml" || -n "$(ls "$path"/*.csproj 2>/dev/null)" || ( -f "$path/tizen-manifest.xml" && -f "$path/CMakeLists.txt" ) ]] && return 0
-    # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject)
+    # Standard Tizen SDK project types — every marker detect_project_type() can classify
+    # (project_def.prop is the Tizen Studio native marker; index.html alone is too loose).
+    [[ -f "$path/tizen_native_project.yaml" || -f "$path/tizen_dotnet_project.yaml" || -f "$path/tizen_resource_project.yaml" || -f "$path/project_def.prop" || -f "$path/config.xml" || -n "$(ls "$path"/*.csproj 2>/dev/null)" ]] && return 0
+    # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject).
+    # tizen-manifest.xml + CMakeLists.txt alone is NOT a marker — ordinary Native apps
+    # also carry tizen-manifest.xml, and only packaging/*.spec makes a project GBS-buildable.
     [[ -f "$path/CMakeLists.txt" && -d "$path/packaging" && -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]] && return 0
     return 1
 }
@@ -159,10 +162,10 @@ detect_project_type() {
         echo "Native"
     elif [[ -f "$path/config.xml" ]] || [[ -f "$path/index.html" ]]; then
         echo "WebApp"
-    elif [[ -f "$path/tizen-manifest.xml" ]] && [[ -f "$path/CMakeLists.txt" ]]; then
-        echo "Platform"
     elif [[ -f "$path/CMakeLists.txt" ]] && [[ -d "$path/packaging" ]] && [[ -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]]; then
-        # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject)
+        # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject).
+        # This is the ONLY route to a GBS build; it mirrors isPlatformProject() in
+        # lib/core/project.js. Native/DotNET/WebApp/RPK never use GBS.
         echo "Platform"
     else
         echo "Unknown"

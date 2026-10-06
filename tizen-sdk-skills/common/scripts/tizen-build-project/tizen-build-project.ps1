@@ -72,12 +72,23 @@ if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
 
 function Test-HasProjectConfig {
     param([string]$Path)
-    (Test-Path (Join-Path $Path "tizen_native_project.yaml")) -or `
-    (Test-Path (Join-Path $Path "tizen_dotnet_project.yaml")) -or `
-    (Test-Path (Join-Path $Path "tizen_resource_project.yaml")) -or `
-    (Test-Path (Join-Path $Path "config.xml")) -or `
-    (Get-ChildItem -Path $Path -Filter "*.csproj" -ErrorAction SilentlyContinue) -or `
-    ((Test-Path (Join-Path $Path "tizen-manifest.xml")) -and (Test-Path (Join-Path $Path "CMakeLists.txt")))
+    # Mirrors has_project_config() in tizen-build-project.sh: every marker that
+    # Detect-ProjectType can classify (yaml / project_def.prop / config.xml / *.csproj).
+    # tizen-manifest.xml + CMakeLists.txt is deliberately NOT a marker: ordinary Native
+    # apps carry tizen-manifest.xml too, and GBS (Platform) builds are Linux-only — the
+    # .sh counterpart recognises them by CMakeLists.txt + packaging/*.spec.
+    # Always return a real [bool]: a bare Get-ChildItem result would make the function
+    # yield nothing (empty) or a FileInfo array instead of $false / $true.
+    $hasCsproj = [bool](Get-ChildItem -Path $Path -Filter "*.csproj" -File -ErrorAction SilentlyContinue |
+        Select-Object -First 1)
+    return [bool](
+        (Test-Path (Join-Path $Path "tizen_native_project.yaml")) -or
+        (Test-Path (Join-Path $Path "tizen_dotnet_project.yaml")) -or
+        (Test-Path (Join-Path $Path "tizen_resource_project.yaml")) -or
+        (Test-Path (Join-Path $Path "project_def.prop")) -or
+        (Test-Path (Join-Path $Path "config.xml")) -or
+        $hasCsproj
+    )
 }
 
 function Verify-ProjectPath {

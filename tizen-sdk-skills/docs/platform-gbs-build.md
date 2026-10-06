@@ -245,7 +245,7 @@ GBS 빌드가 성공하면 다음 위치에 `.rpm` 패키지가 생성됩니다:
 
 `tizen-build-project.sh` 스크립트의 Platform 빌드 흐름:
 
-1. **프로젝트 타입 감지** — `tizen-manifest.xml` + `CMakeLists.txt` 존재 확인 → Platform
+1. **프로젝트 타입 감지** — `CMakeLists.txt` + `packaging/*.spec` 존재 확인 → Platform (`tizen-manifest.xml`은 일반 Native 앱에도 있으므로 Platform 마커가 아님)
 2. **DALi C++17 프리플라이트** — `dali2-*` 의존성이 있으면 C++17 설정 확인, 없으면 exit 4로 즉시 중단
 3. **GBS 실행 파일 확인** — 3단계 fallback (tizen-cli 플러그인 → 시스템 gbs → 에러)
 4. **Git 저장소 확인** — `.git`이 없으면 자동 초기화

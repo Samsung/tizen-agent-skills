@@ -262,7 +262,7 @@ node "$CLI" build --project "/home/user/tizen-apps/MyDaliDemoApp" --build-type D
 
 ### 빌드 스크립트 내부 동작
 
-1. **프로젝트 타입 감지** — `tizen-manifest.xml` + `CMakeLists.txt` 존재 확인 → Platform
+1. **프로젝트 타입 감지** — `CMakeLists.txt` + `packaging/*.spec` 존재 확인 → Platform
 2. **DALi C++17 프리플라이트** — `dali2-*` 의존성이 있으면 C++17 설정 확인, 없으면 **exit 4**로 즉시 중단
 3. **GBS 실행 파일 확인** — 3단계 fallback (tizen-cli 플러그인 → 시스템 gbs → 에러)
 4. **Git 저장소 확인** — `.git`이 없으면 자동 초기화

@@ -90,7 +90,12 @@ The command auto-detects the project type:
 | DotNET   | `tizen_dotnet_project.yaml` or `*.csproj`         | `tz build` + `tz pack`    |
 | WebApp   | `config.xml` or `index.html`                      | `tz build` + `tz pack`    |
 | RPK      | `tizen_resource_project.yaml`                     | `tizen package -t rpk` (see below) |
-| Platform | `tizen-manifest.xml` + `CMakeLists.txt`           | **GBS build** (see below) |
+| Platform | `CMakeLists.txt` + `packaging/*.spec`             | **GBS build** (see below) |
+
+Detection runs top-down, so a project with `tizen_native_project.yaml` is Native even if it also
+has a `CMakeLists.txt`. `tizen-manifest.xml` is **not** a Platform marker — every Native app has
+one. **GBS is used only for Platform projects**; Native, DotNET, WebApp and RPK builds never
+invoke GBS, so a slow native build is `tz build` compiling, not GBS.
 
 ### RPK resource packages
 
