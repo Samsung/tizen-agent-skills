@@ -61,6 +61,32 @@ make is "Install the Tizen SDK".
 Details, trigger phrases and the 35 `tizen-sdk` CLI commands are in the plugin's
 [README](tizen-sdk-skills/README.md) and [Skills Reference](tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md).
 
+## Featured plugin: tizen-action-skills
+
+`tizen-action-skills` brings the **Tizen Action Framework** to AI coding agents.
+The Action Framework is the mechanism that lets an on-device AI Agent use an
+app's capabilities. This plugin walks your agent through the entire Action
+Provider development flow — from picking a default Action category (or
+authoring a custom one) to generating stubs, implementing, registering and
+verifying the provider on a device.
+
+| Area | Details |
+|---|---|
+| Action categories | Picks a default Action Category (e.g. `Tizen.Action.Browser`) or authors a custom `.action`/`.entity` schema, including subscription actions |
+| Stub generation | Generates provider stubs with `actionc` for **C#**, **C++**, **JavaScript** or **Flutter-Tizen/Dart** (TIDL protocol 3) |
+| Provider implementation & registration | Implements the provider interface and registers provider metadata so the on-device Agent can discover and invoke it |
+| Verification | Verifies the provider on a device with `action-tool` |
+| Toolchain checks | Validates the Tizen Action Toolchain (`actionc`, `action2tidl`, `tidlc`) and `ACTIONC_DATA_DIR` setup via `scripts/check_toolchain_env.sh` — never installs anything itself |
+
+**Requirements:** Tizen Action Framework with TIDL protocol 3 on the device
+(tizen-action 1.4+; subscription actions need 1.6), the Tizen Action Toolchain
+from `tools/action-toolchain` in the `platform/core/appfw/tidl` repository, and
+Bash 4+ (PowerShell for the Windows check scripts).
+
+Details, the bundled scripts and commonly missed rules are in the plugin's
+[README](tizen-action-skills/README.md) and
+[skill README](tizen-action-skills/common/skills/tizen-action-skill/README.md).
+
 ## Repository structure
 
 ```
