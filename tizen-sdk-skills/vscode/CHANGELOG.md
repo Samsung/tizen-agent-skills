@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.4.2] — 2026-10-07
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. One **(skills)** feature lands: `tizen-dlog-analyzer` gains a `search` action for text/regex search across every collected dlog category at once. Three further **(skills)** fixes land for the CLI-runner lookup blocks in the skills. See the project CHANGELOG for details.
+
 ## [1.4.1] — 2026-10-01
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. Two **(skills)** fixes land for Cline on Windows: the cmd.exe CLI-runner lookup block was headed for both shells (`&` is reserved in PowerShell — `AmpersandNotAllowed`), and a `node "$CLI"` line pasted on its own failed with a misleading `MODULE_NOT_FOUND` (Windows PowerShell 5.1 drops the empty `"$CLI"` argument). The skill headings now name the shell each block is for, and the generated `node` line guards against an empty `$CLI`. Two further **(skills)** fixes land for `dlog-analyzer`: a `start` refused by a live collector lock now returns `already_running` naming the holder (instead of reporting success and deleting the lock file), and the runner picks the binary it shipped with — newest cache version otherwise — instead of the first directory it finds, and keeps a report the Windows cp949 code page crash cut short. See the project CHANGELOG for details.

@@ -92,7 +92,8 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
     켠 뒤(`start start-monitoring`, `kernel collect`, `dlog-collect <app-id>`), **턴을 끝내고
     사용자에게 재현을 요청**합니다 — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요".
     `sleep`·폴링·같은 명령에서의 stop/analyze는 금지. 분석은 에러부터(`error-analyze
-    <app-id> summary` → `check` → `kernel analyze`), 전체 `app-log`는 그 뒤에 필터를 걸어서만.
+    <app-id> summary` → `check` → `kernel analyze`), 특정 문자열 찾기는 `search "<문자열>"`(수집된
+    모든 카테고리, 엔트리 단위 — `.hot.log`를 `grep`하지 않음), 전체 `app-log`는 그 뒤에 필터를 걸어서만.
     커널 로그는 `sdb shell dmesg`가 아니라 `kernel collect` → `kernel stop` → `kernel analyze`,
     `top`/`ps`/`free`/`/proc/meminfo` 같은 진단은 `investigate` / `probe run <id>`로.
 

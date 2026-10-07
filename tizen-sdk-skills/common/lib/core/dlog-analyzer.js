@@ -19,6 +19,7 @@
  *   collectAppLogs     — Collect dlog filtered by app PID (app-specific logs)
  *   analyzeErrors      — Analyze collected app logs for non-fatal runtime errors (E/F priority)
  *   appLog             — Print the full collected log for one app (all priorities, hot + cold files)
+ *   searchLogs         — Search every collected dlog category for text or a regex (v0.2.6+ `search`)
  *   deviceProfile      — Detect and print the connected device's profile (type, version, arch, root, tools)
  *   investigate        — Run a one-shot first-pass investigation and emit a budgeted report
  *   runProbe            — List and run evidence probes from the data-driven catalog
@@ -2141,6 +2142,283 @@ async function appLog(appId, opts = {}, commandLabel) {
 }
 
 /**
+ * Normalise the `search` pattern input (positional strings, a single string,
+ * or an array mixed with undefined) into a clean, non-empty-string array.
+ */
+function normalizePatterns(patterns) {
+  const list = Array.isArray(patterns) ? patterns : [patterns];
+  return list
+    .filter((p) => p !== undefined && p !== null)
+    .map((p) => String(p))
+    .filter((p) => p.length > 0);
+}
+
+/**
+ * Normalise the `search` category list: an array, a single value, or a
+ * comma-separated string (the JS runner's parser keeps only the last value
+ * of a repeated flag, so `--category a,b` is the way to name several).
+ */
+function normalizeCategories(categories) {
+  const list = Array.isArray(categories) ? categories : [categories];
+  return list
+    .filter((c) => c !== undefined && c !== null)
+    .flatMap((c) => String(c).split(","))
+    .map((c) => c.trim())
+    .filter((c) => c.length > 0);
+}
+
+/**
+ * Normalise the `search` tag list (array or single value; no comma split —
+ * a tag may legitimately contain a comma, and the flag is repeatable).
+ */
+function normalizeTags(tags) {
+  const list = Array.isArray(tags) ? tags : [tags];
+  return list
+    .filter((t) => t !== undefined && t !== null)
+    .map((t) => String(t))
+    .filter((t) => t.length > 0);
+}
+
+// ASCII control characters (NUL … US, DEL). A dlog line never contains one
+// inside a field, so a pattern / tag / time / path carrying one is a mistake
+// (most often a stray newline) and the binary could only misparse it. The
+// control range is the point of these patterns (same as sanitizeDlogOutput).
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS_RE = /[\x00-\x1f\x7f]/;
+// A dlog tag is a single token: no whitespace, no control characters.
+// eslint-disable-next-line no-control-regex
+const VALID_TAG_RE = /^[^\s\x00-\x1f\x7f]+$/;
+const DLOG_PRIORITIES = ["V", "D", "I", "W", "E", "F"];
+
+/**
+ * Build the native `search` argument vector (TizenDLogAnalyzer v0.2.6+).
+ *
+ * The binary is spawned with execFileSync(argv) — no shell — so no value can
+ * be split into shell words; and every pattern goes through `--pattern` (the
+ * binary's `-e`), never as a positional, so a pattern that starts with '-'
+ * (e.g. "-1 returned") can never be mistaken for an option by the binary's
+ * parser. Validation of the values lives in searchLogs(); this is a pure
+ * builder and forwards what it is given.
+ *
+ * @param {string[]} patterns - already normalised, at least one
+ * @param {object} [opts] - { categories, regex, caseSensitive, invert, all,
+ *   context, afterContext, beforeContext, since, until, priority, tags,
+ *   count, format, output, maxMatches, maxLines, maxChars }
+ */
+function buildSearchArgs(patterns, opts = {}) {
+  const args = ["search"];
+  patterns.forEach((p) => args.push("--pattern", p));
+  normalizeCategories(opts.categories).forEach((c) =>
+    args.push("--category", c),
+  );
+  if (opts.regex) args.push("--regex");
+  if (opts.caseSensitive) args.push("--case-sensitive");
+  if (opts.invert) args.push("--invert");
+  if (opts.all) args.push("--all");
+  if (opts.context != null) args.push("--context", String(opts.context));
+  if (opts.afterContext != null)
+    args.push("--after-context", String(opts.afterContext));
+  if (opts.beforeContext != null)
+    args.push("--before-context", String(opts.beforeContext));
+  if (opts.since) args.push("--since", opts.since);
+  if (opts.until) args.push("--until", opts.until);
+  if (opts.priority) args.push("--priority", opts.priority);
+  normalizeTags(opts.tags).forEach((t) => args.push("--tag", t));
+  if (opts.count) args.push("--count");
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.output) args.push("--output", opts.output);
+  if (opts.maxMatches != null)
+    args.push("--max-matches", String(opts.maxMatches));
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  return args;
+}
+
+/**
+ * Read the match count back out of the binary's stdout so the agent can tell
+ * from the envelope alone whether to narrow the query: `--format json` carries
+ * `total_matches` / `returned` / `truncated`; `--count` prints `total: N`.
+ * Text output has no reliable total — only an "any match" signal.
+ */
+function summarizeSearchOutput(output, opts = {}) {
+  const text = (output || "").trim();
+  if (opts.format === "json") {
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && typeof parsed.total_matches === "number") {
+        return {
+          total_matches: parsed.total_matches,
+          returned: parsed.returned,
+          truncated: parsed.truncated === true,
+        };
+      }
+    } catch (_e) {
+      // not a JSON document (e.g. the binary printed a note) — fall through
+    }
+    return {};
+  }
+  if (opts.count) {
+    const m = /^total:\s*(\d+)\s*$/m.exec(text);
+    return m ? { total_matches: Number(m[1]) } : {};
+  }
+  return { matched: text.length > 0 };
+}
+
+/**
+ * Search every collected dlog category (each app, _general, _unparsed —
+ * kernel excluded) for plain text or a regular expression — the binary's
+ * `search` subcommand (TizenDLogAnalyzer v0.2.6+). Finds a string without
+ * knowing which app wrote it; a match returns the whole entry including its
+ * stack-trace continuation lines. Reads the collected files only — no device
+ * is needed, but something must have been collected first.
+ *
+ * @param {string|string[]} patterns - one or more search patterns (any one
+ *   matches unless opts.all)
+ * @param {object} [opts] - see buildSearchArgs
+ * @param {string} [commandLabel]
+ */
+async function searchLogs(patterns, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer search";
+  const list = normalizePatterns(patterns);
+  if (list.length === 0) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            'At least one search pattern is required. Usage: search <pattern> [pattern ...] [--pattern <p>]... [--category <app-id|_general|_unparsed>]... [--regex] [--context <n>] [--priority <p>] [--since <t>] [--count] [--format json]. Use --pattern "<text>" for a pattern that starts with "--".',
+        },
+      ],
+    };
+  }
+  const invalid = (message) => ({
+    command,
+    status: "failure",
+    errors: [{ category: "invalid_parameters", message }],
+  });
+  // The binary is started with execFileSync(argv) — no shell — and every
+  // value sits behind its own flag, so a value cannot become a different
+  // option or a shell word. What is checked here is what the binary cannot
+  // make sense of: control characters (a pattern or tag spanning lines), an
+  // unknown priority letter, a non-integer limit, an unknown output format.
+  // A pattern may legitimately start with "-" and contain regex metacharacters.
+  const ctrl = list.find((p) => CONTROL_CHARS_RE.test(p));
+  if (ctrl !== undefined) {
+    return invalid(
+      `Invalid search pattern ${JSON.stringify(ctrl)}: control characters (newline, tab, NUL …) are not allowed.`,
+    );
+  }
+  const categories = normalizeCategories(opts.categories);
+  for (const c of categories) {
+    if (!isValidAppId(c)) return invalidAppIdError(command, c);
+  }
+  const tags = normalizeTags(opts.tags);
+  const badTag = tags.find((t) => !VALID_TAG_RE.test(t));
+  if (badTag !== undefined) {
+    return invalid(
+      `Invalid dlog tag ${JSON.stringify(badTag)}: a tag has no whitespace or control characters.`,
+    );
+  }
+  let priority = opts.priority;
+  if (priority !== undefined && priority !== null && priority !== "") {
+    priority = String(priority).toUpperCase();
+    if (!DLOG_PRIORITIES.includes(priority)) {
+      return invalid(
+        `Invalid priority '${opts.priority}'. Must be one of ${DLOG_PRIORITIES.join(", ")}.`,
+      );
+    }
+  }
+  for (const [name, value] of [
+    ["--context", opts.context],
+    ["--after-context", opts.afterContext],
+    ["--before-context", opts.beforeContext],
+    ["--max-matches", opts.maxMatches],
+    ["--max-lines", opts.maxLines],
+    ["--max-chars", opts.maxChars],
+  ]) {
+    if (value === undefined || value === null) continue;
+    if (!/^\d+$/.test(String(value))) {
+      return invalid(
+        `Invalid value '${value}' for ${name}: must be a non-negative integer.`,
+      );
+    }
+  }
+  for (const [name, value] of [
+    ["--since", opts.since],
+    ["--until", opts.until],
+    ["--output", opts.output],
+  ]) {
+    if (value && CONTROL_CHARS_RE.test(String(value))) {
+      return invalid(
+        `Invalid value for ${name}: control characters are not allowed.`,
+      );
+    }
+  }
+  if (opts.format && !["text", "json"].includes(opts.format)) {
+    return invalid(
+      `Invalid format: '${opts.format}'. Must be 'text' (grep-like lines, default) or 'json'.`,
+    );
+  }
+
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const appDir = path.join(logBase.baseDir, "app");
+  // Same `no_logs` contract as error-analyze / app-log: say which directories
+  // are missing — every one of them, not just the first — and how to fill
+  // them, instead of forwarding the binary's exit 1.
+  const missing = categories.filter(
+    (c) => !fs.existsSync(path.join(appDir, c)),
+  );
+  if (missing.length || (!categories.length && !fs.existsSync(appDir))) {
+    const what = missing.length
+      ? `No collected logs found for ${missing.length === 1 ? "category" : "categories"} ${missing.map((c) => JSON.stringify(c)).join(", ")} (expected ${missing.map((c) => path.join(appDir, c)).join(", ")}).`
+      : `No collected logs found (expected ${appDir}).`;
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "no_logs",
+          message: `${what} Collect first: dlog-collect <app-id> or start start-monitoring, then stop-collect / stop.`,
+          ...(missing.length ? { missing_categories: missing } : {}),
+        },
+      ],
+    };
+  }
+
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return binaryNotFoundError(command);
+
+  const args = buildSearchArgs(list, { ...opts, categories, tags, priority });
+  const envelope = runBinary(command, binaryPath, args, {
+    result: {
+      patterns: list,
+      categories: categories.length ? categories : "all (kernel excluded)",
+      regex: opts.regex === true,
+      log_base_dir: logBase.baseDir,
+    },
+    errorCategory: "search_failed",
+    errorPrefix: `Search failed for ${JSON.stringify(list)}`,
+  });
+  if (envelope.status === "success") {
+    const summary = summarizeSearchOutput(envelope.result.output, opts);
+    const none =
+      summary.total_matches === 0 ||
+      (summary.matched === false && summary.total_matches === undefined);
+    envelope.result = {
+      ...envelope.result,
+      ...summary,
+      message: none
+        ? `No entry matches ${JSON.stringify(list)} in the collected logs (kernel excluded). Widen the pattern, drop --priority/--since, or collect again.`
+        : `Matching entries for ${JSON.stringify(list)} (match lines are "<category>:", context lines "<category>-").${summary.truncated ? " --max-matches cut the result; narrow the pattern or raise --max-matches." : ""}`,
+    };
+  }
+  return envelope;
+}
+
+/**
  * Detect and print the connected device's profile (type, version, arch, root, tools).
  * @param {string} [serial]
  * @param {object} [opts] - { refresh, maxAge, format }
@@ -2647,6 +2925,9 @@ module.exports = {
   analyzeErrors,
   // New v0.1.3 commands
   appLog,
+  searchLogs,
+  buildSearchArgs,
+  summarizeSearchOutput,
   deviceProfile,
   investigate,
   runProbe,

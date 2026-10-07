@@ -1317,10 +1317,11 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | 파라미터      | 타입   | 기본값   | 설명                                                                     |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel` 중 하나 |
+| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` 중 하나 |
 | `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect`(백그라운드)/`stop`/`analyze`. timeline: `show`/`report`/`analyze`/`export`     |
 | `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze, app-log에 필수; investigate는 선택(앱 범위 조사) |
 | `symptoms`    | string | `null`   | investigate 전용: 사용자의 증상 표현 그대로 (예: "300% cpu, video not playing") — 실행할 프로브 번들을 선택 |
+| `pattern`     | string | _(search 필수)_ | search 전용: 찾을 텍스트(여러 개 가능, 기본은 하나라도 일치; `--regex`면 Python 정규식). `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json`으로 범위·출력 조정 |
 | `format`      | string | `null`   | error-analyze 전용: `summary` (요약 라인만), `details` (상세 항목만), 생략 시 둘 다  |
 | `serial`      | string | `null`   | sdb 디바이스 시리얼 (생략 시 자동 선택)                                  |
 
@@ -1337,6 +1338,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]
+node <plugin>/lib/cli/dlog-analyzer-cli.js search <pattern> [pattern ...] [--regex] [--category <app-id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]
 node <plugin>/lib/cli/dlog-analyzer-cli.js device-profile [--refresh]
 node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
@@ -1388,6 +1390,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 | `stop-collect`  | 백그라운드 앱 dlog 수집 프로세스 종료                         |
 | `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함) — 첫 번째 분석 호출 |
 | `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일) — `error-analyze` 이후 확대용, 필터 필수 |
+| `search`        | 수집된 모든 dlog 카테고리(각 앱, `_general`, `_unparsed`; 커널 제외)에서 텍스트/정규식 검색 — 어느 앱이 남겼는지 몰라도 찾고, 스택 트레이스를 포함한 엔트리 전체를 반환 (바이너리 v0.2.6+; `.hot.log`를 `grep`하지 않음) |
 | `device-profile`| 연결된 디바이스의 프로필 감지 및 출력 (타입, 버전, 아키텍처, 루트, 도구) |
 | `investigate`   | 일회성 1차 조사: 증상 표현 → 프로브 번들 → 상관 분석 보고서 (증상 조사의 첫 호출) |
 | `probe`         | 증거 프로브 카탈로그 `list` / `run <probe-id>` 한 개 실행 (`sdb shell top/ps/free` 직접 입력 대체) |

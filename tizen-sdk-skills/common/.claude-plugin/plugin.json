@@ -1,7 +1,7 @@
 {
   "name": "tizen-sdk-skills",
   "displayName": "Tizen SDK Skills",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Tizen app development for AI coding agents (Claude Code, Cline, Codex CLI, VS Code): install the Tizen SDK and TV extension, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run emulators and devices over sdb, manage certificates, debug remotely with GDB / netcoredbg / CDP, analyse dlog and run Playwright tests.",
   "author": {
     "name": "Samsung Electronics"

@@ -24,7 +24,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--action <action>",
         description:
-          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect)",
+          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (search every collected dlog category for text or a regex — --pattern required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect)",
         choices: [
           "start",
           "stop",
@@ -36,6 +36,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           "stop-collect",
           "error-analyze",
           "app-log",
+          "search",
           "device-profile",
           "investigate",
           "probe",
@@ -56,12 +57,72 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--app-id <id>",
         description:
-          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, and error-analyze actions.",
+          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search: same as --category (restrict the search to this app's logs).",
       },
       {
         flags: "--format <format>",
         description:
-          "Output format. For --action error-analyze: summary (summary lines only), details (detail entries only), or omit for both. For --action app-log, device-profile, investigate, probe, snapshot, timeline, kernel: json or text (default: text).",
+          "Output format. For --action error-analyze: summary (summary lines only), details (detail entries only), or omit for both. For --action app-log, search, device-profile, investigate, probe, snapshot, timeline, kernel: json or text (default: text). For search, json carries total_matches / returned / truncated.",
+      },
+      {
+        flags: "--pattern <text...>",
+        description:
+          "For --action search (required there): text to search for; several values are allowed and any one matches unless --all. Quote a multi-word pattern. Plain text unless --regex.",
+      },
+      {
+        flags: "--category <name>",
+        description:
+          "For --action search: search only this category — an app id, _general or _unparsed; comma-separate several. Default: every category under app/ (kernel is excluded).",
+      },
+      {
+        flags: "--regex",
+        description:
+          "For --action search: treat --pattern values as Python regular expressions.",
+        default: false,
+      },
+      {
+        flags: "--case-sensitive",
+        description:
+          "For --action search: match case exactly (default: case-insensitive).",
+        default: false,
+      },
+      {
+        flags: "--invert",
+        description:
+          "For --action search: select the entries that do NOT match.",
+        default: false,
+      },
+      {
+        flags: "--all",
+        description:
+          "For --action search: an entry must match every --pattern (default: any pattern).",
+        default: false,
+      },
+      {
+        flags: "--context <n>",
+        description:
+          "For --action search: entries of context before and after each match (like grep -C).",
+      },
+      {
+        flags: "--after-context <n>",
+        description:
+          "For --action search: entries of context after each match (like grep -A; overrides --context).",
+      },
+      {
+        flags: "--before-context <n>",
+        description:
+          "For --action search: entries of context before each match (like grep -B; overrides --context).",
+      },
+      {
+        flags: "--count",
+        description:
+          "For --action search: print only the number of matching entries per category.",
+        default: false,
+      },
+      {
+        flags: "--max-matches <n>",
+        description:
+          "For --action search: return at most this many matches (default 100, 0 = unlimited); the total is always counted.",
       },
       SERIAL_OPTION,
       {
@@ -82,7 +143,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--output <file>",
         description:
-          "For --action log-dump only: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log).",
+          "For --action log-dump: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log). For --action app-log / search: file that receives the complete output (--max-lines/--max-chars apply to stdout only). For --action timeline export: the JSON file.",
       },
       {
         flags: "--confirm",
@@ -93,19 +154,22 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--since <timestamp>",
         description:
-          "For --action app-log: show logs from this timestamp onward.",
+          "For --action app-log / search: entries at/after this time ('08-14 18:09' or a relative age like '10m', '2h').",
       },
       {
         flags: "--until <timestamp>",
-        description: "For --action app-log: show logs up to this timestamp.",
+        description:
+          "For --action app-log / search: entries at/before this time (same formats as --since).",
       },
       {
         flags: "--priority <p>",
-        description: "For --action app-log: filter by priority (V/D/I/W/E/F).",
+        description:
+          "For --action app-log / search: minimum priority (V/D/I/W/E/F). For search, context entries are not filtered.",
       },
       {
         flags: "--tag <tag>",
-        description: "For --action app-log: filter by dlog tag (repeatable).",
+        description:
+          "For --action app-log / search: only entries with this dlog tag.",
       },
       {
         flags: "--keyword <kw>",
@@ -114,12 +178,12 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--max-lines <n>",
         description:
-          "For --action app-log, investigate, timeline: cap the number of lines returned.",
+          "For --action app-log, search, investigate, timeline: cap the number of lines returned (stdout only).",
       },
       {
         flags: "--max-chars <n>",
         description:
-          "For --action app-log, investigate: cap the number of characters returned.",
+          "For --action app-log, search, investigate: cap the number of characters returned (stdout only).",
       },
       {
         flags: "--refresh",
@@ -203,6 +267,33 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
             },
             commandLabel,
           );
+        case "search":
+          // --pattern is variadic (array); --app-id is the binary's alias of
+          // --category, so either names the category to search.
+          return sdkCommands.searchLogs(
+            o.pattern,
+            {
+              categories: o.category ?? o.appId,
+              regex: o.regex,
+              caseSensitive: o.caseSensitive,
+              invert: o.invert,
+              all: o.all,
+              context: o.context,
+              afterContext: o.afterContext,
+              beforeContext: o.beforeContext,
+              since: o.since,
+              until: o.until,
+              priority: o.priority,
+              tags: o.tag,
+              count: o.count,
+              format: o.format,
+              output: o.output,
+              maxMatches: o.maxMatches,
+              maxLines: o.maxLines,
+              maxChars: o.maxChars,
+            },
+            commandLabel,
+          );
         case "device-profile":
           return sdkCommands.deviceProfile(
             o.serial,
@@ -267,7 +358,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
             errors: [
               {
                 category: "invalid_parameters",
-                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, device-profile, investigate, probe, snapshot, timeline, kernel, log-dump, log-clear`,
+                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, snapshot, timeline, kernel, log-dump, log-clear`,
               },
             ],
           });

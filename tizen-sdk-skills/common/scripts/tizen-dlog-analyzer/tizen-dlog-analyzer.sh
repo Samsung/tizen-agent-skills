@@ -13,6 +13,7 @@
 #   start-monitoring  — Run dlog-collect + exception-detect in parallel
 #   error-analyze     — Detect non-fatal runtime errors (E/F priority)
 #   app-log           — Print the full collected log for one app
+#   search            — Search every collected dlog category for text or a regex (v0.2.6+)
 #   app-launch        — Launch a Tizen application
 #   app-terminate     — Terminate a running Tizen application
 #   device-profile    — Detect and print the device profile
@@ -37,7 +38,7 @@
 #   tizen-dlog-analyzer.sh <subcommand> [serial]
 #
 # Arguments:
-#   subcommand  - dlog-collect | exception-detect | start-monitoring | error-analyze | app-log | app-launch | app-terminate | device-profile | investigate | probe | snapshot | timeline | kernel
+#   subcommand  - dlog-collect | exception-detect | start-monitoring | error-analyze | app-log | search | app-launch | app-terminate | device-profile | investigate | probe | snapshot | timeline | kernel
 #   serial      - Optional sdb device serial (auto-detect if omitted)
 #
 # Exit codes:

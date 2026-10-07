@@ -1315,6 +1315,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]
+node <plugin>/lib/cli/dlog-analyzer-cli.js search <pattern> [pattern ...] [--regex] [--category <app-id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]
 node <plugin>/lib/cli/dlog-analyzer-cli.js device-profile [--refresh]
 node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
@@ -1346,6 +1347,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 | `stop-collect`  | 백그라운드 앱 dlog 수집 프로세스 종료                         |
 | `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함)   |
 | `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일)  |
+| `search`        | 수집된 모든 dlog 카테고리(각 앱, `_general`, `_unparsed`; 커널 제외)에서 텍스트/정규식 검색 — 엔트리 전체 반환 (바이너리 v0.2.6+) |
 | `device-profile`| 연결된 디바이스의 프로필 감지 및 출력 (타입, 버전, 아키텍처, 루트, 도구) |
 | `investigate`   | 일회성 1차 조사 실행 및 예산화된 보고서 출력 (general/app)   |
 | `probe`         | 데이터 기반 카탈로그에서 증거 프로브 목록 조회 및 실행        |
