@@ -1,0 +1,17 @@
+{
+  "name": "tizen-agent-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Unified release of Tizen agent skills plugins (tizen-sdk-skills + tizen-action-skills) for AI coding agents.",
+  "license": "Apache-2.0",
+  "author": "Samsung Electronics",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Samsung/tizen-agent-skills.git",
+    "directory": "."
+  },
+  "bugs": {
+    "url": "https://github.com/Samsung/tizen-agent-skills/issues"
+  },
+  "homepage": "https://github.com/Samsung/tizen-agent-skills"
+}

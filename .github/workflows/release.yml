@@ -1,17 +1,25 @@
-name: Release (tizen-sdk-skills)
+name: Release (tizen-agent-skills)
 
-# Lives at the ROOT of the tizen-agent-skills repository. Tags are prefixed with
-# the project name so that several projects can release independently from the
-# same repository: tizen-sdk-skills-v1.2.0 -> assets tizen-sdk-v1.2.0.zip and
-# tizen-ai-extension-v1.2.0.vsix.
+# Lives at the ROOT of the tizen-agent-skills repository. The repository
+# releases as a whole under the tag prefix tizen-agent-skills-vX.Y.Z. A single
+# GitHub Release publishes assets from every plugin:
+#   - tizen-sdk-skills:  tizen-sdk-v<plugin-version>.zip (CLI dist),
+#                         tizen-ai-extension-v<plugin-version>.vsix (VS Code),
+#                         tizen-sdk-skills-source-v<release-version>.zip (source)
+#   - tizen-action-skills: tizen-action-skills-source-v<release-version>.zip (source)
+#
+# The release version (from root package.json) is independent from each
+# plugin's own version. The CLI zip and VSIX are stamped with the plugin's
+# declared version, not the release version, so the two can advance
+# independently.
 on:
   push:
     tags:
-      - "tizen-sdk-skills-v*"
+      - "tizen-agent-skills-v*"
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Release tag to create (for example, tizen-sdk-skills-v1.2.0)"
+        description: "Release tag to create (for example, tizen-agent-skills-v1.0.0)"
         required: true
         type: string
 
@@ -51,36 +59,41 @@ jobs:
           node --version
           pnpm --version
 
-      - name: Derive version from tag
+      - name: Derive release version from tag
         id: ver
         run: |
           set -euo pipefail
           case "${RELEASE_TAG}" in
-            tizen-sdk-skills-v*) ;;
-            *) echo "Tag '${RELEASE_TAG}' must look like tizen-sdk-skills-vX.Y.Z" >&2; exit 1 ;;
+            tizen-agent-skills-v*) ;;
+            *) echo "Tag '${RELEASE_TAG}' must look like tizen-agent-skills-vX.Y.Z" >&2; exit 1 ;;
           esac
-          VERSION="${RELEASE_TAG#tizen-sdk-skills-v}"
+          VERSION="${RELEASE_TAG#tizen-agent-skills-v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-      # The ZIP stamps plugin.json from tizen-cli/package.json while the VSIX
-      # takes the tag's version, so a tag that does not match the manifests
-      # would publish two assets claiming different versions. Refuse it.
-      - name: Check tag against package manifests
+      # The release version (from root package.json) must match the tag.
+      # Plugin versions are NOT checked against the tag — they advance
+      # independently.
+      - name: Check release version against root package.json
         env:
           VERSION: ${{ steps.ver.outputs.version }}
         run: |
           set -euo pipefail
-          status=0
-          for manifest in tizen-sdk-skills/package.json \
-                          tizen-sdk-skills/tizen-cli/package.json \
-                          tizen-sdk-skills/vscode/package.json; do
-            declared="$(node -p "require('./${manifest}').version")"
-            if [ "${declared}" != "${VERSION}" ]; then
-              echo "::error file=${manifest}::version ${declared} does not match tag version ${VERSION}"
-              status=1
-            fi
-          done
-          exit "${status}"
+          declared="$(node -p "require('./package.json').version")"
+          if [ "${declared}" != "${VERSION}" ]; then
+            echo "::error file=package.json::root version ${declared} does not match tag version ${VERSION}"
+            exit 1
+          fi
+
+      # ── tizen-sdk-skills: build CLI and VSIX ─────────────────────────────
+      # The CLI zip and VSIX are stamped with the plugin's own version
+      # (tizen-sdk-skills/package.json, tizen-sdk-skills/vscode/package.json),
+      # not the release version, so they can advance independently.
+
+      - name: Read tizen-sdk-skills plugin version
+        id: sdk_ver
+        run: |
+          SDK_VERSION="$(node -p "require('./tizen-sdk-skills/package.json').version")"
+          echo "version=${SDK_VERSION}" >> "$GITHUB_OUTPUT"
 
       # tizen-cli and the VS Code extension are pnpm-managed (pnpm-lock.yaml),
       # the same way ci.yml installs them.
@@ -94,51 +107,60 @@ jobs:
 
       - name: Package dist directory
         working-directory: tizen-sdk-skills/tizen-cli
-        run: zip -r "tizen-sdk-v${{ steps.ver.outputs.version }}.zip" dist/
+        run: zip -r "tizen-sdk-v${{ steps.sdk_ver.outputs.version }}.zip" dist/
 
       - name: Install dependencies (vscode extension)
         working-directory: tizen-sdk-skills/vscode
         run: pnpm install --frozen-lockfile
 
-      # Pass the tag's semver value to vsce so the packaged extension version
-      # changes with each release. This modifies package.json only on the
-      # ephemeral runner; --no-git-tag-version avoids creating a commit/tag.
-      - name: Build VSIX
+      # Pass the plugin's own version to vsce so the packaged extension
+      # version matches the plugin manifest, not the release tag.
+      - name: Package VS Code extension (VSIX)
         working-directory: tizen-sdk-skills/vscode
-        run: pnpm exec vsce package "${{ steps.ver.outputs.version }}" --no-git-tag-version --out "tizen-ai-extension-v${{ steps.ver.outputs.version }}.vsix"
-
-      # Generate release notes that list ONLY pull requests touching the
-      # tizen-sdk-skills/ directory. GitHub's --generate-notes lists every PR
-      # between two tags regardless of which plugin it touched, so in a
-      # multi-plugin repository a tizen-action-skills or root-docs PR would
-      # leak into the tizen-sdk-skills release notes. The script filters by
-      # file path instead of relying on labels.
-      - name: Generate filtered release notes
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_VERSION: ${{ steps.sdk_ver.outputs.version }}
         run: |
-          set -euo pipefail
-          bash tizen-sdk-skills/scripts/generate-release-notes.sh "${RELEASE_TAG}" > release-notes.md
-          echo "===== release-notes.md ====="
-          cat release-notes.md
-          echo "============================="
+          pnpm exec vsce package "${SDK_VERSION}" --no-git-tag-version \
+            --out "tizen-ai-extension-v${SDK_VERSION}.vsix"
+
+      # ── Source zips for every plugin ────────────────────────────────────
+      # Each plugin's source directory is packaged separately so consumers
+      # can download only the plugin they need. git archive produces a zip
+      # of only the git-tracked files under that directory — no node_modules,
+      # dist/ or other build output. The zip filename uses the RELEASE version
+      # (not the plugin version) so the release page is consistent.
+      - name: Package tizen-sdk-skills source zip
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git archive --format=zip --prefix=tizen-sdk-skills/ HEAD tizen-sdk-skills/ \
+            -o "tizen-sdk-skills-source-v${VERSION}.zip"
+
+      - name: Package tizen-action-skills source zip
+        env:
+          VERSION: ${{ steps.ver.outputs.version }}
+        run: |
+          git archive --format=zip --prefix=tizen-action-skills/ HEAD tizen-action-skills/ \
+            -o "tizen-action-skills-source-v${VERSION}.zip"
 
       # Re-running an existing tag updates the release in place instead of
       # deleting it: assets are replaced by name (--clobber), so the
       # name-based download URLs stay valid for anyone they were shared
-      # with; the notes are regenerated so they don't stay frozen at the
-      # tag's original commit.
+      # with.
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
           VERSION: ${{ steps.ver.outputs.version }}
+          SDK_VERSION: ${{ steps.sdk_ver.outputs.version }}
         run: |
           set -euo pipefail
 
-          CLI_ZIP="tizen-sdk-skills/tizen-cli/tizen-sdk-v${VERSION}.zip"
-          VSIX="tizen-sdk-skills/vscode/tizen-ai-extension-v${VERSION}.vsix"
+          CLI_ZIP="tizen-sdk-skills/tizen-cli/tizen-sdk-v${SDK_VERSION}.zip"
+          VSIX="tizen-sdk-skills/vscode/tizen-ai-extension-v${SDK_VERSION}.vsix"
+          SDK_SRC_ZIP="tizen-sdk-skills-source-v${VERSION}.zip"
+          ACTION_SRC_ZIP="tizen-action-skills-source-v${VERSION}.zip"
 
           if gh release view "${RELEASE_TAG}" &>/dev/null; then
             echo "Release ${RELEASE_TAG} exists; updating it in place"
@@ -154,17 +176,25 @@ jobs:
             fi
 
             # Replace assets by name so their download URLs stay stable.
-            gh release upload "${RELEASE_TAG}" --clobber "${CLI_ZIP}" "${VSIX}"
+            gh release upload "${RELEASE_TAG}" --clobber \
+              "${CLI_ZIP}" "${VSIX}" "${SDK_SRC_ZIP}" "${ACTION_SRC_ZIP}"
 
-            # Regenerate the notes at the new commit from the filtered file
-            # and publish a leftover draft (a no-op when the release is
-            # already live).
-            gh release edit "${RELEASE_TAG}" --target "${SHA}" --notes-file release-notes.md --draft=false
+            # Regenerate the notes at the new commit.
+            gh release edit "${RELEASE_TAG}" --target "${SHA}" --draft=false
           else
             echo "Creating new release ${RELEASE_TAG}"
             gh release create "${RELEASE_TAG}" \
               --target "${SHA}" \
               --title "${RELEASE_TAG}" \
-              --notes-file release-notes.md \
-              "${CLI_ZIP}" "${VSIX}"
+              --generate-notes \
+              "${CLI_ZIP}" "${VSIX}" "${SDK_SRC_ZIP}" "${ACTION_SRC_ZIP}"
           fi
+
+          # GitHub auto-generates "Source code (zip)" and "Source code (tar.gz)"
+          # for every release. These are full-repository snapshots — redundant
+          # with the per-plugin source zips uploaded above. Delete them so
+          # the release page only shows the curated assets. Use || true
+          # because the assets may already be gone (re-run) or GitHub may
+          # rename them.
+          gh release delete-asset "${RELEASE_TAG}" "Source code (zip)" --yes 2>/dev/null || true
+          gh release delete-asset "${RELEASE_TAG}" "Source code (tar.gz)" --yes 2>/dev/null || true

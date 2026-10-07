@@ -23,8 +23,8 @@ whole repository; each project directory has its own `CONTRIBUTING.md` with the 
 
 ## Adding a new plugin
 
-This repository is an umbrella for several independently versioned plugins. Each plugin is one
-top-level directory; `tizen-sdk-skills/` is the reference layout. A new plugin
+This repository is an umbrella for several plugins. Each plugin is one top-level
+directory; `tizen-sdk-skills/` is the reference layout. A new plugin
 `<plugin-name>/` must provide:
 
 | Path | Purpose |
@@ -50,14 +50,16 @@ Register the plugin in the repository-root files:
 3. `llms.txt`: add the plugin README and its main reference doc under `## Plugins`.
 4. `CONTRIBUTING.md` (this file): add a row to the project table at the top.
 5. `.github/CODEOWNERS`: add a `<plugin-name>` block.
-6. `.github/workflows/`: copy `ci.yml` and `release.yml` to `ci-<plugin-name>.yml` and
-   `release-<plugin-name>.yml`, replace the `tizen-sdk-skills/` paths, and use the tag
-   prefix `<plugin-name>-v*` so the plugin releases independently
-   (`git tag <plugin-name>-vX.Y.Z`). Keep the note at the top of `ci.yml` in mind: a
-   workflow whose jobs are **required status checks** must not use a `paths:` filter,
-   otherwise a PR that only touches repository-root files can never be merged.
+6. `.github/workflows/release.yml`: add a step to package the new plugin's source
+   zip (`git archive --format=zip --prefix=<plugin-name>/ HEAD <plugin-name>/`) and
+   add it to the `gh release create`/`upload` asset list. No separate workflow file
+   is needed — the repository releases as a whole under `tizen-agent-skills-v*`.
 
-Each plugin owns its own version number and release cadence. Keep a pull request inside one
+Each plugin keeps its own version number in its `package.json` and
+`common/.claude-plugin/plugin.json` (advanced independently of the release
+version). The repository releases as a whole under `tizen-agent-skills-v*`
+(`git tag tizen-agent-skills-vX.Y.Z`); the release version is tracked in the
+root `package.json` and `CHANGELOG.md`. Keep a pull request inside one
 plugin directory (plus the root registration files above when adding the plugin).
 
 ## License of contributions
