@@ -1,0 +1,20 @@
+{
+  "name": "tizen-action-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Tizen Action Framework provider skill for AI coding agents. The plugin root loaded by the hosts is common/.",
+  "license": "Apache-2.0",
+  "author": "Samsung Electronics",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Samsung/tizen-agent-skills.git",
+    "directory": "tizen-action-skills"
+  },
+  "bugs": {
+    "url": "https://github.com/Samsung/tizen-agent-skills/issues"
+  },
+  "homepage": "https://github.com/Samsung/tizen-agent-skills/tree/main/tizen-action-skills",
+  "scripts": {
+    "test": "bash common/skills/tizen-action-skill/scripts/test_scaffold_action.sh && bash common/skills/tizen-action-skill/scripts/test_scaffold_custom_action.sh"
+  }
+}

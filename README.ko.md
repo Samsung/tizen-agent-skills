@@ -25,6 +25,7 @@
 | 플러그인 | 하는 일 | 지원 호스트 | 버전 | 설치 및 문서 |
 |---|---|---|---|---|
 | [`tizen-sdk-skills/`](tizen-sdk-skills/) | 타이젠 SDK를 처음부터 끝까지 자동화: SDK 설치, 프로젝트 생성, 빌드, 에뮬레이터·디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서, dlog 분석, Playwright 테스트. 스킬 29개, 에이전트 24개, 독립 실행 `tizen-sdk` CLI, VS Code용 Tizen AI Extension 포함. | Claude Code, Cline, Codex CLI, Gemini CLI, VS Code, 독립 실행 CLI | 1.4.1 | [빠른 시작](tizen-sdk-skills/README.ko.md#빠른-시작) · [README](tizen-sdk-skills/README.ko.md) · [English](tizen-sdk-skills/README.md) · [스킬 레퍼런스](tizen-sdk-skills/docs/SKILLS_REFERENCE.md) |
+| [`tizen-action-skills/`](tizen-action-skills/) | Tizen Action Framework provider 개발: 기본 Action 카테고리 선택 또는 custom `.action`/`.entity` 작성, C#·C++·JavaScript·Flutter-Tizen/Dart용 `actionc`/TIDL stub 생성, provider metadata 등록, `action-tool` 검증. 스킬 1개. | Claude Code | 1.0.0 | [README](tizen-action-skills/README.ko.md) · [English](tizen-action-skills/README.md) |
 <!-- plugins:end -->
 
 ## 빠른 시작
