@@ -24,7 +24,7 @@
 4. **문제 보고는 에뮬레이터가 언급되어도 이 스킬의 일입니다** — "에뮬레이터에서 com.samsung.fh.youtube 동영상을 재생하니 CPU가 300%까지 올라가고 재생이 안 돼요, 조사해줘"는 `tizen-device-manager`(디바이스 목록·에뮬레이터 종료 전용)의 작업이 아니라 여기로 라우팅합니다 (이슈 #211).
 5. **커널 로그는 `kernel collect` → `kernel stop` → `kernel analyze`로** — `sdb shell dmesg` / `cat /proc/kmsg` 금지 (이슈 #213).
 6. **증거 프로브는 `investigate --symptoms "…"`와 `probe run <id>`로** — `sdb shell top / ps / free / cat /proc/meminfo`를 직접 치지 않습니다 (이슈 #214).
-7. **에러부터 분석, 전체 로그는 마지막에** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; 증상이 설명되지 않을 때만 `error-analyze … details` → 필터를 건 `app-log` → `probe run` (이슈 #215).
+7. **에러부터 분석, 전체 로그는 마지막에** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; 증상이 설명되지 않을 때만 `error-analyze … details` → `search "<발견된 문자열>" --context 1` (수집된 모든 카테고리, 엔트리 단위) → 필터를 건 `app-log` → `probe run` (이슈 #215, #254).
 
 ---
 
@@ -39,7 +39,7 @@
 | 3 | **멈추고 질문** — "지금 이슈를 재현해 주세요. (1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요" — 그리고 **턴 종료** | (에이전트 상호작용 — `sleep`·폴링 없음) |
 | 4 | 답변 후: 수집기 중지 | `--action stop-collect` · `--action kernel --subcommand stop` |
 | 5 | 에러부터 분석 | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
-| 6 | 설명되지 않을 때만 확대 | `--action error-analyze --format details` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 6 | 설명되지 않을 때만 확대 | `--action error-analyze --format details` → `--action search --pattern "<발견된 문자열>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
 | 7 | 2개 언어 보고서, 다음 단계 안내, 정리 | `--action stop` |
 
 ---
@@ -365,6 +365,13 @@ tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id org.example.myapp --
 
 `app-log`는 절대 첫 번째 분석 호출이 아닙니다 (이슈 #215).
 
+분석 결과나 사용자가 특정 문자열(에러 메시지, 태그, URL, PID)을 지목했다면 전체 로그를 넘기기 전에 `search`로 수집된 모든 카테고리를 한 번에 찾습니다 — 어느 앱이 남겼는지 몰라도 되고, 스택 트레이스를 포함한 엔트리 전체가 돌아옵니다 (바이너리 v0.2.6+, 이슈 #254). `.hot.log` 파일을 `grep`하지 않습니다:
+
+```bash
+tizen-cli tizen-sdk dlog-analyzer --action search --pattern "connection refused" --context 1 --priority W
+tizen-cli tizen-sdk dlog-analyzer --action search --pattern "Exception|SIGSEGV" --regex --category org.example.myapp --count
+```
+
 **사용자가 "계속 수집"을 선택한 경우:**
 
 백그라운드 수집이 계속 진행됩니다. 사용자가 추가 테스트를 완료한 후 다시 "수집 중지 및 분석"을 요청할 때까지 대기합니다.
@@ -406,6 +413,7 @@ tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id org.example.my
 | 앱 로그 수집 중지 | `tizen-cli tizen-sdk dlog-analyzer --action stop-collect` |
 | 앱 에러 분석 | `tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id <id> [--format summary\|details]` |
 | 전체 앱 로그 출력 | `tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id <id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]` |
+| 수집 로그 전체에서 문자열/정규식 검색 | `tizen-cli tizen-sdk dlog-analyzer --action search --pattern <text> [--regex] [--category <id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]` |
 | 디바이스 프로필 | `tizen-cli tizen-sdk dlog-analyzer --action device-profile [--refresh]` |
 | 조사 | `tizen-cli tizen-sdk dlog-analyzer --action investigate [--app-id <id>] [--symptoms <text>]` |
 | 프로브 목록 | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand list` |

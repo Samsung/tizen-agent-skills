@@ -5,10 +5,10 @@
     "url": "https://github.com/Samsung"
   },
   "description": "Tizen development skills and plugins for AI coding agents — install the Tizen SDK, create, build, debug and test Tizen Web, Native, .NET, RPK, RPM and Samsung TV apps from Claude Code.",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "metadata": {
     "description": "Catalog of the plugins in github.com/Samsung/tizen-agent-skills. Each plugin is versioned independently; this version is the catalog version.",
-    "version": "1.4.1"
+    "version": "1.4.2"
   },
   "plugins": [
     {
@@ -16,7 +16,7 @@
       "displayName": "Tizen SDK Skills",
       "source": "./tizen-sdk-skills/common",
       "description": "Automate the Tizen SDK end to end for AI coding agents: install the SDK and TV extension, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run emulators and devices over sdb, manage certificates, debug remotely with GDB / netcoredbg / CDP, analyse dlog and run Playwright tests.",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "author": {
         "name": "Samsung Electronics"
       },

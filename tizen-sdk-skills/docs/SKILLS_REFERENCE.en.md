@@ -1341,10 +1341,11 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | Parameter    | Type   | Default      | Description                                                              |
 | ------------ | ------ | ------------ | ------------------------------------------------------------------------ |
-| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` |
+| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` |
 | `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect` (background) / `stop` / `analyze`. timeline: `show`/`report`/`analyze`/`export` |
 | `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, app-log; optional for investigate (app-scoped) |
 | `symptoms`   | string | `null`       | For investigate: the user's own symptom words (e.g. "300% cpu, video not playing") — selects the probe bundles |
+| `pattern`    | string | _(search)_   | For search (required there): text to look for (several allowed, any one matches; `--regex` for a Python regular expression). Narrow / shape with `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json` |
 | `format`     | string | `null`       | For error-analyze only: `summary` (summary lines only), `details` (detail entries only), or omit for both |
 | `serial`     | string | `null`       | Optional sdb device serial (auto-select if omitted)                      |
 
@@ -1364,6 +1365,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id] --symptoms "<the
 node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--priority <p>] [--max-lines <n>]   # escalation only
+node <plugin>/lib/cli/dlog-analyzer-cli.js search <pattern> [--regex] [--category <app-id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]   # find a string across every collected log
 ```
 
 **Workflow (background monitoring):**
@@ -1409,6 +1411,7 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 | `stop-collect`  | Stop the background app dlog collection process                   |
 | `error-analyze` | Analyze collected app logs for E/F priority errors with deduplication — the first analysis call |
 | `app-log`       | Full collected log of one app (all priorities, hot + cold) — escalation only, after `error-analyze`, filtered |
+| `search`        | Text / regex search across every collected dlog category (each app, `_general`, `_unparsed`; kernel excluded) — finds a string without knowing which app wrote it and returns whole entries, stack traces intact (binary v0.2.6+; never `grep` the `.hot.log` files) |
 | `investigate`   | One-shot first pass: symptom words → probe bundles → correlated report (the first call of a symptom investigation) |
 | `probe`         | `list` the evidence-probe catalog / `run <probe-id>` one probe (replaces hand-typed `sdb shell top/ps/free`) |
 | `kernel`        | `collect` the kernel log in the background / `stop` it / `analyze` it (replaces `sdb shell dmesg`) |

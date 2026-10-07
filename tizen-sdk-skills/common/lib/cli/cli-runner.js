@@ -133,15 +133,30 @@ class UsageError extends Error {
  * Unknown --options consistently throw UsageError regardless of whether
  * they use space-separated or equals-separated syntax.
  *
+ * A flag listed in `repeatableFlags` collects every occurrence into an array
+ * (`--tag A --tag B` → `{ tag: ["A", "B"] }`, also for the = form) instead of
+ * keeping only the last value; two flags bound to the same propName merge
+ * into one array. A repeatable flag that was never given is simply absent.
+ *
  * @param {string[]} args               - process.argv.slice(2)
  * @param {Object<string, string>} optionFlags  - { "--flag": "propName" }
  * @param {Object<string, string>} booleanFlags  - { "--flag": "propName" }
+ * @param {string[]} [repeatableFlags]  - subset of optionFlags keys that collect into arrays
  * @returns {{ options: Object, positional: string[] }}
  */
-function parseArgs(args, optionFlags, booleanFlags = {}) {
+function parseArgs(args, optionFlags, booleanFlags = {}, repeatableFlags = []) {
   const options = {};
   const positional = [];
   let onlyPositional = false;
+  const repeatable = new Set(repeatableFlags);
+  const bind = (flag, key, value) => {
+    if (repeatable.has(flag)) {
+      if (!Array.isArray(options[key])) options[key] = [];
+      options[key].push(value);
+    } else {
+      options[key] = value;
+    }
+  };
 
   for (let i = 0; i < args.length; i++) {
     const token = args[i];
@@ -169,7 +184,7 @@ function parseArgs(args, optionFlags, booleanFlags = {}) {
         // --boolean-flag=true|false
         options[booleanKey] = valuePart !== "false" && valuePart !== "0";
       } else if (key) {
-        options[key] = valuePart;
+        bind(flagPart, key, valuePart);
       } else {
         // Unknown option in --key=value form — throw consistently with
         // the space-separated path (not silently push to positional).
@@ -196,7 +211,7 @@ function parseArgs(args, optionFlags, booleanFlags = {}) {
       if (isKnownFlag) {
         throw new UsageError(`Option ${token} requires a value`);
       }
-      options[key] = value;
+      bind(token, key, value);
       i++;
     } else if (token.startsWith("--")) {
       // Unknown option — throw to catch typos early.
@@ -247,10 +262,17 @@ function exitWithUsageError(command, usage, message) {
  *
  * @returns {{ options: Object, positional: string[] }}
  */
-function parseArgsOrExit(command, usage, args, optionFlags, booleanFlags = {}) {
+function parseArgsOrExit(
+  command,
+  usage,
+  args,
+  optionFlags,
+  booleanFlags = {},
+  repeatableFlags = [],
+) {
   // `--background` is already gone from process.argv (module load, above).
   try {
-    return parseArgs(args, optionFlags, booleanFlags);
+    return parseArgs(args, optionFlags, booleanFlags, repeatableFlags);
   } catch (e) {
     if (e instanceof UsageError) {
       exitWithUsageError(command, usage, e.message);

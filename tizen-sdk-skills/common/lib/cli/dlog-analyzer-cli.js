@@ -24,6 +24,7 @@
  *   stop-collect    — Stop the background app log collection process
  *   error-analyze   — Analyze collected app logs for E/F priority errors
  *   app-log         — Print the full collected log for one app (all priorities, hot + cold files)
+ *   search          — Search every collected dlog category for text or a regex (binary v0.2.6+)
  *   device-profile   — Detect and print the connected device's profile
  *   investigate      — Run a one-shot first-pass investigation and emit a budgeted report
  *   probe            — List and run evidence probes from the data-driven catalog
@@ -48,6 +49,7 @@
  *   node dlog-analyzer-cli.js stop-collect
  *   node dlog-analyzer-cli.js error-analyze <app-id> [format]
  *   node dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>] [--format <f>] [--output <file>] [--max-lines <n>] [--max-chars <n>]
+ *   node dlog-analyzer-cli.js search <pattern> [pattern ...] [--pattern <p>]... [--category <app-id|_general|_unparsed>]... [--regex] [--case-sensitive] [--invert] [--all] [--context <n>] [--after-context <n>] [--before-context <n>] [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--count] [--format text|json] [--output <file>] [--max-matches <n>] [--max-lines <n>] [--max-chars <n>]
  *   node dlog-analyzer-cli.js device-profile [serial] [--refresh] [--max-age <n>] [--format <f>]
  *   node dlog-analyzer-cli.js investigate [general|app] [app-id] [serial] [--format <f>] [--max-lines <n>] [--max-chars <n>]
  *   node dlog-analyzer-cli.js probe list|run [probe-id] [serial] [--format <f>]
@@ -66,6 +68,10 @@
  *   node .../dlog-analyzer-cli.js dlog-collect org.example.myapp
  *   node .../dlog-analyzer-cli.js stop-collect
  *   node .../dlog-analyzer-cli.js error-analyze org.example.myapp summary
+ *   node .../dlog-analyzer-cli.js search "connection refused"
+ *   node .../dlog-analyzer-cli.js search "Exception|SIGSEGV" --regex --context 2 --priority W
+ *   node .../dlog-analyzer-cli.js search handshake --category org.example.myapp --since 10m --count
+ *   node .../dlog-analyzer-cli.js search "timeout|refused" --regex --format json --max-matches 20
  *   node .../dlog-analyzer-cli.js log-dump
  *   node .../dlog-analyzer-cli.js log-dump emulator-26101 --filter "*:E" --lines 100
  *   node .../dlog-analyzer-cli.js log-dump --output ./device.log --lines 0
@@ -88,6 +94,7 @@ const {
   stopCollectAppLogs,
   analyzeErrors,
   appLog,
+  searchLogs,
   deviceProfile,
   investigate,
   runProbe,
@@ -104,9 +111,11 @@ const USAGE =
   "Usage: node dlog-analyzer-cli.js <action> [params...] " +
   '[--filter "<spec> ..."] [--lines <n>] [--output <file>] [--confirm]';
 
-// Flags are only meaningful for log-dump / log-clear / app-log / device-profile /
-// investigate / probe / timeline / kernel; every other action is positional.
-// `--background` was already removed from argv by cli-runner.
+// Flags are only meaningful for log-dump / log-clear / app-log / search /
+// device-profile / investigate / probe / timeline / kernel; every other action
+// is positional. `--background` was already removed from argv by cli-runner.
+// The flags in REPEATABLE_FLAGS collect every occurrence into an array
+// (`--pattern a --pattern b`, `--tag A --tag B`); the others keep the last.
 const OPTION_FLAGS = {
   "--filter": "filter",
   "--lines": "lines",
@@ -125,6 +134,14 @@ const OPTION_FLAGS = {
   "--budget": "budget",
   "--budget-tokens": "budgetTokens",
   "--probe-id": "probeId",
+  // search only
+  "--pattern": "pattern",
+  "--category": "category",
+  "--app-id": "category", // the binary's alias of --category
+  "--context": "context",
+  "--after-context": "afterContext",
+  "--before-context": "beforeContext",
+  "--max-matches": "maxMatches",
 };
 const BOOLEAN_FLAGS = {
   "--confirm": "confirm",
@@ -132,7 +149,16 @@ const BOOLEAN_FLAGS = {
   "--with-context": "withContext",
   "--with-kernel": "withKernel",
   "--allow-network-probe": "allowNetworkProbe",
+  // search only
+  "--regex": "regex",
+  "--case-sensitive": "caseSensitive",
+  "--invert": "invert",
+  "--all": "all",
+  "--count": "count",
 };
+// `--tag` is repeatable for app-log and search alike; `--category` and its
+// alias `--app-id` share one key, so mixing them yields a single array.
+const REPEATABLE_FLAGS = ["--pattern", "--category", "--app-id", "--tag"];
 
 // --- Main entry point ---
 const { options, positional } = parseArgsOrExit(
@@ -141,6 +167,7 @@ const { options, positional } = parseArgsOrExit(
   process.argv.slice(2),
   OPTION_FLAGS,
   BOOLEAN_FLAGS,
+  REPEATABLE_FLAGS,
 );
 const [action, param1, param2, param3] = positional;
 
@@ -155,6 +182,7 @@ const VALID_ACTIONS = [
   "stop-collect",
   "error-analyze",
   "app-log",
+  "search",
   "device-profile",
   "investigate",
   "probe",
@@ -231,6 +259,31 @@ runCli(COMMAND, async () => {
         keywords: options.keyword,
         format: options.format,
         output: options.output,
+        maxLines: options.maxLines,
+        maxChars: options.maxChars,
+      });
+    case "search":
+      // search <pattern> [pattern ...] — every positional after the action is
+      // a pattern (any one matches unless --all); each --pattern (repeatable)
+      // adds one more, e.g. for a pattern that starts with "--". Reads the
+      // collected files: no serial.
+      return searchLogs([...positional.slice(1), ...(options.pattern || [])], {
+        categories: options.category,
+        regex: options.regex === true,
+        caseSensitive: options.caseSensitive === true,
+        invert: options.invert === true,
+        all: options.all === true,
+        context: options.context,
+        afterContext: options.afterContext,
+        beforeContext: options.beforeContext,
+        since: options.since,
+        until: options.until,
+        priority: options.priority,
+        tags: options.tag,
+        count: options.count === true,
+        format: options.format,
+        output: options.output,
+        maxMatches: options.maxMatches,
         maxLines: options.maxLines,
         maxChars: options.maxChars,
       });

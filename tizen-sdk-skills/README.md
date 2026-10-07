@@ -300,7 +300,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-10-01 against v1.4.1. Every row can be re-measured with the
+Measured on 2026-10-07 against v1.4.2. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 

@@ -11,8 +11,51 @@
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-10-07
+
+`tizen-dlog-analyzer`에 `search` 액션이 추가됐습니다 — 수집된 모든 dlog 카테고리(각 앱, `_general`,
+`_unparsed`; 커널 제외)에서 일반 텍스트나 Python 정규식을 한 번에 검색합니다. "`connection refused`를
+어느 앱이 남겼지?"가 필요한 에이전트가 더 이상 규칙이 금지하는 `.hot.log` 직접 `grep`에 의존하지 않아도
+됩니다. 번들 바이너리는 이미 v0.2.7a0였으며, JS 러너, tizen-cli 스펙, 양쪽 SKILL.md 모두 바이너리의
+`search` 서브커맨드를 완전한 매개변수 검증과 빠진 카테고리를 모두 나열하는 `no_logs` 게이트와 함께
+노출합니다. 공통 argv 파서에 `repeatableFlags`가 추가돼 `--pattern`, `--category` / `--app-id`, `--tag`가
+배열로 수집됩니다. CLI 러너 조회 블록에 대한 **(skills)** 수정 세 건이 추가로 들어갑니다:
+`rewrite-runner-snippets.js`가 섹션 경계를 명시적으로 파싱하고, Bash와 PowerShell 블록을 먼저 cmd.exe
+블록을 마지막에 두며, `tizen-screenshot`의 "do not wrap" 안내문이 셸 선택 줄에 흡수됐습니다.
+
 ### Added
 
+- **`tizen-dlog-analyzer search` — 수집된 모든 dlog 카테고리에서 텍스트/정규식 검색** (이슈 #254;
+  `common/lib/core/dlog-analyzer.js`, `common/lib/cli/dlog-analyzer-cli.js`, `common/lib/core/sdk-commands.js`,
+  `tizen-cli/src/command-specs/dlog-analyzer.ts`, `common/skills/tizen-dlog-analyzer/SKILL.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`, `common/agents/tizen-dlog-analyzer.md`,
+  `common/lib/tests/dlog-analyzer.test.js`, 가드 규칙 텍스트와 dlog-analyzer 문서). TizenDLogAnalyzer v0.2.6에
+  추가된 `search` 서브커맨드는 수집된 모든 카테고리 — 각 앱, `_general`, `_unparsed` (커널 제외) — 에서
+  일반 텍스트나 Python 정규식을 한 번에 찾습니다. 어느 앱이 남겼는지 몰라도 되고, 원본 라인 전체와 스택
+  트레이스 연속 라인까지 매칭하므로 엔트리 전체가 돌아옵니다. 번들 바이너리는 이미 v0.2.7a0였지만 JS 러너,
+  tizen-cli 스펙, 스킬 텍스트 어디에도 노출되지 않아, "`connection refused`를 어느 앱이 남겼지?"가 필요한
+  에이전트에게는 `app-log`(앱 하나, 전체 로그)나 규칙이 금지하는 `.hot.log` 직접 `grep`밖에 없었습니다. 이제
+  러너에 `search` 액션이 있습니다: 패턴은 위치 인자(`search "connection refused"`, 여러 개면 하나라도 일치,
+  `--all`이면 모두 일치)이고 `--`로 시작하는 패턴은 `--pattern`(반복 가능)으로; `--category <app-id|_general|_unparsed>`
+  (`--app-id` 별칭, 반복 또는 쉼표 구분)로 범위를 좁히고; `--regex`, `--case-sensitive`, `--invert`, `--context` / `--after-context` /
+  `--before-context`(엔트리 단위), `--since` / `--until`, `--priority`, `--tag`, `--count`, `--format text|json`,
+  `--output`, `--max-matches`(기본 100), `--max-lines` / `--max-chars`가 바이너리로 전달됩니다 — 모든 패턴은
+  `--pattern`을 통해 넘기므로 `-1 returned` 같은 값이 옵션으로 해석되지 않고, 값은 실행 전에 검증합니다
+  (패턴/태그/시각/경로의 제어 문자, 공백이 든 태그, `V D I W E F` 밖의 우선순위, 정수가 아닌 제한값 →
+  `invalid_parameters`). 엔벨로프는 다른 로그 리더처럼 SDK 경로를 먼저 검사하고(`sdk_path_not_set`), 수집된
+  로그가 없으면 바이너리의 exit 1 대신 **빠진 카테고리 전부**(`errors[0].missing_categories`) 또는 빠진
+  `app/` 디렉터리를 명시한 `no_logs`를 돌려주며, JSON / `--count` 출력에서 `total_matches` / `returned` / `truncated`를
+  꺼내 담아 에이전트가 엔벨로프만 보고도 패턴을 좁혀야 할지 알 수 있게 합니다. 일치 없음도 `success`이며
+  `No entry matches …` 메시지가 붙습니다. tizen-cli에는 `--action search --pattern <text...>`(가변 인자)와 같은
+  스위치가 추가되었습니다. 두 SKILL.md와 에이전트는 언제 쓰는지를 설명합니다 — 분석 순서(규칙 12)에서
+  `error-analyze … details`와 필터를 건 `app-log` 사이의 표적 단계, "로그에서 X 찾아줘" / "어느 앱이 X를
+  남겼지"의 답, 첫 분석 호출은 아니며, 수집 파일을 `grep`하지 않음(규칙 2) — 그리고 단위 테스트는 argv 빌더,
+  파라미터 검증, 출력 요약, `sdk_path_not_set` 게이트, 실제 CLI를 통한 `no_logs` 목록, 두 하네스 간 드리프트
+  가드를 다룹니다. 공용 argv 파서(`common/lib/cli/cli-runner.js`의 `parseArgs`)에 선택적 `repeatableFlags`
+  목록이 추가되어 러너가 `--flag a --flag b`를 마지막 값만 남기는 대신 배열로 모을 수 있습니다 —
+  dlog-analyzer는 `--pattern`, `--category` / `--app-id`, `--tag`에 사용합니다(`app-log`의 `--tag`는 반복
+  가능하다고 문서화되어 있었지만 마지막 값만 남았습니다); 다른 러너는 변경 없습니다. common 스킬 버전은
+  1.4.0으로 올렸습니다.
 - **`tizen-install-app`가 설치 + 실행 성공 후 다음 단계로 `tizen-dlog-analyzer`를 제시**
   (`common/skills/tizen-install-app/SKILL.md`, `common/agents/tizen-install-app.md`,
   `tizen-cli/skills/tizen-install-app/SKILL.md`). "Suggested next steps" 목록에는 Playwright(웹앱), 재실행,
@@ -1301,7 +1344,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...HEAD
+[1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0
 [1.3.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...tizen-sdk-skills-v1.3.1

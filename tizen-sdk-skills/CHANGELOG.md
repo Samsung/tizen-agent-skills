@@ -11,8 +11,54 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.2] — 2026-10-07
+
+`tizen-dlog-analyzer` gains a `search` action — plain text or Python regex across every collected dlog
+category at once (each app, `_general`, `_unparsed`; kernel excluded), so an agent that needs "which app
+logged `connection refused`?" no longer falls back to a forbidden `grep` on the `.hot.log` files. The
+bundled binaries were already at v0.2.7a0; the JS runner, the tizen-cli spec and both SKILL.md copies now
+expose the binary's `search` subcommand with full parameter validation and a `no_logs` gate that lists every
+missing category. The shared argv parser gains `repeatableFlags` so `--pattern`, `--category` / `--app-id`
+and `--tag` collect into arrays. Three further **(skills)** fixes land for the CLI-runner lookup blocks:
+`rewrite-runner-snippets.js` now parses sections by explicit boundaries, the Bash and PowerShell blocks lead
+with the cmd.exe block last, and `tizen-screenshot`'s "do not wrap" note is folded into the shell-pick line.
+
 ### Added
 
+- **`tizen-dlog-analyzer search` — text / regex search across every collected dlog category** (issue #254;
+  `common/lib/core/dlog-analyzer.js`, `common/lib/cli/dlog-analyzer-cli.js`, `common/lib/core/sdk-commands.js`,
+  `tizen-cli/src/command-specs/dlog-analyzer.ts`, `common/skills/tizen-dlog-analyzer/SKILL.md`,
+  `tizen-cli/skills/tizen-dlog-analyzer/SKILL.md`, `common/agents/tizen-dlog-analyzer.md`,
+  `common/lib/tests/dlog-analyzer.test.js`, the guard rule texts and the dlog-analyzer docs). TizenDLogAnalyzer
+  v0.2.6 added a `search` subcommand that finds plain text or a Python regex in every collected category at
+  once — each app, `_general`, `_unparsed` (kernel excluded) — without knowing which app wrote it, matching
+  the whole raw line and the entry's stack-trace continuation lines so a match returns the whole entry. The
+  bundled binaries were already at v0.2.7a0, but neither the JS runner, the tizen-cli spec nor the skill text
+  exposed it, so an agent that needed "which app logged `connection refused`?" had only `app-log` (one app,
+  whole log) or a hand-typed `grep` on the `.hot.log` files, which the rules forbid. The runner now has a
+  `search` action: patterns are positional (`search "connection refused"`, several = any one matches, `--all`
+  = every one) or `--pattern` (repeatable) for one that starts with `--`; `--category <app-id|_general|_unparsed>`
+  (`--app-id` alias, repeatable or comma-separated) narrows the scope; `--regex`, `--case-sensitive`, `--invert`, `--context` /
+  `--after-context` / `--before-context` (whole entries), `--since` / `--until`, `--priority`, `--tag`,
+  `--count`, `--format text|json`, `--output`, `--max-matches` (default 100), `--max-lines` / `--max-chars`
+  pass through to the binary — every pattern via `--pattern`, so a value like `-1 returned` is never parsed
+  as an option, and the values are checked before anything runs (control characters in a pattern / tag /
+  time / path, a tag with whitespace, a priority outside `V D I W E F`, a non-integer limit →
+  `invalid_parameters`). The envelope gates on the SDK path first (`sdk_path_not_set`, like the other log
+  readers), returns `no_logs` listing **every** missing category (`errors[0].missing_categories`) or the
+  missing `app/` directory when nothing has been collected (instead of the binary's exit 1), and copies `total_matches` / `returned` / `truncated` out of the JSON or `--count` output so the
+  agent can tell from the envelope alone whether to narrow the pattern; no match is still `success` with a
+  `No entry matches …` message. tizen-cli gets `--action search --pattern <text...>` (variadic) plus the
+  same switches. Both SKILL.md copies and the agent describe when to use it — the targeted step between
+  `error-analyze … details` and the filtered `app-log` in the analysis order (Rule 12), the answer to "find
+  X in the logs" / "which app logged X" / 로그에서 X 찾아줘, never the first analysis call, never `grep` on
+  the collected files (Rule 2) — and the unit tests cover the argv builder, the parameter validation, the
+  output summary, the `sdk_path_not_set` gate, the `no_logs` listing through the real CLI and the drift guard
+  across both harnesses. The shared argv parser (`common/lib/cli/cli-runner.js` `parseArgs`) gains an
+  optional `repeatableFlags` list so a runner can collect `--flag a --flag b` into an array instead of
+  keeping the last value — dlog-analyzer uses it for `--pattern`, `--category` / `--app-id` and `--tag`
+  (`app-log`'s `--tag` was documented as repeatable but kept only the last one); other runners are
+  unchanged. The common skill version is bumped to 1.4.0.
 - **`tizen-install-app` suggests `tizen-dlog-analyzer` as the next step after a successful install + run**
   (`common/skills/tizen-install-app/SKILL.md`, `common/agents/tizen-install-app.md`,
   `tizen-cli/skills/tizen-install-app/SKILL.md`). The "Suggested next steps" list only offered Playwright
@@ -1377,7 +1423,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...HEAD
+[1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0
 [1.3.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.0...tizen-sdk-skills-v1.3.1

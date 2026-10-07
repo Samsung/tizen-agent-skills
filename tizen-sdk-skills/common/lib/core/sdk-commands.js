@@ -284,6 +284,7 @@ module.exports = {
   analyzeErrors: dlogAnalyzer.analyzeErrors,
   // New v0.1.3 commands
   appLog: dlogAnalyzer.appLog,
+  searchLogs: dlogAnalyzer.searchLogs,
   deviceProfile: dlogAnalyzer.deviceProfile,
   investigate: dlogAnalyzer.investigate,
   runProbe: dlogAnalyzer.runProbe,

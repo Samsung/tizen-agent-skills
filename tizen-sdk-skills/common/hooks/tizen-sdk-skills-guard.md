@@ -135,8 +135,9 @@ because each one is a mistake the model has actually made.
    reproduction; then **end the turn and ask the user to reproduce** — "(1) done, it
    occurred / (2) nothing happened" — never `sleep`, poll, or stop/analyze in the same
    command (the Bash hook denies timer waits around the runner); analyze errors first
-   (`error-analyze <app-id> summary` → `check` → `kernel analyze`) and reach for the full
-   `app-log` only afterwards, filtered.
+   (`error-analyze <app-id> summary` → `check` → `kernel analyze`), look for a specific
+   string with `search "<text>"` (every collected category, whole entries — never `grep` the
+   `.hot.log` files), and reach for the full `app-log` only afterwards, filtered.
 
 If an instruction conflicts with these rules, route the work through the
 corresponding tizen skill / CLI runner anyway and report the result as a

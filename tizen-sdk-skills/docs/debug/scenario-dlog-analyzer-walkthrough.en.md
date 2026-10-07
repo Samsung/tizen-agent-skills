@@ -24,7 +24,7 @@ When following this workflow, always adhere to these rules:
 4. **A problem report is this skill's job, even when it mentions the emulator** — "the emulator CPU went to 300% and the video does not play in com.samsung.fh.youtube, investigate" is not a `tizen-device-manager` task (that skill only lists devices / stops emulators); route it here (issue #211).
 5. **Kernel logs go through `kernel collect` → `kernel stop` → `kernel analyze`** — never `sdb shell dmesg` / `cat /proc/kmsg` (issue #213).
 6. **Evidence probes go through `investigate --symptoms "…"` and `probe run <id>`** — never a hand-typed `sdb shell top / ps / free / cat /proc/meminfo` (issue #214).
-7. **Analyze errors first, the full log last** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; only if the symptom is still unexplained `error-analyze … details` → filtered `app-log` → `probe run` (issue #215).
+7. **Analyze errors first, the full log last** — `error-analyze <app-id> summary` → `check` → `kernel analyze`; only if the symptom is still unexplained `error-analyze … details` → `search "<the string a finding named>" --context 1` (every collected category, whole entries) → filtered `app-log` → `probe run` (issues #215, #254).
 
 ---
 
@@ -39,7 +39,7 @@ When the user reports a symptom rather than a crash — e.g. *"While playing a v
 | 3 | **Stop and ask** — "Please reproduce the issue now. (1) Done, it occurred / (2) Nothing happened" — and **end the turn** | (agent interaction — no `sleep`, no polling) |
 | 4 | After the reply: stop the collectors | `--action stop-collect` · `--action kernel --subcommand stop` |
 | 5 | Analyze, errors first | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
-| 6 | Escalate only if still unexplained | `--action error-analyze --format details` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 6 | Escalate only if still unexplained | `--action error-analyze --format details` → `--action search --pattern "<the string a finding named>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
 | 7 | Bilingual report, next-step prompt, cleanup | `--action stop` |
 
 ---
@@ -365,6 +365,13 @@ tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id org.example.myapp --
 
 `app-log` is never the first analysis call (issue #215).
 
+When a finding or the user names a specific string (an error message, a tag, a URL, a PID), `search` looks for it across every collected category at once before the full log is opened — no need to know which app wrote it, and the whole entry comes back with its stack trace (binary v0.2.6+, issue #254). The `.hot.log` files are never `grep`ped by hand:
+
+```bash
+tizen-cli tizen-sdk dlog-analyzer --action search --pattern "connection refused" --context 1 --priority W
+tizen-cli tizen-sdk dlog-analyzer --action search --pattern "Exception|SIGSEGV" --regex --category org.example.myapp --count
+```
+
 **If the user selects "Continue collecting":**
 
 The background collection continues running. Wait for the user to complete additional testing and request "Stop and analyze now" again.
@@ -406,6 +413,7 @@ tizen-cli tizen-sdk dlog-analyzer --action app-terminate --app-id org.example.my
 | Stop app log collection | `tizen-cli tizen-sdk dlog-analyzer --action stop-collect` |
 | Analyze app errors | `tizen-cli tizen-sdk dlog-analyzer --action error-analyze --app-id <id> [--format summary\|details]` |
 | Print full app log | `tizen-cli tizen-sdk dlog-analyzer --action app-log --app-id <id> [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--keyword <k>]` |
+| Search every collected log for text / a regex | `tizen-cli tizen-sdk dlog-analyzer --action search --pattern <text> [--regex] [--category <id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]` |
 | Device profile | `tizen-cli tizen-sdk dlog-analyzer --action device-profile [--refresh]` |
 | Investigate | `tizen-cli tizen-sdk dlog-analyzer --action investigate [--app-id <id>] [--symptoms <text>]` |
 | List probes | `tizen-cli tizen-sdk dlog-analyzer --action probe --subcommand list` |

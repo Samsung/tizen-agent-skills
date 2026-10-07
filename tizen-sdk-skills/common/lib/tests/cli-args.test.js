@@ -117,6 +117,53 @@ check(
   { request: "x" },
 );
 
+// Test 3b: repeatableFlags collect every occurrence (dlog-analyzer search
+// --pattern / --category / --tag — issue #254 review: "--pattern a --pattern b"
+// must not silently keep only b)
+console.log("\nTest 3b: repeatableFlags");
+const ROPTS = { "--tag": "tag", "--category": "cat", "--app-id": "cat" };
+check(
+  "  repeated space form collects in order",
+  parseArgs(["--tag", "A", "--tag", "B"], ROPTS, {}, ["--tag"]).options,
+  { tag: ["A", "B"] },
+);
+check(
+  "  equals form and space form mix",
+  parseArgs(["--tag=A", "--tag", "B", "--tag=C"], ROPTS, {}, ["--tag"]).options,
+  { tag: ["A", "B", "C"] },
+);
+check(
+  "  a single occurrence is still an array",
+  parseArgs(["--tag", "A"], ROPTS, {}, ["--tag"]).options,
+  { tag: ["A"] },
+);
+check(
+  "  never given → absent, not []",
+  parseArgs(["x"], ROPTS, {}, ["--tag"]).options,
+  {},
+);
+check(
+  "  two flags bound to one key merge into one array",
+  parseArgs(["--category", "org.a", "--app-id", "_general"], ROPTS, {}, [
+    "--category",
+    "--app-id",
+  ]).options,
+  { cat: ["org.a", "_general"] },
+);
+check(
+  "  a flag NOT listed as repeatable keeps the last value",
+  parseArgs(["--tag", "A", "--tag", "B"], ROPTS, {}, ["--category"]).options,
+  { tag: "B" },
+);
+check(
+  "  omitted repeatableFlags → old behaviour",
+  parseArgs(["--tag", "A", "--tag", "B"], ROPTS).options,
+  { tag: "B" },
+);
+checkThrowsUsage("  repeatable flag still needs a value", () =>
+  parseArgs(["--tag", "A", "--tag"], ROPTS, {}, ["--tag"]),
+);
+
 // Test 4: sdb-helper-cli.js CLI contract (spawned; no sdb/SDK access needed)
 console.log("\nTest 4: sdb-helper-cli.js contract");
 const CLI = path.join(__dirname, "..", "cli", "sdb-helper-cli.js");

@@ -1,6 +1,6 @@
 {
   "name": "tizen-cli-plugin-tizen-sdk",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "tizen-cli plugin (tizen-sdk) wrapping the tizen-sdk-skills workflows — SDK install, project create/build, device, app install, remote debug",
   "main": "dist/tizen-sdk.js",
   "bin": {

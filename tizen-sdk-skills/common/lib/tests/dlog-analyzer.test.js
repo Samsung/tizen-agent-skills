@@ -80,6 +80,9 @@ const {
   LOCK_REFUSAL_RE,
   REPORT_FORMAT_HINT,
   STOP_OUTPUT_LINES,
+  searchLogs,
+  buildSearchArgs,
+  summarizeSearchOutput,
 } = require("../core/dlog-analyzer");
 const { VERSION_DIR_RE } = require("../core/plugin-cache");
 
@@ -546,6 +549,202 @@ console.log("\nTest 11: new v0.1.3 command param validation");
   );
 })();
 
+// searchLogs — requires at least one pattern; categories are app ids
+// (issue #254: the binary's v0.2.6+ `search` subcommand)
+(async () => {
+  const none = await searchLogs([]);
+  check("search no pattern → failure", none.status, "failure");
+  check(
+    "search no pattern → invalid_parameters",
+    none.errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search undefined pattern → invalid_parameters",
+    (await searchLogs(undefined)).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search empty-string pattern → invalid_parameters",
+    (await searchLogs([""])).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search invalid category → invalid_parameters",
+    (await searchLogs("foo", { categories: "$(id)" })).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search invalid format → invalid_parameters",
+    (await searchLogs("foo", { format: "yaml" })).errors[0].category,
+    "invalid_parameters",
+  );
+  // Values the binary could only misparse are refused before anything runs
+  // (review of #254: the builder forwards user input verbatim, so the
+  // boundaries are enforced here).
+  check(
+    "search pattern with a newline → invalid_parameters",
+    (await searchLogs("foo\nbar")).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search pattern with NUL → invalid_parameters",
+    (await searchLogs(["ok", "a\u0000b"])).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search tag with whitespace → invalid_parameters",
+    (await searchLogs("foo", { tags: ["OK", "bad tag"] })).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search unknown priority → invalid_parameters",
+    (await searchLogs("foo", { priority: "X" })).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search non-integer --context → invalid_parameters",
+    (await searchLogs("foo", { context: "two" })).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search negative --max-matches → invalid_parameters",
+    (await searchLogs("foo", { maxMatches: -1 })).errors[0].category,
+    "invalid_parameters",
+  );
+  check(
+    "search --since with a control character → invalid_parameters",
+    (await searchLogs("foo", { since: "10m\r" })).errors[0].category,
+    "invalid_parameters",
+  );
+  // Regex metacharacters and a leading '-' are legitimate pattern content and
+  // must get past validation (they then stop at the SDK-path gate on a host
+  // without a config, or at no_logs / the binary with one — never at
+  // invalid_parameters).
+  check(
+    "search regex metacharacters and a leading '-' are not rejected",
+    [
+      (await searchLogs(["-1 returned", "Exception|SIGSEGV", "a.*(b)?"]))
+        .errors?.[0]?.category,
+      (await searchLogs("x", { priority: "w", tags: "E20:W" })).errors?.[0]
+        ?.category,
+    ].every((c) => c !== "invalid_parameters"),
+    true,
+  );
+})();
+
+// buildSearchArgs — pure argv builder for the binary's `search`
+console.log("\nTest 11b: search argv builder");
+check(
+  "every pattern goes through --pattern (a leading '-' is never an option)",
+  buildSearchArgs(["-1 returned", "foo"]),
+  ["search", "--pattern", "-1 returned", "--pattern", "foo"],
+);
+check(
+  "categories: array, single and comma-separated all become --category",
+  [
+    buildSearchArgs(["x"], { categories: ["org.a", "_general"] }).slice(3),
+    buildSearchArgs(["x"], { categories: "org.a,_unparsed" }).slice(3),
+    buildSearchArgs(["x"], { categories: "org.a" }).slice(3),
+  ],
+  [
+    ["--category", "org.a", "--category", "_general"],
+    ["--category", "org.a", "--category", "_unparsed"],
+    ["--category", "org.a"],
+  ],
+);
+check(
+  "boolean switches and numeric limits are forwarded verbatim",
+  buildSearchArgs(["Exception|SIGSEGV"], {
+    regex: true,
+    caseSensitive: true,
+    invert: true,
+    all: true,
+    context: 2,
+    afterContext: 1,
+    beforeContext: 0,
+    since: "10m",
+    until: "08-14 18:09",
+    priority: "W",
+    tags: ["CHROMIUM", "E20"],
+    count: true,
+    format: "json",
+    output: "matches.log",
+    maxMatches: 20,
+    maxLines: 0,
+    maxChars: 16000,
+  }),
+  [
+    "search",
+    "--pattern",
+    "Exception|SIGSEGV",
+    "--regex",
+    "--case-sensitive",
+    "--invert",
+    "--all",
+    "--context",
+    "2",
+    "--after-context",
+    "1",
+    "--before-context",
+    "0",
+    "--since",
+    "10m",
+    "--until",
+    "08-14 18:09",
+    "--priority",
+    "W",
+    "--tag",
+    "CHROMIUM",
+    "--tag",
+    "E20",
+    "--count",
+    "--format",
+    "json",
+    "--output",
+    "matches.log",
+    "--max-matches",
+    "20",
+    "--max-lines",
+    "0",
+    "--max-chars",
+    "16000",
+  ],
+);
+check(
+  "false switches and absent options add nothing",
+  buildSearchArgs(["x"], { regex: false, count: false, context: undefined }),
+  ["search", "--pattern", "x"],
+);
+
+// summarizeSearchOutput — the envelope tells the agent whether to narrow down
+check(
+  "json output → total_matches / returned / truncated",
+  summarizeSearchOutput(
+    '{"query":{},"total_matches":42,"returned":20,"truncated":true,"matches":[]}',
+    { format: "json" },
+  ),
+  { total_matches: 42, returned: 20, truncated: true },
+);
+check(
+  "json output that is not JSON → nothing claimed",
+  summarizeSearchOutput("No matches", { format: "json" }),
+  {},
+);
+check(
+  "--count output → total_matches from the 'total:' line",
+  summarizeSearchOutput("org.a: 3\n_general: 4\ntotal: 7\n", { count: true }),
+  { total_matches: 7 },
+);
+check(
+  "text output → only an any-match signal",
+  [
+    summarizeSearchOutput("org.a: 09-30 10:00:00.000 E/TAG(1): boom\n", {}),
+    summarizeSearchOutput("", {}),
+  ],
+  [{ matched: true }, { matched: false }],
+);
+
 // deviceProfile — no params to validate; its failure mode on this host
 // depends on the SDK config, the bundled binary and a connected device, so
 // the deterministic check lives in Test 13b (child process, empty home).
@@ -676,6 +875,36 @@ check("CLI runner accepts probe", cliSource.includes('"probe"'), true);
 check("CLI runner accepts snapshot", cliSource.includes('"snapshot"'), true);
 check("CLI runner accepts timeline", cliSource.includes('"timeline"'), true);
 check("CLI runner accepts kernel", cliSource.includes('"kernel"'), true);
+check("CLI runner accepts search", cliSource.includes('"search"'), true);
+check(
+  "CLI runner parses the search switches",
+  [
+    "--pattern",
+    "--category",
+    "--regex",
+    "--context",
+    "--count",
+    "--max-matches",
+  ]
+    .map((f) => cliSource.includes(`"${f}"`))
+    .every(Boolean),
+  true,
+);
+if (fs.existsSync(tsSpec)) {
+  const tsSource = fs.readFileSync(tsSpec, "utf-8");
+  check("tizen-cli spec offers search", tsSource.includes('"search"'), true);
+  check(
+    "tizen-cli spec offers --pattern (variadic) and --regex",
+    tsSource.includes('"--pattern <text...>"') &&
+      tsSource.includes('"--regex"'),
+    true,
+  );
+  check(
+    "tizen-cli spec wires search to sdkCommands.searchLogs",
+    tsSource.includes("sdkCommands.searchLogs("),
+    true,
+  );
+}
 check("CLI runner parses --format", cliSource.includes('"--format"'), true);
 check(
   "CLI runner parses --max-lines",
@@ -891,6 +1120,7 @@ console.log(
     ["dlog-collect", "org.example.app"],
     ["error-analyze", "org.example.app"],
     ["app-log", "org.example.app"],
+    ["search", "connection refused"],
     ["device-profile"],
     ["investigate", "org.example.app"],
     ["probe", "list"],
@@ -928,6 +1158,115 @@ console.log(
     true,
   );
   fs.rmSync(emptyHome, { recursive: true, force: true });
+}
+
+// Test 13c: search through the real CLI against a configured but mostly
+// empty log directory — the repeatable --category / --pattern flags are
+// collected (not last-wins), and no_logs names EVERY missing category
+// (review of #254). Runs before the binary is needed, so no device / binary.
+console.log("\nTest 13c: search no_logs lists every missing category");
+{
+  const { spawnSync } = require("child_process");
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-search-home-"));
+  const sdkRoot = path.join(home, "sdk");
+  const sdkData = path.join(home, "sdk-data");
+  fs.mkdirSync(sdkRoot, { recursive: true });
+  fs.mkdirSync(path.join(sdkData, "dloganalyzer", "app", "org.present"), {
+    recursive: true,
+  });
+  fs.writeFileSync(
+    path.join(sdkRoot, "sdk.info"),
+    `TIZEN_SDK_INSTALLED_PATH=${sdkRoot}\nTIZEN_SDK_DATA_PATH=${sdkData}\n`,
+  );
+  fs.writeFileSync(path.join(home, ".tizen.sdk.path.config"), `${sdkRoot}\n`);
+  const cli = path.join(__dirname, "..", "cli", "dlog-analyzer-cli.js");
+  const env = { ...process.env, USERPROFILE: home, HOME: home };
+  delete env.TIZEN_SDK_PATH;
+  const run = (argv) => {
+    const r = spawnSync(process.execPath, [cli, ...argv], {
+      env,
+      encoding: "utf-8",
+      timeout: 60_000,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    try {
+      return JSON.parse(r.stdout || r.stderr);
+    } catch (_e) {
+      return { raw: r.stdout, err: r.stderr };
+    }
+  };
+  const two = run([
+    "search",
+    "foo",
+    "--category",
+    "org.present,org.missing1",
+    "--app-id",
+    "org.missing2",
+  ]);
+  check(
+    "two missing categories → no_logs",
+    two.errors?.[0]?.category,
+    "no_logs",
+  );
+  check(
+    "no_logs lists both missing categories (repeated + comma + alias merged)",
+    two.errors?.[0]?.missing_categories,
+    ["org.missing1", "org.missing2"],
+  );
+  check(
+    "no_logs message names both, not only the first",
+    /"org\.missing1".*"org\.missing2"/.test(two.errors?.[0]?.message || ""),
+    true,
+  );
+  const one = run(["search", "foo", "--category", "org.missing1"]);
+  check(
+    "one missing category → singular wording with the path",
+    /No collected logs found for category "org\.missing1" \(expected .*org\.missing1\)/.test(
+      one.errors?.[0]?.message || "",
+    ),
+    true,
+  );
+  const repeated = run([
+    "search",
+    "--pattern",
+    "a",
+    "--pattern",
+    "b",
+    "--category",
+    "org.missing1",
+    "--priority",
+    "X",
+  ]);
+  check(
+    "repeated --pattern does not drop a value: validation sees both patterns, then rejects the priority",
+    [
+      repeated.errors?.[0]?.category,
+      /priority/.test(repeated.errors?.[0]?.message || ""),
+    ],
+    ["invalid_parameters", true],
+  );
+  const noArgs = run(["search", "--pattern", "a", "--pattern", "b"]);
+  check(
+    "repeated --pattern alone is accepted as the pattern list (gets past validation)",
+    noArgs.errors?.[0]?.category !== "invalid_parameters",
+    true,
+  );
+  fs.rmSync(path.join(sdkData, "dloganalyzer", "app"), {
+    recursive: true,
+    force: true,
+  });
+  const none = run(["search", "foo"]);
+  check(
+    "no app/ directory at all → no_logs naming it",
+    [
+      none.errors?.[0]?.category,
+      /No collected logs found \(expected .*app\)/.test(
+        none.errors?.[0]?.message || "",
+      ),
+    ],
+    ["no_logs", true],
+  );
+  fs.rmSync(home, { recursive: true, force: true });
 }
 
 // Test 14: no runner copy may pass --base-dir / an output dir to the binary
