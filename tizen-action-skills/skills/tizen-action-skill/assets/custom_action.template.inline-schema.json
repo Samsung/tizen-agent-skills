@@ -4,8 +4,8 @@
   "type": "tidl",
   "category": "{{CATEGORY}}",
   "description": "{{DESCRIPTION}}",
-  "allowedBackground": "true",
-  "autoDispose": "false",
+  "allowedBackground": true,
+  "autoDispose": false,
   "inputSchema": {
     "type": "object",
     "properties": {

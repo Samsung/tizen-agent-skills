@@ -1,97 +1,104 @@
-
 # Tizen Action Framework — Web (JavaScript) provider
 
-This reference covers the workflow for a **Tizen Web app** (WRT — plain HTML/CSS/JS, no npm or bundler) acting as a Tizen Action provider for an **existing, default action category**: run `actionc -l JS` → implement the generated `ServiceBase` class → register it with `stub.listen()`. It stops there — `config.xml` wiring, `.wgt` packaging/signing, deploying to a device, and testing via `action-tool execute`/`dlogutil` are outside this reference's scope; help with those only if asked, using general Tizen Web knowledge rather than tooling bundled here.
+This reference covers a **Tizen Web app** (WRT — plain HTML/CSS/JS, no npm or bundler) acting as a Tizen Action provider: run `actionc -l JS` → implement the generated `ServiceBase` class → register it with `stub.listen()` → declare provider metadata in `config.xml`. Packaging and signing the `.wgt` follow the usual Tizen Web workflow.
 
-**Scope reminder:** this only applies to `"type": "tidl"` actions, and only to **default categories already known to the framework**. If the developer actually wants an `appControl` or `plugin` action, redirect them — see `common.md`. If they want to define a brand-new action that no default category covers, redirect them to `custom-action.md` — once that skill produces a generated stub, come back here for the implementation step.
+**Scope reminder:** `"type": "tidl"` actions only. For a brand-new action that no default category covers, start with `custom-action.md`, then come back here at Step 4. For the shared conventions (output parameters, subscriptions, request routing, on-device verification), read `common.md`.
 
-For the `actionc` CLI reference, read `common.md`. Default categories aren't documented statically — they're read live from the installed toolchain via `../scripts/list_categories.sh`/`.ps1`. For `.action`/`.entity` schema details, read `custom-action.md` — don't re-derive that here.
+## Contents
+
+- [Step 1 — Toolchain check](#step-1--toolchain-check)
+- [Step 2 — Confirm a default category covers this](#step-2--confirm-a-default-category-covers-this)
+- [Step 3 — Run `actionc -l JS`](#step-3--run-actionc--l-js)
+- [Step 4 — Implement the `ServiceBase` class and register](#step-4--implement-the-servicebase-class-and-register-with-stublisten)
+- [Step 5 — Register in config.xml](#step-5--register-in-configxml)
+- [Step 6 — Verify on a device](#step-6--verify-on-a-device)
+- [Troubleshooting](#troubleshooting)
 
 ## Step 1 — Toolchain check
 
-Before anything else, confirm `actionc` is actually usable: run `../scripts/check_toolchain_env.sh` (or `.ps1` on Windows). If it reports anything missing, stop and give the developer the exact install command it prints — do not attempt to install the toolchain yourself, since that persistently modifies their shell profile or Windows environment variables.
+Run `bash scripts/check_toolchain_env.sh` (or `.ps1` on Windows). If it reports anything missing, stop and give the developer the setup command it prints — do not install the toolchain yourself.
 
 ## Step 2 — Confirm a default category covers this
 
-Run `../scripts/list_categories.sh` (or `.ps1` on Windows), optionally with a filter keyword (e.g. `list_categories.sh Browser`), to see the default categories actually installed on this machine — read live from `$ACTIONC_DATA_DIR/actions`, so it never drifts from what `actionc -a` can actually resolve. To see which entity type(s) a specific action uses, read its `.action` file directly under `$ACTIONC_DATA_DIR/actions/`.
-
-- **If a default category matches**: continue to Step 3 with `-a <Category>`.
-- **If nothing matches**: no default category applies — go to `custom-action.md` to define the action first. Once that skill generates a stub, come back here for Step 4 (implementation + registration) using the generated file it produced.
+Run `bash scripts/list_categories.sh` (or `.ps1`), optionally with a keyword (e.g. `Browser`), then read the matching `.action` files under `$ACTIONC_DATA_DIR/actions/` for exact names and entity types. If nothing matches, go to `custom-action.md`.
 
 ## Step 3 — Run `actionc -l JS`
 
 ```bash
+cd js
 actionc -a Tizen.Action.<Category> -l JS -o Impl<Category>
 ```
 
-`../scripts/run_actionc.sh --language JS -- -a Tizen.Action.<Category> -o Impl<Category>` wraps this and validates the language value. Run it from your web app's `js/` folder; it produces a single `Impl<Category>.js` targeting the `tizen.rpcport` WebAPI.
+`bash scripts/scaffold_action.sh --language JS --category Tizen.Action.<Category> --out-name Impl<Category>` does the same into `./js` after checking the toolchain, then lists the `on<Method>` stubs to override. The result is one `Impl<Category>.js` targeting the `tizen.rpcport` WebAPI.
 
-`../scripts/scaffold_action.sh --language JS --category Tizen.Action.<Category> --out-name Impl<Category>` goes further: it checks the toolchain, generates into `./js`, and then lists the `on<Method>` stubs you need to override.
+The generated file defines **global classes** (no module, no namespace):
+- Entity classes (e.g. `TizenEntityWebPageInfo extends TizenEntity`) with public fields and `serialize`/`deserialize`.
+- `<Interface>ServiceBase` (e.g. `TizenActionBrowserServiceBase`) — **the class you extend**. It declares empty `on<Method>(...) {}` stubs, one per action (`Tv_Tizen.Action.Browser_OpenPage` → `onOpenPage`).
+- `<Interface>` (e.g. `TizenActionBrowser extends _rpc.StubBase`) — the stub you construct and call `.listen()` on.
+- `ActionServiceProxy` and, for subscription actions, a `<Interface>_<Method>Event` delegate class.
 
-The generated file contains, among other things:
-- Entity classes (e.g. `TizenEntityBrowser`) with `serialize`/`deserialize` methods, mirroring every `.entity` file the category's actions reference.
-- **`<Interface>ServiceBase`** (e.g. `TizenActionBrowserServiceBase`, named `<Category-as-PascalCase-interface>ServiceBase` — note this is a plain top-level class, not nested, and it is **not namespaced**, unlike the C++/C# generated code) — **this is the class you implement in Step 4**. It declares empty `on<Method>(...) {}` stub methods, one per action in the category, named after the method suffix of the action's `name` with an `on` prefix (e.g. action `Tv_Tizen.Action.Browser_OpenPage` → method `onOpenPage`).
-- **`<Interface>`** (e.g. `TizenActionBrowser`, extends `_rpc.StubBase`) — the RPC stub object you instantiate and call `.listen()` on.
+Because the classes are global, an app that implements two categories must generate them under names that don't collide.
 
-**Read the generated file to get the exact `on<Method>` parameter lists before writing the implementation** — they vary per category (some take an `out`-style `result` parameter to fill in) and shouldn't be guessed.
-
-⚠️ Because the generated classes are global (not namespaced/module-scoped), **if a single app ever implements two categories, their generated files must use distinct class names** — this is a real collision risk worth flagging to the developer if they mention wanting more than one category.
+**Read the generated file before writing the implementation.** Each `_dispatch<Method>` function shows exactly what it passes in and reads back.
 
 ## Step 4 — Implement the `ServiceBase` class and register with `stub.listen()`
 
-`../assets/js_action_pattern.js` is an annotated, generalized version of this pattern (based on the real `ActionSampleAppJs` sample) — read it alongside the generated file's `on<Method>` stubs. The shape:
+`assets/js_action_pattern.js` is an annotated version of this pattern — read it alongside the generated `on<Method>` stubs.
+
+Handlers run **synchronously**: the dispatcher serializes the returned `TizenEntityStatus` immediately, so a handler must not be `async` or return a Promise. Do slow work ahead of time, or return a failure status.
+
+Output parameters follow `common.md`; in JS:
+- **optional single result** — a holder `{ value: null }`: set `result.value = new TizenEntityX()`.
+- **required single result** — a pre-built entity: set its fields.
+- **list result** — a pre-built array: `result.push(...)`.
 
 ```js
-class <Category>Service extends <Interface>ServiceBase {
+class BrowserService extends TizenActionBrowserServiceBase {
   constructor(sender, instance) { super(sender, instance); }
 
   onCreate() { /* a client connected */ }
   onTerminate() { /* a client disconnected */ }
 
-  // One override per on<Method> stub in the generated ServiceBase.
-  // Entity results that come back via an `out`-style `result` parameter are
-  // filled in by setting its fields directly (it's passed in already
-  // constructed) rather than returned separately.
-  on<Method>(input) {
-    // ... actual business logic here ...
+  onOpenPage(webPageInfo) {
+    // ... business logic ...
     const status = new TizenEntityStatus();
     status.Success = true;
-    status.Reason = "";
+    return status;
+  }
+
+  onGetCurrentPage(result) {          // optional result: { value: null }
+    const page = new TizenEntityWebPageInfo();
+    page.Url = location.href;
+    result.value = page;
+    const status = new TizenEntityStatus();
+    status.Success = true;
     return status;
   }
 }
 ```
 
-Registration happens **via a closure factory function, not a `Type` or a separate `Factory` object** — this is the third of the four registration patterns (contrast with C#'s `Listen(typeof(...))`, C++'s `Factory` instance, and Dart's `await listen()`). Call it from a `window.load` handler so it runs once the page (and the `tizen.rpcport` WebAPI) is ready:
+Registration passes **a closure** that builds one service per connecting client. Call it once the page (and `tizen.rpcport`) is ready:
 
 ```js
 let stub = null;
 
-function start() {
-  if (typeof tizen === 'undefined' || !tizen.rpcport) {
-    console.error('tizen.rpcport WebAPI is not available');
-    return;
-  }
+window.addEventListener('load', function () {
   try {
-    stub = new <Interface>(function (sender, instance) {
-      return new <Category>Service(sender, instance);
+    stub = new TizenActionBrowser(function (sender, instance) {
+      return new BrowserService(sender, instance);
     });
     stub.listen();
   } catch (e) {
     console.error('Listen failed: ' + e.message);
   }
-}
-
-window.addEventListener('load', function () {
-  start();
 });
 ```
 
-Load order matters: `<script src="js/Impl<Category>.js">` must come **before** `<script src="js/main.js">` (or wherever `start()` lives) in `index.html`, since the generated file defines the classes `main.js` depends on.
+Load order matters: `<script src="js/Impl<Category>.js">` must come **before** the script that defines the service.
+
+A subscription action receives the delegate as its last parameter (`onWatch(event)`). Keep it, call `event.invoke(entity)` per event inside `try/catch`, and drop it in `onTerminate()`.
 
 ## Step 5 — Register in config.xml
-
-For each action your provider exposes, add **one** metadata entry in your `config.xml`, and enable background support:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -109,7 +116,7 @@ For each action your provider exposes, add **one** metadata entry in your `confi
   <tizen:metadata key="http://tizen.org/metadata/action/provider"
                   value="Tv_Tizen.Action.Browser_OpenPage"/>
 
-  <!-- CRITICAL: allow RPC-port requests while app is in background -->
+  <!-- Keep answering RPC-port requests while the app is in the background -->
   <tizen:setting background-support="enable"/>
 
   <tizen:privilege name="http://tizen.org/privilege/datasharing"/>
@@ -118,20 +125,23 @@ For each action your provider exposes, add **one** metadata entry in your `confi
 ```
 
 **Key points:**
-- **Only `action/provider` is registered** in the config — the framework resolves the actual `.action`/`.entity` files from its internal data directory.
-- The value is the action's **`name` exactly** (e.g., `Tv_Tizen.Action.Browser_OpenPage`), not its category or filename.
-- **Use `<tizen:metadata>` with the `tizen:` namespace** — this is required in `config.xml` (unlike C#'s `tizen-manifest.xml` which uses plain `<metadata>`).
-- **`background-support="enable"` is essential** — without it, your web app's JavaScript is suspended when another app takes the foreground, and the action service stops responding to RPC-port requests. With it enabled, the `stub.listen()` callback continues running even while the app is backgrounded.
-- Add one `<tizen:metadata>` entry for every action the provider exposes, including when those actions share a category and TIDL interface.
-- Add the default-operation `<tizen:app-control>` shown above with `reload="disable"`; otherwise a proxy-triggered relaunch reloads the page and destroys the listening stub.
-- Declare `datasharing` and `appmanager.launch` privileges. Filesystem privileges are needed only for optional sample-style file logging.
-- Provider metadata records the config app `id` independently of
-  `details.appid`; the schema value is only the fallback target.
+- The value is the action's **`name` exactly**, not its category or filename. One entry per action (or one entry with a `;`-separated list).
+- Use `<tizen:metadata>` with the `tizen:` namespace in `config.xml`.
+- For a default category, register only `action/provider`. A custom category also needs the `action` and `action/entity` entries, with the files in the widget's `res/` directory — see `custom-action.md`.
+- `background-support="enable"` keeps the JavaScript running while another app is in the foreground; without it, requests time out.
+- The default-operation `<tizen:app-control>` with `reload="disable"` keeps a proxy-triggered relaunch from reloading the page and destroying the listening stub.
+- The application `id` becomes the provider. A default category's `details.appid` names the platform's own app, so callers reach yours through `params.appid` or `action-tool default-app set`.
+
+## Step 6 — Verify on a device
+
+Install the `.wgt`, then follow [Verify on a device](common.md#verify-on-a-device).
 
 ## Troubleshooting
 
-- **`actionc: error: no action files for category '...'`** — either the category name is misspelled, or the toolchain env isn't set up (re-run Step 1's check script). If the category genuinely doesn't exist yet, this isn't a default category — see `custom-action.md`.
-- **`ReferenceError: <Interface>ServiceBase is not defined`** — the generated `Impl<Category>.js` `<script>` tag is missing or loaded after your implementation file; fix the load order in `index.html`.
-- **`tizen.rpcport WebAPI is not available`** — this only exists inside the Tizen Web Runtime on-device/emulator; it will not exist when previewing the page in a normal desktop browser.
-- **`stub.listen()` throws** — check the error message; a common cause is the app's `config.xml` not declaring provider metadata for every exposed action.
-- **Action requests timeout or the app doesn't respond** — verify `<tizen:setting background-support="enable"/>` is in your `config.xml`. Without it, the action service stops when the app is backgrounded.
+- **`actionc: error: no action files for category '...'`** — misspelled category, or `ACTIONC_DATA_DIR` is wrong (re-run Step 1). If the category does not exist, see `custom-action.md`.
+- **`ReferenceError: <Interface>ServiceBase is not defined`** — the generated script tag is missing or loaded after your implementation.
+- **`ReferenceError: tizen is not defined`** at load — the page runs outside the Tizen Web Runtime (e.g. a desktop browser); `tizen.rpcport` only exists on a device or emulator.
+- **`TypeError: _ret.serialize is not a function`** — a handler is `async`, returned a Promise, or returned nothing; return a `TizenEntityStatus` synchronously.
+- **The caller always receives `null` for a result** — an optional result was assigned to the parameter (`result = …`) instead of `result.value = …`.
+- **`execute` fails without reaching the app** — `find-appids` does not list it, or the request carries no `appid` and the app is not the default app.
+- **Requests time out while the app is in the background** — `<tizen:setting background-support="enable"/>` is missing.

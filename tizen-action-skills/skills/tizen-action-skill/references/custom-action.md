@@ -1,59 +1,62 @@
 # Tizen Action Framework — defining a custom action
 
-This reference covers the schema-authoring half of adding a brand-new Tizen Action: writing the `.action` file (and `.entity` file(s), if the input/output needs a new entity type), then running `actionc` to generate the stub. Implementing the generated `ServiceBase` and registering it with `Listen()` is language-specific and lives in `cs.md`/`cpp.md`/`js.md`/`dart.md`. Once a stub exists, it is indistinguishable from a default category's, so switch to the matching language reference and treat it as one.
+This reference covers the schema-authoring half of adding a brand-new Tizen Action: writing the `.action` file (and `.entity` file(s), if the input/output needs a new entity type), then running `actionc` to generate the stub. Implementing the generated `ServiceBase` and registering it with `Listen()` is language-specific and lives in `cs.md`/`cpp.md`/`js.md`/`dart.md`.
 
 **Scope reminder:** this only applies to `"type": "tidl"` actions. If the request is really about an `appControl` or `plugin` action, redirect — see `common.md`.
 
-## What's here
+The framework's complete sample of this path is `samples/tidl-custom-action` in the `tizen-action` repository (a Bookmark category with Save/Get/List and a Watch subscription), and Part 05 of the framework guide walks through it.
 
-The two schema references are appendices further down this same file:
+## Contents
 
-- [`.action` file schema reference](#action-file-schema-reference) — every field, the two `inputSchema`/`outputSchema` shapes (bare entity ref vs. inline object), and worked examples.
-- [`.entity` file schema reference](#entity-file-schema-reference) — the `.entity` format, the single-inheritance chain rooted at `Tizen.Entity`, and how entities map to generated struct/class names.
-
-Alongside them:
+- [Step 0 — Confirm this is actually needed](#step-0--confirm-this-is-actually-needed)
+- [Steps 1–5 — Write, generate, hand off](#step-1--toolchain-check)
+- [Method order is ABI](#method-order-is-abi)
+- [Manifest metadata and packaging](#manifest-metadata-and-packaging)
+- [Troubleshooting](#troubleshooting)
+- [Appendix — `.action` file reference](#action-file-schema-reference)
+- [Appendix — `.entity` file reference](#entity-file-schema-reference)
 
 | Path | Use it to |
 |---|---|
-| `../assets/custom_action.template.bare-ref.json` | Fill in a `.action` for the common case: entity ref in, entity ref out |
-| `../assets/custom_action.template.inline-schema.json` | Fill in a `.action` for inline object schemas / list results |
-| `../assets/custom_entity.template.json` | Fill in a new `.entity` |
-| `../scripts/scaffold_custom_action.sh` | Do the template filling and `actionc` run in one shot |
+| `assets/custom_action.template.bare-ref.json` | Fill in a `.action` for the common case: entity ref in, entity ref out |
+| `assets/custom_action.template.inline-schema.json` | Fill in a `.action` for inline object schemas / list results |
+| `assets/custom_entity.template.json` | Fill in a new `.entity` |
+| `scripts/scaffold_custom_action.sh` | Do the template filling and `actionc` run in one shot |
 
 ## Step 0 — Confirm this is actually needed
 
-Before writing anything new, run `../scripts/list_categories.sh` (or `.ps1` on Windows) — optionally filtered by a keyword — to check, against what's actually installed on this machine, whether a default category already covers the capability. **If one does, stop here** and go to the matching language reference (`cs.md`/`cpp.md`/`js.md`/`dart.md`) instead. A default category means the framework already ships and resolves the schemas, so there is nothing to author, nothing to package, and nothing to keep in sync.
-
-Only continue past this point if the capability is genuinely new.
+Before writing anything new, run `bash scripts/list_categories.sh` (or `.ps1` on Windows) — optionally filtered by a keyword — to check whether a default category already covers the capability. **If one does, stop here** and go to the matching language reference instead. A default category means the framework already ships and resolves the schemas, so there is nothing to author, nothing to package, and nothing to keep in sync.
 
 ## Step 1 — Toolchain check
 
-Confirm `actionc` is actually usable: run `../scripts/check_toolchain_env.sh` (or `.ps1` on Windows). If it reports anything missing, stop and give the developer the exact install command it prints — do not attempt to install the toolchain yourself, since that persistently modifies their shell profile or Windows environment variables.
+Run `bash scripts/check_toolchain_env.sh` (or `.ps1` on Windows). If it reports anything missing, stop and give the developer the setup command it prints — do not install the toolchain yourself.
 
 ## Step 2 — Write the `.action` file
 
-Use the [`.action` schema appendix](#action-file-schema-reference) for the full field reference — the two `inputSchema`/`outputSchema` shapes, bare entity ref vs. inline object, are the part that actually matters here — and start from one of the templates in `../assets/`:
+Use the [`.action` appendix](#action-file-schema-reference) for the field reference and start from one of the templates in `assets/`:
 - `custom_action.template.bare-ref.json` — input/output is a plain reference to an existing entity type (a default one, or one you're about to define)
 - `custom_action.template.inline-schema.json` — input/output is an inline object schema (e.g. a list result)
 
-Keep the `<Prefix>_<Category>_<Method>.action` filename convention — `actionc -i` expects it.
+Keep the `<Prefix>_<Category>_<Method>.action` filename convention — `actionc -i` parses the category out of it. Use a category and entity namespace that cannot be mistaken for a platform one (the sample uses `App_Example.Action.Bookmark_*` and `Example.Entity.Bookmark`), and set `details.appid` to the app that provides the action.
 
 ## Step 3 — Write `.entity` file(s), if needed
 
-If the action's input or output needs a domain model that no existing default entity represents (check `../scripts/list_categories.sh --entities` / `.ps1 -Entities` for what already exists), write a new `.entity` file using the [`.entity` schema appendix](#entity-file-schema-reference) and `../assets/custom_entity.template.json`. Entities support single inheritance rooted at `Tizen.Entity` — reuse an existing entity as a base where it makes sense instead of duplicating fields. For a primitive value, use an inline object schema with a named primitive property instead; a bare primitive is not a valid top-level input or output schema.
+If the input or output needs a domain model that no existing entity represents (check `bash scripts/list_categories.sh --entities` / `.ps1 -Entities`), write a new `.entity` file using the [`.entity` appendix](#entity-file-schema-reference) and `assets/custom_entity.template.json`. Reuse an existing entity as `base` where it fits instead of duplicating fields. For a single primitive value, use an inline object schema with a named primitive property; a bare primitive is not a valid top-level input or output schema.
 
-## Step 4 — Run `actionc` for the target platform
+## Step 4 — Run `actionc`
 
 ```bash
-actionc -i <Prefix>_<Category>_<Method>.action -e <Category>.entity -l <C#|C++|JS|Dart> -o Impl<Category>
+actionc -i <Prefix>_<Category>_<MethodA>.action \
+        -i <Prefix>_<Category>_<MethodB>.action \
+        -e <entities-dir-or-file> -l <C#|C++|JS|Dart> -o Impl<Category>
 ```
 
-`-e` is repeatable if there are multiple `.entity` files (or point it at a directory containing them).
+Pass **every** action of the category, sorted by full action name (see [Method order is ABI](#method-order-is-abi)). A run with only one `-i` generates an interface with only that method. `-e` is repeatable and accepts a directory.
 
-`../scripts/scaffold_custom_action.sh` does Steps 2–4 in one shot — it fills in the `.action` template, writes an `.entity` template for each `--new-entity` you name, then invokes `actionc` for the language you specify:
+`bash scripts/scaffold_custom_action.sh` does Steps 2–4 in one shot: it fills in the `.action` template, writes an `.entity` template for each `--new-entity`, then regenerates the stub from every `*_<Category>_*.action` in the schema directory, sorted, plus every `.entity` there:
 
 ```bash
-../scripts/scaffold_custom_action.sh \
+bash scripts/scaffold_custom_action.sh \
   --language 'C#' \
   --prefix MyApp --category My.Action.Memo --method Save \
   --description 'save a memo' \
@@ -62,230 +65,181 @@ actionc -i <Prefix>_<Category>_<Method>.action -e <Category>.entity -l <C#|C++|J
   --new-entity My.Entity.Memo
 ```
 
-It refuses to overwrite an existing `.action` file, and it only writes the schema files plus `actionc`'s own output — nothing else in the app project. Each new `.entity` starts with a valid string field named `value`, so `actionc` can generate the stub immediately. Customize that field and regenerate before implementing the provider.
-
-**Pick `-l` based on where the provider is being implemented:** `C#` → `cs.md`, `C++` → `cpp.md`, `JS` → `js.md`, `Dart` → `dart.md`.
+It refuses to overwrite an existing `.action` file and only writes the schema files plus `actionc`'s own output. Each new `.entity` starts with a single string field named `value` so `actionc` can generate immediately; replace it with the real fields and regenerate before implementing. Run it again with another `--method` to add an action to the same category.
 
 ## Step 5 — Hand off to the language reference
 
-Once `actionc` succeeds, the generated stub (`ServiceBase` + entity classes) is indistinguishable from what a default category would produce. The schema-definition half is done. Switch to the matching language reference's implementation step:
-- `-l C#` → `cs.md`
-- `-l C++` → `cpp.md`
-- `-l JS` → `js.md`
-- `-l Dart` → `dart.md`
+Once `actionc` succeeds, the generated stub (`ServiceBase` + entity classes) works like a default category's. Switch to the language reference (`-l C#` → `cs.md`, `C++` → `cpp.md`, `JS` → `js.md`, `Dart` → `dart.md`) for implementation and registration, and apply the [manifest metadata](#manifest-metadata-and-packaging) below as well: unlike a default category, a custom category must ship and register its schema files.
 
-Each covers implementing the `ServiceBase` class and registering it. Follow the custom manifest metadata below as well: unlike a default category, a custom category must register its schema resources.
+## Method order is ABI
 
----
+TIDL method ids are positional inside a category. For an app category the device sorts the installed action names; `actionc -i` keeps the command-line order. So:
 
-## Appendix — Manifest metadata (for reference)
+- Always pass every `-i` of the category, sorted by full action name.
+- Adding an action whose name sorts **before** an existing one renumbers every method after it and breaks already-installed callers. Give new actions names that sort last, or ship them in a new category.
+- Never add an `eventSchema` to an action that has shipped — delegate ids are positional too. Add a new action instead.
+- Never change the notation of a shipped property (moving it in or out of `required`, switching `type`↔`base`, reordering `oneOf`) — each changes the wire encoding. Append new fields instead.
 
-Once the implementation is done, register the custom action in the app's manifest/config file. Use the action's **`name`** field from your `.action` file (e.g., `My_Custom.Action.MyFeature_DoThing`).
+## Manifest metadata and packaging
 
-Register all three metadata kinds:
-- `http://tizen.org/metadata/action` — each packaged `.action` resource filename (e.g., `My_Custom.Action.MyFeature_DoThing.action`)
-- `http://tizen.org/metadata/action/entity` — each packaged `.entity` resource filename (e.g., `My.Entity.Feature.entity`)
-- `http://tizen.org/metadata/action/provider` — each custom action's exact **`name`** (e.g., `My_Custom.Action.MyFeature_DoThing`)
+Register all three metadata kinds (each value may also be a `;`-separated list):
+- `http://tizen.org/metadata/action` — each packaged `.action` resource filename (e.g., `App_Example.Action.Bookmark_Save.action`)
+- `http://tizen.org/metadata/action/entity` — each packaged `.entity` resource filename (e.g., `Example.Entity.Bookmark.entity`); omit it when the actions use only installed entities
+- `http://tizen.org/metadata/action/provider` — each action's exact **`name`** (e.g., `App_Example.Action.Bookmark_Save`)
 
-The package-manager parser loads custom schemas only through the `action` and `action/entity` entries; shipping the files and declaring `action/provider` alone does not register them. The parser records the provider appid from the application declaring the metadata, independently of the `.action` file's `details.appid`. The latter is the schema's fallback target when no registered provider has been selected, so the two appids need not match.
+The package-manager parser loads custom schemas only through the `action` and `action/entity` entries; declaring `action/provider` alone does not register them. It records the provider appid from the application that declares the metadata, and `details.appid` must name that same app — a request without `params.appid` goes to `details.appid`, and the framework refuses to call an app that is not a registered provider.
 
-See the matching language reference (`cs.md`/`cpp.md`/`js.md`/`dart.md`) for the exact `tizen-manifest.xml` / `config.xml` syntax.
-
-Custom actions differ from default categories in one packaging respect: your `.action`/`.entity` files are not in the framework data directory, so the app package must ship them. Install them under the app's `res/` and keep them in the source tree next to the code that implements them.
+Ship the `.action`/`.entity` files in the package `res/` directory (for a `.wgt`, the widget's `res/` directory) and keep them in the source tree next to the code that implements them. See the language reference for the exact `tizen-manifest.xml` / `config.xml` syntax and the install rules.
 
 ## Troubleshooting
 
-- **`actionc: error: no action files for category '...'`** — the `.action` file's `category` field doesn't match, the file isn't named `<Prefix>_<Category>_<Method>.action`, or it's not in the current directory / not passed via `-i`.
-- **`action2tidl` fails to resolve an entity reference** — a referenced `.entity` type isn't default and you forgot to pass its file via `-e`; double check `../scripts/list_categories.sh --entities` (`.ps1 -Entities` on Windows) for what already exists before assuming you need a new entity.
-- **Not sure which `-l` to use** — ask which platform the provider is being implemented in (.NET / native C++ / Tizen Web / Flutter-Tizen); that determines both `-l` here and which language reference picks up from Step 5.
+- **`actionc: error: no action files for category '...'`** — the `.action` filename is not `<Prefix>_<Category>_<Method>.action`, or it was not passed via `-i`.
+- **`action2tidl` fails to resolve an entity reference** — a referenced `.entity` type isn't installed and you didn't pass its file via `-e`; check `bash scripts/list_categories.sh --entities` before assuming you need a new entity.
+- **Generated stub has fewer methods than the category** — not every `.action` of the category was passed with `-i`.
+- **Install fails in the metadata parser** — a schema did not validate (run `python3 -m json.tool` on it, then compare it with the appendix), a metadata value does not match a file in `res/`, or the action's `providerPrivilegeLevel` is above the package's signing level.
+- **Not sure which `-l` to use** — ask which platform the provider is implemented in (.NET / native C++ / Tizen Web / Flutter-Tizen).
 
 
 <a id="action-file-schema-reference"></a>
 
-# Appendix — `.action` file schema reference
+# Appendix — `.action` file reference
 
-A `.action` file is a JSON document describing one method of one action category. Its shape is enforced by the framework's own validator (`tizen-action/src/common/action_validator.cc`, constant `kMetaSchemaForActionSchema`), reproduced here verbatim:
-
-```json
-{
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "version": "v2",
-  "title": "Tizen Action Schema",
-  "type": "object",
-  "required": ["name", "type", "category", "description", "inputSchema", "details"],
-  "properties": {
-    "name": { "type": "string" },
-    "type": { "type": "string", "enum": ["appControl", "plugin", "tidl"] },
-    "category": { "type": "string" },
-    "description": { "type": "string" },
-    "inputSchema": { "$ref": "#/definitions/schema" },
-    "outputSchema": { "$ref": "#/definitions/schema" },
-    "requiredPrivileges": {
-      "type": "array",
-      "description": "A list of privileges required to execute the action.",
-      "items": { "type": "string", "description": "Each privilege as a URI (e.g., 'http://tizen.org/privilege/internet')" }
-    },
-    "details": { "type": "object" }
-  },
-  "definitions": {
-    "schema": {
-      "type": "object",
-      "oneOf": [
-        { "required": ["type", "properties"], "properties": {
-            "type": { "enum": ["object"] },
-            "required": { "type": "array", "items": { "type": "string" } },
-            "properties": { "type": "object", "additionalProperties": { "$ref": "#/definitions/propertyDef" } }
-        }},
-        { "required": ["type"], "properties": {
-            "type": { "type": "string", "pattern": "^[^.]+(\\.[^.]+)+$" }
-        }}
-      ]
-    },
-    "propertyDef": {
-      "type": "object",
-      "oneOf": [
-        { "required": ["type", "description"], "properties": {
-            "type": { "type": "string", "enum": ["string", "integer", "boolean", "number", "object", "array"] },
-            "description": { "type": "string" },
-            "enum": { "type": "array", "items": { "type": "string" } },
-            "minimum": { "type": "integer" },
-            "maximum": { "type": "integer" }
-        }},
-        { "required": ["type"], "properties": { "type": { "type": "string", "pattern": "^[^.]+(\\.[^.]+)+$" } } }
-      ]
-    }
-  }
-}
-```
+A `.action` file is a JSON document describing one method of one action category. The framework validates it against the meta schema `kMetaSchemaForActionSchema` in `src/common/action_validator.cc` of the `tizen-action` repository; read that file when a field below is not enough.
 
 ## Field reference
 
 | Field | Required? | Meaning |
 |---|---|---|
-| `name` | yes | Unique action identifier. By convention (not schema-enforced) this also matches the filename: `<Prefix>_<Category>_<Method>` |
-| `type` | yes | One of `appControl` \| `plugin` \| `tidl`. **This skill family only handles `tidl`** — see the scope note in `common.md` |
-| `category` | yes | Groups related actions and, for `tidl` actions, becomes the generated RPC interface name (e.g. `Tizen.Action.Music` → `TizenActionMusic`) |
-| `description` | yes | Human-readable one-liner |
-| `inputSchema` | yes | See "The two schema shapes" below |
-| `outputSchema` | no | Same shape rules as `inputSchema`; omit if the action truly returns nothing |
-| `requiredPrivileges` | no | Array of Tizen privilege URIs, e.g. `http://tizen.org/privilege/internet` |
-| `details` | yes | Free-form object whose shape depends on `type`. For `tidl`, `appid` is the fallback target when no registered provider has been selected; provider metadata may register a different app |
+| `version` | no | Use `"v2"` |
+| `name` | yes | Unique action identifier, equal to the filename: `<Prefix>_<Category>_<Method>` |
+| `type` | yes | `appControl` \| `plugin` \| `tidl`. **This skill only handles `tidl`** |
+| `category` | yes | Groups related actions; for `tidl` it becomes the generated interface (`Example.Action.Bookmark` → `ExampleActionBookmark`) |
+| `description` | yes | What the action does, written for the Agent that picks it |
+| `inputSchema` | yes | See [the schema shapes](#the-inputschema--outputschema-shapes) |
+| `outputSchema` | no | Same shapes as `inputSchema`; omit only if the action truly returns nothing |
+| `eventSchema` | no | Makes the action a subscription; see [Subscription actions](#subscription-actions) |
+| `details` | yes | For `tidl`, `{ "appid": "<provider appid>" }` — the default target when a request names no app |
+| `requiredPrivileges` | no | Privilege URIs the caller needs, e.g. `http://tizen.org/privilege/internet` |
+| `requiresConfirmation` | no | Boolean; the Agent must get the user's approval before executing |
+| `consent` | no | Declares the approval prompt (purpose, modes, risk level, localized messages); implies `requiresConfirmation` — see Part 02 of the guide |
+| `providerPrivilegeLevel` | no | `public` (default) / `partner` / `platform`: the minimum signing level to declare or provide the action, and to see or call it |
+| `allowedBackground` | no | Boolean, `tidl` only, default `false`: allow background execution |
+| `autoDispose` | no | Boolean, `tidl` only, default `false`: let rpc-port dispose the connection after the request; must be `false` with `eventSchema` |
 
-## The two `inputSchema`/`outputSchema` shapes
+Write the booleans as JSON booleans. Older catalogue files used the strings `"true"`/`"false"`, which the parser still accepts.
 
-Each of `inputSchema`/`outputSchema` must be **one of**:
+## The `inputSchema` / `outputSchema` shapes
 
-**Bare primitive types are not valid top-level schemas.** For example,
-`{ "type": "string" }` is rejected during package registration. Wrap a
-primitive in a named property of the inline object shape below, or model it as
-an entity.
+Each must be **one of**:
 
-1. **A bare entity reference** — just a dotted type name matching the pattern `^[^.]+(\.[^.]+)+$` (i.e. at least one dot):
+1. **A bare entity reference** — a dotted type name:
    ```json
-   { "type": "Tizen.Entity.MusicFile" }
+   { "type": "Tizen.Entity.WebPageInfo" }
    ```
-   This is the common case: the whole input or output IS one entity, defined separately in a `.entity` file (see the [`.entity` appendix](#entity-file-schema-reference)).
-
-2. **An inline object schema**, when the input/output contains a primitive value, a combination of fields, or a list:
+2. **An inline object schema**, for primitive values, several fields, or a list:
    ```json
    {
      "type": "object",
-     "required": ["someField"],
+     "required": ["id"],
      "properties": {
-       "someField": { "type": "string", "description": "..." }
+       "id": { "type": "string", "description": "Stable bookmark identifier" }
      }
    }
    ```
-   Each property is either a primitive (`string`/`integer`/`boolean`/`number`/`object`/`array`) with a `description` (and optionally `enum` and/or `minimum`/`maximum`), or itself a dotted entity-type reference (nesting an entity inline). For **list results**, wrap the entity type in an `array` property with `items`:
-   ```json
-   "result": { "type": "array", "description": "Result entities", "items": { "type": "Tizen.Entity.Content" } }
-   ```
 
-## Real-world conventions (not schema-enforced, but followed by all 117 shipped default actions)
+Bare primitives such as `{ "type": "string" }` are rejected at install. In an output, a property named `return` (usually `Tizen.Entity.Status`) becomes the method's return value and every other property an out-parameter.
 
-- `"version": "v2"` — a version marker on every modern action file.
-- Filename == `name` field == `"<Prefix>_<Category>_<Method>"`, e.g. `Tv_Tizen.Action.Browser_OpenPage.action` has `"name": "Tv_Tizen.Action.Browser_OpenPage"`. `actionc -i` actually depends on this naming convention when you feed it a custom action file.
-- `category` matches the `Tizen.Action.<X>` portion of `name` (e.g. `name: Tv_Tizen.Action.Browser_OpenPage` → `category: Tizen.Action.Browser`).
-- Two extra fields appear on every default action file but aren't schema-validated: `"allowedBackground": "true"|"false"` and `"autoDispose": "true"|"false"` (both as **strings**, not booleans). Include them for consistency with the rest of the framework even though nothing enforces them.
+Each property takes one of these forms:
 
-## Worked examples
+| Form | Example | Generated as |
+|---|---|---|
+| primitive | `{ "type": "string", "description": "…" }` (`string`/`integer`/`boolean`/`number`/`object`/`array`, with optional `enum`, `minimum`, `maximum`) | the language's primitive |
+| sized integer | `{ "type": "integer", "format": "int64" }` (also `uint32`, `uint64`) | TIDL `long` / `u32` / `u64` |
+| entity reference | `{ "type": "Tizen.Entity.Photo", "description": "…" }` | the entity class (sliced to that type) |
+| polymorphic slot | `{ "base": "Tizen.Entity.Content", "description": "…" }` | `box<…>`, keeps a derived entity's runtime type (`TypeName`) |
+| alternatives | `{ "oneOf": [ {…}, {…} ], "description": "…" }` | `variant<…>`, in declaration order; never two branches of the same JSON type |
+| list | `{ "type": "array", "description": "…", "items": { "type": "Tizen.Entity.Tab" } }` | list/vector of the item type |
 
-**1. Bare entity ref in, bare entity ref out** (`TizenActionToolchain/data/actions/Tv_Tizen.Action.Browser_OpenPage.action`):
+`required` decides optionality: with no `required` list every property is required; with a list, the properties missing from it are generated as optional types.
+
+## Subscription actions
+
+An `eventSchema` turns the action into a subscription: `outputSchema` is the immediate acknowledgement, then the provider keeps sending events until the caller cancels or disconnects.
+
 ```json
 {
   "version": "v2",
-  "name": "Tv_Tizen.Action.Browser_OpenPage",
+  "name": "App_Example.Action.Bookmark_Watch",
   "type": "tidl",
-  "category": "Tizen.Action.Browser",
-  "description": "open a URL in the browser",
-  "allowedBackground": "true",
-  "autoDispose": "false",
-  "inputSchema": { "type": "Tizen.Entity.WebPageInfo" },
+  "category": "Example.Action.Bookmark",
+  "description": "Subscribe to bookmark changes: reports every bookmark saved from now on",
+  "allowedBackground": true,
+  "autoDispose": false,
+  "inputSchema": { "type": "object", "properties": {} },
   "outputSchema": { "type": "Tizen.Entity.Status" },
-  "details": { "appid": "org.tizen.next-browser" }
+  "eventSchema": {
+    "description": "Fired whenever a bookmark is saved or updated",
+    "once": false,
+    "type": "Example.Entity.Bookmark"
+  },
+  "details": { "appid": "org.example.tidlcustomactionsample" }
 }
 ```
 
-**2. Inline output wrapping a status + a list of entities** — this is the pattern for "find"/"search" actions that return multiple results (`Tv_Tizen.Action.Video_FindContent.action`):
+`eventSchema` takes the same shapes as `outputSchema`, plus `description` (when the event fires) and `once` (`true` closes after the first event). It requires `"type": "tidl"` and `"autoDispose": false`. `actionc` turns it into a `WatchEvent` delegate passed as the method's last parameter — see `common.md`.
+
+## Worked example — object input, status plus entity output
+
+`App_Example.Action.Bookmark_Get` from the framework sample:
+
 ```json
 {
   "version": "v2",
-  "name": "Tv_Tizen.Action.Video_FindContent",
+  "name": "App_Example.Action.Bookmark_Get",
   "type": "tidl",
-  "category": "Tizen.Action.Video",
-  "description": "search video content with filters",
-  "allowedBackground": "true",
-  "autoDispose": "false",
-  "inputSchema": { "type": "Tizen.Entity.ContentQuery" },
+  "category": "Example.Action.Bookmark",
+  "description": "Get a saved bookmark by its stable identifier",
+  "allowedBackground": true,
+  "autoDispose": false,
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "id": { "type": "string", "description": "Identifier of the bookmark to retrieve" }
+    },
+    "required": ["id"]
+  },
   "outputSchema": {
     "type": "object",
     "properties": {
-      "return": { "type": "Tizen.Entity.Status", "description": "status" },
-      "result": { "type": "array", "description": "Result entities", "items": { "type": "Tizen.Entity.Content" } }
+      "return": { "type": "Tizen.Entity.Status", "description": "Operation status" },
+      "bookmark": { "type": "Example.Entity.Bookmark", "description": "Retrieved bookmark" }
     }
   },
-  "details": { "appid": "HEPsqFNie0.tvplusstandalone" }
+  "details": { "appid": "org.example.tidlcustomactionsample" }
 }
 ```
 
-**3. Out of scope, for contrast — a `plugin`-type action** (no `actionc`/`ServiceBase` involved at all):
-```json
-{
-  "name": "tizen_app_launch",
-  "type": "plugin",
-  "category": "app",
-  "description": "Launch an application.",
-  "inputSchema": {
-    "type": "object",
-    "properties": { "appid": { "type": "string", "description": "The ID of the application to launch." } },
-    "required": ["appid"]
-  },
-  "requiredPrivileges": ["http://tizen.org/privilege/appmanager.launch"],
-  "outputSchema": {
-    "type": "object",
-    "properties": { "error": { "type": "string", "description": "Error message, if applicable." } }
-  },
-  "details": { "pluginPath": "libaction-launch-app.so" }
-}
-```
-And `appControl`-type actions look like `{"name":"pickImage","type":"appControl"}` plus a `details` shaped for app-control launch. See `Part03_Eng.md` in the framework repo — that flow needs no `actionc`/`ServiceBase` either.
+Generated C++: `TizenEntityStatus Get(std::string id, ExampleEntityBookmark& bookmark)`. With `"required": ["return"]` in the output, `bookmark` would instead be an optional out-parameter.
 
 
 <a id="entity-file-schema-reference"></a>
 
-# Appendix — `.entity` file schema reference
+# Appendix — `.entity` file reference
 
-An `.entity` file defines one `Tizen.Entity.*` type that `.action` files reference from `inputSchema`/`outputSchema`. Shape:
+An `.entity` file defines one entity type that `.action` files reference:
 
 ```json
 {
-  "typeName": "Tizen.Entity.SomeType",
-  "description": "...",
-  "base": "Tizen.Entity.ParentType",
+  "typeName": "Example.Entity.Bookmark",
+  "description": "A bookmark exposed by the example application",
+  "base": "Tizen.Entity",
   "dataSchema": {
     "type": "object",
+    "required": ["Url", "Title"],
     "properties": {
-      "FieldName": { "type": "string", "description": "..." }
+      "Url": { "type": "string", "description": "Bookmark URL" },
+      "Title": { "type": "string", "description": "Human-readable bookmark title" },
+      "Note": { "type": "string", "description": "Free-form note" }
     }
   }
 }
@@ -293,59 +247,13 @@ An `.entity` file defines one `Tizen.Entity.*` type that `.action` files referen
 
 | Field | Required? | Meaning |
 |---|---|---|
-| `typeName` | yes | The dotted entity type name, e.g. `Tizen.Entity.MusicFile` |
+| `typeName` | yes | The dotted entity type name |
 | `description` | yes | Human-readable one-liner |
-| `base` | no | Parent entity's `typeName`. Omit only for the root `Tizen.Entity` itself |
-| `dataSchema.properties` | yes | Each property is either a primitive (`string`/`integer`/`boolean`/`number`) with a `description` (+ optional `enum`), or itself a dotted entity-type reference for a nested entity field |
+| `base` | yes for new entities | Parent entity's `typeName`; at least `Tizen.Entity` |
+| `dataSchema.properties` | yes | The property forms from the `.action` appendix |
+| `dataSchema.required` | no | Properties left out of it are generated as optional |
+| `entityResolver` | no | Declares a `<Category>_Get<Entity>ByIds` action that refreshes instances by id; see Part 02 of the guide |
 
-## Single-inheritance chain
+## Inheritance and generated names
 
-Every entity ultimately inherits from the root `Tizen.Entity`, which defines `Id` and `Extra`:
-
-```json
-{
-  "typeName": "Tizen.Entity",
-  "description": "root base for all entities",
-  "dataSchema": {
-    "type": "object",
-    "properties": {
-      "Id": { "type": "string", "description": "Id" },
-      "Extra": { "type": "string", "description": "Extra" }
-    }
-  }
-}
-```
-
-An entity's `base` chain is single-inheritance only (one parent, not multiple) — think of it like a class hierarchy. When generating code, the generated struct/class includes the base chain's fields plus its own, base-first.
-
-## Worked example: multi-level chain, enum property, nested entity field
-
-`Tizen.Entity.MusicFile` (chain: `MusicFile` → `Files` → `Tizen.Entity`):
-
-```json
-{
-  "typeName": "Tizen.Entity.MusicFile",
-  "description": "a music track",
-  "base": "Tizen.Entity.Files",
-  "dataSchema": {
-    "type": "object",
-    "properties": {
-      "Title": { "type": "string", "description": "Title" },
-      "Artist": { "type": "Tizen.Entity.Artist", "description": "Artist" },
-      "Album": { "type": "Tizen.Entity.Album", "description": "Album" },
-      "Duration": { "type": "integer", "description": "Duration" },
-      "Genre": { "type": "string", "description": "Genre" },
-      "TrackNumber": { "type": "integer", "description": "TrackNumber" },
-      "Affinity": { "type": "string", "description": "Affinity", "enum": ["liked", "unliked", "unset"] }
-    }
-  }
-}
-```
-
-Notice `Artist` and `Album` are themselves entity references (`Tizen.Entity.Artist`, `Tizen.Entity.Album`) rather than primitives — nesting one entity inside another this way is normal and expected.
-
-## How entities map to generated code
-
-`actionc`/`tidlc` turn each entity into a struct/class named by stripping the dots and PascalCasing the result: `Tizen.Entity.MusicFile` → `TizenEntityMusicFile`. The generated type inherits from its base chain's generated type the same way the `.entity` file's `base` field describes (e.g. `TizenEntityMusicFile : TizenEntityFiles`), with getters/setters (or public fields, depending on the target language) for every property in `dataSchema.properties`, in addition to the inherited `Id`/`Extra` fields from the root.
-
-When writing a new `.entity` file, always set `base` to at least `Tizen.Entity` (or a more specific existing entity if one fits) — don't invent a rootless entity, since the framework's code generation assumes the chain terminates at `Tizen.Entity`.
+Every entity inherits, through single inheritance, from the root `Tizen.Entity`, which defines optional `Id` and `Extra` strings. The generated class strips the dots (`Example.Entity.Bookmark` → `ExampleEntityBookmark`), inherits the generated class of its `base`, and carries the base chain's fields first. Property names become generated getters/setters/fields, so treat published names as part of the contract.

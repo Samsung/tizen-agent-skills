@@ -39,7 +39,7 @@ if [[ -z "$GEN_DIR" ]]; then
   esac
 fi
 
-"$SCRIPT_DIR/check_toolchain_env.sh" || {
+bash "$SCRIPT_DIR/check_toolchain_env.sh" || {
   echo 'error: fix the toolchain setup above before continuing.' >&2
   exit 1
 }
@@ -47,7 +47,7 @@ mkdir -p "$GEN_DIR"
 echo "== Using built-in category: $CATEGORY ($LANGUAGE) =="
 (
   cd "$GEN_DIR"
-  "$SCRIPT_DIR/run_actionc.sh" --language "$LANGUAGE" -- -a "$CATEGORY" -o "$OUT_NAME"
+  bash "$SCRIPT_DIR/run_actionc.sh" --language "$LANGUAGE" -- -a "$CATEGORY" -o "$OUT_NAME"
 )
 
 case "$LANGUAGE" in
@@ -101,3 +101,5 @@ echo "2. Adapt $PATTERN; implement every generated handler."
 echo "3. Register the stub with: $REGISTER"
 echo '4. Register one action/provider metadata entry per exposed .action name.'
 echo "5. Follow $SKILL_DIR/$REFERENCE_DOC for lifecycle, manifest, and build details."
+echo '6. Verify on the device with action-tool, passing your appid in the request'
+echo '   (see "Verify on a device" in references/common.md).'

@@ -12,19 +12,13 @@
 
 set -u
 
-DATA_DIR="${ACTIONC_DATA_DIR:-}"
-if [ -z "$DATA_DIR" ]; then
-  if [ "${OS:-}" = "Windows_NT" ]; then
-    DATA_DIR="$HOME\\.action-tools\\data"
-  else
-    DATA_DIR="$HOME/.action-tools/data"
-  fi
-fi
+# Git Bash on Windows also gives a POSIX-style $HOME, so one form serves both.
+DATA_DIR="${ACTIONC_DATA_DIR:-$HOME/.action-tools/data}"
 
 if [ ! -d "$DATA_DIR" ]; then
   echo "error: data dir '$DATA_DIR' does not exist." >&2
   echo "Either \$ACTIONC_DATA_DIR is wrong, or the toolchain isn't installed —" >&2
-  echo "run ./check_toolchain_env.sh (or .ps1) first." >&2
+  echo "run scripts/check_toolchain_env.sh (or .ps1) first." >&2
   exit 1
 fi
 
@@ -79,3 +73,6 @@ fi
 for category in $(printf '%s\n' "${!methods_by_category[@]}" | sort); do
   echo "  $category: ${methods_by_category[$category]}"
 done
+echo
+echo "Methods are listed alphabetically; the generated method order follows"
+echo "the [Category] sections of $DATA_DIR/action.seq."

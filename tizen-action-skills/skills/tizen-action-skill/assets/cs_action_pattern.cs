@@ -1,7 +1,7 @@
 // Annotated reference pattern for implementing a Tizen Action provider in
-// Tizen.NET (C#). Based on the real ActionSampleAppCs sample, generalized
-// with <Category>/<Method> placeholders since the actual abstract method
-// list depends on which category you generated with actionc.
+// Tizen.NET (C#), generalized with <Category>/<Method> placeholders since
+// the actual abstract method list depends on which category you generated
+// with actionc.
 //
 // Do not copy this file verbatim into a project — read the actual generated
 // Impl<Category>.cs first (from `actionc -l C#`) to get the real method
@@ -49,8 +49,9 @@ namespace YourAppNamespace
 
             // Multi-value case: the action's outputSchema wraps a `return` (status)
             // and a `result` (another entity) — the generated method signature puts
-            // the extra result entity in an `out` parameter. You must `new` it up
-            // and set its fields directly; there's no builder/constructor helper.
+            // the extra result in an `out` parameter. Assign it on every path: a new
+            // entity with its fields set, `null` when the result is optional and
+            // there is none, or a new List<T> for a list result.
             public override TizenEntityStatus <OtherMethod>(TizenEntity<InputEntity> input, out TizenEntity<ResultEntity> result)
             {
                 result = new TizenEntity<ResultEntity>();
@@ -61,6 +62,11 @@ namespace YourAppNamespace
                 status.Reason = "";
                 return status;
             }
+
+            // Subscription case (the .action declares an eventSchema): the
+            // generated <Method>Event is the LAST parameter. Keep it, call
+            // Invoke() per event inside try/catch (it throws once the client is
+            // gone), and drop it in OnTerminate().
         }
 
         // The generated "stub" object — construct one and Listen() on it at startup.
@@ -74,8 +80,7 @@ namespace YourAppNamespace
             {
                 // Registration is BY TYPE, not by instance or factory — the stub's
                 // internals use reflection to construct a fresh <Category>Service
-                // per connecting client. Contrast this with the C++ platform skill,
-                // which instead requires you to hand it a Factory *instance*.
+                // per connecting client (C++ hands it a Factory instance instead).
                 _stub.Listen(typeof(<Category>Service));
             }
             catch (Exception e)

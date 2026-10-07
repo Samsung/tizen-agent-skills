@@ -9,8 +9,12 @@ JavaScript, Dart), implementing it, and registering it in the app manifest.
 This skill does not explain the Tizen Action Framework or the Tizen Action
 Toolchain themselves. For those, see:
 
-- [Tizen Action guide](https://git.tizen.org/cgit/platform/core/appfw/tizen-action/tree/docs/guide) in the `platform/core/appfw/tizen-action` repository
-- Tizen Action Toolchain (`actionc`, `action2tidl`, `tidlc`) — to be distributed with the Tizen SDK later
+- [Tizen Action provider guide](https://git.tizen.org/cgit/platform/core/appfw/tizen-action/tree/docs/guide)
+  and the samples `samples/tidl-type` / `samples/tidl-custom-action` in the
+  `platform/core/appfw/tizen-action` repository
+- The Tizen Action Toolchain (`actionc`, `action2tidl`) in
+  `tools/action-toolchain` of the `platform/core/appfw/tidl` repository, which
+  also builds `tidlc` — to be distributed with the Tizen SDK later
 
 ## What this skill does
 
@@ -43,12 +47,14 @@ cp -r tizen-action-skill ~/.claude/skills/
 
 ## Getting started
 
-From the skill root, check the toolchain and see which Categories are available:
+From the skill root, check the toolchain and see which Categories are available.
+The check also runs `actionc` on a throwaway action to confirm the toolchain
+emits TIDL protocol 3, which the current framework requires:
 
 ```bash
-scripts/check_toolchain_env.sh
-scripts/list_categories.sh Browser
-scripts/list_categories.sh --entities
+bash scripts/check_toolchain_env.sh
+bash scripts/list_categories.sh Browser
+bash scripts/list_categories.sh --entities
 ```
 
 Generate a stub for a default Category. `scaffold_action.sh` does the toolchain
@@ -56,7 +62,7 @@ check, the generation, and printing the handler list you need to implement, all
 in one go:
 
 ```bash
-scripts/scaffold_action.sh \
+bash scripts/scaffold_action.sh \
   --language 'C#' \
   --category Tizen.Action.Browser \
   --out-name ImplBrowser
@@ -65,7 +71,7 @@ scripts/scaffold_action.sh \
 Supported languages are `C#`, `C++`, `JS`, and `Dart`. To only generate:
 
 ```bash
-scripts/run_actionc.sh --language JS -- -a Tizen.Action.Browser -o ImplBrowser
+bash scripts/run_actionc.sh --language JS -- -a Tizen.Action.Browser -o ImplBrowser
 ```
 
 Define a custom Action only when no default Category covers the capability. A
@@ -73,7 +79,7 @@ default Category is always the cheaper path, because the framework already
 ships and resolves its schemas:
 
 ```bash
-scripts/scaffold_custom_action.sh \
+bash scripts/scaffold_custom_action.sh \
   --language 'C#' \
   --prefix MyApp --category My.Action.Memo --method Save \
   --description 'save a memo' \
@@ -82,6 +88,8 @@ scripts/scaffold_custom_action.sh \
   --new-entity My.Entity.Memo
 ```
 
+Run it again with another `--method` to add an Action to the same Category;
+it regenerates the stub from every Action of the Category in method-id order.
 Read [references/custom-action.md](references/custom-action.md) for the
 authoring rules first, then the reference for your target language.
 
@@ -111,7 +119,8 @@ Pick an Action Category
   → generate the language-specific stub with actionc
   → read the generated stub and implement each Action method
   → register provider metadata per Action name in the manifest
-  → build, package, and test on a device
+  → build, package, and install
+  → verify with action-tool get-action / execute on the device
 ```
 
 ## Commonly missed
@@ -119,11 +128,18 @@ Pick an Action Category
 - The provider metadata value is the `.action` **`name` verbatim**, not the
   Category. Getting this wrong still builds cleanly — the Action just never
   resolves.
-- Provider metadata records the declaring app independently of the `.action`
-  `details.appid`; they need not match. The schema appid is the fallback target
-  when no registered provider has been selected.
-- Generated stub signatures vary per Category. Read the generated file instead
-  of guessing.
+- The framework only calls registered providers. A request without an appid
+  goes to the schema's `details.appid` (the default app), so a custom Action's
+  `details.appid` must be your app, and a third-party provider of a default
+  Category is reached only through an explicit appid or `action-tool
+  default-app set`.
+- Method order is the RPC ABI. For a custom Category, pass every `.action` to
+  `actionc` sorted by Action name, and give new Actions names that sort last.
+- Generated stub signatures vary per Category, and optional outputs are handed
+  back differently in each language. Read the generated file instead of
+  guessing.
+- A stub from a pre-protocol-3 toolchain still builds but cannot talk to the
+  current framework; regenerate after updating the toolchain.
 - The toolchain installer persistently modifies your shell profile or Windows
   user environment variables, so an agent should not run it for you. Run the
   command that `check_toolchain_env` prints yourself.

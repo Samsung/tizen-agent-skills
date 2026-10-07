@@ -23,12 +23,21 @@ class <Category>Service extends ServiceBase {
       ..Reason = '';
   }
 
-  // For an action with an output entity, mutate result rather than reassigning it.
+  // Output parameters (copy the exact type from the generated stub):
+  //   Out<TizenEntity<Result>?> result -> set result.value (optional entity)
+  //   TizenEntity<Result> result       -> mutate its fields (required entity)
+  //   List<TizenEntity<Result>> result -> add() to it (list)
+  // Never reassign the parameter itself.
+  // @override
   // Future<TizenEntityStatus> on<OtherMethod>(TizenEntity<Input> input,
-  //     TizenEntity<Result> result) async {
-  //   result.SomeField = '...';
+  //     Out<TizenEntity<Result>?> result) async {
+  //   result.value = TizenEntity<Result>()..SomeField = '...';
   //   return TizenEntityStatus()..Success = true..Reason = '';
   // }
+
+  // Subscription (the .action declares an eventSchema): the generated
+  // <Method>Event is the LAST parameter. Keep it, call event.invoke(...) per
+  // event inside try/catch, and drop it in onTerminate().
 }
 
 class ActionProviderPage extends StatefulWidget {

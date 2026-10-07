@@ -13,14 +13,19 @@
 # --schema-dir (default: the current directory) and actionc's own output under
 # --gen-dir. It never touches files already in your app project.
 #
+# Every action of a category shares one generated interface, so the stub is
+# regenerated from ALL <prefix>_<category>_*.action files in --schema-dir,
+# sorted by action name (the order the device assigns method ids in), plus
+# every .entity file there. Run it once per method to grow a category.
+#
 # Usage:
 #   ./scaffold_custom_action.sh \
 #     --language 'C#' \
 #     --prefix MyApp --category My.Action.Memo --method Save \
 #     --description 'save a memo' \
-#     --input-type Tizen.Entity.Memo --output-type Tizen.Entity.Status \
+#     --input-type My.Entity.Memo --output-type Tizen.Entity.Status \
 #     --appid org.example.myapp --out-name ImplMemo \
-#     [--new-entity Tizen.Entity.Memo] [--schema-dir .] [--gen-dir ./gen]
+#     [--new-entity My.Entity.Memo] [--schema-dir .] [--gen-dir ./gen]
 #
 # --new-entity is repeatable. Use it for every entity type in --input-type /
 # --output-type that ./list_categories.sh --entities does NOT already list;
@@ -101,7 +106,7 @@ if [[ -z "$GEN_DIR" ]]; then
   esac
 fi
 
-"$SCRIPT_DIR/check_toolchain_env.sh" || {
+bash "$SCRIPT_DIR/check_toolchain_env.sh" || {
   echo 'error: fix the toolchain setup above before continuing.' >&2
   exit 1
 }
@@ -146,7 +151,6 @@ sed \
   -e "s|{{PROVIDER_APPID}}|$APPID|g" \
   "$ASSETS_DIR/custom_action.template.bare-ref.json" > "$ACTION_FILE"
 
-ENTITY_ARGS=()
 for entity_type in ${NEW_ENTITIES[@]+"${NEW_ENTITIES[@]}"}; do
   entity_file="$SCHEMA_DIR/${entity_type}.entity"
   if [[ -e "$entity_file" ]]; then
@@ -158,8 +162,23 @@ for entity_type in ${NEW_ENTITIES[@]+"${NEW_ENTITIES[@]}"}; do
       -e "s|{{DESCRIPTION}}|$entity_type|g" \
       "$ASSETS_DIR/custom_entity.template.json" > "$entity_file"
   fi
-  ENTITY_ARGS+=(-e "$entity_file")
 done
+
+# The whole category, sorted by action name with byte ordering, which is how
+# the device numbers the methods of an app-defined category.
+ACTION_ARGS=()
+ACTION_NAMES=()
+while IFS= read -r action_path; do
+  ACTION_ARGS+=(-i "$action_path")
+  ACTION_NAMES+=("$(basename "$action_path" .action)")
+done < <(find "$SCHEMA_DIR" -maxdepth 1 -type f \
+  -name "*_${CATEGORY}_*.action" | LC_ALL=C sort)
+
+ENTITY_ARGS=()
+while IFS= read -r entity_path; do
+  ENTITY_ARGS+=(-e "$entity_path")
+done < <(find "$SCHEMA_DIR" -maxdepth 1 -type f -name '*.entity' |
+  LC_ALL=C sort)
 
 echo
 echo "Review the generated schema file(s) before continuing:"
@@ -170,17 +189,26 @@ done
 if [[ ${#NEW_ENTITIES[@]} -eq 0 ]]; then
   echo
   echo "No --new-entity given, so actionc must resolve $INPUT_TYPE and"
-  echo "$OUTPUT_TYPE from the framework data dir. If either is new, rerun with"
-  echo "--new-entity, or write the .entity file yourself and pass it via -e."
+  echo "$OUTPUT_TYPE from the framework data dir or the .entity files in"
+  echo "$SCHEMA_DIR. If either is new, rerun with --new-entity."
+fi
+echo
+echo "Category $CATEGORY now has ${#ACTION_NAMES[@]} action(s), in method order:"
+printf '  %s\n' "${ACTION_NAMES[@]}"
+if [[ "${ACTION_NAMES[${#ACTION_NAMES[@]}-1]}" != "${PREFIX}_${CATEGORY}_${METHOD}" ]]; then
+  echo "WARNING: ${PREFIX}_${CATEGORY}_${METHOD} does not sort last, so it renumbers"
+  echo "         the methods after it. That breaks callers of an already-installed"
+  echo "         version of this category; rename it or use a new category if the"
+  echo "         category has shipped."
 fi
 echo
 
 mkdir -p "$GEN_DIR"
-echo "== Running actionc -l $LANGUAGE against $(basename "$ACTION_FILE") =="
+echo "== Running actionc -l $LANGUAGE for $CATEGORY =="
 if ! (
   cd "$GEN_DIR"
-  "$SCRIPT_DIR/run_actionc.sh" --language "$LANGUAGE" -- \
-    -i "$ACTION_FILE" ${ENTITY_ARGS[@]+"${ENTITY_ARGS[@]}"} -o "$OUT_NAME"
+  bash "$SCRIPT_DIR/run_actionc.sh" --language "$LANGUAGE" -- \
+    "${ACTION_ARGS[@]}" ${ENTITY_ARGS[@]+"${ENTITY_ARGS[@]}"} -o "$OUT_NAME"
 ); then
   rm -f "$ACTION_FILE"
   exit 1
@@ -188,13 +216,12 @@ fi
 
 echo
 echo '== Next steps =='
-echo "1. The generated stub is now in $GEN_DIR/ — from here on it is"
-echo '   indistinguishable from a default category, so treat it as one.'
+echo "1. The generated stub is now in $GEN_DIR/ — from here on it works like a"
+echo '   default category, so treat it as one.'
 echo "2. Read $SKILL_DIR/$REFERENCE_DOC for implementing the generated"
 echo '   ServiceBase and registering it.'
-echo "3. Register one action/provider metadata entry for the exact action name:"
-echo "   ${PREFIX}_${CATEGORY}_${METHOD}"
-echo "4. Register action metadata for $(basename "$ACTION_FILE") and action/entity"
-echo '   metadata for every custom .entity resource, in addition to the provider.'
-echo "5. The schema details.appid default is $APPID; provider metadata records the"
-echo '   declaring application independently, so those appids need not be equal.'
+echo '3. Register one action/provider metadata entry per action name above.'
+echo '4. Register action metadata for each .action file and action/entity metadata'
+echo '   for each custom .entity file, and install both into the package res/.'
+echo "5. details.appid is $APPID; it must be the appid of the app that declares"
+echo '   the provider metadata, or requests without an explicit appid fail.'

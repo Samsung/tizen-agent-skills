@@ -18,7 +18,7 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 DESCRIPTION=$'save A&B | "safely" \\ path\nnext line'
 
-"$SCRIPT_DIR/scaffold_custom_action.sh" \
+bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
   --language 'C#' \
   --prefix 'A&B|C\D' --category My.Action.Memo --method Save \
   --description "$DESCRIPTION" \
@@ -53,7 +53,7 @@ PY
 test -s "$WORK_DIR/gen/ImplMemo.cs"
 
 TRAVERSAL_DIR="$WORK_DIR/traversal"
-if "$SCRIPT_DIR/scaffold_custom_action.sh" \
+if bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
   --language 'C#' \
   --prefix MyApp --category My.Action.Traversal --method Save \
   --description 'reject a path-bearing entity name' \
@@ -71,7 +71,7 @@ fi
 test ! -e "$TRAVERSAL_DIR/escaped.entity"
 
 PREFIX_TRAVERSAL_DIR="$WORK_DIR/prefix-traversal"
-if "$SCRIPT_DIR/scaffold_custom_action.sh" \
+if bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
   --language 'C#' \
   --prefix ../escaped --category My.Action.Memo --method Save \
   --description 'reject a path-bearing schema filename component' \
@@ -90,7 +90,7 @@ test ! -e "$PREFIX_TRAVERSAL_DIR/escaped_My.Action.Memo_Save.action"
 
 RETRY_DIR="$WORK_DIR/retry"
 ACTION_FILE="$RETRY_DIR/schema/MyApp_My.Action.Retry_Save.action"
-if "$SCRIPT_DIR/scaffold_custom_action.sh" \
+if bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
   --language 'C#' \
   --prefix MyApp --category My.Action.Retry --method Save \
   --description 'save retry data' \
@@ -102,7 +102,7 @@ if "$SCRIPT_DIR/scaffold_custom_action.sh" \
 fi
 
 test ! -e "$ACTION_FILE"
-"$SCRIPT_DIR/scaffold_custom_action.sh" \
+bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
   --language 'C#' \
   --prefix MyApp --category My.Action.Retry --method Save \
   --description 'save retry data' \
@@ -111,3 +111,33 @@ test ! -e "$ACTION_FILE"
   --new-entity My.Entity.Retry \
   --schema-dir "$RETRY_DIR/schema" --gen-dir "$RETRY_DIR/gen"
 test -s "$RETRY_DIR/gen/ImplRetry.cs"
+
+# Growing a category regenerates the stub from every action of the category,
+# in sorted order, and warns when the new action does not sort last.
+GROW_DIR="$WORK_DIR/grow"
+grow() {
+  bash "$SCRIPT_DIR/scaffold_custom_action.sh" \
+    --language 'C++' \
+    --prefix MyApp --category My.Action.Note --method "$1" \
+    --description "$1 a note" \
+    --input-type Tizen.Entity.Status --output-type Tizen.Entity.Status \
+    --appid org.example.myapp --out-name ImplNote \
+    --schema-dir "$GROW_DIR/schema" --gen-dir "$GROW_DIR/gen"
+}
+grow Save > "$GROW_DIR.save.txt"
+grep -q 'virtual TizenEntityStatus Save(' "$GROW_DIR/gen/ImplNote.h"
+if grep -q 'does not sort last' "$GROW_DIR.save.txt"; then
+  echo 'a single-action category was reported as renumbered' >&2
+  exit 1
+fi
+grow Delete > "$GROW_DIR.delete.txt"
+grep -q 'virtual TizenEntityStatus Save(' "$GROW_DIR/gen/ImplNote.h"
+grep -q 'virtual TizenEntityStatus Delete(' "$GROW_DIR/gen/ImplNote.h"
+grep -q 'does not sort last' "$GROW_DIR.delete.txt"
+DELETE_ID="$(sed -n 's/^ *Delete = \([0-9]*\),$/\1/p' "$GROW_DIR/gen/ImplNote.h")"
+SAVE_ID="$(sed -n 's/^ *Save = \([0-9]*\),$/\1/p' "$GROW_DIR/gen/ImplNote.h")"
+if [[ -z "$DELETE_ID" || -z "$SAVE_ID" || "$DELETE_ID" -ge "$SAVE_ID" ]]; then
+  echo "expected Delete before Save in method ids, got $DELETE_ID/$SAVE_ID" >&2
+  exit 1
+fi
+echo 'PASS: custom action scaffolding'

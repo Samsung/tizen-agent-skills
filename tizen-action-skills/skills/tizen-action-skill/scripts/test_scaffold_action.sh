@@ -17,43 +17,46 @@ fi
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 
-OUTPUT="$WORK_DIR/output.txt"
-"$SCRIPT_DIR/scaffold_action.sh" \
-  --language 'C++' --category Tizen.Action.Browser \
-  --out-name ImplBrowser --gen-dir "$WORK_DIR/gen" > "$OUTPUT"
-
-grep -q 'Open' "$OUTPUT"
-HANDLER_COUNT="$(awk '
-  /== Generated action methods/ { in_methods = 1; next }
-  /== Next steps ==/ { in_methods = 0 }
-  in_methods && /virtual/ { count++ }
-  END { print count + 0 }
-' "$OUTPUT")"
-if [[ "$HANDLER_COUNT" -ne 18 ]]; then
-  echo "expected 18 Browser action handlers, got $HANDLER_COUNT" >&2
-  exit 1
-fi
-if grep -qE 'OnLocal(Connected|Disconnected|Received)' "$OUTPUT"; then
-  echo 'internal transport callback reported as an action handler' >&2
+# The Browser category changes between catalogue releases, so the expected
+# handler count comes from the data dir rather than a constant.
+EXPECTED="$(find "$ACTIONC_DATA_DIR/actions" -maxdepth 1 \
+  -name '*_Tizen.Action.Browser_*.action' | wc -l)"
+if [[ "$EXPECTED" -eq 0 ]]; then
+  echo "no Tizen.Action.Browser actions in $ACTIONC_DATA_DIR" >&2
   exit 1
 fi
 
-CSHARP_OUTPUT="$WORK_DIR/csharp-output.txt"
-"$SCRIPT_DIR/scaffold_action.sh" \
-  --language 'C#' --category Tizen.Action.Browser \
-  --out-name ImplBrowser --gen-dir "$WORK_DIR/csharp-gen" > "$CSHARP_OUTPUT"
+# Counts the handler lines scaffold_action.sh listed for one language.
+count_handlers() {
+  awk -v pattern="$2" '
+    /== Generated action methods/ { in_methods = 1; next }
+    /== Next steps ==/ { in_methods = 0 }
+    in_methods && $0 ~ pattern { count++ }
+    END { print count + 0 }
+  ' "$1"
+}
 
-CSHARP_HANDLER_COUNT="$(awk '
-  /== Generated action methods/ { in_methods = 1; next }
-  /== Next steps ==/ { in_methods = 0 }
-  in_methods && /public abstract/ { count++ }
-  END { print count + 0 }
-' "$CSHARP_OUTPUT")"
-if [[ "$CSHARP_HANDLER_COUNT" -ne 18 ]]; then
-  echo "expected 18 C# Browser action handlers, got $CSHARP_HANDLER_COUNT" >&2
-  exit 1
-fi
-if grep -q 'public abstract class ServiceBase' "$CSHARP_OUTPUT"; then
-  echo 'C# ServiceBase declaration reported as an action handler' >&2
-  exit 1
-fi
+check_language() {
+  local language="$1" pattern="$2" output="$WORK_DIR/$3.txt"
+  bash "$SCRIPT_DIR/scaffold_action.sh" \
+    --language "$language" --category Tizen.Action.Browser \
+    --out-name ImplBrowser --gen-dir "$WORK_DIR/$3" > "$output"
+  local count
+  count="$(count_handlers "$output" "$pattern")"
+  if [[ "$count" -ne "$EXPECTED" ]]; then
+    echo "$language: expected $EXPECTED Browser action handlers, got $count" >&2
+    exit 1
+  fi
+  if grep -qE 'OnLocal(Connected|Disconnected|Received)|ServiceBase \{|class ServiceBase' \
+      "$output"; then
+    echo "$language: a non-action member was reported as an action handler" >&2
+    exit 1
+  fi
+}
+
+check_language 'C++' 'virtual' cpp
+check_language 'C#' 'public abstract' cs
+check_language JS 'on[A-Z]' js
+check_language Dart 'Future<TizenEntityStatus> on' dart
+grep -q 'OpenPage' "$WORK_DIR/cpp.txt"
+echo "PASS: $EXPECTED Browser handlers listed for C++, C#, JS and Dart"
