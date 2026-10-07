@@ -107,6 +107,22 @@ jobs:
         working-directory: tizen-sdk-skills/vscode
         run: pnpm exec vsce package "${{ steps.ver.outputs.version }}" --no-git-tag-version --out "tizen-ai-extension-v${{ steps.ver.outputs.version }}.vsix"
 
+      # Generate release notes that list ONLY pull requests touching the
+      # tizen-sdk-skills/ directory. GitHub's --generate-notes lists every PR
+      # between two tags regardless of which plugin it touched, so in a
+      # multi-plugin repository a tizen-action-skills or root-docs PR would
+      # leak into the tizen-sdk-skills release notes. The script filters by
+      # file path instead of relying on labels.
+      - name: Generate filtered release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          bash tizen-sdk-skills/scripts/generate-release-notes.sh "${RELEASE_TAG}" > release-notes.md
+          echo "===== release-notes.md ====="
+          cat release-notes.md
+          echo "============================="
+
       # Re-running an existing tag updates the release in place instead of
       # deleting it: assets are replaced by name (--clobber), so the
       # name-based download URLs stay valid for anyone they were shared
@@ -140,14 +156,15 @@ jobs:
             # Replace assets by name so their download URLs stay stable.
             gh release upload "${RELEASE_TAG}" --clobber "${CLI_ZIP}" "${VSIX}"
 
-            # Regenerate the notes at the new commit and publish a leftover draft
-            # (a no-op when the release is already live).
-            gh release edit "${RELEASE_TAG}" --target "${SHA}" --generate-notes --draft=false
+            # Regenerate the notes at the new commit from the filtered file
+            # and publish a leftover draft (a no-op when the release is
+            # already live).
+            gh release edit "${RELEASE_TAG}" --target "${SHA}" --notes-file release-notes.md --draft=false
           else
             echo "Creating new release ${RELEASE_TAG}"
             gh release create "${RELEASE_TAG}" \
               --target "${SHA}" \
               --title "${RELEASE_TAG}" \
-              --generate-notes \
+              --notes-file release-notes.md \
               "${CLI_ZIP}" "${VSIX}"
           fi

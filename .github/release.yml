@@ -1,0 +1,36 @@
+# GitHub release-notes configuration for tizen-sdk-skills.
+#
+# This file controls the auto-generated notes that GitHub produces when a
+# release is created from the web UI or when --generate-notes is used. In a
+# multi-plugin repository, GitHub's default notes list every PR between two
+# tags regardless of which plugin it touched — so a tizen-action-skills or
+# root-docs PR would leak into the tizen-sdk-skills release notes.
+#
+# The release workflow (release.yml) uses a path-based filter script
+# (tizen-sdk-skills/scripts/generate-release-notes.sh) as the primary
+# mechanism. This file is a secondary safety net for manual/UI releases:
+# it excludes PRs labeled for other plugins and categorises the rest.
+#
+# Labels used by the issue templates: "tizen-sdk-skills", "tizen-action-skills".
+changelog:
+  exclude:
+    labels:
+      - tizen-action-skills
+      - ignore-for-release
+  categories:
+    - title: "⚠️ Breaking Changes"
+      labels:
+        - breaking
+    - title: "🚀 Features"
+      labels:
+        - feature
+    - title: "🐛 Bug Fixes"
+      labels:
+        - bug
+        - fix
+    - title: "📚 Documentation"
+      labels:
+        - documentation
+    - title: "🔧 Other Changes"
+      labels:
+        - "*"
