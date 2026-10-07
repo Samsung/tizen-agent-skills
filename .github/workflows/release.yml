@@ -107,6 +107,19 @@ jobs:
         working-directory: tizen-sdk-skills/vscode
         run: pnpm exec vsce package "${{ steps.ver.outputs.version }}" --no-git-tag-version --out "tizen-ai-extension-v${{ steps.ver.outputs.version }}.vsix"
 
+      # Package the tizen-sdk-skills/ source directory as a zip so the release
+      # has a source-code asset that contains ONLY this plugin. GitHub
+      # auto-generates "Source code (zip)" / "Source code (tar.gz)" for every
+      # release, but those are full-repository snapshots — in a multi-plugin
+      # repo they include tizen-action-skills/ and every other top-level
+      # directory. git archive produces a zip of only the git-tracked files
+      # under tizen-sdk-skills/ (node_modules, dist and other build outputs
+      # are gitignored and therefore excluded automatically).
+      - name: Package source code (tizen-sdk-skills only)
+        run: |
+          git archive --format=zip --prefix=tizen-sdk-skills/ HEAD tizen-sdk-skills/ \
+            -o "tizen-sdk-skills-source-v${{ steps.ver.outputs.version }}.zip"
+
       # Generate release notes that list ONLY pull requests touching the
       # tizen-sdk-skills/ directory. GitHub's --generate-notes lists every PR
       # between two tags regardless of which plugin it touched, so in a
@@ -139,6 +152,7 @@ jobs:
 
           CLI_ZIP="tizen-sdk-skills/tizen-cli/tizen-sdk-v${VERSION}.zip"
           VSIX="tizen-sdk-skills/vscode/tizen-ai-extension-v${VERSION}.vsix"
+          SRC_ZIP="tizen-sdk-skills-source-v${VERSION}.zip"
 
           if gh release view "${RELEASE_TAG}" &>/dev/null; then
             echo "Release ${RELEASE_TAG} exists; updating it in place"
@@ -154,7 +168,7 @@ jobs:
             fi
 
             # Replace assets by name so their download URLs stay stable.
-            gh release upload "${RELEASE_TAG}" --clobber "${CLI_ZIP}" "${VSIX}"
+            gh release upload "${RELEASE_TAG}" --clobber "${CLI_ZIP}" "${VSIX}" "${SRC_ZIP}"
 
             # Regenerate the notes at the new commit from the filtered file
             # and publish a leftover draft (a no-op when the release is
@@ -166,5 +180,16 @@ jobs:
               --target "${SHA}" \
               --title "${RELEASE_TAG}" \
               --notes-file release-notes.md \
-              "${CLI_ZIP}" "${VSIX}"
+              "${CLI_ZIP}" "${VSIX}" "${SRC_ZIP}"
           fi
+
+          # GitHub auto-generates "Source code (zip)" and "Source code (tar.gz)"
+          # for every release. These are full-repository snapshots that include
+          # tizen-action-skills/ and every other top-level directory — they do
+          # not belong on a per-plugin release page. Delete them so the only
+          # source-code asset is the plugin-scoped tizen-sdk-skills-source-v*.zip
+          # uploaded above. Use || true because the assets may already be gone
+          # (re-run) or GitHub may rename them; the custom zip is already
+          # uploaded.
+          gh release delete-asset "${RELEASE_TAG}" "Source code (zip)" --yes 2>/dev/null || true
+          gh release delete-asset "${RELEASE_TAG}" "Source code (tar.gz)" --yes 2>/dev/null || true
