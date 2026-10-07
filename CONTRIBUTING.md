@@ -8,6 +8,9 @@ whole repository; each project directory has its own `CONTRIBUTING.md` with the 
 |---|---|---|
 | `tizen-sdk-skills/` | [tizen-sdk-skills/CONTRIBUTING.md](tizen-sdk-skills/CONTRIBUTING.md) | [tizen-sdk-skills/GOVERNANCE.md](tizen-sdk-skills/GOVERNANCE.md) |
 
+AI coding agents should also read [AGENTS.md](AGENTS.md) for a concise summary of the
+technical rules that apply when working in this repository.
+
 ## Ground rules
 
 - Be respectful. This project follows the [Code of Conduct](CODE_OF_CONDUCT.md).

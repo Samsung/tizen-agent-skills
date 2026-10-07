@@ -91,6 +91,9 @@ tizen-agent-skills/
 각 플러그인의 `CONTRIBUTING.md`를 참고하세요. 모든 참여자는
 [행동 강령](CODE_OF_CONDUCT.md)을 따라야 합니다.
 
+AI 코딩 에이전트는 저장소 작업 시 적용되는 기술 규칙 요약인 [AGENTS.md](AGENTS.md)도
+참고하세요.
+
 보안 문제는 공개 이슈 대신 [SECURITY.md](SECURITY.md)의 절차를 따라 주세요.
 
 ## 라이선스

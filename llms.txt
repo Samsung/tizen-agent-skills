@@ -24,6 +24,7 @@ Each top-level directory of the repository is one independently versioned plugin
 
 - [Repository README](https://github.com/Samsung/tizen-agent-skills/blob/main/README.md): Hub page listing every plugin
 - [Repository README (Korean)](https://github.com/Samsung/tizen-agent-skills/blob/main/README.ko.md)
+- [AGENTS.md](https://github.com/Samsung/tizen-agent-skills/blob/main/AGENTS.md): Essential rules for AI coding agents working in this repository
 - [Documentation index](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/README.en.md): Full list of guides (certificate, debug, emulator, platform, TV setup)
 - [Usage scenarios](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/usage/usage.en.md): End-to-end walkthroughs
 - [Changelog](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/CHANGELOG.md)
