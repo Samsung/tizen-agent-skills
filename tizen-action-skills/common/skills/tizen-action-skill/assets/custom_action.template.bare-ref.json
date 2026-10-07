@@ -1,0 +1,12 @@
+{
+  "version": "v2",
+  "name": "{{PREFIX}}_{{CATEGORY}}_{{METHOD}}",
+  "type": "tidl",
+  "category": "{{CATEGORY}}",
+  "description": "{{DESCRIPTION}}",
+  "allowedBackground": true,
+  "autoDispose": false,
+  "inputSchema": { "type": "{{INPUT_ENTITY_TYPE}}" },
+  "outputSchema": { "type": "{{OUTPUT_ENTITY_TYPE}}" },
+  "details": { "appid": "{{PROVIDER_APPID}}" }
+}

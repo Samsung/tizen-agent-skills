@@ -56,6 +56,38 @@
         "automation",
         "debug"
       ]
+    },
+    {
+      "name": "tizen-action-skills",
+      "displayName": "Tizen Action Skills",
+      "source": "./tizen-action-skills/common",
+      "description": "Build, register and troubleshoot Tizen Action Framework providers for AI coding agents: pick a default Action category or author custom .action/.entity schemas, generate actionc/TIDL stubs for C#, C++, JavaScript or Flutter-Tizen/Dart, implement the generated ServiceBase, register provider metadata and verify with action-tool.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Samsung Electronics"
+      },
+      "homepage": "https://github.com/Samsung/tizen-agent-skills/tree/main/tizen-action-skills",
+      "repository": "https://github.com/Samsung/tizen-agent-skills",
+      "license": "Apache-2.0",
+      "category": "Productivity",
+      "keywords": [
+        "tizen",
+        "tizen-action",
+        "action-framework",
+        "actionc",
+        "tidl",
+        "rpc-port",
+        "action-provider",
+        "samsung",
+        "samsung-tv",
+        "dotnet",
+        "native-app",
+        "web-app",
+        "flutter-tizen",
+        "claude-code",
+        "agent-skills",
+        "ai-agent"
+      ]
     }
   ]
 }

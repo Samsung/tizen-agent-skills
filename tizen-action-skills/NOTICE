@@ -1,0 +1,8 @@
+tizen-action-skills
+Copyright 2026 Samsung Electronics Co., Ltd.
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It contains no third-party material. The skill documents the Tizen Action
+Framework (platform/core/appfw/tizen-action) and the Tizen Action Toolchain
+(platform/core/appfw/tidl), which are not redistributed here.
