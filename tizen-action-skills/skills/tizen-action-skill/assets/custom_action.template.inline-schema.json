@@ -1,0 +1,23 @@
+{
+  "version": "v2",
+  "name": "{{PREFIX}}_{{CATEGORY}}_{{METHOD}}",
+  "type": "tidl",
+  "category": "{{CATEGORY}}",
+  "description": "{{DESCRIPTION}}",
+  "allowedBackground": "true",
+  "autoDispose": "false",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "{{PARAM_NAME}}": { "type": "{{PARAM_TYPE}}", "description": "{{PARAM_DESCRIPTION}}" }
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "return": { "type": "Tizen.Entity.Status", "description": "status" },
+      "result": { "type": "array", "description": "Result entities", "items": { "type": "{{RESULT_ENTITY_TYPE}}" } }
+    }
+  },
+  "details": { "appid": "{{PROVIDER_APPID}}" }
+}

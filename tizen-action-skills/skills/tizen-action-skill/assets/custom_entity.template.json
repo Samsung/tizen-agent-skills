@@ -1,0 +1,11 @@
+{
+  "typeName": "{{ENTITY_TYPE_NAME}}",
+  "description": "{{DESCRIPTION}}",
+  "base": "Tizen.Entity",
+  "dataSchema": {
+    "type": "object",
+    "properties": {
+      "value": { "type": "string", "description": "Entity value" }
+    }
+  }
+}
