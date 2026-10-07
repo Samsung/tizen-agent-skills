@@ -117,6 +117,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the repository-wide rules and each pl
 `CONTRIBUTING.md` for its branch flow, commit style and test tiers. All participants are
 expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
+AI coding agents should also read [AGENTS.md](AGENTS.md) for a concise summary of the
+technical rules that apply when working in this repository.
+
 Security issues: please follow [SECURITY.md](SECURITY.md) instead of opening a public issue.
 
 ## License

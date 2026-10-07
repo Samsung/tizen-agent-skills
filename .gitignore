@@ -24,7 +24,6 @@ settings.local.json
 .wolf/
 .workspace_rag/
 CLAUDE.md
-AGENTS.md
 GEMINI.md
 
 # OS / editor noise
