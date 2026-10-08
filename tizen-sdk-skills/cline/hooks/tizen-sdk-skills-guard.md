@@ -51,6 +51,10 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
      `$env:USERPROFILE`, `$_` 를 먼저 전개해 안쪽 PowerShell 에는 ` = ; foreach ( in @(…` 같은
      빈 코드가 전달됩니다("foreach 뒤에 변수 이름이 없습니다"). 큰따옴표 중첩
      (`powershell -Command "Get-ChildItem "$env:USERPROFILE\…""`)도 같은 이유로 깨집니다.
+     `Sort-Object` 에 `, FullName` 보조 정렬 키가 추가되어, `$_` 전개로 1차 정렬이
+     무효화되더라도 2차 키(`FullName` 문자열 정렬)가 같은 자릿수 버전(예: 1.4.x)에서는
+     올바른 최신 버전을 반환합니다. 단, 자릿수가 다른 버전(예: 1.10.0 vs 1.3.1)에서는
+     문자열 정렬이 정확하지 않으므로 `powershell -Command "…"` 감싸기를 피해야 합니다.
    ② 실행 — `node "<찾은 절대경로>" <인자>` (node 호출부는 어느 셸에서나 동일; PowerShell 은
    ```powershell 블록의 세 번째 줄이 이미 이 단계이므로 그 줄을 그대로 쓰면 됩니다).
    bash 계열 셸에서는 따옴표 없는 백슬래시 경로 금지 (백슬래시가 소실됨).

@@ -231,7 +231,7 @@ const PS_HOST_LIST = `@($h, ${HOST_DOT_DIRS.map((d) => `"${d}"`).join(", ")})`;
 const psLookupLine = (tailWin) =>
   `$CLI = $null; foreach ($d in ${PS_HOST_LIST}) { ` +
   `$CLI = Get-ChildItem "$env:USERPROFILE\\$d\\${CACHE_TAIL_WIN}\\${tailWin}" -ErrorAction SilentlyContinue ` +
-  `| Sort-Object { [version]$_.Directory.Parent.Parent.Name } | Select-Object -Last 1 -ExpandProperty FullName; ` +
+  `| Sort-Object { [version]$_.Directory.Parent.Parent.Name }, FullName | Select-Object -Last 1 -ExpandProperty FullName; ` +
   `if ($CLI) { break } }`;
 
 // Guard in front of the PowerShell `node "$CLI" …` line. With `$CLI` unset
@@ -250,7 +250,7 @@ const psNodeLine = (nodeArgs) => `${PS_GUARD}; node "$CLI"${nodeArgs}`;
 // so a change in HOST_MARKERS or HOST_DOT_DIRS regenerates them in place.
 const CUR_PS_HOST_PICK_RE =
   /\$h = "\.[a-z]+"(?:; if \([^)]*\) \{ \$h = "\.[a-z]+" \})*/g;
-const CUR_PS_LOOKUP_SRC = `\\$CLI = \\$null; foreach \\(\\$d in @\\(\\$h(?:, "\\.[a-z]+")*\\)\\) \\{ \\$CLI = Get-ChildItem "\\$env:USERPROFILE\\\\\\$d\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)" -ErrorAction SilentlyContinue \\| Sort-Object \\{ \\[version\\]\\$_\\.Directory\\.Parent\\.Parent\\.Name \\} \\| Select-Object -Last 1 -ExpandProperty FullName; if \\(\\$CLI\\) \\{ break \\} \\}`;
+const CUR_PS_LOOKUP_SRC = `\\$CLI = \\$null; foreach \\(\\$d in @\\(\\$h(?:, "\\.[a-z]+")*\\)\\) \\{ \\$CLI = Get-ChildItem "\\$env:USERPROFILE\\\\\\$d\\\\${esc(CACHE_TAIL_WIN)}\\\\([^"]+)" -ErrorAction SilentlyContinue \\| Sort-Object \\{ \\[version\\]\\$_\\.Directory\\.Parent\\.Parent\\.Name \\}(?:, FullName)? \\| Select-Object -Last 1 -ExpandProperty FullName; if \\(\\$CLI\\) \\{ break \\} \\}`;
 const CUR_PS_LOOKUP_RE = new RegExp(CUR_PS_LOOKUP_SRC, "g");
 // A lookup line directly followed by a bare `node "$CLI" …` line (the form
 // generated before the guard existed). Group 1 = lookup line, group 2 = the
