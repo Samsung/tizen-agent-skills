@@ -81,7 +81,7 @@ async function initSdk(sdkPath, command = "tizen-sdk sdk-init") {
         command,
         "sdk_path_invalid",
         "SDK path must be a non-empty string",
-        "tizen-cli tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
+        "tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
       );
     }
 
@@ -134,7 +134,7 @@ async function getSdkStatus(command = "tizen-sdk sdk-status") {
         command,
         "sdk_path_not_set",
         "SDK path is not configured",
-        "tizen-cli tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
+        "tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
       );
     }
 
@@ -153,7 +153,7 @@ async function getSdkStatus(command = "tizen-sdk sdk-status") {
         command,
         "sdk_path_invalid",
         `Configured SDK path does not exist: ${sdkPath}`,
-        "tizen-cli tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
+        "tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
       );
     }
 
@@ -392,7 +392,7 @@ function requestedPlatformMissing(
     installed.length > 0
       ? `installed platforms: ${installed.join(", ")}`
       : "no platforms/tizen-X.Y directory found";
-  const platformInstall = `tizen-cli tizen-sdk platform-install --platform-version ${version}`;
+  const platformInstall = `tizen-sdk platform-install --platform-version ${version}`;
 
   if (opts.afterInstall) {
     console.error(

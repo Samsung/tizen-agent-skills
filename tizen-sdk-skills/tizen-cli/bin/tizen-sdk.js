@@ -5,9 +5,8 @@
 /**
  * tizen-sdk — standalone launcher for the tizen-sdk plugin bundle.
  *
- * The plugin (dist/tizen-sdk.js) exports a single run(args) function that the
- * tizen-cli host calls in-process. This launcher lets the same bundle run
- * WITHOUT the host:
+ * The plugin (dist/tizen-sdk.js) exports a single run(args) function.
+ * This launcher lets the bundle run as a standalone CLI:
  *
  *   node bin/tizen-sdk.js <command> [--options...]
  *   tizen-sdk <command> [--options...]          (after `pnpm add -g .` in tizen-cli/)
@@ -15,10 +14,10 @@
  *
  * It re-implements nothing: it locates the bundle, forwards argv to run(),
  * and maps run()'s { status } to the process exit code (0 success, 1 failure).
- * stdout carries exactly one Standard JSON Envelope, as in the host.
+ * stdout carries exactly one Standard JSON Envelope.
  *
- * tests/runner.mjs already falls back to a `tizen-sdk` binary on PATH when
- * tizen-cli is not installed — this file is that binary.
+ * tests/runner.mjs already falls back to a `tizen-sdk` binary on PATH —
+ * this file is that binary.
  *
  * Never call process.exit(): on Windows stdout pipes are asynchronous, so a
  * forced exit right after the envelope write can truncate it. Setting
@@ -126,9 +125,9 @@ function main() {
     return;
   }
 
-  // The plugin renders `user_command` with the prefix the user typed. Inside
-  // the tizen-cli host that is "tizen-cli tizen-sdk"; standalone it is just
-  // "tizen-sdk". Respect an explicit override (wrapper scripts, aliases).
+  // The plugin renders `user_command` with the prefix the user typed.
+  // Default is `tizen-sdk` (matching the standalone launcher). Respect an
+  // explicit override (wrapper scripts, aliases).
   if (!process.env.TIZEN_SDK_USER_COMMAND_PREFIX) {
     process.env.TIZEN_SDK_USER_COMMAND_PREFIX = PROGRAM;
   }

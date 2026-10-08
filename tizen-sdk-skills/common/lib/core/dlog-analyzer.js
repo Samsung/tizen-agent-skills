@@ -408,7 +408,7 @@ function splitLinesLikePython(s) {
 function resolveLogBaseDir(opts = {}) {
   const configFile = (opts && opts.configFile) || SDK_CONFIG_FILE;
   const initHint =
-    "Run tizen-sdk-init (tizen-cli tizen-sdk sdk-init --sdk-path <path>) first.";
+    "Run tizen-sdk-init (tizen-sdk sdk-init --sdk-path <path>) first.";
 
   // _read_sdk_install_path(): read_text().strip(); empty/unreadable -> None.
   let sdkRoot = "";

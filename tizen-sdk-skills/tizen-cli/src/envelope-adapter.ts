@@ -3,21 +3,21 @@
 
 /**
  * Envelope adapter — maps the vendored core's inner envelope to the
- * tizen-cli Standard JSON Envelope, and provides the shared command
+ * Standard JSON Envelope, and provides the shared command
  * execution wrapper.
  *
  * Inner envelope (vendor/envelope/envelope.js):
  *   { command, status: 'success'|'failure'|'error', duration_ms,
  *     result?, warnings?, errors?: [{ error_code, error_category, message, suggested_fix? }] }
  *
- * tizen-cli envelope:
+ * Standard JSON Envelope:
  *   success: { status: 'success', result, warnings: [], errors: [] }
  *   failure: { status: 'failure', result: null, warnings: [], errors: [{ error_code, message, ... }] }
  *
- * IMPORTANT: the plugin runs IN-PROCESS inside tizen-cli (Core require()s the
- * bundle and awaits run()). Never call process.exit() here — failure is
- * signalled through run()'s return value, which this module tracks via a
- * per-dispatch flag.
+ * IMPORTANT: the plugin runs in-process (Core require()s the bundle and
+ * awaits run()). Never call process.exit() here — failure is signalled
+ * through run()'s return value, which this module tracks via a per-dispatch
+ * flag.
  */
 
 import { outputEnvelope } from "./lib/core-utils";
@@ -32,13 +32,12 @@ const PLUGIN_NAME = "tizen-sdk";
 /**
  * How the user invokes this program — the head of every `user_command`.
  *
- * Inside the tizen-cli host it is "tizen-cli tizen-sdk". The standalone
- * launcher (bin/tizen-sdk.js) runs the same bundle as plain `tizen-sdk` and
- * sets TIZEN_SDK_USER_COMMAND_PREFIX so the rendered line matches what was
- * typed; the host sets nothing, so its behaviour is unchanged.
+ * Defaults to `tizen-sdk` (the standalone launcher). The standalone launcher
+ * (bin/tizen-sdk.js) sets TIZEN_SDK_USER_COMMAND_PREFIX to match what was
+ * typed; a wrapper script or alias can override it explicitly.
  */
 export const USER_COMMAND_PREFIX: string =
-  process.env.TIZEN_SDK_USER_COMMAND_PREFIX || `tizen-cli ${PLUGIN_NAME}`;
+  process.env.TIZEN_SDK_USER_COMMAND_PREFIX || PLUGIN_NAME;
 
 /**
  * The command line the user issued, captured once per dispatch by run().

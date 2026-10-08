@@ -153,9 +153,9 @@ check(
   "  tizen-cli form",
   buildUserCommand(
     ["create-emulator", "--vm-name", "myEmul", "--size", "1080", "--launch"],
-    "tizen-cli tizen-sdk",
+    "tizen-sdk",
   ),
-  "tizen-cli tizen-sdk create-emulator --vm-name myEmul --size 1080 --launch",
+  "tizen-sdk create-emulator --vm-name myEmul --size 1080 --launch",
 );
 check(
   "  standalone runner form",

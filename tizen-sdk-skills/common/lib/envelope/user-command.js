@@ -6,7 +6,7 @@
  *
  * The envelope's `command` field carries the internal core label
  * ("tizen-sdk create-emulator"), which is deliberately NOT the string the user
- * typed ("tizen-cli tizen-sdk create-emulator --vm-name myEmul ...") —
+ * typed ("tizen-sdk create-emulator --vm-name myEmul ...") —
  * see docs/COMMAND_MAPPING.md. That leaves an envelope with no
  * way to answer "what do I re-run to reproduce this?", which matters most on a
  * failure envelope and in bug reports where the envelope is all that is pasted.
@@ -145,8 +145,8 @@ function isRedacted(token) {
  * @param {string[]} argv - user tokens WITHOUT the program prefix
  *   (e.g. ["create-emulator", "--vm-name", "myEmul"])
  * @param {string} prefix - how the user invoked the program
- *   (e.g. "tizen-cli tizen-sdk" or "node emulator-manager-cli.js")
- * @returns {string} e.g. `tizen-cli tizen-sdk create-emulator --vm-name myEmul`
+ *   (e.g. "tizen-sdk" or "node emulator-manager-cli.js")
+ * @returns {string} e.g. `tizen-sdk create-emulator --vm-name myEmul`
  */
 function buildUserCommand(argv, prefix) {
   const head = String(prefix || "").trim();

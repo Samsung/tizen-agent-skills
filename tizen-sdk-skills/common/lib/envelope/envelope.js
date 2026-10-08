@@ -126,7 +126,7 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_CONFIG_E001",
     error_category: "sdk_path_not_set",
     suggested_fix: {
-      command: "tizen-cli tizen-sdk sdk-init --sdk-path <path>",
+      command: "tizen-sdk sdk-init --sdk-path <path>",
       auto_fixable: false,
       guide_url: "https://docs.tizen.org/application/native/tutorials/setup/",
     },
@@ -149,7 +149,7 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_DEVICE_E001",
     error_category: "device_not_found",
     suggested_fix: {
-      command: "tizen-cli tizen-sdk launch-emulator --vm-name <emulator-name>",
+      command: "tizen-sdk launch-emulator --vm-name <emulator-name>",
       auto_fixable: false,
       guide_url:
         "https://docs.tizen.org/application/native/tutorials/getting-started/",
@@ -449,8 +449,7 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_PLATFORM_E001",
     error_category: "platform_version_not_found",
     suggested_fix: {
-      command:
-        "tizen-cli tizen-sdk platform-install --platform-version <version>",
+      command: "tizen-sdk platform-install --platform-version <version>",
       auto_fixable: false,
     },
   },

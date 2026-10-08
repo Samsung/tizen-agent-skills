@@ -896,7 +896,7 @@ async function runSdbCommand(
         command,
         "invalid_parameters",
         "Missing required parameter: request (natural-language sdb request).",
-        'tizen-cli tizen-sdk sdb-helper --request "run shell command ls -la"',
+        'tizen-sdk sdb-helper --request "run shell command ls -la"',
         startTime,
       );
     }
@@ -908,7 +908,7 @@ async function runSdbCommand(
         command,
         "sdk_path_not_set",
         sdbResolved.error,
-        "tizen-cli tizen-sdk sdk-init --sdk-path <path>",
+        "tizen-sdk sdk-init --sdk-path <path>",
         startTime,
       );
     }
@@ -989,7 +989,7 @@ async function runSdbCommand(
     const serialResult = resolveSerial(sdbPath, serial);
     if (serialResult.errorCategory) {
       const failure = describeSerialFailure(serialResult, {
-        noDeviceFix: "tizen-cli tizen-sdk device-manager",
+        noDeviceFix: "tizen-sdk device-manager",
       });
       return formatError(
         command,

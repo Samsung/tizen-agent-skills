@@ -1,13 +1,11 @@
-# tizen-cli 하네스 (tizen-sdk 플러그인)
+# tizen-sdk CLI
 
 [English](README.md) | 한국어
 
 **tizen-sdk-skills**의 세 번째 하네스 (`claude/`, `cline/`과 병행):
-tizen-cli 플러그인으로,
 공유 워크플로우를 표준 CLI 명령어로 노출합니다.
 
 ```
-tizen-cli tizen-sdk <command> [--options...]   # tizen-cli 호스트 안에서
 tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js)
 ```
 
@@ -100,7 +98,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 > **참고:** 스키마는 런타임에 `src/commands.ts`가 `src/command-specs/`의
 > 선언적 스펙(도메인별 모듈: sdk, check, project, device, debug, test, certificate)으로부터
 > 구성한 Commander 프로그램에서 자동 생성됩니다.
-> `tizen-cli tizen-sdk --schema`를 실행하면 머신 리더블 JSON 버전을
+> `tizen-sdk --schema`를 실행하면 머신 리더블 JSON 버전을
 > 얻을 수 있습니다. `plugin.json`의 `"commands"` 배열은 `pnpm build`
 > (또는 `npm run build`) 시 자동 업데이트됩니다.
 
@@ -147,15 +145,15 @@ src/               TypeScript 플러그인 셸 (커맨드 엔진 + command-specs
                    envelope adapter, --schema/--doctor/--capabilities) — ../common/lib/core 필요
 ../common/lib/     공유 CommonJS 도메인 로직 (단일 소스)
 ../common/scripts/ 플랫폼 .ps1/.sh 기능 스크립트 → dist/scripts로 복사
-skills/            tizen-cli 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates) → dist/skills
-bin/               독립 런처 (tizen-sdk.js): tizen-cli 호스트 없이 번들을 로드해
+skills/            tizen-sdk 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates) → dist/skills
+bin/               독립 런처 (tizen-sdk.js): 번들을 로드해
                    run()을 호출 → dist/bin으로 복사
 ```
 
 - `common/lib/core/plugin-cache.js`가 모든 하네스의 `scripts/` 경로를 해석합니다
   (환경 변수 → 번들 옆 → repo/cache 상대 경로 → `.claude/.cline/.codex/.gemini` 캐시 레거시 스캔),
   하네스별 패치가 불필요합니다.
-- 플러그인은 tizen-cli 내부에서 **in-process**로 실행됩니다 —
+- 플러그인은 **in-process**로 실행됩니다 —
   `process.exit()`를 호출하지 않으며, 실패는 `run()`의 반환값으로 전파됩니다.
 - 장시간 SDK 설치는 2단계 패턴을 사용합니다: 빠른 사전 체크; 실패 시
   `errors[0].suggested_fix.command`에 백그라운드 실행용 설치 명령을 포함합니다.
@@ -171,34 +169,17 @@ pnpm build            # src → dist/tizen-sdk.js 번들링,
 ```
 
 `pnpm build`는 먼저 `dist/`를 비우므로, 이전 빌드의 파일(이름이 바뀐 번들, 삭제된
-스크립트나 스킬)이 `tizen-cli plugin install dist/`로 흘러들지 않습니다.
+스크립트나 스킬)이 dist 출력으로 흘러들지 않습니다.
 
 > **참고:** pnpm이 선호 패키지 매니저입니다 (ahub CI에서 사용).
 > esbuild의 postinstall 스크립트를 허용하기 위해 `pnpm-workspace.yaml`이
 > 포함되어 있습니다. npm도 폴백으로 사용 가능합니다.
 
-## 설치 / 재설치
+## 설치 / 사용
 
-> 플러그인은 `tizen-sdk` 이름으로 등록되며, 중첩 커맨드(`sdk init` / `emulator create`)를
-> 쓰던 구 `tizen-sdk` 플러그인을 대체합니다. 구 플러그인이나 이전 `tizen-sdk-skills` 빌드가
-> 설치돼 있으면 먼저 제거하세요:
-> `tizen-cli plugin uninstall tizen-sdk` / `tizen-cli plugin uninstall tizen-sdk-skills`.
-
-```
-tizen-cli plugin install <repo>/tizen-cli/dist
-# 수정 후:
-pnpm build
-tizen-cli plugin uninstall tizen-sdk
-tizen-cli plugin install <repo>/tizen-cli/dist
-```
-
-## 독립 실행 (tizen-cli 호스트 없이)
-
-`bin/tizen-sdk.js`는 빌드된 번들을 `require()`하고 호스트가 쓰는 것과 같은 진입점
-`run(args)`를 호출하는 얇은 런처입니다. 따라서 `tizen-cli`가 설치되지 않은 머신에서도
-위의 모든 명령어를 그대로 실행할 수 있습니다. 로직을 재구현하지 않으며,
-`dist/tizen-sdk.js`를 찾아 argv를 전달하고 `run()`의 결과를 종료 코드(성공 `0`,
-실패 `1`)로 매핑하는 일만 합니다.
+`bin/tizen-sdk.js`는 빌드된 번들을 `require()`하고 `run(args)`를 호출하는
+얇은 런처입니다. 로직을 재구현하지 않으며, `dist/tizen-sdk.js`를 찾아 argv를
+전달하고 `run()`의 결과를 종료 코드(성공 `0`, 실패 `1`)로 매핑하는 일만 합니다.
 
 ```bash
 cd tizen-cli && pnpm install && pnpm build   # 런처는 dist/tizen-sdk.js가 필요
@@ -218,8 +199,7 @@ node dist/bin/tizen-sdk.js --schema          # 릴리스 ZIP / dist만 있는 �
 - 빌드하지 않은 상태에서는 `PLUGIN_NOT_BUILT` 실패 엔벨로프를 출력하고
   (`suggested_fix.command`에 빌드 명령 포함) `1`로 종료합니다.
 - 엔벨로프의 `user_command`는 사용자가 입력한 접두어로 렌더링됩니다:
-  독립 실행 시 `tizen-sdk …`, 호스트 안에서는 `tizen-cli tizen-sdk …`.
-  alias나 래퍼 스크립트에서 바꾸려면 `TIZEN_SDK_USER_COMMAND_PREFIX`를 설정하세요.
+  `tizen-sdk …`. alias나 래퍼 스크립트에서 바꾸려면 `TIZEN_SDK_USER_COMMAND_PREFIX`를 설정하세요.
 - `pnpm add -g .`는 pnpm 공식 문서가 안내하는 전역 링크 대체 명령입니다
   (pnpm 11.22.0에서 검증). 이 체크아웃을 전역 패키지로 등록하고 `tizen-sdk`
   shim을 pnpm 전역 bin 디렉터리에 생성합니다 (복사가 아니라 링크이므로

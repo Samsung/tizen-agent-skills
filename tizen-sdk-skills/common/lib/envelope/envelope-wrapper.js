@@ -83,7 +83,7 @@ function findErrorCodeByCategory(category) {
  *
  * Example:
  * ```markdown
- * User runs `tizen-cli tizen-sdk create-project`
+ * User runs `tizen-sdk create-project`
  * → executes tizen-create-project agent
  * → agent response: "Project created at /path/to/project"
  * → call wrapAgentResponse('project create', result)
@@ -123,9 +123,9 @@ const CommonErrors = {
       command,
       null,
       "sdk_path_not_set",
-      'Tizen SDK path is not configured. Run "tizen-cli tizen-sdk sdk-init --sdk-path <path>" first.',
+      'Tizen SDK path is not configured. Run "tizen-sdk sdk-init --sdk-path <path>" first.',
       {
-        command: "tizen-cli tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
+        command: "tizen-sdk sdk-init --sdk-path /opt/tizen-studio",
         auto_fixable: false,
         guide_url: "https://docs.tizen.org/application/native/tutorials/setup/",
       },
@@ -139,7 +139,7 @@ const CommonErrors = {
       "No connected device or emulator found.",
       {
         command:
-          "tizen-cli tizen-sdk create-emulator --vm-name myEmul --size 1080 --launch",
+          "tizen-sdk create-emulator --vm-name myEmul --size 1080 --launch",
         auto_fixable: false,
         guide_url:
           "https://docs.tizen.org/application/native/tutorials/getting-started/",
@@ -156,7 +156,7 @@ const CommonErrors = {
       "template_not_found",
       `Template '${templateName}' not found.`,
       {
-        command: "tizen-cli tizen-sdk list-templates",
+        command: "tizen-sdk list-templates",
         auto_fixable: false,
       },
     ),
@@ -176,7 +176,7 @@ const CommonErrors = {
       "emulator_not_found",
       `Emulator '${emulatorName}' not found.`,
       {
-        command: "tizen-cli tizen-sdk emulator-manager --action list-vm",
+        command: "tizen-sdk emulator-manager --action list-vm",
         auto_fixable: false,
       },
     ),

@@ -228,7 +228,7 @@ export function handleDoctor(): { status: "success" | "failure" } {
       status: sdkOk ? ("ok" as const) : ("warn" as const),
       message: sdkOk
         ? `Tizen SDK found at ${sdkCommands.readSdkPath()}`
-        : "Tizen SDK not installed — run: tizen-cli tizen-sdk sdk-install",
+        : "Tizen SDK not installed — run: tizen-sdk sdk-install",
     },
     {
       name: "sdb reachable",

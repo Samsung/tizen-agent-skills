@@ -147,15 +147,15 @@ check(
   "noDeviceFix is used for device_not_found",
   describeSerialFailure(
     { errorCategory: "device_not_found", message: "n" },
-    { noDeviceFix: "tizen-cli tizen-sdk device-manager" },
+    { noDeviceFix: "tizen-sdk device-manager" },
   ).suggestedFix,
-  "tizen-cli tizen-sdk device-manager",
+  "tizen-sdk device-manager",
 );
 check(
   "noDeviceFix is NOT applied to multiple_devices",
   describeSerialFailure(
     { errorCategory: "multiple_devices", message: "m", devices: table },
-    { noDeviceFix: "tizen-cli tizen-sdk device-manager" },
+    { noDeviceFix: "tizen-sdk device-manager" },
   ).suggestedFix,
   "Re-run with --serial <one-of: emulator-26101, 192.168.0.10:26101>",
 );

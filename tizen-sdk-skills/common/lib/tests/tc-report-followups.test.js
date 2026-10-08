@@ -122,7 +122,7 @@ try {
     check(
       "  suggested_fix is platform-install for that version",
       env.errors[0].suggested_fix.command ===
-        "tizen-cli tizen-sdk platform-install --platform-version 99.99",
+        "tizen-sdk platform-install --platform-version 99.99",
       env.errors[0].suggested_fix.command,
     );
     check(

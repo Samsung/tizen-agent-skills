@@ -73,7 +73,7 @@ console.log("\n--- wrapEnvelope failure ---");
     "sdk_path_not_set",
     "SDK path missing",
     {
-      command: "tizen-cli tizen-sdk sdk-init --sdk-path <path>",
+      command: "tizen-sdk sdk-init --sdk-path <path>",
       guide_url: "https://example.invalid/guide",
     },
   );
@@ -96,7 +96,7 @@ console.log("\n--- wrapEnvelope failure ---");
     "suggested_fix normalized (auto_fixable defaults to false)",
     env.errors[0].suggested_fix,
     {
-      command: "tizen-cli tizen-sdk sdk-init --sdk-path <path>",
+      command: "tizen-sdk sdk-init --sdk-path <path>",
       auto_fixable: false,
       guide_url: "https://example.invalid/guide",
     },

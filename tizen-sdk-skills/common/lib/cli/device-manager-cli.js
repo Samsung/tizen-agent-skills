@@ -20,7 +20,7 @@
  *   action     - 'start' (default; find connected device) or 'stop' (shut down
  *                running emulator VMs). Given as the first bare token or as
  *                `--action <start|stop>` / `--action=<start|stop>`, matching
- *                `tizen-cli tizen-sdk device-manager --action stop`.
+ *                `tizen-sdk device-manager --action stop`.
  *   timeoutSec - Emulator connection wait time in seconds (1~540; default 300; start only)
  *   vmName     - Emulator VM name to look for (default tizen-vm-default; start only)
  *   profile    - Emulator profile: 'tizen' (default) or 'tv' (Samsung TV)
