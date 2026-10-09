@@ -11,6 +11,15 @@
 
 ## [Unreleased]
 
+- **PowerShell `Sort-Object` `$_` 전개 방어** — `powershell -Command "…"`로 감싸면 바깥 PowerShell이
+  `$_`를 빈 문자열로 전개해 버전 정렬이 무효화되는 문제를 수정했습니다
+  (`scripts/rewrite-runner-snippets.js`, Windows 조회 블록이 있는 모든 `common/skills/*/SKILL.md`,
+  `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`,
+  `cline/hooks/tizen-sdk-skills-guard.md`, `common/hooks/tizen-sdk-skills-guard.md`).
+  `Sort-Object { [version]$_.Directory.Parent.Parent.Name }`에 `, FullName` 보조 정렬 키를 추가하여,
+  `$_`가 정상 작동할 때는 1차 버전 정렬로 정확한 최신 버전을 반환하고, `$_`가 전개되어 1차 키가
+  무효화되면 2차 `FullName` 문자열 정렬이 같은 자릿수 버전(예: 1.4.x)에서 올바른 결과를 반환합니다.
+
 ## [1.4.2] — 2026-10-07
 
 `tizen-dlog-analyzer`에 `search` 액션이 추가됐습니다 — 수집된 모든 dlog 카테고리(각 앱, `_general`,

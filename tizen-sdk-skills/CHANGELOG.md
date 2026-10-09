@@ -11,6 +11,18 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+- **PowerShell `Sort-Object` `$_` expansion defense** — fixes the issue where wrapping the
+  PowerShell lookup in `powershell -Command "…"` causes the outer shell to expand `$_` to an
+  empty string, voiding the version sort and returning the wrong runner version
+  (`scripts/rewrite-runner-snippets.js`, all `common/skills/*/SKILL.md` with Windows lookup blocks,
+  `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`,
+  `cline/hooks/tizen-sdk-skills-guard.md`, `common/hooks/tizen-sdk-skills-guard.md`).
+  `Sort-Object { [version]$_.Directory.Parent.Parent.Name }` now carries a `, FullName` secondary
+  sort key: when `$_` works (direct terminal) the primary version sort returns the correct latest
+  version; when `$_` is expanded (wrapped) the secondary `FullName` string sort returns the correct
+  result for same-digit versions (e.g. 1.4.x). Wrapping must still be avoided for different-digit
+  versions (1.10.0 vs 1.3.1).
+
 ## [1.4.2] — 2026-10-07
 
 `tizen-dlog-analyzer` gains a `search` action — plain text or Python regex across every collected dlog
