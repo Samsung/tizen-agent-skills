@@ -12,6 +12,30 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-10-14
+
+Repository-wide release that ships `tizen-sdk-skills` 1.4.3 and `tizen-action-skills` 1.0.0.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.4.2 to 1.4.3 (#40, #41, and the direct sync of
+  internal PR #260). Highlights: the standalone `tizen-sdk` CLI becomes the sole usage mode
+  (the `tizen-cli` host commands are gone from the READMEs and every `suggested_fix.command`),
+  the PowerShell CLI-runner lookup gains a `, FullName` secondary sort key as a mitigation for
+  `$_` expansion when the block is wrapped in `powershell -Command "…"`, and the guard hooks
+  document the limits of that fallback. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
+  for the full list. The release assets stamped with the plugin version are therefore
+  `tizen-sdk-v1.4.3.zip` and `tizen-ai-extension-v1.4.3.vsix`.
+- Root `.claude-plugin/marketplace.json` catalog version follows the `tizen-sdk-skills` plugin
+  (1.4.3).
+
+### Added
+
+- Repository-level `AGENTS.md` (#39): a concise summary of the technical rules for AI coding
+  agents (plugin structure, versioning model, documentation conventions, security, commit/PR
+  style, validation commands per plugin), cross-linked from the READMEs, `CONTRIBUTING.md` and
+  `llms.txt`.
+
 ## [1.0.0]
 
 ### Added
