@@ -11,14 +11,46 @@
 
 ## [Unreleased]
 
+## [1.4.3] — 2026-10-13
+
+Windows의 CLI 러너 조회 블록에 대한 수정 두 건, 독립 실행형 `tizen-sdk` CLI가 유일한
+사용 방식이 됐습니다, 그리고 번들된 `tizen-dlog-analyzer` 바이너리가 0.2.8a0로 리빌드됐습니다.
+내부에서 지원된 적 없는 `tizen-cli` 호스트 명령이 README와 모든
+`suggested_fix.command` 문자열에서 제거되어, 엔벨로프가 항상 `tizen-sdk …`를 실행하라고
+안내합니다.
+
+### Changed
+
 - **PowerShell `Sort-Object` `$_` 전개 방어** — `powershell -Command "…"`로 감싸면 바깥 PowerShell이
   `$_`를 빈 문자열로 전개해 버전 정렬이 무효화되는 문제를 수정했습니다
   (`scripts/rewrite-runner-snippets.js`, Windows 조회 블록이 있는 모든 `common/skills/*/SKILL.md`,
   `common/agents/tizen-{dotnet-debug,webapp-debug,playwright-test}.md`,
   `cline/hooks/tizen-sdk-skills-guard.md`, `common/hooks/tizen-sdk-skills-guard.md`).
   `Sort-Object { [version]$_.Directory.Parent.Parent.Name }`에 `, FullName` 보조 정렬 키를 추가하여,
-  `$_`가 정상 작동할 때는 1차 버전 정렬로 정확한 최신 버전을 반환하고, `$_`가 전개되어 1차 키가
-  무효화되면 2차 `FullName` 문자열 정렬이 같은 자릿수 버전(예: 1.4.x)에서 올바른 결과를 반환합니다.
+  `$_`가 정상 작동할 때는 1차 버전 정렬로 정확한 최신 버전을 반환하고, `$_`만 전개되어(감싸졌지만
+  명령은 실행되는 경우) 1차 키가 무효화되면 2차 `FullName` 문자열 정렬이 모든 자리의 자릿수가 같은
+  버전(예: 1.4.0 vs 1.4.2)에서 올바른 결과를 반환합니다. 이는 완화책이지 근본 수정이 아닙니다 —
+  어느 한 자리라도 자릿수가 다르면(1.4.2 vs 1.4.10, 1.3.1 vs 1.10.0) 문자열 정렬이 더 낮은 버전을
+  고르므로 `powershell -Command "…"` 감싸기는 여전히 피해야 합니다.
+
+- **`tizen-dlog-analyzer` 바이너리 0.2.8a0로 리빌드** (PR #265;
+  `common/tools/tizen-dlog-analyzer/linux/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/macos/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/windows/tizen-dlog-analyzer.exe`,
+  `common/tools/tizen-dlog-analyzer/NOTICE.md`). 번들된 PyInstaller 단일 파일 실행 파일(linux,
+  windows, macos)이 리빌드됐고, `NOTICE.md`가 새 파일 크기, SHA-256 해시, 버전으로 갱신됐습니다.
+
+- **독립 실행형 `tizen-sdk`를 유일한 CLI로 — `tizen-cli` 호스트 명령 제거** (PR #260;
+  `tizen-cli/README.md`, `tizen-cli/README.ko.md`, `tizen-cli/src/envelope-adapter.ts`,
+  `tizen-cli/src/doctor.ts`, `tizen-cli/bin/tizen-sdk.js`, `common/lib/core/*.js`,
+  `common/lib/tests/*.test.js`). `tizen-cli` 호스트 명령은 내부에서 지원되지 않으므로, README
+  파일(EN + KO)이 독립 실행형 `tizen-sdk` CLI만 참조하도록 업데이트됐습니다. 기본
+  `USER_COMMAND_PREFIX`가 `'tizen-cli tizen-sdk'`에서 `'tizen-sdk'`(`PLUGIN_NAME`만)로 변경됐고,
+  `common/lib`의 8개 소스 파일에 있는 15개의 하드코딩된 `suggested_fix.command` 문자열이
+  `'tizen-cli tizen-sdk …'`에서 `'tizen-sdk …'`로 업데이트됐습니다. `doctor` 명령의
+  `suggested_fix`는 이제 `'tizen-sdk sdk-install'`을 사용하며, 4개 테스트 파일이 `'tizen-sdk'`
+  접두사를 예상하도록 업데이트됐습니다. `envelope.js`는 `'tizen-cli'` 접두사가 사라지면서
+  `suggested_fix.command`를 한 줄로 접는 prettier 포맷팅 수정을 받았습니다.
 
 ## [1.4.2] — 2026-10-07
 
@@ -1353,7 +1385,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...HEAD
+[1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0

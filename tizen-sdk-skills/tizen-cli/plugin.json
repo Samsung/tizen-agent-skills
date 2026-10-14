@@ -1,6 +1,6 @@
 {
   "plugin_name": "tizen-sdk",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "tizen_cli_required": "^1.0.0",
   "binary": "tizen-sdk.js",
   "commands": [
