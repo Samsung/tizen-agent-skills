@@ -11,6 +11,16 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.3] — 2026-10-13
+
+Two fixes for the CLI-runner lookup blocks on Windows, the standalone `tizen-sdk` CLI becomes
+the sole usage mode, and the bundled `tizen-dlog-analyzer` binaries are rebuilt to 0.2.8a0.
+The `tizen-cli` host commands, which were never supported internally, are removed from the
+READMEs and from every `suggested_fix.command` string so the envelope always tells the user
+to run `tizen-sdk …`.
+
+### Changed
+
 - **PowerShell `Sort-Object` `$_` expansion defense** — fixes the issue where wrapping the
   PowerShell lookup in `powershell -Command "…"` causes the outer shell to expand `$_` to an
   empty string, voiding the version sort and returning the wrong runner version
@@ -19,9 +29,32 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   `cline/hooks/tizen-sdk-skills-guard.md`, `common/hooks/tizen-sdk-skills-guard.md`).
   `Sort-Object { [version]$_.Directory.Parent.Parent.Name }` now carries a `, FullName` secondary
   sort key: when `$_` works (direct terminal) the primary version sort returns the correct latest
-  version; when `$_` is expanded (wrapped) the secondary `FullName` string sort returns the correct
-  result for same-digit versions (e.g. 1.4.x). Wrapping must still be avoided for different-digit
-  versions (1.10.0 vs 1.3.1).
+  version; when only `$_` is expanded (wrapped, command still runs) the secondary `FullName` string
+  sort returns the correct result as long as every version field has the same number of digits
+  (e.g. 1.4.0 vs 1.4.2). It is a mitigation, not a fix: once any field differs in digit count
+  (1.4.2 vs 1.4.10, 1.3.1 vs 1.10.0) the string sort picks the lower version, so wrapping must
+  still be avoided.
+
+- **`tizen-dlog-analyzer` binaries rebuilt to 0.2.8a0** (PR #265;
+  `common/tools/tizen-dlog-analyzer/linux/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/macos/tizen-dlog-analyzer`,
+  `common/tools/tizen-dlog-analyzer/windows/tizen-dlog-analyzer.exe`,
+  `common/tools/tizen-dlog-analyzer/NOTICE.md`). The bundled PyInstaller one-file executables for
+  linux, windows, and macos were rebuilt, and `NOTICE.md` was refreshed with the new file sizes,
+  SHA-256 hashes and version.
+
+- **Standalone `tizen-sdk` as sole CLI — `tizen-cli` host commands removed** (PR #260;
+  `tizen-cli/README.md`, `tizen-cli/README.ko.md`, `tizen-cli/src/envelope-adapter.ts`,
+  `tizen-cli/src/doctor.ts`, `tizen-cli/bin/tizen-sdk.js`, `common/lib/core/*.js`,
+  `common/lib/tests/*.test.js`). The `tizen-cli` host commands are not supported internally, so
+  the README files (EN + KO) now reference only the standalone `tizen-sdk` CLI. The default
+  `USER_COMMAND_PREFIX` changed from `'tizen-cli tizen-sdk'` to `'tizen-sdk'` (`PLUGIN_NAME`
+  only), and all 15 hardcoded `suggested_fix.command` strings across 8 source files in
+  `common/lib` were updated from `'tizen-cli tizen-sdk …'` to `'tizen-sdk …'`. The `doctor`
+  command's `suggested_fix` now says `'tizen-sdk sdk-install'`, and 4 test files were updated
+  to expect the `'tizen-sdk'` prefix. `envelope.js` received a prettier formatting fix that
+  collapses the `suggested_fix.command` to a single line now that the `'tizen-cli'` prefix is
+  gone.
 
 ## [1.4.2] — 2026-10-07
 
@@ -1435,7 +1468,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...HEAD
+[1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0

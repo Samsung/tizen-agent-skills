@@ -51,11 +51,13 @@ because each one is a mistake the model has actually made.
    so run the ```powershell block there. Run that PowerShell block **as-is in the terminal**,
    never as `powershell -Command "…"` from PowerShell or Git Bash — the outer shell expands
    `$h`, `$CLI`, `$d`, `$env:USERPROFILE` and `$_` first and the inner shell receives
-   ` = ; foreach ( in @(…` (seen in Cline on Windows). The `Sort-Object` now carries a
-   `, FullName` secondary sort key: even if `$_` is expanded and the primary version sort is
-   voided, the `FullName` string sort still returns the correct latest version for same-digit
-   versions (e.g. 1.4.x). For different-digit versions (1.10.0 vs 1.3.1) the string fallback
-   is wrong, so wrapping in `powershell -Command "…"` must still be avoided. Run **all three lines, in order, in
+   ` = ; foreach ( in @(…` (seen in Cline on Windows). The `Sort-Object` also carries a
+   `, FullName` secondary sort key as a mitigation for the partial case where only `$_` is
+   expanded and the rest survives, so the command still runs with the primary `[version]`
+   sort voided: the `FullName` string sort then still returns the correct latest version when
+   every field has the same number of digits (e.g. 1.4.0 vs 1.4.2). As soon as any field
+   differs in digit count (1.4.2 vs 1.4.10, 1.3.1 vs 1.10.0) the string fallback picks the
+   lower version, so wrapping in `powershell -Command "…"` must still be avoided. Run **all three lines, in order, in
    the same session**: the `node` line alone has no `$CLI`, Windows PowerShell drops the
    empty `"$CLI"` argument, and node fails with `Cannot find module '<cwd>\<first-arg>'`
    (e.g. `…\list-templates`) — that is a missing lookup, not a missing module; the guard
