@@ -12,6 +12,31 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-10-16
+
+Repository-wide release that ships `tizen-sdk-skills` 1.4.4 and `tizen-action-skills` 1.0.0.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.4.3 to 1.4.4 (#45, sync of internal main
+  `d11bef68`). Highlights: the test runner executes the locally built `tizen-sdk` launcher
+  exclusively instead of looking up global `tizen-cli` / `tizen-sdk` binaries on PATH
+  (fixes #282); the "list the available emulators" ask routes to `emulator-manager list-vm`
+  and each VM's `profile` is reported on `list-vm --detail`; the bundled `tizen-dlog-analyzer`
+  runner exposes the 0.2.8a0 feature set (`rules`, the expanded `investigate` options and
+  conclusions, consent-gated `probe run` options, file mode for offline analysis); every
+  CLI-runner lookup section carries a "run the node line as-is" note; launch-emulator VM
+  auto-selection compares platform versions segment-wise and filters by profile, and the WSL
+  home-screen fix also covers headless Linux hosts. See
+  [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for the full list. The
+  release assets stamped with the plugin version are therefore `tizen-sdk-v1.4.4.zip` and
+  `tizen-ai-extension-v1.4.4.vsix`.
+- Root `.claude-plugin/marketplace.json` catalog version follows the `tizen-sdk-skills` plugin
+  (1.4.4).
+- `.github/workflows/ci.yml` runs the standalone launcher directly
+  (`node tizen-sdk-skills/tizen-cli/bin/tizen-sdk.js --capabilities`) instead of symlinking it
+  onto PATH, matching the new test-runner executor resolution.
+
 ## [1.1.0] — 2026-10-14
 
 Repository-wide release that ships `tizen-sdk-skills` 1.4.3 and `tizen-action-skills` 1.0.0.

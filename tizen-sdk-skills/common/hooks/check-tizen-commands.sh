@@ -222,6 +222,29 @@ if has_i '(^|[^[:alnum:]_./-])(which|whereis|where(\.exe)?|type|command[[:space:
   deny "Do not search for the sdb binary yourself. Every sdb action goes through a skill runner that locates sdb (<sdk>/tools/sdb) on its own: device shell/forward/reboot/launch/kill -> tizen-sdb-helper (node <plugin>/lib/cli/sdb-helper-cli.js --request '<the user ask>'); device logs (view/save/clear, dlog) -> tizen-dlog-analyzer (node <plugin>/lib/cli/dlog-analyzer-cli.js log-dump | log-clear --confirm | start start-monitoring); connect to an IP -> tizen-remote-device (remote-device-cli.js connect <ip>); list devices -> tizen-device-manager; push/pull -> tizen-file-transfer. Run the runner and report its JSON envelope."
 fi
 
+# Rule 20 — finding the emulator VMs by hand (issue #268). Asked to "provide the list
+# of emulators available", the model skipped the tizen-create-emulator skill and went
+# looking itself: a raw `em-cli list-vm`, or `ls` / `find` / `Get-ChildItem` over the
+# SDK data directory that holds the VMs (<sdk>-data/emulator/vms). Both bypass the
+# runner (which resolves em-cli from the configured SDK, tells a broken em-cli apart
+# from "no VMs", and reports each VM's profile). Exempt: the runners / wrapper scripts,
+# whose command line names them (`node "$CLI" …` included — a runner flag may carry a
+# path under emulator/vms, e.g. --file-sharing-path). The em-cli token must look like an
+# INVOCATION, not a mention: followed by an em-cli subcommand or flag (`em-cli list-vm`,
+# `"$SDK/tools/emulator/bin/em-cli" -h`), or standing at the start of a simple command
+# with an optional path prefix (`cd …/bin && ./em-cli`). A bare mention of the word —
+# `grep -r em-cli SKILL.md`, a commit message — is not. The runner's own file name
+# (emulator-manager-cli.js) contains "-cli" but not "em-cli". $EMCLI / $EM_CLI variable
+# forms are the same detour spelled differently and take the same subcommand test.
+emcli_sub='(list-(vm|vms|platform|platforms|template|templates)|create(-image)?|delete|launch|detail|modify|reset|-[-a-zA-Z])'
+if ! has '(-cli\.js|\$CLI["\\]*[[:space:]]|tizen-emulator-manager|tizen-device-manager|tizen-launch-emulator)' \
+   && { has '(^|[^[:alnum:]_-])em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
+        || has '(^|[;&|(][[:space:]]*)([^[:space:];&|"'"'"']*/)?em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]*($|;|&|\|)' \
+        || has_i '\$\{?EM_?CLI\}?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
+        || has_i 'emulator[/\\]+vms([^[:alnum:]_]|$)'; }; then
+  deny "Do not look for emulator VMs yourself - no raw em-cli, and no ls/find/Get-ChildItem over <sdk>-data/emulator/vms. Listing, inspecting, creating and deleting emulator VMs is the tizen-create-emulator skill: node <plugin>/lib/cli/emulator-manager-cli.js list-vm --detail lists the existing VMs with platform, profile, resolution and RAM (list-platform / list-template --profile tizen|tv for the images and sizes, create / delete / detail / modify for the rest); launching one is tizen-launch-emulator (emulator-manager-cli.js launch --vm-name <name>). The runner locates em-cli from the configured SDK on its own and returns a JSON envelope - report that envelope, and take each VM's profile from it (tizen-* images are the unified tizen profile, not Mobile)."
+fi
+
 # Rule 10 — powershell -File given an MSYS path (/c/...). PowerShell needs a Windows
 # path; a Git Bash `find` result is an MSYS path. \\?\"? tolerates the JSON-escaped quote.
 if has 'powershell' && has '-File[[:space:]]+\\?"?/'; then
@@ -301,7 +324,17 @@ case "$cmd" in *[sS][dD][bB]*shell*) cmd_has_sdb_shell=1 ;; *) cmd_has_sdb_shell
 if [ "$cmd_has_sdb_shell" -eq 1 ] \
    && ! has '(dlog-analyzer|sdb-helper|gdb-debug|dotnet-debug|webapp-debug|playwright-test|screenshot|remote-device|file-transfer|project-manager|install-app)' \
    && has '[sS][dD][bB][^;&|]*shell[^;&|]*((^|[[:space:]"])(top|ps|free|vmstat|memps|uptime)([[:space:]"\\;&|]|$)|/proc/(meminfo|loadavg|stat|cpuinfo|[0-9]+/(status|stat|smaps|maps)))'; then
-  deny "Do not run diagnostic probes (top, ps, free, vmstat, memps, uptime, /proc/meminfo, /proc/loadavg, /proc/<pid>/status) over sdb shell by hand while investigating a Tizen issue. The tizen-dlog-analyzer runner owns evidence collection: node <plugin>/lib/cli/dlog-analyzer-cli.js investigate --symptoms \"<the user's words>\" [app-id] runs the probe bundles matching the symptom (CPU, memory, freeze, media, ...) and correlates them with the collected dlog; node <plugin>/lib/cli/dlog-analyzer-cli.js probe list shows the catalog and probe run <probe-id> runs one probe. Report the runner's JSON envelope; do not type sdb yourself."
+  deny "Do not run diagnostic probes (top, ps, free, vmstat, memps, uptime, /proc/meminfo, /proc/loadavg, /proc/<pid>/status) over sdb shell by hand while investigating a Tizen issue. The tizen-dlog-analyzer runner owns evidence collection: node <plugin>/lib/cli/dlog-analyzer-cli.js investigate --symptoms \"<the user's words>\" [app-id] runs the probe bundles matching the symptom (CPU, memory, freeze, media, ...) and correlates them with the collected dlog; node <plugin>/lib/cli/dlog-analyzer-cli.js probe list shows the catalog and probe run <probe-id> runs one probe (e.g. probe run cpu-top instead of sdb shell top). Report the runner's JSON envelope; do not type sdb yourself."
+fi
+
+# Rule 18b — hand-typed network diagnostics over sdb shell: openssl
+# s_client, curl/wget to the device. These are what the network-egress probes
+# (reachability, tls-handshake) do — gated by --allow-network-probe in the
+# runner. Exempt: skill runners whose command line names them.
+if [ "$cmd_has_sdb_shell" -eq 1 ] \
+   && ! has '(dlog-analyzer|sdb-helper|gdb-debug|dotnet-debug|webapp-debug|playwright-test|screenshot|remote-device|file-transfer|project-manager|install-app)' \
+   && has '[sS][dD][bB][^;&|]*shell[^;&|]*((^|[[:space:]"])(openssl[[:space:]]+s_client|curl|wget)([[:space:]";&|]|$))'; then
+  deny "Do not run network diagnostics (openssl s_client, curl, wget) over sdb shell by hand. The tizen-dlog-analyzer runner owns network-egress probes: node <plugin>/lib/cli/dlog-analyzer-cli.js investigate --symptoms \"<the user's words>\" --allow-network-probe [app-id] runs the reachability and TLS-handshake probes (consent-gated); node <plugin>/lib/cli/dlog-analyzer-cli.js probe run <probe-id> --allow-network-probe runs one. Report the runner's JSON envelope; do not type sdb yourself."
 fi
 
 # Rule 19 — waiting on a timer instead of asking the user to reproduce (issue #212).

@@ -1,9 +1,9 @@
 ---
 name: tizen-create-emulator
-description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, emulator VM create, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, 1080 에뮬레이터, 720 에뮬레이터, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성, Samsung TV emulator create. Use this skill to CREATE a custom Tizen emulator VM with a user-selected screen size (default 1080) plus configurable platform and profile via em-cli (located at {TIZEN_SDK_PATH}/tools/emulator/bin/em-cli). Supports listing available screen sizes/platforms/templates/VMs, creating new VMs, and deleting VMs. Templates here are EMULATOR VM templates (screen sizes/resolutions) — for APP/project templates, use tizen-create-project instead. For LAUNCHING (booting) an existing emulator VM, use tizen-launch-emulator instead.
+description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, emulator VM create, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, 1080 에뮬레이터, 720 에뮬레이터, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, list emulators, available emulators, 에뮬레이터 목록, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성, Samsung TV emulator create. Use this skill to CREATE a custom Tizen emulator VM with a user-selected screen size (default 1080) plus configurable platform and profile via em-cli. Lists screen sizes/platforms/templates/VMs, creates and deletes VMs. ANY "list the available / existing emulators" request ROUTES HERE — it is `list-vm --detail`, never a manual search or a raw em-cli call; report each VM's `profile` from the envelope (tizen-* is the unified tizen profile, not Mobile). Templates here are EMULATOR VM templates — for APP/project templates, use tizen-create-project instead. For LAUNCHING (booting) an existing emulator VM, use tizen-launch-emulator instead.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-07-31"
+  last-updated: "2026-10-14"
   keywords:
     - Tizen create emulator
     - custom emulator
@@ -13,6 +13,10 @@ metadata:
     - emulator VM
     - list platform
     - list template
+    - list VMs
+    - list emulators
+    - available emulators
+    - 에뮬레이터 목록
     - delete emulator
     - TV 에뮬레이터
 ---
@@ -83,6 +87,8 @@ If the user answers "아무거나" / "기본으로" to your question, that IS an
 ### CLI Runner (Cline / Claude Code)
 
 **Pick the ONE block for the shell your terminal / tool runs — the prompt tells you: `$` is Bash (Linux, macOS, Claude Code's Git Bash on Windows, Codex on Linux / macOS) → Bash block; `PS C:\…>` is PowerShell (Codex on Windows, Cline PowerShell terminal) → PowerShell block; `C:\…>` is cmd.exe (Cline cmd.exe terminal) → cmd.exe block. Run that block as-is: a block pasted into another shell, or wrapped in `powershell -Command "…"`, is a parse error.**
+
+**Run the `node` line exactly as written and read the JSON envelope it prints to stdout. Do NOT redirect or capture the output (`> file`, `2>&1 | tee`, `Out-File`, `| Out-String`), do NOT wrap the line in `cmd /c`, `powershell -Command "…"` or any second shell, and do NOT mix shell dialects: `%TEMP%` and `2>nul` are cmd.exe only, `$env:TEMP` and `Out-File` are PowerShell only — in the other shell they are literal text or a parse error. A tool message that the command's completion or output "could not be observed / captured" means the terminal is still busy with an earlier command or its shell-integration hooks have broken, not that the runner failed: open a NEW terminal and re-run the SAME line unchanged. Runners that drive em-cli, sdb or a JVM can take 10–30 s and print the envelope only when they exit — wait for it rather than retrying with a redirect.**
 
 **Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**
 
@@ -252,12 +258,33 @@ node "$CLI" list-platform --profile tv
 # List available templates + their resolutions (this is the size list for Step 1)
 node "$CLI" list-template --profile tizen
 
-# List existing VMs
+# List existing VMs — the answer to "which emulators do I have / are available?"
+# (--detail adds platform, profile, resolution, RAM per VM; prefer it for that question)
 node "$CLI" list-vm
+node "$CLI" list-vm --detail
 
 # Delete a VM
 node "$CLI" delete --vm-name my-vm
 ```
+
+## Listing the available emulators — `list-vm`, never a manual search
+
+"Provide the list of emulators available", "what emulators do I have?", "에뮬레이터 목록
+보여줘" is this skill's `list-vm` action (issue #268). Run `node "$CLI" list-vm --detail`
+and report the envelope — do **not** look for VMs yourself: no `ls` / `find` /
+`Get-ChildItem` over `<sdk>-data/emulator/vms` (or any other SDK directory), no raw
+`em-cli list-vm`, no `tz emul` — the Bash hook denies those detours. The runner locates
+em-cli from the configured SDK path on its own; if the SDK is not configured it returns
+`sdk_path_not_set` (→ `tizen-sdk-init`), and an empty `vms` array with
+`status: success` really means "no VMs yet" (a broken em-cli is a failure envelope).
+
+**Profile comes from the envelope, not from the platform name** (issue #269). Each
+`vm_details[]` record carries `profile`: `tizen` for `tizen-*` platform images (the
+unified Tizen profile — it is **not** Mobile or Wearable), `tv` for `tv-*` images, and `""`
+for a platform the runner does not recognise (e.g. a user-named `create-image` capture). When
+you tabulate the VMs, put that `profile` value in the Profile column verbatim (`tizen`, `tv`,
+or "unknown" for `""`); do not translate `tizen-10.0-x86_64` into "Mobile" and do not turn a
+custom image's first word into a profile.
 
 ## Inspecting and changing an existing VM
 
@@ -387,13 +414,40 @@ Exit code: `0` = success envelope, `1` = failure/error envelope.
 }
 ```
 
-**List-vm success:**
+**List-vm success** (`vm_details` is filled only with `--detail`; its `profile` is derived
+from the platform image — `tizen-*` → `tizen`, `tv-*` → `tv` — and is the value to report):
 
 ```json
 {
   "status": "success",
   "result": {
-    "vms": ["my-vm", "tizen-vm-default"],
+    "vms": ["my-vm", "my-tv-vm"],
+    "vm_details": [
+      {
+        "name": "my-vm",
+        "platform": "tizen-10.0-x86_64",
+        "template": "HD1080 Tizen",
+        "resolution": "1920x1080",
+        "ram": "1024",
+        "cpu_arch": "x86_64",
+        "cpu_count": "4",
+        "type": "standard",
+        "skin_path": "/home/user/tizen-sdk/platforms/common/tizen/emulator-resources/skins/tizen-general-3btn",
+        "profile": "tizen"
+      },
+      {
+        "name": "my-tv-vm",
+        "platform": "tv-samsung-10.0-x86_64",
+        "template": "HD1080 TV",
+        "resolution": "1920x1080",
+        "ram": "1024",
+        "cpu_arch": "x86_64",
+        "cpu_count": "4",
+        "type": "standard",
+        "skin_path": "/home/user/tizen-sdk/platforms/tizen-10.0/tv-samsung/emulator-resources/skins/tv-1920x1080",
+        "profile": "tv"
+      }
+    ],
     "count": 2
   }
 }
@@ -425,7 +479,7 @@ warn-only (the create-time crash is still classified as `TIZEN_SDK_EXEC_E002`).
 | ------------------------------------------- | :--------------------------------------: | :-------------------------: | :------------------------: |
 | Create a **custom** emulator VM             |                    ✅                    |                             |                            |
 | List available platforms/templates          |                    ✅                    |                             |                            |
-| List existing VMs                           |                    ✅                    |                             |                            |
+| List existing / available emulators (VMs)   |                    ✅                    |                             |                            |
 | Delete a VM                                 |                    ✅                    |                             |                            |
 | Launch (boot) an **existing** emulator VM   |                                          |             ✅              |                            |
 | Launch the **first available** VM (no name) |                                          |             ✅              |                            |
@@ -435,6 +489,7 @@ warn-only (the create-time crash is still classified as `TIZEN_SDK_EXEC_E002`).
 > **Rule of thumb:**
 >
 > - If the user wants to **create** an emulator VM → use `tizen-create-emulator`.
+> - If the user wants to **list / see which emulators exist or are available** → use `tizen-create-emulator` (`list-vm --detail`), never a manual search.
 > - If the user wants to **launch/start/boot** an existing emulator → use `tizen-launch-emulator`.
 > - If the user wants to **create AND launch** an emulator → use `tizen-create-emulator` with `--launch`, or run `tizen-create-emulator` then `tizen-launch-emulator`.
 > - If the user needs to **find a connected device** or **stop emulators** → use `tizen-device-manager`.

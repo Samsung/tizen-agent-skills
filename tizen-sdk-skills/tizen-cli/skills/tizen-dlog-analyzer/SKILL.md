@@ -57,14 +57,14 @@ The user reports ANY problem, crash, freeze, error, high CPU or memory usage, sl
 ## Command
 
 ```
-tizen-cli tizen-sdk dlog-analyzer --action <log-dump|log-clear|start|stop|check|status|app-launch|app-terminate|dlog-collect|stop-collect|error-analyze|app-log|search|device-profile|investigate|probe|snapshot|timeline|kernel> [--subcommand <subcommand>] [--app-id <id>] [--format <format>] [--serial <serial>] [--output-dir <path>] [--filter "<spec> ..."] [--lines <n>] [--output <file>] [--confirm] [--since <time>] [--until <time>] [--priority <V|D|I|W|E|F>] [--tag <tag>] [--keyword <kw>] [--max-lines <n>] [--max-chars <n>] [--refresh] [--max-age <age>] [--symptoms <text>] [--profile <profiles>] [--budget <n>] [--budget-tokens <n>] [--allow-network-probe] [--probe-id <id>] [--pattern <text...>] [--category <name>] [--regex] [--case-sensitive] [--invert] [--all] [--context <n>] [--after-context <n>] [--before-context <n>] [--count] [--max-matches <n>]
+tizen-cli tizen-sdk dlog-analyzer --action <log-dump|log-clear|start|stop|check|status|app-launch|app-terminate|dlog-collect|stop-collect|error-analyze|app-log|search|device-profile|investigate|probe|snapshot|timeline|kernel> [--subcommand <subcommand>] [--app-id <id>] [--format <format>] [--serial <serial>] [--output-dir <path>] [--filter "<spec> ..."] [--lines <n>] [--output <file>] [--confirm] [--since <time>] [--until <time>] [--priority <V|D|I|W|E|F>] [--tag <tag>] [--keyword <kw>] [--max-lines <n>] [--max-chars <n>] [--refresh] [--max-age <age>] [--symptoms <text>] [--profile <profiles>] [--budget <n>] [--budget-tokens <n>] [--allow-network-probe] [--probe-id <id>] [--pattern <text...>] [--category <name>] [--regex] [--case-sensitive] [--invert] [--all] [--context <n>] [--after-context <n>] [--before-context <n>] [--count] [--max-matches <n>] [--file <path>] [--pid <n>] [--noise-tag <tag>] [--level <level>] [--with-dlog]
 ```
 
 | Option                    | Required | Default            | Description                                                                       |
 | ------------------------- | -------- | ------------------ | --------------------------------------------------------------------------------- |
 | `--action <action>`       | yes      | —                  | log-dump (one-shot dlog buffer dump — "show/tail/save the logs"), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (find text or a regex in every collected dlog category — `--pattern` required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/analyze) |
 | `--subcommand <subcommand>` | no     | `start-monitoring` | For --action start: dlog-collect, exception-detect, or start-monitoring (recommended). For --action probe: list or run. For --action snapshot: create, list, compare, or delete. For --action kernel: collect (background collector), stop, or analyze. For --action timeline: show, report, analyze, or export. |
-| `--app-id <id>`           | no       | —                  | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, and app-log. Optional for investigate (app-scoped investigation). For search: same as `--category` (restrict the search to this app's logs). |
+| `--app-id <id>`           | no       | —                  | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, and app-log. Optional for investigate (app-scoped investigation). For search (collection mode): same as `--category` (restrict the search to this app's logs). For error-analyze / search `--file`: declared app label (not a verified identity), used with `--pid`. For kernel analyze `--file --with-dlog`: app ID for dlog correlation. |
 | `--format <format>`       | no       | both/text          | For --action error-analyze: summary (summary lines only), details (detail entries only), or omit for both. For app-log, search, device-profile, investigate, probe, snapshot, timeline, kernel: json or text (default: text). For error-analyze prefer `summary` (token-efficient); `details` is the larger output, use it only when the user wants full log entries. For search, `json` carries `total_matches` / `returned` / `truncated` plus structured entries. |
 | `--pattern <text...>`     | search   | —                  | For --action search (**required** there): text to look for. Several values allowed (`--pattern foo bar`, or repeat the flag) — any one matches unless `--all`. Quote a multi-word pattern. Plain text unless `--regex`; case-insensitive unless `--case-sensitive`. |
 | `--category <name>`       | no       | all                | For --action search: search only this category — an app id, `_general` or `_unparsed`; comma-separate several. Default: every category under `app/` (the kernel log is excluded — use `--action kernel --subcommand analyze`). |
@@ -84,7 +84,7 @@ tizen-cli tizen-sdk dlog-analyzer --action <log-dump|log-clear|start|stop|check|
 | `--since <time>`         | no       | —                  | For --action app-log / search: keep entries at/after this time (dlog timestamp like '08-14 18:09' or relative age like '30s', '10m', '2h', '1d') |
 | `--until <time>`         | no       | —                  | For --action app-log / search: keep entries at/before this time (same formats as --since) |
 | `--priority <p>`         | no       | all                | For --action app-log / search: minimum priority to keep (V, D, I, W, E, F — keeps this level and above) |
-| `--tag <tag>`             | no       | —                  | For --action app-log / search: keep only entries with this dlog tag |
+| `--tag <tag>`             | no       | —                  | For --action app-log / search: keep only entries with this dlog tag (repeatable) |
 | `--keyword <kw>`          | no       | —                  | For --action app-log: keep only entries containing these keywords (repeatable). For a search across every app use `--action search --pattern` instead. |
 | `--max-lines <n>`         | no       | —                  | For --action app-log / search: max lines printed to stdout (JSON output and `--output` files are complete) |
 | `--max-chars <n>`         | no       | —                  | For --action app-log / search: max characters printed to stdout |
@@ -96,6 +96,12 @@ tizen-cli tizen-sdk dlog-analyzer --action <log-dump|log-clear|start|stop|check|
 | `--budget-tokens <n>`     | no       | —                  | For --action investigate: max tokens for the report |
 | `--allow-network-probe`   | no       | false              | For --action investigate: allow network-related probes |
 | `--probe-id <id>`         | no       | —                  | For --action timeline: filter to a specific probe ID |
+| `--file <path>`           | no       | —                  | Analyze one saved local dlog or kernel log text file instead of collected logs. Supported by error-analyze, app-log, search, and kernel analyze. In file mode, no SDK directory resolution or device access occurs. |
+| `--pid <n>`               | no       | —                  | Historical capture PID to select from `--file` (repeatable). Required with `--app-id` in file mode for error-analyze and search. |
+| `--noise-tag <tag>`       | no       | —                  | Tag excluded while reconstructing `--file` categories (repeatable). |
+| `--level <level>`        | no       | warning            | For --action kernel analyze --file: minimum level for lines that match no signature (emerg, alert, crit, err, warning, notice, info, debug, or 0-7). |
+| `--with-dlog`             | no       | false              | For --action kernel analyze --file: also analyze dlog and correlate with kernel findings (requires --app-id). |
+| `--with-context`          | no       | false              | For --action error-analyze `--file`: include surrounding context lines for each error entry. |
 
 ## One-shot log actions (plain "show / save / clear the logs")
 
@@ -406,6 +412,46 @@ The first line of the report is `## Analysis Report (English)` or `## 분석 보
 - Launching an emulator → `tizen-cli tizen-sdk launch-emulator`
 - Interactive debugging → `tizen-cli tizen-sdk gdb-debug` (Native) or `tizen-cli tizen-sdk dotnet-debug` (.NET)
 
+## Analyzing a user-provided log file
+
+When the user provides a saved dlog or kernel log file (e.g., `device.log`, `kernel.log`), use `--file <path>` to analyze it directly — no device connection, SDK path resolution, or prior collection is needed. Supported by `error-analyze`, `app-log`, `search`, and `kernel analyze`.
+
+**File-mode companions:**
+- `--pid <n>` (repeatable) — historical capture PID to select records from the file. Required with `--app-id` for `error-analyze` and `search`.
+- `--noise-tag <tag>` (repeatable) — tag excluded while reconstructing file categories.
+- `--category <name>` — reconstructed routing category to select from the file.
+- `--app-id <id>` — declared app label (not a verified identity). For `error-analyze` and `search`, used with `--pid`. For `kernel analyze --with-dlog`, used for dlog correlation.
+- `--level <level>` (kernel only) — minimum level for lines that match no signature (emerg, alert, crit, err, warning, notice, info, debug, or 0-7). Default: warning.
+- `--with-dlog` (kernel only) — also analyze dlog and correlate with kernel findings (requires `--app-id`).
+- `--with-context` (error-analyze only) — include surrounding context lines for each error entry.
+
+**Examples:**
+```bash
+# Analyze a saved dlog file for E/F errors
+tizen-cli tizen-sdk dlog-analyzer --action error-analyze --file ./device.log
+
+# Analyze with a declared app label and historical PID
+tizen-cli tizen-sdk dlog-analyzer --action error-analyze --file ./device.log --app-id org.example.app --pid 12601
+
+# Search for a string in a saved dlog file
+tizen-cli tizen-sdk dlog-analyzer --action search --file ./device.log --pattern "timeout" --context 2
+
+# Print the full log from a saved file, filtered by PID
+tizen-cli tizen-sdk dlog-analyzer --action app-log --file ./device.log --pid 12601 --priority W
+
+# Analyze a saved kernel log file
+tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand analyze --file ./kernel.log --since boot
+
+# Analyze a kernel log file and correlate with dlog
+tizen-cli tizen-sdk dlog-analyzer --action kernel --subcommand analyze --file ./kernel.log --with-dlog --app-id org.example.app
+```
+
+**Notes:**
+- In file mode, `--app-id` is a **declared label** (not a verified identity, not an alias of `--category`). App/PID selection and category selection are mutually exclusive.
+- `--noise-tag` is rejected with PIDs or without categories.
+- All regular filters (`--since`, `--until`, `--priority`, `--tag`, `--keyword`, `--max-lines`, `--max-chars`, `--format`, `--output`) work in file mode.
+- `exception-detect --file` is not yet supported through this runner.
+
 ## Important notes
 
 - **Only one system-wide `start` instance at a time.** If already running, `start` returns an `already_running` error. Stop first (`--action stop`).
@@ -427,6 +473,7 @@ The first line of the report is `## Analysis Report (English)` or `## 분석 보
 - **`investigate` is a one-shot command** — it detects the device profile, resolves symptoms to profiles, runs probes, correlates findings, and exits. It does not run in the background. Use `--symptoms` for free-text description or `--profile` to override symptom resolution.
 - **`timeline` requires a subcommand** — `show`, `report`, `analyze`, or `export`. Without a subcommand, the action fails.
 - **`kernel collect` is long-running and therefore runs in the background** (detached, PID file under `<tmp>/tizen-dlog-analyzer/`). Stop it with `kernel stop` after the user reproduced the issue, then `kernel analyze` the collected file. A missing SDK path fails it with `sdk_path_not_set` like the other collectors.
+- **`--file` mode** lets `error-analyze`, `app-log`, `search`, and `kernel analyze` read one saved local log file directly — no SDK path, no device, no prior collection. Use `--pid` (repeatable) to select records by historical capture PID, `--noise-tag` (repeatable) to exclude tags while reconstructing categories, and `--category` to select a reconstructed routing category. For `error-analyze` and `search`, `--app-id` is a declared label (not a verified identity), used with `--pid`. For `kernel analyze --file`, `--level` sets the minimum level and `--with-dlog --app-id` correlates with collected dlog. See "Analyzing a user-provided log file" above for examples.
 
 ## Follow-ups
 

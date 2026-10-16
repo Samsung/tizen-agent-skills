@@ -11,6 +11,76 @@
 
 ## [Unreleased]
 
+## [1.4.4] — 2026-10-16
+
+테스트 러너가 이제 PATH의 전역 설치 `tizen-cli`/`tizen-sdk` 바이너리를 찾지 않고 항상
+로컬로 빌드한 런처를 실행합니다 (fixes #282). 아울러 "사용 가능한 에뮬레이터 목록" 요청이
+`emulator-manager list-vm`으로 라우팅되고, `list-vm --detail`이 각 VM의 `profile`을
+보고하며, 번들된 `tizen-dlog-analyzer`에 0.2.8a0 기능 세트(`rules`, 확장된 `investigate`,
+`probe run` 옵션)가 들어옵니다.
+
+### Fixed
+
+- **테스트 러너가 로컬 런처만 사용합니다** (PR #283; `tests/runner.mjs`). 기존 executor
+  확인은 PATH의 전역 `tizen-cli`/`tizen-sdk` 바이너리를 우선했습니다 (POSIX `which` 조회와,
+  win32에서는 로컬 런처를 Node로 구동하는 win32 전용 분기). 그래서 오래되었거나 깨진 전역
+  설치를 대상으로 돌아 `PLUGIN_NOT_FOUND`로 실패할 수 있었습니다. `resolveExecutor()`는
+  이제 런처 후보만 확인합니다 — 설정된 경우 `TC_LAUNCHER_JS` 환경 변수, 없으면 빌드된
+  `../tizen-cli/bin/tizen-sdk.js` — 하고 항상 현재 Node 바이너리로 런처를 구동합니다.
+  executor `kind`는 없어졌습니다. 모든 후보가 독립 `tizen-sdk` 런처이므로 러너는 런처 파일 이름으로
+  동작을 유추하지 않고 TC argv의 선행 `tizen-sdk` 토큰을 항상 제거합니다(`launcherArgv()`) —
+  `tizen-sdk.js`로 끝나지 않는 `TC_LAUNCHER_JS`(이름을 바꾼 복사본, 래퍼)는 토큰을 그대로 넘겨
+  모든 TC가 unknown-command 에러로 실패했습니다. `RUNNER_NO_EXECUTOR`는 이제 모든 플랫폼에서
+  확인한 후보 경로를 나열합니다. CI는 런처를 PATH에 심볼릭 링크하는 대신 직접 실행합니다.
+
+- **`tizen-create-emulator` — "사용 가능한 에뮬레이터 목록"이 수동 검색이 아니라 `list-vm`으로
+  라우팅됩니다** (issue #268; `common/skills/tizen-create-emulator/SKILL.md`,
+  `common/agents/tizen-create-emulator.md`, `tizen-cli/skills/tizen-create-emulator/SKILL.md`,
+  `common/skills/tizen-launch-emulator/SKILL.md`, `common/agents/tizen-launch-emulator.md`,
+  `common/skills/tizen-device-manager/SKILL.md`, `common/agents/tizen-device-manager.md`,
+  `common/hooks/check-tizen-commands.sh` 규칙 20, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `tests/tc/device/emulator-manager.prompt-list-available.yaml`). SDK 경로 질문 직후
+  "Provide the list of emulators available"라고 묻자 모델이 스킬을 고르지 않고 VM을 직접
+  찾아 나섰습니다. 스킬·에이전트·`tizen-cli` 설명에 그 요청("list emulators", "available
+  emulators", "which emulators do I have", 에뮬레이터 목록 …)을 명시하고 `list-vm --detail`임을
+  적었으며, launch-emulator와 device-manager 설명은 목록 요청을 이쪽으로 돌려보냅니다. 새
+  Bash 훅 규칙이 두 가지 우회 — `em-cli` 직접 실행(`$EMCLI` 변수 형태 포함)과
+  `<sdk>-data/emulator/vms` 에 대한 `ls` / `find` / `Get-ChildItem` — 를 차단하고 러너와 래퍼
+  스크립트는 허용합니다. 가드 규칙도 같은 내용을 적고, 프롬프트 TC가 보고된 상황을 재현합니다.
+- **`emulator-manager list-vm --detail`이 각 VM의 `profile`을 명시합니다** (issue #269;
+  `common/lib/core/emulator.js`, `common/lib/tests/emulator-manager.test.js`, create-emulator
+  스킬/에이전트 문서 3종, `docs/emulator/emulator-manager-walkthrough.{en,ko}.md`). em-cli는
+  VM이 만들어진 플랫폼 이미지만 보고하므로 모델이 Profile 열을 추측으로 채워
+  `tizen-10.0-x86_64` VM을 **Mobile**이라고 표시했습니다. `parseVmDetails()`가 이제 이미지
+  이름에서 파생한 `profile` — `tizen-*` → `tizen`(통합 Tizen 프로필), `tv-*` → `tv`, 구형
+  `mobile-*` / `wearable-*` / `iot-*`는 그대로, 그 밖의 이름은 `""`(사용자가 `create-image`로 만든
+  `my-custom-image` 같은 이미지가 `my` 프로필로 둔갑하지 않음) — 을 `list-vm --detail`,
+  `detail`, 그리고 `create` / `modify` 후 다시 읽는 `vm_detail`에 추가합니다. 문서는 이 필드를
+  보여주고 에이전트가 그 값을 그대로 보고하도록 안내합니다.
+
+### Added
+
+- **`tizen-dlog-analyzer rules` — 분석 규칙 조회, 상세 보기, 검증, 테스트**
+  (v0.2.8a0 바이너리). 바이너리는 15개 YAML 파일에 24개 규칙을 포함;
+  `rules list` / `rules show <id>` / `rules validate [path]` /
+  `rules test <fixture.json> [--expect <ids>|none]`로 읽기 전용 조회.
+  `--rules-dir <path>`로 사용자 규칙 YAML 추가 로드. `--format`은 `list`와
+  `test`에만 전달 (바이너리가 `show` / `validate`에서는 거부).
+- **`tizen-dlog-analyzer investigate` — v0.2.8a0 옵션**: `--rules-dir`,
+  `--parallel`, `--max-workers`, `--deduplicate`, `--similarity-threshold`,
+  `--allow-heavy`, `--no-noise-filter`, `--fuzzy-symptoms`, `--symptom-map`.
+  investigate JSON에 순위가 매겨진 `conclusions`(신뢰도, 역할, 근거, 수정),
+  `ruled_out`, `unexplained`, `consent_needed`, `redaction_summary` 등이 추가됨.
+- **`tizen-dlog-analyzer probe run` — `--app-id` 및 `--allow-network-probe`**
+  옵션으로 앱 범위 지정 및 동의 기반 네트워크 프로브 실행.
+- **REPORT_TEMPLATE.md**에 근본 원인 항목에 `Confidence`/`Role` 필드,
+  `Ruled Out` 및 `Unexplained Anomalies` 섹션, 마스킹 자리표시자 안내 추가
+  (영문/한국어 블록 모두).
+- **훅** — Rule 18b: sdb shell에서 직접 `openssl s_client` / `curl` / `wget`
+  실행을 거부하고 `investigate --allow-network-probe`와
+  `probe run --allow-network-probe`를 안내.
+
 ## [1.4.3] — 2026-10-13
 
 Windows의 CLI 러너 조회 블록에 대한 수정 두 건, 독립 실행형 `tizen-sdk` CLI가 유일한
@@ -1385,7 +1455,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...HEAD
+[1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
 [1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1

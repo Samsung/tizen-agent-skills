@@ -114,7 +114,12 @@ export function toOuterEnvelope(commandName: string, inner: any): any {
     errors: ((inner && inner.errors) || []).map((e: any) => ({
       error_code: e.error_code || e.code || "EXECUTION_ERROR",
       message: e.message,
-      ...(e.error_category ? { error_category: e.error_category } : {}),
+      // The vendored core's inner envelope names its business categories
+      // `category`; surface them as the outer contract's `error_category`
+      // (an explicit inner error_category wins).
+      ...(e.error_category || e.category
+        ? { error_category: e.error_category || e.category }
+        : {}),
       ...(e.suggested_fix ? { suggested_fix: e.suggested_fix } : {}),
       ...(e.details ? { details: e.details } : {}),
     })),

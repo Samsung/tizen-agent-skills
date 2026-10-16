@@ -12,32 +12,32 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **290** |
-| CSV TC ID 가 매핑된 케이스 | **255** |
+| YAML 테스트 케이스 총 개수 | **295** |
+| CSV TC ID 가 매핑된 케이스 | **256** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
-| └─ Prompt 레인 (`TC-P-*`) | 119 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **35** |
+| └─ Prompt 레인 (`TC-P-*`) | 120 |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **39** |
 
 ### 도메인별 분포
 
 | 도메인 (`tc/<group>/`) | 케이스 수 |
 | --- | ---: |
-| `device` | 103 |
+| `device` | 104 |
 | `sdk` | 66 |
 | `debug` | 32 |
 | `project` | 28 |
 | `certificate` | 25 |
 | `meta` | 17 |
 | `test` | 15 |
-| `dlog-analyzer` | 4 |
+| `dlog-analyzer` | 8 |
 
 ### 티어별 분포
 
 | tier | 케이스 수 |
 | --- | ---: |
-| `device` | 142 |
+| `device` | 143 |
 | `mutating` | 79 |
-| `safe` | 69 |
+| `safe` | 73 |
 
 ---
 
@@ -307,6 +307,7 @@
 | `TC-P-117` | Use bash syntax on Windows (guard rule #7 — no bash syntax in cmd.exe) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 7)* | `tizen-sdk.guard.no-bash-on-windows` | `device-manager` | safe | Prompt |
 | `TC-P-118` | Run native binary with node (guard rule #8 — native executables must not be run with node) | [tc/meta/guard-rules.prompt.yaml](tc/meta/guard-rules.prompt.yaml) *(doc 8)* | `tizen-sdk.guard.no-node-on-native` | `sdb-helper` | safe | Prompt |
 | `TC-P-119` | Prompt — Symptom report that mentions the emulator routes to dlog-analyzer, not device-manager (issue #211) | [tc/dlog-analyzer/dlog-analyzer.prompt-symptom-routing.yaml](tc/dlog-analyzer/dlog-analyzer.prompt-symptom-routing.yaml) | `tizen-sdk.dlog-analyzer.prompt-symptom-routing` | `dlog-analyzer` | device | Prompt |
+| `TC-P-120` | Prompt — "Provide the list of emulators available" routes to emulator-manager list-vm, not a manual search (issue #268) | [tc/device/emulator-manager.prompt-list-available.yaml](tc/device/emulator-manager.prompt-list-available.yaml) | `tizen-sdk.emulator-manager.prompt-list-available` | `emulator-manager` | device | Prompt |
 
 > `tc/meta/guard-rules.prompt.yaml` 은 멀티 도큐먼트 YAML 입니다 — `TC-P-111`~`TC-P-118`
 > 8건이 `---` 로 구분되어 한 파일 안에 들어 있으며, *(doc n)* 은 그 문서 순번입니다.
@@ -334,6 +335,10 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/device/install-app.missing-required.yaml](tc/device/install-app.missing-required.yaml) | `tizen-sdk.install-app.missing-required` | `install-app` | device | CLI | install-app fails with invalid_argument when --package is missing |
 | [tc/device/remote-device.scan-happy.yaml](tc/device/remote-device.scan-happy.yaml) | `tizen-sdk.remote-device.scan-happy` | `remote-device` | device | CLI | remote-device scan returns success with scan results |
 | [tc/device/sdb-helper.missing-required.yaml](tc/device/sdb-helper.missing-required.yaml) | `tizen-sdk.sdb-helper.missing-required` | `sdb-helper` | device | CLI | sdb-helper fails with invalid_argument when --request is missing |
+| [tc/dlog-analyzer/dlog-analyzer.file-app-log-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-app-log-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-app-log-nonexistent` | `dlog-analyzer` | safe | CLI | app-log fails with invalid_parameters when the input file does not exist |
+| [tc/dlog-analyzer/dlog-analyzer.file-error-analyze-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-error-analyze-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-error-analyze-nonexistent` | `dlog-analyzer` | safe | CLI | error-analyze fails with invalid_parameters when the input file does not exist |
+| [tc/dlog-analyzer/dlog-analyzer.file-kernel-analyze-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-kernel-analyze-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-kernel-analyze-nonexistent` | `dlog-analyzer` | safe | CLI | kernel analyze fails with invalid_parameters when the input file does not exist |
+| [tc/dlog-analyzer/dlog-analyzer.file-search-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-search-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-search-nonexistent` | `dlog-analyzer` | safe | CLI | search fails with invalid_parameters when the input file does not exist |
 | [tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml](tc/dlog-analyzer/dlog-analyzer.log-clear-without-confirm.yaml) | `tizen-sdk.dlog-analyzer.log-clear-without-confirm` | `dlog-analyzer` | safe | CLI | dlog-analyzer --action log-clear without --confirm fails (user_input_required) before touching any device |
 | [tc/dlog-analyzer/dlog-analyzer.missing-required.yaml](tc/dlog-analyzer/dlog-analyzer.missing-required.yaml) | `tizen-sdk.dlog-analyzer.missing-required` | `dlog-analyzer` | device | CLI | dlog-analyzer fails with invalid_argument when --action is missing |
 | [tc/meta/meta.help.yaml](tc/meta/meta.help.yaml) | `tizen-sdk.meta.help` | `--help` | safe | CLI | --help returns a success envelope whose result.help_text is Commander's usage text |
@@ -366,9 +371,9 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 이 공백은 **의도된 것**입니다 — `list-projects` 명령 자체가 플러그인에 존재하지
 않아 해당 TC 를 삭제했습니다(커밋 `6d839ae`). 되살릴 대상이 아닙니다.
 
-### `TC-P-*` — 확인 범위 1 ~ 119, 매핑 119건, 공백 0건
+### `TC-P-*` — 확인 범위 1 ~ 120, 매핑 120건, 공백 0건
 
-1 ~ 119 번호가 모두 YAML 로 존재합니다. 번호 공백 없음. ✓
+1 ~ 120 번호가 모두 YAML 로 존재합니다. 번호 공백 없음. ✓
 
 > 번호 공백이 0건이라는 것은 **TC ID 가 빠짐없이 존재한다**는 뜻일 뿐입니다.
 > CSV 본문이 DRM 으로 잠겨 있어(6장 참고) 각 YAML 의 내용이 CSV 원본 TC 의
@@ -377,17 +382,19 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 ### 실행 검증 상태
 
 TC ID 커버리지(위)와 **실제 실행 검증**은 별개입니다.
-prompt 레인 119건 중 118건이 실행 완료입니다
+prompt 레인 120건 중 118건이 실행 완료입니다
 — 최초 41건(커맨드 33 + 가드룰 8) + 2026-08-31 세션의 draft 77건(3회 시도, 77/77 승격).
 `TC-P-119`(`dlog-analyzer.prompt-symptom-routing`, 이슈 #211 — 스킬 이름 없이 CPU 300%·재생 안 됨
 증상만 말해도 `device-manager` 가 아닌 `dlog-analyzer` 로 해석되는지 — `expect` 의 `first_resolved_command` /
-`must_not_resolve_commands` 로 고정)는 2026-09-30 에 작성되어 아직 draft 입니다: 에이전트 세션 3회
+`must_not_resolve_commands` 로 고정)는 2026-09-30 에, `TC-P-120`(`emulator-manager.prompt-list-available`,
+이슈 #268 — "Provide the list of emulators available" 가 SDK 디렉터리 수동 검색이 아니라 `emulator-manager`
+`list-vm` 으로 해석되는지)는 2026-10-15 에 작성되어 아직 draft 입니다: 각각 에이전트 세션 3회
 실행(`skills/run-test-suite.md` Option 2, `pass_rate: 3/3`)이 필요합니다.
 
 | status | 케이스 수 |
 | --- | ---: |
-| `draft` | 8 |
-| `approved` | 279 |
+| `draft` | 9 |
+| `approved` | 286 |
 | `candidate` | 0 |
 
 2026-09-22 device 티어 fixture 패스(`scripts/prepare-device-fixtures.mjs` +

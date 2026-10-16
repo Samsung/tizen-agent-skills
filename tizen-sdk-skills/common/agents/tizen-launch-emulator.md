@@ -1,6 +1,6 @@
 ---
 name: tizen-launch-emulator
-description: Tizen launch emulator, 타이젠 에뮬레이터 실행, 에뮬레이터 켜기, 에뮬레이터 시작, emulator launch, start emulator, em-cli launch, 에뮬레이터 부팅, 에뮬레이터 켜줘, launch emulator VM, start emulator VM. Use this agent to launch an existing Tizen emulator VM via em-cli. If no VM name is given, launches the first VM from the list. Waits for the emulator to connect via sdb.
+description: Tizen launch emulator, 타이젠 에뮬레이터 실행, 에뮬레이터 켜기, 에뮬레이터 시작, emulator launch, start emulator, em-cli launch, 에뮬레이터 부팅, 에뮬레이터 켜줘, launch emulator VM, start emulator VM. Use this agent to launch an existing Tizen emulator VM via em-cli. If no VM name is given, selects a VM by profile (default "tizen") — among VMs of the same profile, the one with the highest platform version is preferred. Waits for the emulator to connect via sdb. To LIST the existing / available emulator VMs without launching one ("list emulators", "에뮬레이터 목록"), use tizen-create-emulator (its `list-vm` action) instead.
 tools: Bash, Read, Glob, Grep
 model: sonnet
 maxTurns: 30
@@ -24,7 +24,7 @@ etc.) — PowerShell syntax fails inside the Bash tool. This is a Bash command
 and it works as-is on Windows (Git Bash), macOS, and Linux.
 
 ```bash
-# Launch the first available emulator VM (default behavior):
+# Launch the newest tizen-profile VM (default: selected by profile and platform version, not list order):
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
@@ -32,6 +32,9 @@ node "$CLI" launch
 
 # Launch a specific VM by name:
 node "$CLI" launch --vm-name my-vm
+
+# Launch a TV-profile VM (when no name is given):
+node "$CLI" launch --profile tv
 
 # Wait up to 120 s for the VM to appear in `sdb devices` — the runner returns as soon as it
 # connects and does NOT stop the emulator when the time is up (a wait cap, not a run duration):
@@ -70,7 +73,7 @@ running (issue #48).
 1. ✅ **Parameter validation** — timeout range (1-540s), safe VM name
 2. ✅ **OS detection** — Detects Windows/Linux/macOS automatically
 3. ✅ **em-cli location** — Finds em-cli at `{TIZEN_SDK_PATH}/tools/emulator/bin/em-cli`
-4. ✅ **VM name resolution** — If no name given, lists VMs and launches the first one
+4. ✅ **VM name resolution** — If no name given, runs `list-vm --detail`, keeps only the VMs of the requested profile (`--profile`, default `tizen`) and launches the one with the highest platform version (issue #270)
 5. ✅ **VM existence check** — Verifies the named VM exists before launching
 6. ✅ **Already-running check** — If the VM is already connected via sdb, returns immediately
 7. ✅ **sdb wait** — Launches the VM and waits for it to appear in `sdb devices`
@@ -92,7 +95,7 @@ Success (`exit 0`):
 }
 ```
 
-`vm_name` is `null` when the first VM from the list was launched (no name specified).
+`vm_name` is always set: when `--vm-name` is omitted it is the VM the runner auto-selected by profile.
 
 Failure (`exit 1`) is a failure/error envelope — e.g. `emulator_not_found` when no VMs
 exist (→ tell the user to create one with `tizen-create-emulator`), or `execution_error`
@@ -173,7 +176,7 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
      On a GUI host, launching once via Tizen Studio → Emulator Manager is an alternative.
      EXCEPTION — a `NoSuchFieldError`/`NoSuchMethodError` trace is a version mismatch,
      not a reinstall case: run `tizen-update-package` (background), then retry once.
-   - `result.homescreen_fix` (WSL, standard tizen profile only) → the WSL home screen
+   - `result.homescreen_fix` (Linux [WSL or remote], standard tizen profile only) → the Linux home screen
      crash loop was detected and handled. `ok` = healthy; `fixed` = starter's retry
      loop and its "Unable to launch org.tizen.homescreen." popup were stopped, crash
      dumps cleared, and the home screen started directly (it then runs as root and

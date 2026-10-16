@@ -287,7 +287,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 ### 프로젝트 현황
 
-2026-10-13, v1.4.3 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
+2026-10-16, v1.4.4 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
 있으며, 스킬·에이전트·커맨드·테스트 스위트가 추가될 때마다 이 표를 갱신합니다.
 
 | 항목 | 수치 | 재측정 방법 |
@@ -301,7 +301,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 단위 테스트 (`common/lib/tests/`) | 80 파일, 어설션 약 2,890개 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 118 케이스 | `cd vscode && npm test` |
 | 훅 테스트 | 122 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 290 TC / 283 YAML — safe 69 / mutating 79 / device 142; approved 282 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 통합 TC (`tests/tc/`) | 295 TC / 288 YAML — safe 73 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
 | 문서 | Markdown 217개 (`docs/` 93개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
