@@ -4,14 +4,14 @@
 
 `tizen-sdk` 플러그인의 독립 테스트 스위트입니다. 35개 플러그인 명령 각각이 올바른 JSON 봉투(envelope)를 출력하는지, 그리고 LLM 에이전트(Cline, Claude, tizen-cli)가 자연어 프롬프트를 올바른 명령으로 해석하는지 검증합니다.
 
-8개 도메인에 걸쳐 **290개 테스트 케이스**가 있으며, 35개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`은 `policy/tiers.yaml`에 mutating으로 분류되어 있지만 아직 TC가 없습니다.
+8개 도메인에 걸쳐 **295개 테스트 케이스**가 있으며, 35개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`은 `policy/tiers.yaml`에 mutating으로 분류되어 있지만 아직 TC가 없습니다.
 
 ## 아키텍처 다이어그램
 
 ```mermaid
 graph TB
     subgraph "테스트 스위트 구성 요소"
-        TC["tc/*.yaml<br/>290 Test Cases (283 YAML files)"]
+        TC["tc/*.yaml<br/>295 Test Cases (288 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
         POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
@@ -38,9 +38,9 @@ graph TB
     end
 
     subgraph "티어 시스템"
-        SAFE["safe (6 cmds / 69 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
+        SAFE["safe (6 cmds / 73 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>설치/수정/삭제<br/>⚠️ 셋업 필요"]
-        DEVICE["device (14 cmds / 142 TCs)<br/>에뮬레이터/디바이스 필요<br/>❌ 수동: scripts/run-device-tier.mjs"]
+        DEVICE["device (14 cmds / 143 TCs)<br/>에뮬레이터/디바이스 필요<br/>❌ 수동: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
         POLICY --> MUTATING
         POLICY --> DEVICE
@@ -152,10 +152,10 @@ node runner.mjs              # 모든 TC 실행 — mutating·device 티어까�
 
 | 레이어          | TCs | 대상                                   | 방법                                                                                         |
 | --------------- | --- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **cli 레인**    | 170 | 명령이 올바른 봉투를 출력              | `runner.mjs`가 `tizen-sdk <command>`를 실행하고 status, jsonpath, errors를 확인               |
-| **prompt 레인** | 120 | LLM이 프롬프트를 올바른 명령으로 해석  | Cline/Claude가 TC를 읽고 프롬프트를 보내 도구 호출을 검증 (`skills/run-test-suite.md` 참고)  |
+| **cli 레인**    | 174 | 명령이 올바른 봉투를 출력              | `runner.mjs`가 `tizen-sdk <command>`를 실행하고 status, jsonpath, errors를 확인               |
+| **prompt 레인** | 121 | LLM이 프롬프트를 올바른 명령으로 해석  | Cline/Claude가 TC를 읽고 프롬프트를 보내 도구 호출을 검증 (`skills/run-test-suite.md` 참고)  |
 
-모든 TC는 레인을 하나만 정의하므로 두 수를 더하면 전체 290개가 됩니다.
+모든 TC는 레인을 하나만 정의하므로 두 수를 더하면 전체 295개가 됩니다.
 
 ### 기존 단위 테스트(`common/lib/tests/`)와의 비교
 
@@ -194,8 +194,8 @@ tests/
     run-device-tier.mjs          ← 순서가 정해진 자체 정리형 device 티어 실행 ("Device 티어" 참고)
     run-mutating-tier.mjs        ← 순서가 정해진 자체 정리형 mutating 티어 실행 ("Mutating 티어" 참고)
     lib/driver-common.mjs        ← 위 세 스크립트의 공용 helper (FIXTURE_NEEDS 포함)
-  tc/                     ← 283개 YAML 파일에 290개 테스트 케이스
-    device/               ← 103 TCs (create-emulator, launch-emulator, emulator-manager,
+  tc/                     ← 288개 YAML 파일에 295개 테스트 케이스
+    device/               ← 104 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
     sdk/                  ←  66 TCs (check-node, check-disk-space, sdk-init, sdk-install,
@@ -210,7 +210,7 @@ tests/
     meta/                 ←  17 TCs (--capabilities, --doctor, --schema, list-commands,
                                      no-args, guard-rules)
     test/                 ←  15 TCs (playwright-test)
-    dlog-analyzer/        ←   4 TCs (dlog-analyzer)
+    dlog-analyzer/        ←   8 TCs (dlog-analyzer)
   skills/
     run-test-suite.md     ← Cline/Claude 프롬프트 레인 실행 가이드
 ```
@@ -467,31 +467,33 @@ requires:
 
 | Status        | 개수  | 의미                                                                  |
 | ------------- | ----- | --------------------------------------------------------------------- |
-| `draft`       | 8     | 작성됨, 실행된 적 없음 — 단언 미검증                                  |
+| `draft`       | 9     | 작성됨, 실행된 적 없음 — 단언 미검증                                  |
 | `candidate`   | 0     | 실행되어 통과했지만 모든 레인이 검증되지는 않음                       |
-| `approved`    | 282   | 모든 레인이 실행되어 통과; 회귀는 릴리스 블로커                       |
+| `approved`    | 286   | 모든 레인이 실행되어 통과; 회귀는 릴리스 블로커                       |
 | `quarantined` | 0     | 불안정하거나 환경 문제로 깨진 것으로 알려짐; 기본 제외                |
 
 스키마 검증(`--dry-run`)은 승격의 근거가 될 수 없습니다 — YAML 형태만 확인합니다.
 
-남은 8개 draft 중 7개는 CI나 개발자 호스트가 제공하지 않는 것을 필요로 합니다: 온라인 CA용 Samsung 계정
+남은 9개 draft 중 7개는 CI나 개발자 호스트가 제공하지 않는 것을 필요로 합니다: 온라인 CA용 Samsung 계정
 (`certificate-manager.samsung-login`, `.generate-samsung-author`, `.generate-samsung-distributor`), Linux GBS
 툴체인(`build-project.arch`, `.gbs`) 또는 LAN의 Tizen 디바이스(`remote-device.connect`,
-`.connect-custom-port`). 수동 실행 방법은 "Mutating 티어"와 "Device 티어"를 참고하세요. 나머지 1개
-`dlog-analyzer.prompt-symptom-routing`(TC-P-119, 이슈 #211)은 prompt 전용으로, 스킬 이름 없는 증상 보고
+`.connect-custom-port`). 수동 실행 방법은 "Mutating 티어"와 "Device 티어"를 참고하세요. 나머지 2개는 prompt
+전용으로, 에이전트 세션 3회 실행 후 승격합니다(`skills/run-test-suite.md` Option 2, `pass_rate: 3/3`):
+`dlog-analyzer.prompt-symptom-routing`(TC-P-119, 이슈 #211)은 스킬 이름 없는 증상 보고
 ("에뮬레이터 CPU 300%, 동영상 재생 안 됨 — 조사해줘")가 `device-manager`가 아닌 `dlog-analyzer`로 해석되는지
-확인합니다 — 판정 기준은 산문이 아니라 `expect`의 `first_resolved_command`와
-`must_not_resolve_commands: ["tizen-sdk device-manager"]`로 고정되어 있으며, 에이전트 세션 3회 실행 후
-승격합니다(`skills/run-test-suite.md` Option 2, `pass_rate: 3/3`).
+확인하며 — 판정 기준은 산문이 아니라 `expect`의 `first_resolved_command`와
+`must_not_resolve_commands: ["tizen-sdk device-manager"]`로 고정 — ,
+`emulator-manager.prompt-list-available`(TC-P-120, 이슈 #268)은 "Provide the list of emulators available"
+라는 평범한 요청이 SDK 디렉터리 수동 검색이 아니라 `emulator-manager`(`list-vm`)로 해석되는지 확인합니다.
 
 ## 티어 분류
 
 | 티어      | 명령 수  | TCs     | 설명                        | CI 안전?      |
 | --------- | -------- | ------- | --------------------------- | ------------- |
-| safe      | 6        | 69      | 부작용 없음                 | ✅ 예         |
+| safe      | 6        | 73      | 부작용 없음                 | ✅ 예         |
 | mutating  | 15       | 79      | 설치/수정/삭제              | ⚠️ 셋업 필요  |
-| device    | 14       | 142     | 에뮬레이터/디바이스 필요    | ❌ 수동       |
-| **합계**  | **35**   | **290** |                             |               |
+| device    | 14       | 143     | 에뮬레이터/디바이스 필요    | ❌ 수동       |
+| **합계**  | **35**   | **295** |                             |               |
 
 전체 분류는 `policy/tiers.yaml`을 참고하세요. CI는 모든 PR에서 `approved` safe TC를 실행하고("러너 옵션"의
 "CI 게이트" 참고), device 티어는 `scripts/run-device-tier.mjs`로 수동 실행하며("러너 옵션"의 "Device 티어"
@@ -543,14 +545,12 @@ Cline이나 Claude 에이전트가 TC YAML을 읽고 사용자 프롬프트를 �
 - Node.js >= 20
 - 빌드된 플러그인 번들: `cd tizen-cli && pnpm install && pnpm build` → `tizen-cli/dist/tizen-sdk.js`
   (gitignored; 아래 모든 cli 레인 실행기가 이를 로드)
-- cli 레인 실행(`runner.mjs`의 `resolveExecutor()`):
-  - Windows: PATH를 참조하지 않습니다. `TC_LAUNCHER_JS`가 설정되어 있으면 그 런처를, 아니면 소스 체크아웃의
-    `../tizen-cli/bin/tizen-sdk.js`를 실행합니다(둘 다 없으면 `RUNNER_NO_EXECUTOR`). 런처는 자기 옆의
-    `../dist/tizen-sdk.js`를 로드하고 없으면 `PLUGIN_NOT_BUILT` 봉투를 출력하므로, 새 체크아웃에서는 위 빌드를
-    하기 전까지 모든 cli 레인 TC가 그 에러로 실패합니다.
-  - Linux/macOS: `TC_LAUNCHER_JS`는 사용하지 않습니다. 러너는 PATH의 `tizen-cli`(`tizen-sdk` 플러그인 설치됨)를
-    쓰고, 없으면 PATH의 독립 `tizen-sdk` 런처로 폴백합니다(`cd tizen-cli && pnpm build && pnpm add -g .`;
-    pnpm 10은 `pnpm link --global`을, pnpm 11은 bare `pnpm link`를 제거함); 둘 다 없으면
-    `RUNNER_NO_EXECUTOR`. CI는 설치 대신 `tizen-cli/bin/tizen-sdk.js`를 PATH에 심볼릭 링크합니다
-    (`.github/workflows/ci.yml` 참고).
+- cli 레인 실행(`runner.mjs`의 `resolveExecutor()`), 모든 플랫폼 동일: PATH를 참조하지 않습니다 — 전역 설치된
+  `tizen-cli` / `tizen-sdk` 바이너리는 무시합니다(#282). 러너는 현재 Node 바이너리로 독립 런처를 구동합니다.
+  `TC_LAUNCHER_JS`가 설정되어 있으면 그 파일을(파일 이름 무관; `tizen-sdk` 런처 또는 그 복사본이어야 함),
+  아니면 소스 체크아웃의 `../tizen-cli/bin/tizen-sdk.js`를 실행합니다(둘 다 없으면 `RUNNER_NO_EXECUTOR`).
+  런처 자체가 `tizen-sdk` 프로그램이므로 러너는 호출 전에 TC argv의 선행 `tizen-sdk` 토큰을 항상 제거합니다.
+  런처는 자기 옆의 `../dist/tizen-sdk.js`를 로드하고 없으면 `PLUGIN_NOT_BUILT` 봉투를 출력하므로, 새
+  체크아웃에서는 위 빌드를 하기 전까지 모든 cli 레인 TC가 그 에러로 실패합니다. CI도 번들을 빌드한 뒤 같은
+  런처를 실행합니다(`.github/workflows/ci.yml` 참고).
 - `--dry-run` 모드: 빌드나 런타임 불필요, Node.js + npm 의존성만 필요

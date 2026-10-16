@@ -598,7 +598,7 @@ function homescreenFixWarning(
   switch (status) {
     case "fixed":
       return (
-        "The home screen was crash-looping (on WSL the Flutter home screen fails EGL config " +
+        "The home screen was crash-looping (on Linux the Flutter home screen fails EGL config " +
         "selection when launched through launchpad) and this was fixed: starter's user units " +
         'were masked and stopped so its retry loop and its "Unable to launch" popup stop, the ' +
         `accumulated crash dumps were deleted to free /opt, and ${HOMESCREEN_RUNNER} was started ` +
@@ -639,9 +639,10 @@ function homescreenFixWarning(
     case undefined:
       return explicit
         ? "The home screen fix did not apply to this target and nothing was changed. It is " +
-            "verified only for the standard tizen emulator profile on WSL, so it is skipped for " +
-            "real devices, TV/wearable images and non-WSL hosts (the script log above says which " +
-            "gate stopped it). TIZEN_HOMESCREEN_CHECK=force runs it anyway — unverified elsewhere."
+            "verified only for the standard tizen emulator profile on Linux (WSL or native " +
+            "Linux), so it is skipped for real devices, TV/wearable images and non-Linux hosts " +
+            "(the script log above says which gate stopped it). TIZEN_HOMESCREEN_CHECK=force runs " +
+            "it anyway — unverified elsewhere."
         : null;
     default:
       return null;
@@ -651,13 +652,13 @@ function homescreenFixWarning(
 /**
  * Parse the HOMESCREEN_STATUS=<status> line emitted by
  * check_and_fix_homescreen() in tizen-emulator-manager.sh — the post-launch
- * check that detects the WSL home screen crash loop (Flutter home screen fails
- * EGL config selection when launched through launchpad), stops starter's retry
- * loop and popup, and starts the home screen directly.
+ * check that detects the Linux (WSL / remote) home screen crash loop (Flutter
+ * home screen fails EGL config selection when launched through launchpad), stops
+ * starter's retry loop and popup, and starts the home screen directly.
  *
  * @param {string} output - combined script stdout/stderr
  * @returns {"ok"|"detected"|"fixed"|"popup_fixed"|"fix_failed"|null} null when
- *   the check did not apply (non-WSL host, non-emulator target, non-tizen
+ *   the check did not apply (non-Linux host, non-emulator target, non-tizen
  *   platform, TIZEN_HOMESCREEN_CHECK=off, or an older script).
  */
 function parseHomescreenStatus(output) {
@@ -918,7 +919,113 @@ function pickPlatform(platforms, profile) {
 }
 
 /**
+ * The emulator profile a platform image belongs to, read from the image name.
+ *
+ * em-cli does not report a profile for a VM, only the platform image it was
+ * created from (`tizen-10.0-x86_64`, `tv-samsung-10.0-x86_64`). Left to guess,
+ * the agent labelled a `tizen-*` VM "Mobile" (issue #269) — but `tizen-*` is
+ * the unified Tizen profile, the one this runner calls `tizen`; only `tv-*`
+ * images are the TV profile. Older SDKs ship `mobile-*` / `wearable-*` /
+ * `iot-*` images too, so those are reported as spelled rather than forced
+ * into tizen|tv.
+ *
+ * Only these known prefixes are recognised. A platform image can also be a
+ * user-named capture (`create-image --vm-name my-vm` → whatever the user
+ * called it), and reporting its first word as a profile would be exactly
+ * the guess this field exists to replace — so anything else yields "".
+ *
+ * @param {string} platform - Platform image name
+ * @returns {string} 'tizen' | 'tv' | 'mobile' | 'wearable' | 'iot', or "" when unknown
+ */
+const KNOWN_PLATFORM_PROFILES = ["tizen", "tv", "mobile", "wearable", "iot"];
+
+function platformProfile(platform) {
+  if (typeof platform !== "string") return "";
+  const head = platform.trim().split("-")[0].toLowerCase();
+  return KNOWN_PLATFORM_PROFILES.includes(head) ? head : "";
+}
+
+/**
+ * Extract the version string from a platform image name.
+ *
+ * Platform images follow the pattern `<profile>[-<vendor>]-<version>-<arch>`
+ * (`tizen-10.0-x86_64`, `tv-samsung-9.0-x86_64`): the version is the first
+ * hyphen-delimited segment made only of dot-separated digits. It is returned
+ * as spelled ("10.0", "10.0.1") — NOT parsed with parseFloat, which would turn
+ * "10.0.1" into 10 and "9.10" into 9.1 and misorder them; compare with
+ * comparePlatformVersions() instead.
+ *
+ * @param {string} platform - Platform image name (e.g. "tizen-10.0-x86_64")
+ * @returns {string} Version string, or "" when the name carries no version
+ */
+function platformVersion(platform) {
+  if (typeof platform !== "string") return "";
+  for (const part of platform.trim().split("-")) {
+    if (/^\d+(?:\.\d+)*$/.test(part)) return part;
+  }
+  return "";
+}
+
+/**
+ * Order two platform image names by version, newest first.
+ *
+ * Compares segment by segment as integers ("10.0.1" > "10.0", "9.10" > "9.9");
+ * a name without a version sorts after every versioned one, and equal versions
+ * compare as 0 so a stable sort keeps em-cli's list order between them.
+ *
+ * @param {string} a - Platform image name
+ * @param {string} b - Platform image name
+ * @returns {number} negative when a is newer than b, positive when older, 0 when equal
+ */
+function comparePlatformVersions(a, b) {
+  const va = platformVersion(a);
+  const vb = platformVersion(b);
+  if (!va && !vb) return 0;
+  if (!va) return 1;
+  if (!vb) return -1;
+  const sa = va.split(".").map(Number);
+  const sb = vb.split(".").map(Number);
+  const len = Math.max(sa.length, sb.length);
+  for (let i = 0; i < len; i++) {
+    const da = sa[i] || 0;
+    const db = sb[i] || 0;
+    if (da !== db) return db - da;
+  }
+  return 0;
+}
+
+/**
+ * Select the VM to launch when the caller named none.
+ *
+ * Filters the VM list by profile (default "tizen"), then picks the one with
+ * the highest platform version when multiple match. This prevents a TV VM
+ * from being launched when the user asked for a "Tizen emulator" (issue #270).
+ * Ties (same version, or no version at all) keep em-cli's list order, so the
+ * choice is deterministic across runs.
+ *
+ * @param {Array} vmDetails - Records from parseVmDetails()
+ * @param {string} profile - Target profile: "tizen", "tv", etc.
+ * @returns {object|null} The selected VM record, or null when none match
+ */
+function selectVmForLaunch(vmDetails, profile) {
+  if (!Array.isArray(vmDetails) || vmDetails.length === 0) return null;
+  const targetProfile = profile || "tizen";
+  const matching = vmDetails.filter((vm) => vm.profile === targetProfile);
+  if (matching.length === 0) return null;
+  if (matching.length === 1) return matching[0];
+  // Multiple VMs of the same profile: pick the one with the highest platform
+  // version (tizen-10.0 over tizen-9.0). Array.prototype.sort is stable, so
+  // equal versions stay in list order.
+  return [...matching].sort((a, b) =>
+    comparePlatformVersions(a.platform, b.platform),
+  )[0];
+}
+
+/**
  * Parse VM_DETAIL= lines emitted by list-vm --detail, detail, create, and modify.
+ *
+ * Adds a derived `profile` (see platformProfile) so the caller reports the
+ * profile the envelope states instead of inferring one from the platform name.
  */
 function parseVmDetails(output) {
   return parsePipeRecords(output, "VM_DETAIL", [
@@ -930,7 +1037,10 @@ function parseVmDetails(output) {
     "cpu_count",
     "type",
     "skin_path",
-  ]);
+  ]).map((record) => ({
+    ...record,
+    profile: platformProfile(record.platform),
+  }));
 }
 
 /**
@@ -1672,7 +1782,10 @@ async function createEmulator(
  * After launching, waits for the emulator to connect via sdb.
  *
  * @param {object} opts - Options object
- * @param {string} [opts.vmName] - Emulator VM name to launch (default: first VM from list-vm)
+ * @param {string} [opts.vmName] - Emulator VM name to launch. When omitted, the
+ *   VM is auto-selected from `list-vm --detail` by profile (see selectVmForLaunch).
+ * @param {string} [opts.profile='tizen'] - Profile the auto-selection filters by
+ *   (one of KNOWN_PLATFORM_PROFILES). Ignored when opts.vmName is given.
  * @param {number|string} [opts.timeoutSec=300] - Emulator connection wait time (seconds, 1-540)
  * @returns {object} Standard JSON Envelope
  */
@@ -1680,7 +1793,7 @@ async function launchEmulator(
   opts = {},
   command = "tizen-sdk launch-emulator",
 ) {
-  const vmName = opts.vmName;
+  let vmName = opts.vmName;
   const timeoutSec = opts.timeoutSec || 300;
   const startTime = Date.now();
 
@@ -1703,6 +1816,18 @@ async function launchEmulator(
       );
     }
 
+    // The profile only drives the JS-side auto-selection below, so it is
+    // validated here against the profiles parseVmDetails() can report — the
+    // script's own -p switch accepts tizen|tv only and is never given this value.
+    const profile = opts.profile || "tizen";
+    if (!vmName && !KNOWN_PLATFORM_PROFILES.includes(profile)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid profile: ${opts.profile}. Must be one of: ${KNOWN_PLATFORM_PROFILES.join(", ")}.`,
+      );
+    }
+
     // emulatorPath is a path option and reaches the script inside double quotes.
     const optionError = validatePassThroughOptions(opts, command);
     if (optionError) return optionError;
@@ -1712,8 +1837,101 @@ async function launchEmulator(
       return formatError(command, "io_error", resolved.error);
     }
 
+    // When no VM name is given, select one from the existing VM list by
+    // profile (default "tizen") so that "launch the Tizen emulator" does not
+    // accidentally start a TV VM (issue #270). Among VMs of the same profile,
+    // the one with the highest platform version is preferred.
+    if (!vmName) {
+      console.error(
+        `[tizen-emulator] No VM name given — listing VMs to select a '${profile}' profile VM...`,
+      );
+      let listOutput;
+      try {
+        // The script's -p is a tizen|tv-only switch that list-vm does not use
+        // for filtering (only -P <platform> narrows the -d records), so the
+        // script default goes through and the profile filter is applied here,
+        // on the parsed records — that is what lets --profile mobile|wearable|iot
+        // work and keeps the "available profiles" hint below complete.
+        listOutput = runEmulatorScript(resolved.scriptPath, {
+          action: "list-vm",
+          profile: "tizen",
+          detail: true,
+        });
+      } catch (error) {
+        const combined = `${error.stdout || ""}\n${error.stderr || ""}`;
+        return formatError(
+          command,
+          "execution_error",
+          `Failed to list emulator VMs for auto-selection: ${error.message}.${javaJnaHint(emcliOutputOf(combined))}${emcliExitHint(combined)} ` +
+            `Pass --vm-name <name> to launch a specific VM without the lookup.`,
+          `node emulator-manager-cli.js list-vm --detail`,
+          startTime,
+          rawOutputTail(combined),
+        );
+      }
+
+      // VM_LIST= is the authoritative "do VMs exist" answer: the script prints
+      // it from `em-cli list-vm`, while the VM_DETAIL records come from a second
+      // `list-vm -d` whose failure is swallowed. Names without records must not
+      // read as "no VMs exist".
+      const vmListMatch = listOutput.match(/^VM_LIST=(.*)$/m);
+      const vmNames = vmListMatch
+        ? vmListMatch[1]
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
+      const vmDetails = parseVmDetails(listOutput);
+
+      if (vmNames.length === 0 && vmDetails.length === 0) {
+        return formatError(
+          command,
+          "emulator_not_found",
+          "No emulator VMs exist yet — create one before launching.",
+          `node emulator-manager-cli.js create --vm-name my-vm --size 1080`,
+          startTime,
+        );
+      }
+      if (vmDetails.length === 0) {
+        return formatError(
+          command,
+          "execution_error",
+          `em-cli listed ${vmNames.length} VM(s) (${vmNames.join(", ")}) but returned no platform details, ` +
+            `so the '${profile}' profile VM cannot be identified. Pass --vm-name <name> to launch one of them.`,
+          `node emulator-manager-cli.js launch --vm-name ${vmNames[0]}`,
+          startTime,
+          rawOutputTail(listOutput),
+        );
+      }
+
+      const selected = selectVmForLaunch(vmDetails, profile);
+      if (!selected) {
+        const uniqueProfiles = [
+          ...new Set(vmDetails.map((vm) => vm.profile).filter(Boolean)),
+        ];
+        return formatError(
+          command,
+          "emulator_not_found",
+          `No '${profile}' profile emulator VM found. ` +
+            `Available VM profiles: ${uniqueProfiles.join(", ") || "none"}. ` +
+            `Pass --vm-name <name> to launch a specific VM, or --profile <profile> to target a different profile.`,
+          `node emulator-manager-cli.js list-vm --detail`,
+          startTime,
+        );
+      }
+
+      vmName = selected.name;
+      const sameProfileCount = vmDetails.filter(
+        (vm) => vm.profile === profile,
+      ).length;
+      console.error(
+        `[tizen-emulator] Selected '${vmName}' (${selected.platform})` +
+          `${sameProfileCount > 1 ? ` — highest version among ${sameProfileCount} '${profile}' profile VMs` : ""}`,
+      );
+    }
+
     console.error(
-      `[tizen-emulator] Launching VM${vmName ? `: ${vmName}` : " (first from list)"}, wait up to ${timeout}s`,
+      `[tizen-emulator] Launching VM: ${vmName}, wait up to ${timeout}s`,
     );
 
     let output;
@@ -1822,7 +2040,7 @@ async function launchEmulator(
       warnings.push(launchWarningText(key));
     }
 
-    // Post-launch home screen check (WSL + tizen emulator only): the script
+    // Post-launch home screen check (Linux host + tizen emulator only): the script
     // detects the crash loop, masks starter to stop its retry loop and popup,
     // reclaims the crash dumps, and starts the home screen directly — see
     // check_and_fix_homescreen in tizen-emulator-manager.sh. Here we only
@@ -1833,11 +2051,19 @@ async function launchEmulator(
       vmName,
     });
     if (homescreenWarning) warnings.push(homescreenWarning);
-    if (homescreenStatus === null && /wsl/i.test(output)) {
-      // The check did not apply (TIZEN_HOMESCREEN_CHECK=off, non-tizen image, or
-      // an older script) — keep the preventive note for WSL users.
+    if (
+      homescreenStatus === null &&
+      /Detected OS: linux/i.test(output) &&
+      !/skipping the home screen check/i.test(output)
+    ) {
+      // A Linux host (the script logs "Detected OS: linux" on WSL and native
+      // Linux alike) where the check neither ran nor was gated off by the
+      // script's own target/platform layers — i.e. TIZEN_HOMESCREEN_CHECK=off or
+      // an older script. Keep the preventive note for those users; a gated skip
+      // (real device, TV/wearable image) logs "skipping the home screen check"
+      // and must not get it, since the advice does not apply there.
       warnings.push(
-        "WSL home screen note: if the home screen fails to start, apply the fix with the " +
+        "Linux home screen note: if the home screen fails to start, apply the fix with the " +
           "fix-homescreen action, or use the TV profile instead: " +
           `em-cli modify -n ${vmName || "<vm>"} -P tv-<platform>-<version>-<arch>`,
       );
@@ -1912,11 +2138,11 @@ function normalizeAction(action) {
 }
 
 /**
- * Apply the WSL home screen fix to an already running emulator, without a
+ * Apply the Linux home screen fix to an already running emulator, without a
  * relaunch. Same work the post-launch hook does: stop starter's retry loop and
  * its "Unable to launch" popup, reclaim the crash dumps that fill /opt, and
  * start the home screen directly (bypassing launchpad). The script owns the
- * gate — WSL + emulator serial + tizen platform — and simply emits no
+ * gate — Linux + emulator serial + tizen platform — and simply emits no
  * HOMESCREEN_STATUS line when the fix does not apply.
  *
  * @param {object} opts - `vmName` optional; defaults to the first connected device
@@ -2355,6 +2581,10 @@ module.exports = {
   // covering without em-cli.
   parseTemplateDetails,
   parseVmDetails,
+  platformProfile,
+  platformVersion,
+  comparePlatformVersions,
+  selectVmForLaunch,
   parsePlatformDetails,
   parseManagerDetails,
   parseLaunchDiagnostics,

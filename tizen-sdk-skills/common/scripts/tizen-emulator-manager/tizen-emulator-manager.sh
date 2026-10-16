@@ -46,8 +46,9 @@
 #   TIZEN_SDB_RESTART_RETRY  Seconds to re-poll for the emulator after bouncing
 #     a wedged sdb server on a connect timeout (default 30; 0 skips the
 #     restart rescue entirely — tests set 0 so timeout paths stay fast).
-#   TIZEN_HOMESCREEN_CHECK  Post-launch home screen check: auto (default; WSL +
-#     tizen emulator only), force (run anywhere — unverified), off (never).
+#   TIZEN_HOMESCREEN_CHECK  Post-launch home screen check: auto (default; Linux
+#     host [WSL or native] + tizen emulator only), force (run anywhere —
+#     unverified), off (never).
 #   TIZEN_HOMESCREEN_LAUNCH  1 (default) starts the home screen directly,
 #     bypassing launchpad; 0 only stops the retry loop and leaves the display
 #     empty. The direct launch runs as root and dies with a guest reboot.
@@ -227,9 +228,10 @@ fi
 OS=$(detect_os)
 log_info "Detected OS: $OS"
 
-# WSL (Windows Subsystem for Linux) detection — used by diagnose_launch_failure()
-# and maybe_check_homescreen(). detect_wsl returns 1 on non-WSL hosts, so the bare
-# call would kill the whole script under `set -e` everywhere except WSL.
+# WSL (Windows Subsystem for Linux) detection — used by diagnose_launch_failure().
+# detect_wsl returns 1 on non-WSL hosts, so the bare call would kill the whole
+# script under `set -e` everywhere except WSL. (The home screen check gates on
+# $OS = linux, which already covers WSL and native Linux alike.)
 detect_wsl || true
 
 # ---------------------------------------------------------------------------
@@ -764,11 +766,11 @@ maybe_enable_hw_virtualization() {
 }
 
 # ---------------------------------------------------------------------------
-# Post-launch home screen check + fix (WSL / Tizen emulator only)
+# Post-launch home screen check + fix (Linux / Tizen emulator only)
 # ---------------------------------------------------------------------------
-# On WSL the standard Tizen profile's home screen never comes up and the display
-# is left with starter's "Unable to launch org.tizen.homescreen." dialog. The
-# traced chain (see docs/wsl/):
+# On WSL or a headless remote Linux server the standard Tizen profile's home
+# screen never comes up and the display is left with starter's "Unable to
+# launch org.tizen.homescreen." dialog. The traced chain (see docs/wsl/):
 #
 #   1. org.tizen.homescreen is a Flutter app. Launched THROUGH LAUNCHPAD it
 #      fails to pick an EGL config:
@@ -797,8 +799,8 @@ maybe_enable_hw_virtualization() {
 # (parsed by lib/core/emulator.js parseHomescreenStatus). Never fails the launch
 # — the emulator is already up, so every probe is guarded.
 #
-# There is no equivalent in tizen-emulator-manager.ps1: the WSL path always runs
-# this bash script, so the Windows script needs no parity.
+# There is no equivalent in tizen-emulator-manager.ps1: every Linux host (WSL or
+# native) runs this bash script, so the Windows script needs no parity.
 HOMESCREEN_CHECK="${TIZEN_HOMESCREEN_CHECK:-auto}"
 HOMESCREEN_LAUNCH="${TIZEN_HOMESCREEN_LAUNCH:-1}"
 HOMESCREEN_MASK_STARTER="${TIZEN_HOMESCREEN_MASK_STARTER:-1}"
@@ -1021,10 +1023,13 @@ check_and_fix_homescreen() {
   return 0
 }
 
-# Gate: this only applies to the Tizen emulator on WSL. Four layers, and any
-# miss returns without emitting a status line at all, so the JS side can tell
-# "checked and healthy" (ok) apart from "not applicable" (no line):
-#   1. host     — WSL only, unless forced
+# Gate: this only applies to the Tizen emulator on Linux (WSL or native). Four
+# layers, and any miss returns without emitting a status line at all, so the JS
+# side can tell "checked and healthy" (ok) apart from "not applicable" (no line):
+#   1. host     — Linux only, unless forced. $OS comes from detect_os (uname -s),
+#                 which reports "linux" for WSL and native Linux alike — the fix
+#                 is entirely sdb-based (guest-side), and the same Flutter EGL
+#                 failure occurs on headless / GPU-less remote Linux servers.
 #   2. target   — emulator serials only, never a USB device
 #   3. platform — tizen* only (whitelist: TV and wearable images have a
 #                 different launcher and must not be touched)
@@ -1035,8 +1040,8 @@ maybe_check_homescreen() {
     off) return 0 ;;
     force) ;;
     *)
-      if [ "${DETECTED_WSL:-0}" -ne 1 ]; then
-        log_info "Not WSL — skipping the home screen check (verified only on WSL; TIZEN_HOMESCREEN_CHECK=force to override)."
+      if [ "$OS" != "linux" ]; then
+        log_info "Host OS is '$OS', not Linux — skipping the home screen check (only verified on Linux hosts; TIZEN_HOMESCREEN_CHECK=force to override)."
         return 0
       fi
       ;;
@@ -1541,7 +1546,7 @@ if [ "$ACTION" = "launch" ]; then
   log_info "Found sdb: $SDB"
 
   # Single success exit for every connect path below: run the post-launch home
-  # screen check (WSL + tizen emulator only; see check_and_fix_homescreen)
+  # screen check (Linux host + tizen emulator only; see check_and_fix_homescreen)
   # before reporting the serial, so a HOMESCREEN_STATUS line always accompanies
   # DEVICE_SERIAL when the check applies. The virgl scanout check runs first —
   # it only reads the VM log, and its LAUNCH_WARN line must accompany
@@ -2024,10 +2029,10 @@ if [ "$ACTION" = "create" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# fix-homescreen: apply the WSL home screen fix to an ALREADY RUNNING emulator
+# fix-homescreen: apply the Linux home screen fix to an ALREADY RUNNING emulator
 # ---------------------------------------------------------------------------
 # Same work the post-launch hook does, without needing a relaunch. The gate is
-# identical (WSL + emulator serial + tizen platform) so this cannot be pointed
+# identical (Linux + emulator serial + tizen platform) so this cannot be pointed
 # at a TV image or a real device by accident; TIZEN_HOMESCREEN_CHECK=force
 # overrides the host layer for investigation on other hosts.
 if [ "$ACTION" = "fix-homescreen" ]; then

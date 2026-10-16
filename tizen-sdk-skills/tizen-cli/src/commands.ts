@@ -72,6 +72,15 @@ function registerCommand(program: Command, spec: CommandSpec): void {
     const option = new Option(o.flags, o.description);
     if (o.choices) option.choices(o.choices);
     if (o.default !== undefined) option.default(o.default);
+    // Repeatable single-value options collect every occurrence into an array
+    // (commander's default keeps only the last value), mirroring the CLI
+    // runners' REPEATABLE_FLAGS.
+    if (o.repeatable) {
+      option.argParser<string[]>((value, previous = []) => [
+        ...previous,
+        value,
+      ]);
+    }
     // With collectAllMissing, required options stay non-mandatory in Commander
     // so the action can report every missing option in a single envelope.
     if (o.required && !spec.collectAllMissing) option.makeOptionMandatory();

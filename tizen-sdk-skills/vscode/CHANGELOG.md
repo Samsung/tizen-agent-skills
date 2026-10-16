@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.4.4] — 2026-10-16
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** test runner now executes the locally built launcher instead of globally installed binaries (fixes #282), "list the available emulators" routes to `emulator-manager list-vm`, `list-vm --detail` reports each VM's `profile`, and the bundled `tizen-dlog-analyzer` gains the 0.2.8a0 feature set. See the project CHANGELOG for details.
+
 ## [1.4.3] — 2026-10-13
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. Two **(skills)** fixes land for the CLI-runner lookup blocks on Windows, the standalone `tizen-sdk` CLI becomes the sole usage mode, and the bundled `tizen-dlog-analyzer` binaries are rebuilt to 0.2.8a0. See the project CHANGELOG for details.

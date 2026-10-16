@@ -31,8 +31,11 @@ because each one is a mistake the model has actually made.
    `tizen-dlog-analyzer` (`investigate --symptoms "…"`, `probe run <id>`); connect
    to an IP → `tizen-remote-device`; list devices → `tizen-device-manager`; push/pull →
    `tizen-file-transfer`. The one exception is a **gated** `result.command` the user
-   has explicitly confirmed — run that exact string. Emulator VMs: `tz emul list-vm`
-   (there is no `tz list-device`).
+   has explicitly confirmed — run that exact string. Emulator VMs ("which emulators do I
+   have / are available?") → `tizen-create-emulator` (`emulator-manager-cli.js list-vm
+   --detail`) — never a raw `em-cli`, never `ls`/`find` over `<sdk>-data/emulator/vms`
+   (the Bash hook denies both), and there is no `tz list-device`. Take each VM's `profile`
+   from the envelope: a `tizen-*` platform image is the unified `tizen` profile, not Mobile.
 6. **No manual gdbserver / port forwarding / interactive gdb or netcoredbg.** The
    gdb-debug and dotnet-debug runners set everything up (setup-only). Launching an
    interactive debugger as a tool call hangs the terminal — return the command for

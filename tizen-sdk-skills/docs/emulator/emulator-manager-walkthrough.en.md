@@ -522,7 +522,9 @@ List all emulator VMs
 List all emulator VMs with details
 ```
 
-**Success check:** full configuration per VM:
+**Success check:** full configuration per VM. `profile` is derived from the platform image
+(`tizen-*` → `tizen`, the unified Tizen profile; `tv-*` → `tv`) — read it from here rather
+than guessing from the platform name:
 
 ```json
 {
@@ -536,7 +538,8 @@ List all emulator VMs with details
         "resolution": "1920x1080",
         "ram": "512",
         "cpu_arch": "x86_64",
-        "cpu_count": "2"
+        "cpu_count": "2",
+        "profile": "tizen"
       }
     ],
     "count": 1

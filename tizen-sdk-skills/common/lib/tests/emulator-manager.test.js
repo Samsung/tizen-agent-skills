@@ -28,6 +28,10 @@ const {
   buildEmulatorArgs,
   manageEmulator,
   parseVmDetails,
+  platformProfile,
+  platformVersion,
+  comparePlatformVersions,
+  selectVmForLaunch,
   parsePlatformDetails,
   parseManagerDetails,
   parseTemplateDetails,
@@ -216,7 +220,76 @@ check("first record fields", vmDetails[0], {
   type: "standard",
   skin_path:
     "/home/user/tizen-sdk/platforms/common/tizen/emulator-resources/skins/tizen-general-3btn",
+  profile: "tizen",
 });
+
+// The envelope must state the profile (issue #269): em-cli reports only the
+// platform image, and left to infer one the agent called a `tizen-*` VM
+// "Mobile". `tizen-*` is the unified Tizen profile; `tv-*` is TV.
+check(
+  "a tizen-* VM is profile 'tizen', not mobile",
+  vmDetails[0].profile,
+  "tizen",
+);
+check("a tv-* VM is profile 'tv'", vmDetails[1].profile, "tv");
+check(
+  "platformProfile: tizen image",
+  platformProfile("tizen-10.0-x86_64"),
+  "tizen",
+);
+check(
+  "platformProfile: tv image",
+  platformProfile("tv-samsung-10.0-x86_64"),
+  "tv",
+);
+check(
+  "platformProfile: TV image, any case",
+  platformProfile("TV-samsung-7.0-x86_64"),
+  "tv",
+);
+check(
+  "platformProfile: legacy mobile image",
+  platformProfile("mobile-6.5-x86"),
+  "mobile",
+);
+check(
+  "platformProfile: legacy wearable image",
+  platformProfile("wearable-6.5-x86"),
+  "wearable",
+);
+check(
+  "platformProfile: legacy iot image",
+  platformProfile("iot-headed-6.5-x86_64"),
+  "iot",
+);
+check(
+  "platformProfile: surrounding whitespace is ignored",
+  platformProfile(" tizen-9.0-x86_64 "),
+  "tizen",
+);
+check("platformProfile: empty platform", platformProfile(""), "");
+check("platformProfile: undefined platform", platformProfile(undefined), "");
+check("platformProfile: non-string platform", platformProfile(42), "");
+// A platform image can be a user-named capture (create-image). Its first word
+// is not a profile, and reporting it as one would be the guess this field
+// exists to replace — unknown prefixes stay "".
+check(
+  "platformProfile: user-named custom image is unknown, not 'my'",
+  platformProfile("my-custom-image"),
+  "",
+);
+check(
+  "platformProfile: a bare architecture is unknown",
+  platformProfile("x86_64"),
+  "",
+);
+check(
+  "a VM on a custom image carries an empty profile",
+  parseVmDetails(
+    "VM_DETAIL=vm1|my-custom-image|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/x",
+  )[0].profile,
+  "",
+);
 
 // A record the script emitted with trailing fields missing must not produce
 // undefined properties — callers render these directly.
@@ -233,7 +306,13 @@ check(
     cpu_count: "",
     type: "",
     skin_path: "",
+    profile: "tizen",
   },
+);
+check(
+  "a record with no platform has an empty profile, not a guessed one",
+  parseVmDetails("VM_DETAIL=no-platform-vm|")[0].profile,
+  "",
 );
 
 check(
@@ -241,6 +320,262 @@ check(
   parseVmDetails("VM_DETAIL=|tizen-10.0-x86_64|HD1080 Tizen"),
   [],
 );
+
+// ---------------------------------------------------------------------------
+// Test 2b: platformVersion — version extraction for auto-selection
+// ---------------------------------------------------------------------------
+console.log("\n--- platformVersion ---");
+
+check(
+  "tizen-10.0-x86_64 → '10.0'",
+  platformVersion("tizen-10.0-x86_64"),
+  "10.0",
+);
+check("tizen-9.0-x86_64 → '9.0'", platformVersion("tizen-9.0-x86_64"), "9.0");
+check(
+  "tv-samsung-10.0-x86_64 → '10.0' (vendor segment skipped)",
+  platformVersion("tv-samsung-10.0-x86_64"),
+  "10.0",
+);
+check(
+  "tizen-10.0.1-x86_64 → '10.0.1' (multi-segment kept, not parseFloat'd to 10)",
+  platformVersion("tizen-10.0.1-x86_64"),
+  "10.0.1",
+);
+check(
+  "tizen-10-aarch64 → '10' (bare major)",
+  platformVersion("tizen-10-aarch64"),
+  "10",
+);
+check(
+  "x86_64 arch segment is not a version",
+  platformVersion("tizen-x86_64"),
+  "",
+);
+check("custom image (no version) → ''", platformVersion("my-custom-image"), "");
+check("empty string → ''", platformVersion(""), "");
+check("undefined → ''", platformVersion(undefined), "");
+check("non-string → ''", platformVersion(42), "");
+
+console.log("\n--- comparePlatformVersions (newest first) ---");
+
+const newer = (a, b) => comparePlatformVersions(a, b) < 0;
+check(
+  "10.0 sorts before 9.0",
+  newer("tizen-10.0-x86_64", "tizen-9.0-x86_64"),
+  true,
+);
+check(
+  "11.0 sorts before 10.0",
+  newer("tizen-11.0-x86_64", "tizen-10.0-x86_64"),
+  true,
+);
+check(
+  "9.10 sorts before 9.9 (segment-wise, not 9.1 < 9.9)",
+  newer("tizen-9.10-x86_64", "tizen-9.9-x86_64"),
+  true,
+);
+check(
+  "10.0.1 sorts before 10.0 (extra segment wins)",
+  newer("tizen-10.0.1-x86_64", "tizen-10.0-x86_64"),
+  true,
+);
+check(
+  "10.0 and 10.0.0 compare equal",
+  comparePlatformVersions("tizen-10.0-x86_64", "tizen-10.0.0-x86_64"),
+  0,
+);
+check(
+  "versioned sorts before unversioned",
+  newer("tizen-9.0-x86_64", "my-custom-image"),
+  true,
+);
+check(
+  "two unversioned names compare equal (list order kept)",
+  comparePlatformVersions("custom-a", "custom-b"),
+  0,
+);
+check(
+  "sorted list is newest → oldest → unversioned",
+  [
+    "my-custom-image",
+    "tizen-9.0-x86_64",
+    "tizen-10.0.1-x86_64",
+    "tizen-10.0-x86_64",
+  ].sort(comparePlatformVersions),
+  [
+    "tizen-10.0.1-x86_64",
+    "tizen-10.0-x86_64",
+    "tizen-9.0-x86_64",
+    "my-custom-image",
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// Test 2c: selectVmForLaunch — profile filtering and version selection
+// ---------------------------------------------------------------------------
+console.log("\n--- selectVmForLaunch ---");
+
+const VM_LIST_MIXED = [
+  // A TV VM listed first, a tizen VM listed second — the old head -1 would
+  // have picked the TV VM (issue #270).
+  "VM_DETAIL=tizen-tv-vm|tv-samsung-10.0-x86_64|HD1080 TV|1920x1080|1024|x86_64|4|standard|/skins/tv",
+  "VM_DETAIL=tizen-vm-1080|tizen-10.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+].join("\n");
+const mixedDetails = parseVmDetails(VM_LIST_MIXED);
+
+check(
+  "selects the tizen-profile VM, not the first-listed TV VM",
+  selectVmForLaunch(mixedDetails, "tizen")?.name,
+  "tizen-vm-1080",
+);
+check(
+  "selects the tv-profile VM when profile is 'tv'",
+  selectVmForLaunch(mixedDetails, "tv")?.name,
+  "tizen-tv-vm",
+);
+check(
+  "defaults to 'tizen' when profile is omitted",
+  selectVmForLaunch(mixedDetails)?.name,
+  "tizen-vm-1080",
+);
+check(
+  "returns null for a profile with no VMs",
+  selectVmForLaunch(mixedDetails, "wearable"),
+  null,
+);
+check("returns null for an empty list", selectVmForLaunch([], "tizen"), null);
+check(
+  "returns null for undefined input",
+  selectVmForLaunch(undefined, "tizen"),
+  null,
+);
+
+// Multiple tizen-profile VMs: pick the highest version.
+const VM_LIST_MULTI_TIZEN = [
+  "VM_DETAIL=tizen-9-vm|tizen-9.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+  "VM_DETAIL=tizen-10-vm|tizen-10.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+  "VM_DETAIL=tizen-11-vm|tizen-11.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+  "VM_DETAIL=my-tv-vm|tv-samsung-10.0-x86_64|HD1080 TV|1920x1080|1024|x86_64|4|standard|/skins/tv",
+].join("\n");
+const multiDetails = parseVmDetails(VM_LIST_MULTI_TIZEN);
+
+check(
+  "picks the highest-version tizen VM (11.0, not 9.0 or 10.0)",
+  selectVmForLaunch(multiDetails, "tizen")?.name,
+  "tizen-11-vm",
+);
+check(
+  "picks the only tv VM regardless of version sorting",
+  selectVmForLaunch(multiDetails, "tv")?.name,
+  "my-tv-vm",
+);
+
+// Single tizen VM among TV VMs.
+const VM_LIST_SINGLE_TIZEN = [
+  "VM_DETAIL=tv-1|tv-samsung-9.0-x86_64|HD1080 TV|1920x1080|1024|x86_64|4|standard|/skins/tv",
+  "VM_DETAIL=tv-2|tv-samsung-10.0-x86_64|HD1080 TV|1920x1080|1024|x86_64|4|standard|/skins/tv",
+  "VM_DETAIL=my-tizen-vm|tizen-9.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+].join("\n");
+const singleDetails = parseVmDetails(VM_LIST_SINGLE_TIZEN);
+
+check(
+  "picks the single tizen VM even when listed last among TV VMs",
+  selectVmForLaunch(singleDetails, "tizen")?.name,
+  "my-tizen-vm",
+);
+
+// Version edge cases: multi-segment versions must beat their parseFloat
+// truncation, unversioned captures must never win over a versioned image, and
+// ties must keep em-cli's order so the pick is the same on every run.
+const VM_LIST_VERSION_EDGES = [
+  "VM_DETAIL=tizen-10|tizen-10.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+  "VM_DETAIL=tizen-10-patch|tizen-10.0.1-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+  "VM_DETAIL=tizen-9-10|tizen-9.10-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+].join("\n");
+check(
+  "10.0.1 beats 10.0 (not truncated to 10 by parseFloat)",
+  selectVmForLaunch(parseVmDetails(VM_LIST_VERSION_EDGES), "tizen")?.name,
+  "tizen-10-patch",
+);
+check(
+  "9.10 beats 9.9 and 9.0",
+  selectVmForLaunch(
+    parseVmDetails(
+      [
+        "VM_DETAIL=nine-nine|tizen-9.9-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+        "VM_DETAIL=nine-ten|tizen-9.10-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+        "VM_DETAIL=nine-zero|tizen-9.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+      ].join("\n"),
+    ),
+    "tizen",
+  )?.name,
+  "nine-ten",
+);
+check(
+  "same version twice → first in list order (deterministic tie-break)",
+  selectVmForLaunch(
+    parseVmDetails(
+      [
+        "VM_DETAIL=first|tizen-10.0-x86_64|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+        "VM_DETAIL=second|tizen-10.0-x86_64|HD720 Tizen|1280x720|1024|x86_64|4|standard|/skins/tizen",
+      ].join("\n"),
+    ),
+    "tizen",
+  )?.name,
+  "first",
+);
+check(
+  "does not mutate the caller's array",
+  (() => {
+    const details = parseVmDetails(VM_LIST_MULTI_TIZEN);
+    const before = details.map((vm) => vm.name);
+    selectVmForLaunch(details, "tizen");
+    return details.map((vm) => vm.name).join(",") === before.join(",");
+  })(),
+  true,
+);
+check(
+  "user-named capture images (no known profile) are never auto-selected",
+  selectVmForLaunch(
+    parseVmDetails(
+      "VM_DETAIL=captured|my-golden-image|HD1080 Tizen|1920x1080|1024|x86_64|4|standard|/skins/tizen",
+    ),
+    "tizen",
+  ),
+  null,
+);
+
+// launch without --vm-name validates --profile before anything runs: the
+// script's own -p switch only knows tizen|tv, so a legacy image profile must be
+// accepted here (the filter is JS-side) and a typo must fail as
+// invalid_parameters, not as an opaque script execution_error.
+async function checkLaunchProfileValidation() {
+  console.log("\n--- launch --profile validation ---");
+  const bad = await manageEmulator(
+    { action: "launch", profile: "television" },
+    "test launch",
+  );
+  check(
+    "launch --profile television → invalid_parameters",
+    bad.errors?.[0]?.error_category,
+    "invalid_parameters",
+  );
+  checkTrue(
+    "invalid-profile message lists the accepted profiles",
+    /tizen, tv, mobile, wearable, iot/.test(bad.errors?.[0]?.message || ""),
+    bad.errors?.[0]?.message,
+  );
+  const named = await manageEmulator(
+    { action: "launch", profile: "television", vmName: "x y" },
+    "test launch",
+  );
+  checkTrue(
+    "--profile is ignored when --vm-name is given (name check fires first)",
+    /Invalid VM name/.test(named.errors?.[0]?.message || ""),
+    named.errors?.[0]?.message,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Test 3: PLATFORM_DETAIL parsing
@@ -339,7 +674,7 @@ const PS_SCRIPT_PATH = path.join(
 const SCRIPT = fs.readFileSync(SCRIPT_PATH, "utf8");
 const PS_SCRIPT = fs.readFileSync(PS_SCRIPT_PATH, "utf8");
 
-// Ten em-cli commands plus fix-homescreen (the WSL home screen repair, which is
+// Ten em-cli commands plus fix-homescreen (the Linux home screen repair, which is
 // not an em-cli command but shares this action surface).
 check(
   "MANAGE_ACTIONS covers all em-cli commands plus fix-homescreen",
@@ -764,9 +1099,11 @@ async function checkOptionScreening() {
   }
 }
 
-checkOptionScreening().then(() => {
-  console.log(
-    `\n=== ${failures === 0 ? "ALL PASSED" : `${failures} FAILED`} ===`,
-  );
-  process.exit(failures === 0 ? 0 : 1);
-});
+checkOptionScreening()
+  .then(checkLaunchProfileValidation)
+  .then(() => {
+    console.log(
+      `\n=== ${failures === 0 ? "ALL PASSED" : `${failures} FAILED`} ===`,
+    );
+    process.exit(failures === 0 ? 0 : 1);
+  });

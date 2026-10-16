@@ -511,6 +511,32 @@ function binaryNotFoundError(command) {
 }
 
 /**
+ * Normalize a repeated option value to an array: the tizen-sdk repeatable
+ * options and the CLI runners' REPEATABLE_FLAGS both hand us either a single
+ * value or a list.
+ */
+function toArray(value) {
+  return Array.isArray(value) ? value : [value];
+}
+
+/**
+ * Failure envelope for a --file path that does not exist. Checked before any
+ * binary or device access so file mode stays fully local.
+ */
+function fileNotFoundError(command, file, kind) {
+  return {
+    command,
+    status: "failure",
+    errors: [
+      {
+        category: "invalid_parameters",
+        message: `File not found: ${file}. Pass an existing ${kind} text file to --file.`,
+      },
+    ],
+  };
+}
+
+/**
  * Binary lookup for the actions whose binary command reads or writes the
  * SDK-resolved log directory (device-profile, investigate, probe, snapshot,
  * timeline, kernel — every one of them calls get_log_base_dir() in the
@@ -1691,10 +1717,19 @@ async function stopCollectAppLogs(commandLabel) {
  * @param {string} [format] - Output format: "summary", "details", or null (both)
  * @param {string} [commandLabel] - Envelope command label
  */
-async function analyzeErrors(appId, format, commandLabel) {
-  const command = commandLabel || "tizen-sdk dlog-analyzer error-analyze";
+async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
+  // Backward-compatible signature: the 3rd arg may be a commandLabel string
+  // (old callers) or an opts object (new file-mode callers).
+  let opts = {};
+  let label = commandLabel;
+  if (typeof optsOrLabel === "string") {
+    label = optsOrLabel;
+  } else if (optsOrLabel && typeof optsOrLabel === "object") {
+    opts = optsOrLabel;
+  }
+  const command = label || "tizen-sdk dlog-analyzer error-analyze";
 
-  if (!appId) {
+  if (!appId && !opts.file) {
     return {
       command,
       status: "failure",
@@ -1707,7 +1742,9 @@ async function analyzeErrors(appId, format, commandLabel) {
       ],
     };
   }
-  if (!isValidAppId(appId)) return invalidAppIdError(command, appId);
+  // In file mode, appId is a declared label — not validated as an identity.
+  if (!opts.file && appId && !isValidAppId(appId))
+    return invalidAppIdError(command, appId);
 
   const validFormats = ["summary", "details", null, undefined, ""];
   if (!validFormats.includes(format)) {
@@ -1723,6 +1760,85 @@ async function analyzeErrors(appId, format, commandLabel) {
     };
   }
 
+  const nativeFormat = format || "both";
+
+  // --- File mode: analyze one saved local dlog file directly ---
+  if (opts.file) {
+    if (!fs.existsSync(opts.file))
+      return fileNotFoundError(command, opts.file, "dlog");
+    const binaryPath = resolveBinary();
+    if (!binaryPath) return binaryNotFoundError(command);
+
+    const args = [
+      "error-analyze",
+      "--file",
+      opts.file,
+      "--format",
+      nativeFormat,
+    ];
+    if (appId) args.push("--app-id", appId);
+    if (opts.pids)
+      toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
+    if (opts.noiseTags)
+      toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
+    if (opts.categories)
+      toArray(opts.categories).forEach((c) => args.push("--category", c));
+    if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+    if (opts.withContext) args.push("--with-context");
+    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+
+    let output;
+    let warnings;
+    try {
+      output = execFileSync(binaryPath, args, {
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: 30000,
+      });
+    } catch (error) {
+      const recovered = recoverEncodingCrash(error);
+      if (!recovered) {
+        const stderr = error.stderr ? error.stderr.toString().trim() : "";
+        return {
+          command,
+          status: "failure",
+          errors: [
+            {
+              category: "error_analyze_failed",
+              message: `Failed to analyze file "${opts.file}": ${stderr || error.message}`,
+            },
+          ],
+        };
+      }
+      output = recovered.output;
+      warnings = [recovered.warning];
+    }
+
+    const trimmedOutput = output.trim();
+    const errorCount = parseErrorCount(trimmedOutput);
+
+    return {
+      command,
+      status: "success",
+      result: {
+        file: opts.file,
+        ...(appId ? { app_id: appId } : {}),
+        format: nativeFormat,
+        error_count: errorCount,
+        output: trimmedOutput,
+        ...(warnings ? { output_truncated: true } : {}),
+        report_format: REPORT_FORMAT_HINT,
+        message:
+          errorCount > 0
+            ? `Found ${errorCount} unique runtime errors in ${opts.file}.`
+            : `No runtime errors (E/F priority) found in ${opts.file}.`,
+      },
+      ...(warnings ? { warnings } : {}),
+    };
+  }
+
+  // --- Collection mode (existing behavior) ---
   const logBase = resolveLogBaseDir();
   if (logBase.error) return logBaseDirError(command, logBase.error);
   const logFile = appLogFile(appId, logBase.baseDir);
@@ -1743,8 +1859,7 @@ async function analyzeErrors(appId, format, commandLabel) {
   if (!binaryPath) return binaryNotFoundError(command);
 
   // Build the native binary command (it resolves the log directory itself)
-  // The native binary's --format accepts: summary, details, both (default)
-  const nativeFormat = format || "both";
+  // nativeFormat was already resolved above (before the file-mode branch)
   const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
 
   let output;
@@ -2072,11 +2187,48 @@ function runBinary(command, binaryPath, args, opts = {}) {
 /**
  * Print the full collected log for one app (all priorities, hot + cold files).
  * @param {string} appId - Tizen app ID
- * @param {object} [opts] - { since, until, priority, tags, keywords, format, output, maxLines, maxChars }
+ * @param {object} [opts] - { file, pids, noiseTags, categories, since, until, priority, tags, keywords, format, output, maxLines, maxChars }
  * @param {string} [commandLabel]
  */
 async function appLog(appId, opts = {}, commandLabel) {
   const command = commandLabel || "tizen-sdk dlog-analyzer app-log";
+
+  // --- File mode: read one saved local dlog file, no collection dir needed ---
+  if (opts.file) {
+    if (!fs.existsSync(opts.file))
+      return fileNotFoundError(command, opts.file, "dlog");
+    const binaryPath = resolveBinary();
+    if (!binaryPath) return binaryNotFoundError(command);
+
+    const args = ["app-log", "--file", opts.file];
+    if (opts.pids)
+      toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
+    if (opts.noiseTags)
+      toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
+    if (opts.categories)
+      toArray(opts.categories).forEach((c) => args.push("--category", c));
+    if (opts.since) args.push("--since", opts.since);
+    if (opts.until) args.push("--until", opts.until);
+    if (opts.priority) args.push("--priority", opts.priority);
+    if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+    if (opts.keywords)
+      toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
+    if (opts.format) args.push("--format", opts.format);
+    if (opts.output) args.push("--output", opts.output);
+    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+
+    return runBinary(command, binaryPath, args, {
+      result: {
+        file: opts.file,
+        message: `Full log from ${opts.file} (all priorities).`,
+      },
+      errorCategory: "app_log_failed",
+      errorPrefix: `Failed to print log from "${opts.file}"`,
+    });
+  }
+
+  // --- Collection mode (existing behavior) ---
   if (!appId) {
     return {
       command,
@@ -2115,16 +2267,9 @@ async function appLog(appId, opts = {}, commandLabel) {
   if (opts.since) args.push("--since", opts.since);
   if (opts.until) args.push("--until", opts.until);
   if (opts.priority) args.push("--priority", opts.priority);
-  if (opts.tags) {
-    (Array.isArray(opts.tags) ? opts.tags : [opts.tags]).forEach((t) =>
-      args.push("--tag", t),
-    );
-  }
-  if (opts.keywords) {
-    (Array.isArray(opts.keywords) ? opts.keywords : [opts.keywords]).forEach(
-      (k) => args.push("--keyword", k),
-    );
-  }
+  if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+  if (opts.keywords)
+    toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
   if (opts.format) args.push("--format", opts.format);
   if (opts.output) args.push("--output", opts.output);
   if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
@@ -2201,13 +2346,21 @@ const DLOG_PRIORITIES = ["V", "D", "I", "W", "E", "F"];
  * builder and forwards what it is given.
  *
  * @param {string[]} patterns - already normalised, at least one
- * @param {object} [opts] - { categories, regex, caseSensitive, invert, all,
- *   context, afterContext, beforeContext, since, until, priority, tags,
- *   count, format, output, maxMatches, maxLines, maxChars }
+ * @param {object} [opts] - { file, appLabels, pids, noiseTags, categories, regex, caseSensitive, invert, all,
+ *   context, afterContext, beforeContext, since, until, priority, tags, count, format, output, maxMatches,
+ *   maxLines, maxChars }
  */
 function buildSearchArgs(patterns, opts = {}) {
   const args = ["search"];
   patterns.forEach((p) => args.push("--pattern", p));
+  // File-mode options (no collection directory is resolved when --file is set)
+  if (opts.file) args.push("--file", opts.file);
+  if (opts.appLabels)
+    toArray(opts.appLabels).forEach((a) => args.push("--app-id", a));
+  if (opts.pids)
+    toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
+  if (opts.noiseTags)
+    toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
   normalizeCategories(opts.categories).forEach((c) =>
     args.push("--category", c),
   );
@@ -2310,7 +2463,15 @@ async function searchLogs(patterns, opts = {}, commandLabel) {
       `Invalid search pattern ${JSON.stringify(ctrl)}: control characters (newline, tab, NUL …) are not allowed.`,
     );
   }
-  const categories = normalizeCategories(opts.categories);
+  // `--app-id` is a category alias in collection mode: merge it into
+  // `categories` so it gets the same isValidAppId validation and `no_logs`
+  // handling as `--category` on every lane. In file mode it stays a declared
+  // label that buildSearchArgs forwards as `--app-id`, not a category.
+  const categories = normalizeCategories(
+    opts.file
+      ? opts.categories
+      : [...(opts.categories || []), ...(opts.appLabels || [])],
+  );
   for (const c of categories) {
     if (!isValidAppId(c)) return invalidAppIdError(command, c);
   }
@@ -2362,6 +2523,47 @@ async function searchLogs(patterns, opts = {}, commandLabel) {
     );
   }
 
+  // --- File mode: read one saved local dlog file, no collection dir needed ---
+  if (opts.file) {
+    if (!fs.existsSync(opts.file))
+      return fileNotFoundError(command, opts.file, "dlog");
+    const binaryPath = resolveBinary();
+    if (!binaryPath) return binaryNotFoundError(command);
+
+    const args = buildSearchArgs(list, {
+      ...opts,
+      categories,
+      tags,
+      priority,
+      appLabels: opts.appLabels,
+    });
+    const envelope = runBinary(command, binaryPath, args, {
+      result: {
+        patterns: list,
+        file: opts.file,
+        categories: categories.length ? categories : "all (reconstructed)",
+        regex: opts.regex === true,
+      },
+      errorCategory: "search_failed",
+      errorPrefix: `Search failed for ${JSON.stringify(list)}`,
+    });
+    if (envelope.status === "success") {
+      const summary = summarizeSearchOutput(envelope.result.output, opts);
+      const none =
+        summary.total_matches === 0 ||
+        (summary.matched === false && summary.total_matches === undefined);
+      envelope.result = {
+        ...envelope.result,
+        ...summary,
+        message: none
+          ? `No entry matches ${JSON.stringify(list)} in ${opts.file}. Widen the pattern, drop --priority/--since, or try a different file.`
+          : `Matching entries for ${JSON.stringify(list)} in ${opts.file} (match lines are "<category>:", context lines "<category>-").${summary.truncated ? " --max-matches cut the result; narrow the pattern or raise --max-matches." : ""}`,
+      };
+    }
+    return envelope;
+  }
+
+  // --- Collection mode (existing behavior) ---
   const logBase = resolveLogBaseDir();
   if (logBase.error) return logBaseDirError(command, logBase.error);
   const appDir = path.join(logBase.baseDir, "app");
@@ -2391,7 +2593,13 @@ async function searchLogs(patterns, opts = {}, commandLabel) {
   const binaryPath = resolveBinary();
   if (!binaryPath) return binaryNotFoundError(command);
 
-  const args = buildSearchArgs(list, { ...opts, categories, tags, priority });
+  const args = buildSearchArgs(list, {
+    ...opts,
+    appLabels: undefined, // already merged into categories above
+    categories,
+    tags,
+    priority,
+  });
   const envelope = runBinary(command, binaryPath, args, {
     result: {
       patterns: list,
@@ -2449,7 +2657,9 @@ async function deviceProfile(serial, opts = {}, commandLabel) {
  * Run a one-shot first-pass investigation and emit a budgeted report.
  * @param {string} [appId] - Optional app ID for app-scoped investigation
  * @param {string} [serial]
- * @param {object} [opts] - { symptoms, profile, format, budget, budgetTokens, allowNetworkProbe }
+ * @param {object} [opts] - { symptoms, profile, format, budget, budgetTokens,
+ *   allowNetworkProbe, rulesDir, parallel, maxWorkers, deduplicate,
+ *   similarityThreshold, allowHeavy, noNoiseFilter, fuzzySymptoms, symptomMap }
  * @param {string} [commandLabel]
  */
 async function investigate(appId, serial, opts = {}, commandLabel) {
@@ -2469,6 +2679,17 @@ async function investigate(appId, serial, opts = {}, commandLabel) {
   if (opts.budgetTokens != null)
     args.push("--budget-tokens", String(opts.budgetTokens));
   if (opts.allowNetworkProbe) args.push("--allow-network-probe");
+  if (opts.rulesDir) args.push("--rules-dir", opts.rulesDir);
+  if (opts.parallel) args.push("--parallel");
+  if (opts.maxWorkers != null)
+    args.push("--max-workers", String(opts.maxWorkers));
+  if (opts.deduplicate) args.push("--deduplicate");
+  if (opts.similarityThreshold != null)
+    args.push("--similarity-threshold", String(opts.similarityThreshold));
+  if (opts.allowHeavy) args.push("--allow-heavy");
+  if (opts.noNoiseFilter) args.push("--no-noise-filter");
+  if (opts.fuzzySymptoms) args.push("--fuzzy-symptoms");
+  if (opts.symptomMap) args.push("--symptom-map", opts.symptomMap);
   return runBinary(command, binaryPath, args, {
     timeout: 60000,
     result: {
@@ -2481,11 +2702,100 @@ async function investigate(appId, serial, opts = {}, commandLabel) {
 }
 
 /**
+ * Manage analysis rules — list, show, validate, or test the YAML rule files.
+ *
+ *   list     — list all rules (built-in + any from --rules-dir)
+ *   show     — show the full definition of one rule (target = rule id)
+ *   validate — validate rule files (target = optional file/dir; default: all)
+ *   test     — run every rule against a JSON fixture (target = fixture path)
+ *              and print the diagnosis; `--expect` turns it into a pass/fail
+ *              regression check (comma-separated rule ids, or "none")
+ *
+ * The binary's own option surface differs per subcommand: only `list` and
+ * `test` accept `--format`; `show` and `validate` reject it, so it is never
+ * forwarded to them.
+ *
+ * @param {string} subcommand - "list", "show", "validate", or "test"
+ * @param {string} [target] - rule id (show), fixture path (test) or an
+ *   optional rule file/directory (validate); unused by list
+ * @param {object} [opts] - { rulesDir, format, family, expect }
+ * @param {string} [commandLabel]
+ */
+async function manageRules(subcommand, target, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer rules";
+  const sub = subcommand || "list";
+  const validSubs = ["list", "show", "validate", "test"];
+  if (!validSubs.includes(sub)) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `Invalid subcommand: '${sub}'. Must be one of: ${validSubs.join(", ")}`,
+        },
+      ],
+    };
+  }
+  if (sub === "show" && !target) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            "rule_id is required for 'rules show'. Usage: rules show <rule-id>",
+        },
+      ],
+    };
+  }
+  if (sub === "test" && !target) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            "A JSON fixture path is required for 'rules test'. Usage: rules test <fixture.json> [--expect <rule-id>[,<rule-id>]|none]",
+        },
+      ],
+    };
+  }
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const args = ["rules", sub];
+  if (sub !== "list" && target) args.push(target);
+  if (opts.rulesDir) args.push("--rules-dir", opts.rulesDir);
+  if ((sub === "list" || sub === "test") && opts.format)
+    args.push("--format", opts.format);
+  if (sub === "list" && opts.family) args.push("--family", opts.family);
+  if (sub === "test" && opts.expect) args.push("--expect", opts.expect);
+  return runBinary(command, binaryPath, args, {
+    timeout: 30000,
+    result: {
+      message:
+        sub === "list"
+          ? "Available analysis rules."
+          : sub === "show"
+            ? `Definition of rule "${target}".`
+            : sub === "validate"
+              ? "Rule validation results."
+              : `Diagnosis for fixture "${target}".`,
+    },
+    errorCategory: "rules_failed",
+    errorPrefix: `Failed to ${sub} rules`,
+  });
+}
+
+/**
  * List and run evidence probes from the data-driven catalog.
  * @param {string} subcommand - "list" or "run"
  * @param {string} [probeId] - Probe ID (required for "run")
  * @param {string} [serial]
- * @param {object} [opts] - { format }
+ * @param {object} [opts] - { format, allowNetworkProbe, appId }
  * @param {string} [commandLabel]
  */
 async function runProbe(subcommand, probeId, serial, opts = {}, commandLabel) {
@@ -2524,7 +2834,9 @@ async function runProbe(subcommand, probeId, serial, opts = {}, commandLabel) {
     const device = resolveDevice(serial);
     if (device.error) return deviceErrorEnvelope(command, device);
     const args = ["probe", "run", probeId, "--serial", device.serial];
+    if (opts.appId) args.push("--app-id", opts.appId);
     if (opts.format) args.push("--format", opts.format);
+    if (opts.allowNetworkProbe) args.push("--allow-network-probe");
     return runBinary(command, binaryPath, args, {
       result: {
         probe_id: probeId,
@@ -2876,7 +3188,7 @@ async function stopKernelCollect(command) {
  *
  * @param {string} subcommand - "collect", "stop" or "analyze"
  * @param {string} [serial]
- * @param {object} [opts] - { format }
+ * @param {object} [opts] - { format, file, since, level, withDlog, appId, maxLines, maxChars }
  * @param {string} [commandLabel]
  */
 async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
@@ -2895,9 +3207,49 @@ async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
       ],
     };
   }
+  if (opts.file && sub !== "analyze") {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message: `--file requires --subcommand analyze (got '${sub}'). Usage: kernel analyze --file <kernel-log-path>`,
+        },
+      ],
+    };
+  }
   if (sub === "stop") return stopKernelCollect(command);
   if (sub === "collect") return startKernelCollect(command, serial);
 
+  // --- File mode: analyze one saved local kernel log file directly ---
+  if (opts.file) {
+    if (!fs.existsSync(opts.file))
+      return fileNotFoundError(command, opts.file, "kernel dmesg/kmsg");
+    const binaryPath = resolveBinary();
+    if (!binaryPath) return binaryNotFoundError(command);
+    const args = ["kernel", "analyze", "--file", opts.file];
+    if (opts.since) args.push("--since", opts.since);
+    if (opts.level) args.push("--level", opts.level);
+    if (opts.format) args.push("--format", opts.format);
+    if (opts.withDlog) {
+      args.push("--with-dlog");
+      if (opts.appId) args.push("--app-id", opts.appId);
+    }
+    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+    return runBinary(command, binaryPath, args, {
+      result: {
+        file: opts.file,
+        message: `Kernel log analysis of ${opts.file}.`,
+        report_format: REPORT_FORMAT_HINT,
+      },
+      errorCategory: "kernel_failed",
+      errorPrefix: `Failed to analyze kernel log file "${opts.file}"`,
+    });
+  }
+
+  // --- Collection mode (existing behavior) ---
   const resolved = resolveBinaryForLogs(command);
   if (resolved.error) return resolved.error;
   const { binaryPath } = resolved;
@@ -2931,6 +3283,7 @@ module.exports = {
   deviceProfile,
   investigate,
   runProbe,
+  manageRules,
   manageSnapshot,
   runTimeline,
   manageKernel,
@@ -2949,6 +3302,8 @@ module.exports = {
   sanitizeDlogOutput,
   buildLogClearGate,
   deviceErrorEnvelope,
+  toArray,
+  fileNotFoundError,
   collectorEnv,
   capturedOutputSummary,
   resolveBinary,

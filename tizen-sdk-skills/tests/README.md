@@ -4,14 +4,14 @@ English | [한국어](README.ko.md)
 
 Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 35 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
 
-**290 test cases** across 8 domains, covering 34 of the 35 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
+**295 test cases** across 8 domains, covering 34 of the 35 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TB
     subgraph "Test Suite Components"
-        TC["tc/*.yaml<br/>290 Test Cases (283 YAML files)"]
+        TC["tc/*.yaml<br/>295 Test Cases (288 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
         POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
@@ -38,9 +38,9 @@ graph TB
     end
 
     subgraph "Tier System"
-        SAFE["safe (6 cmds / 69 TCs)<br/>No side effects<br/>CI gate ✅"]
+        SAFE["safe (6 cmds / 73 TCs)<br/>No side effects<br/>CI gate ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>Install/modify/delete<br/>⚠️ With setup"]
-        DEVICE["device (14 cmds / 142 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
+        DEVICE["device (14 cmds / 143 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
         POLICY --> MUTATING
         POLICY --> DEVICE
@@ -153,10 +153,10 @@ start); `runner.mjs` and the launcher only check that `dist/tizen-sdk.js` exists
 
 | Layer           | TCs | What                                   | How                                                                                      |
 | --------------- | --- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **cli lane**    | 170 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
-| **prompt lane** | 120 | LLM resolves prompt to correct command | Cline/Claude reads TC, sends prompt, verifies tool call (see `skills/run-test-suite.md`) |
+| **cli lane**    | 174 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
+| **prompt lane** | 121 | LLM resolves prompt to correct command | Cline/Claude reads TC, sends prompt, verifies tool call (see `skills/run-test-suite.md`) |
 
-Every TC defines exactly one lane, so the two counts add up to the 290 TCs.
+Every TC defines exactly one lane, so the two counts add up to the 295 TCs.
 
 ### vs. Existing Unit Tests (`common/lib/tests/`)
 
@@ -195,8 +195,8 @@ tests/
     run-device-tier.mjs          ← ordered, self-cleaning device-tier run (see "Device tier")
     run-mutating-tier.mjs        ← ordered, self-cleaning mutating-tier run (see "Mutating tier")
     lib/driver-common.mjs        ← shared helpers of the three scripts above (incl. FIXTURE_NEEDS)
-  tc/                     ← 290 test cases in 283 YAML files
-    device/               ← 103 TCs (create-emulator, launch-emulator, emulator-manager,
+  tc/                     ← 295 test cases in 288 YAML files
+    device/               ← 104 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
     sdk/                  ←  66 TCs (check-node, check-disk-space, sdk-init, sdk-install,
@@ -211,7 +211,7 @@ tests/
     meta/                 ←  17 TCs (--capabilities, --doctor, --schema, list-commands,
                                      no-args, guard-rules)
     test/                 ←  15 TCs (playwright-test)
-    dlog-analyzer/        ←   4 TCs (dlog-analyzer)
+    dlog-analyzer/        ←   8 TCs (dlog-analyzer)
   skills/
     run-test-suite.md     ← Cline/Claude prompt-lane execution guide
 ```
@@ -502,32 +502,35 @@ path; repair with `tizen-sdk sdk-init --sdk-path <your SDK dir>`.
 
 | Status        | Count | Meaning                                                            |
 | ------------- | ----- | ------------------------------------------------------------------ |
-| `draft`       | 8     | Authored, never executed — assertions unproven                     |
+| `draft`       | 9     | Authored, never executed — assertions unproven                     |
 | `candidate`   | 0     | Executed and passing, but not every lane verified yet              |
-| `approved`    | 282   | Every lane executed and passing; a regression is a release blocker |
+| `approved`    | 286   | Every lane executed and passing; a regression is a release blocker |
 | `quarantined` | 0     | Known unstable or environment-broken; excluded by default          |
 
 Schema validation (`--dry-run`) never justifies a promotion — it only checks the YAML shape.
 
-Of the 8 remaining drafts, 7 need something no CI or developer host provides: a Samsung
+Of the 9 remaining drafts, 7 need something no CI or developer host provides: a Samsung
 account for the online CA (`certificate-manager.samsung-login`, `.generate-samsung-author`,
 `.generate-samsung-distributor`), a Linux GBS toolchain (`build-project.arch`, `.gbs`) or a
 Tizen device on the LAN (`remote-device.connect`, `.connect-custom-port`). See "Mutating tier"
-and "Device tier" for how to run them by hand. The 8th, `dlog-analyzer.prompt-symptom-routing`
-(TC-P-119, issue #211), is prompt-only: it checks that a bare symptom report ("emulator CPU 300%,
-video not playing — investigate") resolves to `dlog-analyzer` rather than `device-manager` — pinned by
-`first_resolved_command` and `must_not_resolve_commands: ["tizen-sdk device-manager"]` in its `expect`
-block, not by prose — and is promoted after three agent-session runs (`skills/run-test-suite.md`,
-Option 2; `pass_rate: 3/3`).
+and "Device tier" for how to run them by hand. The other two are prompt-only and are promoted
+after three agent-session runs (`skills/run-test-suite.md`, Option 2; `pass_rate: 3/3`):
+`dlog-analyzer.prompt-symptom-routing` (TC-P-119, issue #211) checks that a bare symptom report
+("emulator CPU 300%, video not playing — investigate") resolves to `dlog-analyzer` rather than
+`device-manager` — pinned by `first_resolved_command` and
+`must_not_resolve_commands: ["tizen-sdk device-manager"]` in its `expect` block, not by prose —
+and `emulator-manager.prompt-list-available` (TC-P-120, issue #268) checks that a plain
+"Provide the list of emulators available" resolves to `emulator-manager` (`list-vm`) instead of a
+manual search of the SDK directories.
 
 ## Tier Classification
 
 | Tier      | Commands | TCs     | Description              | CI-safe?      |
 | --------- | -------- | ------- | ------------------------ | ------------- |
-| safe      | 6        | 69      | No side effects          | ✅ Yes        |
+| safe      | 6        | 73      | No side effects          | ✅ Yes        |
 | mutating  | 15       | 79      | Install/modify/delete    | ⚠️ With setup |
-| device    | 14       | 142     | Requires emulator/device | ❌ Manual     |
-| **Total** | **35**   | **290** |                          |               |
+| device    | 14       | 143     | Requires emulator/device | ❌ Manual     |
+| **Total** | **35**   | **295** |                          |               |
 
 See `policy/tiers.yaml` for the full classification. CI runs the `approved` safe TCs on
 every PR (see "CI gate" under Runner Options); the device tier is run manually through
@@ -582,16 +585,15 @@ See `skills/run-test-suite.md` for instructions on how Cline or Claude agents ex
 - Node.js >= 20
 - A built plugin bundle: `cd tizen-cli && pnpm install && pnpm build` → `tizen-cli/dist/tizen-sdk.js`
   (gitignored; every cli-lane executor below loads it)
-- For cli-lane execution (`resolveExecutor()` in `runner.mjs`):
-  - Windows: PATH is not consulted. The runner runs the launcher `TC_LAUNCHER_JS` points at if
-    that variable is set, else `../tizen-cli/bin/tizen-sdk.js` from the source checkout
-    (`RUNNER_NO_EXECUTOR` when neither file exists). The launcher loads `../dist/tizen-sdk.js`
-    next to itself and prints a `PLUGIN_NOT_BUILT` envelope when it is missing, so on a fresh
-    checkout every cli-lane TC fails with that error until the build above has run.
-  - Linux/macOS: `TC_LAUNCHER_JS` is not used. The runner takes `tizen-cli` on PATH (with the
-    `tizen-sdk` plugin installed) and falls back to a standalone `tizen-sdk` launcher on PATH
-    (`cd tizen-cli && pnpm build && pnpm add -g .`; pnpm 10 removed `pnpm link --global` and
-    pnpm 11 removed the bare `pnpm link`); `RUNNER_NO_EXECUTOR` when neither is found. CI
-    symlinks `tizen-cli/bin/tizen-sdk.js` onto PATH instead of installing it, see
-    `.github/workflows/ci.yml`.
+- For cli-lane execution (`resolveExecutor()` in `runner.mjs`), the same on every platform:
+  PATH is not consulted — globally installed `tizen-cli` / `tizen-sdk` binaries are ignored
+  (#282). The runner drives the standalone launcher through the current Node binary: the file
+  `TC_LAUNCHER_JS` points at if that variable is set (any filename; it must be the `tizen-sdk`
+  launcher or a copy of it), else `../tizen-cli/bin/tizen-sdk.js` from the source checkout
+  (`RUNNER_NO_EXECUTOR` when neither file exists). Because the launcher *is* the `tizen-sdk`
+  program, the runner always drops the leading `tizen-sdk` token of the TC argv before the
+  call. The launcher loads `../dist/tizen-sdk.js` next to itself and prints a
+  `PLUGIN_NOT_BUILT` envelope when it is missing, so on a fresh checkout every cli-lane TC
+  fails with that error until the build above has run. CI builds the bundle and runs the same
+  launcher, see `.github/workflows/ci.yml`.
 - For `--dry-run` mode: no build and no runtime needed, just Node.js + npm dependencies

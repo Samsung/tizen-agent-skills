@@ -50,18 +50,19 @@ tizen-cli tizen-sdk launch-emulator --vm-name my-vm --timeout 120
 
 ## Output
 
-- **Success** `result`: `device_serial` (e.g. `emulator-26101`), `device_type` (`emulator`), `vm_name` (or `null`), `status: "launched"`, `timeout_sec` (the wait cap in effect), `waited_ms` (actual wait), `emulator_keeps_running: true`, and on WSL `homescreen_fix` (see below). The timeout never shuts the emulator down (issue #98).
+- **Success** `result`: `device_serial` (e.g. `emulator-26101`), `device_type` (`emulator`), `vm_name` (or `null`), `status: "launched"`, `timeout_sec` (the wait cap in effect), `waited_ms` (actual wait), `emulator_keeps_running: true`, and on Linux (WSL/remote) `homescreen_fix` (see below). The timeout never shuts the emulator down (issue #98).
 - Failure: emulator/sdb errors — surface `message`; SDK not installed → run `sdk-install` first; no VMs exist → run `create-emulator` first.
 - `emulator_boot_failed`: `errors[0].details` carries a layered boot diagnosis (KVM state, missing libraries, Qt xcb, WSL) plus the untouched script output tail as `raw: ...` lines — relay the details; run `errors[0].suggested_fix.command` (the `--hw-virtualization yes` modify) once if present, then retry the launch once.
 - Java/JNA error (em-cli crashed before touching the VM): host problem, not a VM problem — relay the `raw: ...` detail lines (they carry the actual Java error, e.g. `NoClassDefFoundError: com/sun/jna/Native`), then have the user run `download-emulator-package` to reinstall the emulator package and verify the SDK's bundled JRE. `tizen-cli tizen-sdk --doctor` probes em-cli health up front.
   - **EXCEPTION:** a `NoSuchFieldError` / `NoSuchMethodError` trace (real case `java.lang.NoSuchFieldError: isVirgl`) is NOT a reinstall case — the emulator-manager core and the platform's emulator plugin are at mismatched versions. Run `update-package` (long-running download), then retry the identical launch once. If it fails again, stop and report; do not reinstall the emulator package.
 
-## WSL: home screen crash loop (automatic)
+## WSL / Remote Linux: home screen crash loop (automatic)
 
-On WSL the standard `tizen` profile's home screen (`org.tizen.homescreen`, a Flutter
-app) fails to pick an EGL config when launched through launchpad and aborts;
-`starter` then retries it forever, leaving an "Unable to launch
-org.tizen.homescreen." dialog on screen while crash dumps fill `/opt`.
+On WSL or a headless remote Linux server the standard `tizen` profile's home
+screen (`org.tizen.homescreen`, a Flutter app) fails to pick an EGL config when
+launched through launchpad and aborts; `starter` then retries it forever, leaving
+an "Unable to launch org.tizen.homescreen." dialog on screen while crash dumps
+fill `/opt`.
 
 The launch flow fixes this automatically and reports `homescreen_fix` in `result`:
 
@@ -71,7 +72,7 @@ The launch flow fixes this automatically and reports `homescreen_fix` in `result
 | `fixed` | Retry loop and popup stopped, dumps cleared, home screen started directly |
 | `popup_fixed` | Retry loop stopped, home screen deliberately not started (`TIZEN_HOMESCREEN_LAUNCH=0`) |
 | `fix_failed` | Retry loop stopped but the home screen would not come up — use the TV profile |
-| absent | The check does not apply (real device, TV/wearable image, non-WSL host) |
+| absent | The check does not apply (real device, TV/wearable image, non-Linux host) |
 
 Apply it to an already-running emulator without relaunching:
 

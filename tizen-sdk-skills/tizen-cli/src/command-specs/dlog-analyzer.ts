@@ -24,7 +24,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--action <action>",
         description:
-          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (search every collected dlog category for text or a regex — --pattern required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect)",
+          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (search every collected dlog category for text or a regex — --pattern required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), rules (list/show/validate/test analysis rules), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect)",
         choices: [
           "start",
           "stop",
@@ -40,6 +40,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           "device-profile",
           "investigate",
           "probe",
+          "rules",
           "snapshot",
           "timeline",
           "kernel",
@@ -51,13 +52,13 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--subcommand <subcommand>",
         description:
-          "For --action start: dlog-collect, exception-detect, or start-monitoring (recommended). For --action probe: list or run. For --action snapshot: create, list, compare, or delete. For --action kernel: collect (background collector), stop, or analyze. For --action timeline: show, report, analyze, or export.",
+          "For --action start: dlog-collect, exception-detect, or start-monitoring (recommended). For --action probe: list or run. For --action rules: list, show, validate, or test. For --action snapshot: create, list, compare, or delete. For --action kernel: collect (background collector), stop, or analyze. For --action timeline: show, report, analyze, or export.",
         default: "start-monitoring",
       },
       {
         flags: "--app-id <id>",
         description:
-          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search: same as --category (restrict the search to this app's logs).",
+          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search (collection mode): same as --category (restrict the search to this app's logs). For --action error-analyze / search --file: declared app label (not a verified identity), used with --pid. For --action kernel analyze --file --with-dlog: app ID for dlog correlation. For --action probe --subcommand run: the app whose PID/app id the probe substitutes (app-process, io, ...) when --probe-id names the probe; without --probe-id it is read as the probe id itself (legacy form). For --action rules: the rule id (show), fixture path (test) or rule file/dir (validate).",
       },
       {
         flags: "--format <format>",
@@ -169,11 +170,13 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--tag <tag>",
         description:
-          "For --action app-log / search: only entries with this dlog tag.",
+          "For --action app-log / search: only entries with this dlog tag (repeatable).",
+        repeatable: true,
       },
       {
         flags: "--keyword <kw>",
         description: "For --action app-log: filter by keyword (repeatable).",
+        repeatable: true,
       },
       {
         flags: "--max-lines <n>",
@@ -214,12 +217,106 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--allow-network-probe",
         description:
-          "For --action investigate: allow network probes (may require connectivity).",
+          "For --action investigate and --action probe --subcommand run: consent to network-egress probes (reachability, tls-handshake).",
         default: false,
       },
       {
+        flags: "--rules-dir <path>",
+        description:
+          "For --action investigate/rules: load extra user rule YAML from this directory.",
+      },
+      {
+        flags: "--parallel",
+        description: "For --action investigate: run probes concurrently.",
+        default: false,
+      },
+      {
+        flags: "--max-workers <n>",
+        description:
+          "For --action investigate: concurrency limit with --parallel (default 4).",
+      },
+      {
+        flags: "--deduplicate",
+        description:
+          "For --action investigate: remove near-duplicate evidence.",
+        default: false,
+      },
+      {
+        flags: "--similarity-threshold <float>",
+        description:
+          "For --action investigate: threshold for near-dup detection (0.0-1.0, default 1.0).",
+      },
+      {
+        flags: "--allow-heavy",
+        description:
+          "For --action investigate: include probes that take >5 s or generate load.",
+        default: false,
+      },
+      {
+        flags: "--no-noise-filter",
+        description:
+          "For --action investigate: show all dlog findings including known-benign.",
+        default: false,
+      },
+      {
+        flags: "--fuzzy-symptoms",
+        description:
+          "For --action investigate: Levenshtein <=2 typo-tolerant symptom matching.",
+        default: false,
+      },
+      {
+        flags: "--symptom-map <path>",
+        description:
+          "For --action investigate: replace the built-in symptom map entirely.",
+      },
+      {
         flags: "--probe-id <id>",
-        description: "For --action timeline: filter to a specific probe ID.",
+        description:
+          "For --action timeline: filter to a specific probe ID. For --action probe --subcommand run: the probe to run (then --app-id is the app the probe is scoped to).",
+      },
+      {
+        flags: "--family <f>",
+        description:
+          "For --action rules --subcommand list: filter rules by family (crash, network, performance, memory, audio, peripheral, power, security, hang, service, storage, launch, graphics, time, media).",
+      },
+      {
+        flags: "--expect <rule_id>",
+        description:
+          "For --action rules --subcommand test: comma-separated rule ids that must be concluded exactly for the fixture ('none' = no conclusion); the envelope fails otherwise.",
+      },
+      {
+        flags: "--file <path>",
+        description:
+          "Analyze one saved local dlog or kernel log text file instead of collected logs. Supported by error-analyze, app-log, search, and kernel analyze. In file mode, no SDK directory resolution or device access occurs.",
+      },
+      {
+        flags: "--pid <n>",
+        description:
+          "Historical capture PID to select from --file (repeatable). Required with --app-id in file mode for error-analyze and search.",
+        repeatable: true,
+      },
+      {
+        flags: "--noise-tag <tag>",
+        description:
+          "Tag excluded while reconstructing --file categories (repeatable).",
+        repeatable: true,
+      },
+      {
+        flags: "--level <level>",
+        description:
+          "For --action kernel analyze --file: minimum level for lines that match no signature (emerg, alert, crit, err, warning, notice, info, debug, or 0-7). Default: warning.",
+      },
+      {
+        flags: "--with-dlog",
+        description:
+          "For --action kernel analyze --file: also analyze dlog and correlate with kernel findings (requires --app-id).",
+        default: false,
+      },
+      {
+        flags: "--with-context",
+        description:
+          "For --action error-analyze --file: include surrounding context lines for each error entry (default: false).",
+        default: false,
       },
     ],
     handler: (o) => {
@@ -250,11 +347,29 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
         case "stop-collect":
           return sdkCommands.stopCollectAppLogs(commandLabel);
         case "error-analyze":
-          return sdkCommands.analyzeErrors(o.appId, o.format, commandLabel);
+          return sdkCommands.analyzeErrors(
+            o.appId,
+            o.format,
+            {
+              file: o.file,
+              pids: o.pid,
+              noiseTags: o.noiseTag,
+              tags: o.tag,
+              categories: o.category,
+              withContext: o.withContext,
+              maxLines: o.maxLines,
+              maxChars: o.maxChars,
+            },
+            commandLabel,
+          );
         case "app-log":
           return sdkCommands.appLog(
             o.appId,
             {
+              file: o.file,
+              pids: o.pid,
+              noiseTags: o.noiseTag,
+              categories: o.category,
               since: o.since,
               until: o.until,
               priority: o.priority,
@@ -268,12 +383,18 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
             commandLabel,
           );
         case "search":
-          // --pattern is variadic (array); --app-id is the binary's alias of
-          // --category, so either names the category to search.
+          // --pattern is variadic (array). appLabels reach the core: in file
+          // mode they are declared app labels pushed as --app-id; in
+          // collection mode searchLogs merges them into categories so they
+          // get the same validation and no_logs handling as --category.
           return sdkCommands.searchLogs(
             o.pattern,
             {
-              categories: o.category ?? o.appId,
+              file: o.file,
+              appLabels: o.appId,
+              pids: o.pid,
+              noiseTags: o.noiseTag,
+              categories: o.category,
               regex: o.regex,
               caseSensitive: o.caseSensitive,
               invert: o.invert,
@@ -311,15 +432,48 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               budget: o.budget,
               budgetTokens: o.budgetTokens,
               allowNetworkProbe: o.allowNetworkProbe,
+              rulesDir: o.rulesDir,
+              parallel: o.parallel,
+              maxWorkers: o.maxWorkers,
+              deduplicate: o.deduplicate,
+              similarityThreshold: o.similarityThreshold,
+              allowHeavy: o.allowHeavy,
+              noNoiseFilter: o.noNoiseFilter,
+              fuzzySymptoms: o.fuzzySymptoms,
+              symptomMap: o.symptomMap,
             },
             commandLabel,
           );
-        case "probe":
+        case "probe": {
+          // `probe run` has two ids: the probe to run and, optionally, the app
+          // it is scoped to. Historically --app-id carried the probe id; keep
+          // that working, but when --probe-id names the probe, --app-id is the
+          // app (otherwise the probe id would be sent to the binary as the app
+          // id too and `{pid}` probes would resolve a non-existent app).
+          const probeId = o.probeId ?? o.appId;
+          const scopedAppId = o.probeId ? o.appId : undefined;
           return sdkCommands.runProbe(
             o.subcommand,
-            o.appId,
+            probeId,
             o.serial,
-            { format: o.format },
+            {
+              format: o.format,
+              appId: scopedAppId,
+              allowNetworkProbe: o.allowNetworkProbe,
+            },
+            commandLabel,
+          );
+        }
+        case "rules":
+          return sdkCommands.manageRules(
+            o.subcommand,
+            o.appId,
+            {
+              rulesDir: o.rulesDir,
+              format: o.format,
+              family: o.family,
+              expect: o.expect,
+            },
             commandLabel,
           );
         case "snapshot":
@@ -339,7 +493,16 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           return sdkCommands.manageKernel(
             o.subcommand,
             o.serial,
-            { format: o.format },
+            {
+              format: o.format,
+              file: o.file,
+              since: o.since,
+              level: o.level,
+              withDlog: o.withDlog,
+              appId: o.appId,
+              maxLines: o.maxLines,
+              maxChars: o.maxChars,
+            },
             commandLabel,
           );
         case "log-dump":
@@ -358,7 +521,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
             errors: [
               {
                 category: "invalid_parameters",
-                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, snapshot, timeline, kernel, log-dump, log-clear`,
+                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, rules, snapshot, timeline, kernel, log-dump, log-clear`,
               },
             ],
           });

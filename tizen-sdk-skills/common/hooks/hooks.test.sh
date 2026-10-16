@@ -124,6 +124,46 @@ check $H allow 'sdb -s emulator-26101 shell reboot'
 check $H allow 'git commit -m \"hook: deny which sdb\"'
 
 echo
+echo "--- check-tizen-commands: finding emulator VMs by hand (issue #268) ---"
+# "Provide the list of emulators available" is tizen-create-emulator's list-vm; a raw
+# em-cli call or a directory walk over <sdk>-data/emulator/vms is the manual detour.
+check $H deny 'em-cli list-vm'
+check $H deny '~/tizen-sdk/tools/emulator/bin/em-cli list-vm -d'
+check $H deny '\"$HOME/tizen-sdk/tools/emulator/bin/em-cli\" list-vm'
+check $H deny '/c/tizen-sdk/tools/emulator/bin/em-cli.bat list-vm'
+check $H deny 'EMCLI=~/tizen-sdk/tools/emulator/bin/em-cli; \"$EMCLI\" list-vm'
+check $H deny 'em-cli.exe list-vm'
+check $H deny 'C:\\tizen-sdk\\tools\\emulator\\bin\\em-cli.bat list-vm -d'
+check $H deny '& \"$env:USERPROFILE\\tizen-sdk\\tools\\emulator\\bin\\em-cli.bat\" list-vm'
+check $H deny '${EMCLI} list-vm'
+check $H deny 'EM_CLI=~/tizen-sdk/tools/emulator/bin/em-cli; $EM_CLI list-vm -d'
+check $H deny 'cd ~/tizen-sdk/tools/emulator/bin && ./em-cli list-vm'
+check $H deny 'cd ~/tizen-sdk/tools/emulator/bin && ./em-cli'
+check $H deny 'em-cli --help'
+check $H deny 'em-cli list-vm | tail -5'
+check $H deny 'ls ~/tizen-sdk-data/emulator/vms'
+check $H deny 'ls -la \"$HOME/tizen-sdk-data/emulator/vms/\"'
+check $H deny 'find / -path \"*emulator/vms*\" -name vm_config.xml 2>/dev/null'
+check $H deny 'Get-ChildItem \"$env:USERPROFILE\\tizen-sdk-data\\emulator\\vms\"'
+check $H deny 'cat ~/tizen-sdk-data/emulator/vms/my-vm/vm_config.xml'
+# The runner and the wrapper scripts stay allowed, and so do unrelated commands that
+# merely contain "emulator" or "-cli".
+check $H allow 'node \"$CLI\" list-vm --detail'
+check $H allow 'node emulator-manager-cli.js list-vm'
+check $H allow 'node \"$CLI\" launch --vm-name my-vm'
+check $H allow 'node \"$CLI\" create --vm-name my-vm --size 1080 --file-sharing-path ~/tizen-sdk-data/emulator/vms/share'
+check $H allow 'bash tizen-emulator-manager.sh -a list-vm -p tizen'
+check $H allow 'ls ~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js'
+check $H allow 'ls ~/tizen-sdk/platforms/tizen-10.0/tv-samsung/emulator-resources/skins'
+check $H allow 'ls ~/tizen-sdk-data/emulator/vmsnapshots'
+# A MENTION of the word is not an invocation: contributors grep the docs and code for it.
+check $H allow 'grep -rn em-cli common/skills/tizen-create-emulator/SKILL.md'
+check $H allow 'cat common/lib/core/emulator.js | grep em-cli'
+check $H allow 'echo $EMCLI'
+check $H allow 'node system-cli.js info'
+check $H allow 'git commit -m \"hook: deny raw em-cli list-vm\"'
+
+echo
 echo "--- check-tizen-commands: kernel log by hand (issue #213) ---"
 # Kernel logs are collected by the dlog-analyzer runner (kernel collect/stop/analyze);
 # the raw dmesg / kmsg detour right after dlog-collect is denied.
@@ -154,6 +194,30 @@ check $H allow 'node sdb-helper-cli.js --request \"shell top -n 1\"'
 check $H allow 'node \"$CLI\" probe run cpu_top'
 check $H allow 'node \"$CLI\" investigate --symptoms \"300% cpu, video not playing\"'
 check $H allow 'bash tizen-native-gdb-debug.sh -a org.example.app # sdb shell ps'
+
+echo
+echo "--- check-tizen-commands: hand-typed network diagnostics over sdb shell (Rule 18b) ---"
+# openssl s_client / curl / wget on the device are the consent-gated
+# network-egress probes (reachability, tls-handshake); typed by hand they are
+# denied, in every spelling the runner itself would never produce.
+check $H deny 'sdb shell openssl s_client -connect example.com:443'
+check $H deny 'sdb shell \"openssl s_client -connect example.com:443 </dev/null\"'
+check $H deny 'sdb -s emulator-26101 shell curl -I https://example.com'
+check $H deny 'sdb shell \"curl -sS https://example.com\"'
+check $H deny 'sdb shell wget -O- http://example.com'
+check $H deny 'sdb shell \"su - -c curl https://example.com\"'
+check $H deny 'sdb shell \"timeout 5 curl https://example.com\"'
+check $H deny 'SDB shell curl https://example.com'
+# Other openssl subcommands, look-alike names, host-side curl and the runners
+# stay allowed.
+check $H allow 'sdb shell openssl version'
+check $H allow 'sdb shell curlx'
+check $H allow 'sdb shell mycurl'
+check $H allow 'curl https://example.com'
+check $H allow 'sdb shell \"echo hi\" && curl https://example.com'
+check $H allow 'node \"$CLI\" probe run tls-handshake --allow-network-probe'
+check $H allow 'node \"$CLI\" investigate --symptoms \"dns timeout\" --allow-network-probe'
+check $H allow 'node sdb-helper-cli.js --request \"shell curl https://example.com\"'
 
 echo
 echo "--- check-tizen-commands: timer waits during dlog collection (issue #212) ---"

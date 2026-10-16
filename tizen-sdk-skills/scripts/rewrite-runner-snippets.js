@@ -61,7 +61,11 @@
  *       `powershell -Command "…"` (outer-shell expansion of $CLI / $env:).
  *   (g) block order (skills/agents only) — every lookup section with a fenced
  *       cmd.exe block is re-emitted in a fixed order: SHELL_PICK_LINE (how to
- *       pick the block for your shell), Bash, PowerShell, cmd.exe, then the
+ *       pick the block for your shell), RUN_NOTE (run the node line as-is: no
+ *       redirect / temp file, no `cmd /c` or `powershell -Command` wrapper, no
+ *       mixed dialects such as `%TEMP%` in PowerShell, and what a "completion
+ *       could not be observed" tool message means — all four seen in one Cline
+ *       PowerShell session on Windows), Bash, PowerShell, cmd.exe, then the
  *       `node "<found-path>"` step and the "Runner not found?" note. The model
  *       tends to run the FIRST block it sees — with cmd.exe first, a Cline
  *       PowerShell terminal ran the `&` chain (AmpersandNotAllowed) and then
@@ -312,8 +316,38 @@ function psFence(runnerJs, nodeArgs) {
 //     first block.
 const SHELL_PICK_LINE =
   '**Pick the ONE block for the shell your terminal / tool runs — the prompt tells you: `$` is Bash (Linux, macOS, Claude Code\'s Git Bash on Windows, Codex on Linux / macOS) → Bash block; `PS C:\\…>` is PowerShell (Codex on Windows, Cline PowerShell terminal) → PowerShell block; `C:\\…>` is cmd.exe (Cline cmd.exe terminal) → cmd.exe block. Run that block as-is: a block pasted into another shell, or wrapped in `powershell -Command "…"`, is a parse error.**';
+// Follows SHELL_PICK_LINE. One Cline PowerShell session on Windows produced,
+// in turn: the PowerShell block wrapped in `powershell -Command "…"` ($CLI
+// expanded empty by the outer shell), `> "%TEMP%\x.txt"` in PowerShell (a
+// literal `%TEMP%` directory), `Out-File '$env:TEMP\…'` inside a second
+// wrapper, and finally `cmd /c node … > file 2>&1` — each one a reaction to
+// the tool saying the command's output "could not be captured", which was the
+// terminal still being busy with the first (detached) command and the shell
+// integration having lost the command markers, not the runner failing. One
+// line (no newline): classifyChunk compares the trimmed paragraph verbatim, and
+// an indented section would carry the indent inside a multi-line note.
+const RUN_NOTE =
+  '**Run the `node` line exactly as written and read the JSON envelope it prints to stdout. Do NOT redirect or capture the output (`> file`, `2>&1 | tee`, `Out-File`, `| Out-String`), do NOT wrap the line in `cmd /c`, `powershell -Command "…"` or any second shell, and do NOT mix shell dialects: `%TEMP%` and `2>nul` are cmd.exe only, `$env:TEMP` and `Out-File` are PowerShell only — in the other shell they are literal text or a parse error. A tool message that the command\'s completion or output "could not be observed / captured" means the terminal is still busy with an earlier command or its shell-integration hooks have broken, not that the runner failed: open a NEW terminal and re-run the SAME line unchanged. Runners that drive em-cli, sdb or a JVM can take 10–30 s and print the envelope only when they exit — wait for it rather than retrying with a redirect.**';
 const BASH_BLOCK_HEADING =
   "**Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**";
+// classifyChunk recognises these paragraphs by comparing the trimmed chunk
+// verbatim, so each must be a single line: a newline inside one would make
+// every generated copy unrecognisable on the next run (re-emitted, so the
+// --check fixed point breaks) and an indented section would carry its indent
+// inside the paragraph. Fail at load time rather than in 30 skill files.
+const VERBATIM_PARAGRAPHS = {
+  SHELL_PICK_LINE,
+  RUN_NOTE,
+  PS_BLOCK_HEADING,
+  BASH_BLOCK_HEADING,
+};
+for (const [name, text] of Object.entries(VERBATIM_PARAGRAPHS)) {
+  if (text.includes("\n") || text !== text.trim()) {
+    throw new Error(
+      `${name} must be a single trimmed line: classifyChunk compares it verbatim`,
+    );
+  }
+}
 // Hand-written headings over a Bash lookup fence, canonicalised to BASH_BLOCK_HEADING.
 const BASH_HEADING_RE =
   /^\*\*(?:Bash — |Linux \/ macOS|Claude Code — Bash tool)[^\n]*:\*\*$/;
@@ -397,6 +431,7 @@ function classifyChunk(c) {
   // match (its extra lines would be dropped); it ends the section instead.
   const oneLine = !t.includes("\n");
   if (t === SHELL_PICK_LINE) return "shellPick";
+  if (t === RUN_NOTE) return "runNote";
   if (t === PS_BLOCK_HEADING) return "psHead";
   if (oneLine && t.startsWith(CMD_HEADING_LEAD) && t.endsWith(":**")) {
     return "cmdHead";
@@ -461,7 +496,7 @@ function renderSection(blocks) {
       .split("\n")
       .map((l) => indent + l)
       .join("\n");
-  const parts = [ind(SHELL_PICK_LINE)];
+  const parts = [ind(SHELL_PICK_LINE), ind(RUN_NOTE)];
   if (by.bashFence) parts.push(ind(BASH_BLOCK_HEADING), by.bashFence.text);
   parts.push(
     ind(PS_BLOCK_HEADING),
@@ -493,7 +528,9 @@ function reorderLookupSections(text) {
     const seen = new Set(["cmdFence"]);
     const accepts = (c, step) => {
       if (!c.cls || seen.has(c.cls)) return false;
-      if (step > 0 && c.cls === "shellPick") return false;
+      // The shell-pick line and the run note only ever open a section.
+      if (step > 0 && (c.cls === "shellPick" || c.cls === "runNote"))
+        return false;
       if (step < 0 && TAIL_KINDS.has(c.cls)) return false;
       if (c.kind === "fence") return sameRunner(c);
       // A heading moves with its fence: going forward, that fence must still
@@ -733,6 +770,8 @@ module.exports = {
   PS_BLOCK_HEADING,
   BASH_BLOCK_HEADING,
   SHELL_PICK_LINE,
+  RUN_NOTE,
+  VERBATIM_PARAGRAPHS,
   PS_GUARD,
   psLookupLine,
   psNodeLine,

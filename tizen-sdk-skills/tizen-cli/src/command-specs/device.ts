@@ -131,7 +131,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
     // examples) and must not be renamed casually — see command-specs/index.ts.
     name: "emulator-manager",
     description:
-      "Manage Tizen emulator VMs across the full em-cli surface: create, delete, launch, list platforms/templates/VMs, inspect one VM or the emulator manager, modify an existing VM's template/RAM/skin/acceleration, reset a VM's disk, capture a VM as a platform image, and re-apply the WSL home screen fix to a running VM. Use --action detail or --action list-vm --detail to read an existing VM's screen size and RAM.",
+      "Manage Tizen emulator VMs across the full em-cli surface: create, delete, launch, list platforms/templates/VMs, inspect one VM or the emulator manager, modify an existing VM's template/RAM/skin/acceleration, reset a VM's disk, capture a VM as a platform image, and re-apply the Linux (WSL/remote) home screen fix to a running VM. Use --action detail or --action list-vm --detail to read an existing VM's screen size and RAM.",
     options: [
       {
         flags: "--action <action>",
