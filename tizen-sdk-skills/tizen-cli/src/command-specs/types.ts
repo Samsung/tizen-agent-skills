@@ -29,6 +29,12 @@ export interface OptionSpec {
   required?: boolean;
   default?: string | boolean;
   choices?: string[];
+  /**
+   * Repeatable single-value option: every occurrence is collected into an
+   * array (`--pid 1 --pid 2` → `["1", "2"]`), matching the CLI runners'
+   * REPEATABLE_FLAGS. Without it, commander keeps only the last value.
+   */
+  repeatable?: boolean;
   /** Per-option hint used in the collectAllMissing error message (defaults to description). */
   missingHint?: string;
 }

@@ -1350,13 +1350,13 @@ if ($Action -eq "create") {
 }
 
 # fix-homescreen exists here only so the action is not a Windows-only outage.
-# The home screen crash loop it repairs is a WSL phenomenon and the fix is only
-# verified there, so this path deliberately does nothing: it emits no
-# HOMESCREEN_STATUS line, which the JS side reports as "did not apply".
-# See check_and_fix_homescreen in tizen-emulator-manager.sh.
+# The home screen crash loop it repairs is a Linux (WSL / remote Linux server)
+# phenomenon and the fix is only verified there, so this path deliberately does
+# nothing: it emits no HOMESCREEN_STATUS line, which the JS side reports as
+# "did not apply". See check_and_fix_homescreen in tizen-emulator-manager.sh.
 if ($Action -eq "fix-homescreen") {
-    Write-Info "fix-homescreen applies to the Tizen emulator on WSL only - nothing to do on a Windows host."
-    Write-Info "If your emulator runs inside WSL, run this action from inside WSL so the bash script handles it."
+    Write-Info "fix-homescreen applies to the Tizen emulator on Linux (WSL or remote Linux server) only - nothing to do on a Windows host."
+    Write-Info "If your emulator runs on Linux, run this action from that Linux host so the bash script handles it."
     exit 0
 }
 

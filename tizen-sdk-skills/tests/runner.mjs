@@ -35,8 +35,8 @@
  *
  * The runner:
  *   1. Loads and schema-validates every TC YAML in tc/
- *   2. For each TC with a cli lane, executes `tizen-cli <argv>` (or `tizen-sdk <argv>`
- *      if tizen-cli is not on PATH — falls back to direct plugin invocation)
+ *   2. For each TC with a cli lane, executes `node <launcher> <argv>` through the
+ *      locally built standalone launcher (see resolveExecutor; PATH is not consulted)
  *   3. Parses the JSON envelope from stdout
  *   4. Compares against the expect block (status, jsonpath matchers, error matchers)
  *   5. Prints Jest-style results and a summary
@@ -379,46 +379,42 @@ function loadTCs(args) {
 // ── Envelope execution ────────────────────────────────────────────────────
 
 /**
- * Resolve which binary to call. Prefer `tizen-cli` on PATH; fall back to
- * `tizen-sdk` directly (useful when testing the plugin standalone).
+ * Resolve the executor. The runner only ever drives the standalone launcher
+ * (tizen-cli/bin/tizen-sdk.js, or a copy of it) through the current Node
+ * binary; globally installed `tizen-cli` / `tizen-sdk` binaries on PATH are
+ * deliberately ignored because they may be outdated (#282). Candidates, in order:
+ *   - TC_LAUNCHER_JS=<path to a tizen-sdk.js launcher>  (explicit; any filename)
+ *   - ../tizen-cli/bin/tizen-sdk.js                     (source checkout after `pnpm build`)
  *
- * Returns { bin, prefix, kind } where `kind` is "tizen-cli" or "tizen-sdk"
- * (decides whether the leading "tizen-sdk" argv token is stripped), and
- * `prefix` holds any arguments that must precede the TC argv.
+ * Returns { bin, prefix } — `prefix` is the launcher path that precedes the TC
+ * argv — or null when no candidate exists on disk.
  *
- * Windows: Node's execFileSync refuses the .cmd shims that pnpm/npm create
- * (EINVAL since CVE-2024-27980) and a POSIX shell shim is not a Win32
- * executable (ENOENT). So on win32 the runner drives the standalone launcher
- * through the current Node binary instead of a PATH lookup:
- *   - TC_LAUNCHER_JS=<path to tizen-sdk.js launcher>   (explicit)
- *   - ../tizen-cli/bin/tizen-sdk.js                    (source checkout after `pnpm build`)
+ * Every candidate is the same `tizen-sdk <command>` launcher, so no executor
+ * "kind" is tracked: the launcher never accepts a leading `tizen-sdk` token,
+ * and runCommand() always strips it. (An earlier revision inferred the kind
+ * from the file name — `endsWith("tizen-sdk.js")` — which silently passed the
+ * token through for a renamed or wrapped launcher and made every TC fail
+ * with an unknown-command error.)
  */
 const LAUNCHER_JS_CANDIDATES = [
   process.env.TC_LAUNCHER_JS,
   join(ROOT, "..", "tizen-cli", "bin", "tizen-sdk.js"),
 ].filter(Boolean);
 
+/** Program name every TC argv starts with; the launcher supplies it itself. */
+const PROGRAM_TOKEN = "tizen-sdk";
+
 function resolveExecutor() {
-  if (process.platform === "win32") {
-    const launcher = LAUNCHER_JS_CANDIDATES.find((p) => existsSync(p));
-    return launcher
-      ? { bin: process.execPath, prefix: [launcher], kind: "tizen-sdk" }
-      : null;
-  }
-  try {
-    execFileSync("which", ["tizen-cli"], { stdio: "pipe", timeout: 3000 });
-    return { bin: "tizen-cli", prefix: [], kind: "tizen-cli" };
-  } catch {
-    try {
-      execFileSync("which", ["tizen-sdk"], {
-        stdio: "pipe",
-        timeout: 3000,
-      });
-      return { bin: "tizen-sdk", prefix: [], kind: "tizen-sdk" };
-    } catch {
-      return null;
-    }
-  }
+  const launcher = LAUNCHER_JS_CANDIDATES.find((p) => existsSync(p));
+  return launcher ? { bin: process.execPath, prefix: [launcher] } : null;
+}
+
+/**
+ * TC argv is written as the user would type it (`tizen-sdk <command> ...`).
+ * The launcher is already the `tizen-sdk` program, so drop that first token.
+ */
+export function launcherArgv(expanded) {
+  return expanded[0] === PROGRAM_TOKEN ? expanded.slice(1) : expanded;
 }
 
 function runCommand(argv, timeoutSec, env) {
@@ -429,10 +425,7 @@ function runCommand(argv, timeoutSec, env) {
       errors: [
         {
           error_code: "RUNNER_NO_EXECUTOR",
-          message:
-            process.platform === "win32"
-              ? "No tizen-sdk launcher found. Build tizen-cli first (`cd tizen-cli && pnpm install && pnpm build` — tests/ has no build script) or set TC_LAUNCHER_JS to the launcher's tizen-sdk.js."
-              : "Neither tizen-cli nor tizen-sdk found on PATH. Install tizen-cli or add the plugin to PATH.",
+          message: `No tizen-sdk launcher found (checked: ${LAUNCHER_JS_CANDIDATES.join(", ")}). Build tizen-cli first (\`cd tizen-cli && pnpm install && pnpm build\` — tests/ has no build script) or set TC_LAUNCHER_JS to a tizen-sdk.js launcher. PATH is not consulted.`,
         },
       ],
     };
@@ -467,12 +460,7 @@ function runCommand(argv, timeoutSec, env) {
     }
   }
 
-  // If executor is tizen-cli, argv already starts with "tizen-sdk <command>"
-  // If executor is tizen-sdk, strip the leading "tizen-sdk" token
-  const finalArgv = [
-    ...executor.prefix,
-    ...(executor.kind === "tizen-cli" ? expanded : expanded.slice(1)),
-  ];
+  const finalArgv = [...executor.prefix, ...launcherArgv(expanded)];
 
   try {
     const stdout = execFileSync(executor.bin, finalArgv, {

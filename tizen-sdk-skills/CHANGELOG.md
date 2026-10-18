@@ -11,6 +11,84 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.4] — 2026-10-16
+
+The test runner now always executes the locally built launcher instead of looking up
+globally installed `tizen-cli`/`tizen-sdk` binaries on PATH (fixes #282). The
+"list the available emulators" ask routes to `emulator-manager list-vm`, each VM's
+`profile` is reported on `list-vm --detail`, and the bundled `tizen-dlog-analyzer`
+gains the 0.2.8a0 feature set (`rules`, expanded `investigate`, `probe run` options).
+
+### Fixed
+
+- **Test runner uses the local launcher exclusively** (PR #283; `tests/runner.mjs`). The
+  executor resolution used to prefer globally installed `tizen-cli`/`tizen-sdk` binaries
+  on PATH (POSIX `which` lookups, plus a win32-only branch that drove the local launcher
+  through Node), so runs could hit outdated or broken global installs and fail with
+  `PLUGIN_NOT_FOUND`. `resolveExecutor()` now checks only the launcher candidates — the
+  `TC_LAUNCHER_JS` env var if set, otherwise the built `../tizen-cli/bin/tizen-sdk.js` —
+  and always drives the launcher through the current Node binary. The executor `kind` is
+  gone: every candidate is the standalone `tizen-sdk` launcher, so the runner always strips
+  the leading `tizen-sdk` token of the TC argv (`launcherArgv()`) instead of inferring the
+  behaviour from the launcher's file name — a `TC_LAUNCHER_JS` that does not end in
+  `tizen-sdk.js` (renamed copy, wrapper) used to keep the token and fail every TC with an
+  unknown-command error. `RUNNER_NO_EXECUTOR` now lists the checked candidate paths on every
+  platform. CI runs the launcher directly instead of symlinking it onto PATH.
+
+- **`tizen-create-emulator` — "list the available emulators" routes to `list-vm`, not a manual
+  search** (issue #268; `common/skills/tizen-create-emulator/SKILL.md`,
+  `common/agents/tizen-create-emulator.md`, `tizen-cli/skills/tizen-create-emulator/SKILL.md`,
+  `common/skills/tizen-launch-emulator/SKILL.md`, `common/agents/tizen-launch-emulator.md`,
+  `common/skills/tizen-device-manager/SKILL.md`, `common/agents/tizen-device-manager.md`,
+  `common/hooks/check-tizen-commands.sh` rule 20, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `tests/tc/device/emulator-manager.prompt-list-available.yaml`). Asked "Provide the list of
+  emulators available" right after an SDK-path question, the model did not pick the skill and
+  went looking for VMs itself. The skill, agent and `tizen-cli` descriptions now name that ask
+  ("list emulators", "available emulators", "which emulators do I have", 에뮬레이터 목록 …) and
+  say it is `list-vm --detail`; the launch-emulator and device-manager descriptions point a
+  listing request back here; a new Bash-hook rule denies the two detours — a raw `em-cli`
+  (also via `$EMCLI`) and `ls` / `find` / `Get-ChildItem` over `<sdk>-data/emulator/vms` —
+  while the runner and wrapper scripts stay allowed; the guard rules say the same, and a prompt
+  TC replays the report.
+- **`emulator-manager list-vm --detail` states each VM's `profile`** (issue #269;
+  `common/lib/core/emulator.js`, `common/lib/tests/emulator-manager.test.js`, the three
+  create-emulator skill/agent docs, `docs/emulator/emulator-manager-walkthrough.{en,ko}.md`).
+  em-cli reports only the platform image a VM was created from, so the model filled the Profile
+  column by guesswork and labelled a `tizen-10.0-x86_64` VM **Mobile**. `parseVmDetails()` now
+  adds a `profile` derived from the image name — `tizen-*` → `tizen` (the unified Tizen
+  profile), `tv-*` → `tv`, legacy `mobile-*` / `wearable-*` / `iot-*` as spelled, and `""` for
+  anything else (a user-named `create-image` capture such as `my-custom-image` is not turned
+  into a profile `my`) — on `list-vm --detail`, `detail`, and the `vm_detail` read back after
+  `create` / `modify`; the docs show the field and tell the agent to report it verbatim.
+
+### Added
+
+- **`tizen-dlog-analyzer rules` — list, show, validate, and test analysis rules**
+  (v0.2.8a0 binary; `common/lib/core/dlog-analyzer.js`,
+  `common/lib/cli/dlog-analyzer-cli.js`, `common/lib/core/sdk-commands.js`,
+  `tizen-cli/src/command-specs/dlog-analyzer.ts`,
+  `common/skills/tizen-dlog-analyzer/SKILL.md`). The binary ships 24 rules in
+  15 YAML files; `rules list` / `rules show <id>` / `rules validate [path]` /
+  `rules test <fixture.json> [--expect <ids>|none]` expose them read-only.
+  `--rules-dir <path>` loads extra user rule YAML; `--format` is forwarded
+  only to `list` and `test` (the binary rejects it on `show` / `validate`).
+- **`tizen-dlog-analyzer investigate` — v0.2.8a0 options**: `--rules-dir`,
+  `--parallel`, `--max-workers`, `--deduplicate`, `--similarity-threshold`,
+  `--allow-heavy`, `--no-noise-filter`, `--fuzzy-symptoms`, `--symptom-map`.
+  The investigate JSON now returns ranked `conclusions` (confidence, role,
+  evidence, fix), `ruled_out`, `unexplained`, `consent_needed`,
+  `redaction_summary`, `playbook_app_type`, `playbook_probes_added`,
+  `fuzzy_matches`, `duplicates_removed`, `dedup_text_saved`.
+- **`tizen-dlog-analyzer probe run` — `--app-id` and `--allow-network-probe`**
+  options for app-scoped and consent-gated network-egress probes.
+- **REPORT_TEMPLATE.md** gains `Confidence`/`Role` fields on root-cause
+  bullets, `Ruled Out` and `Unexplained Anomalies` sections, and a masking
+  note for redacted placeholders — in both English and Korean blocks.
+- **Hooks** — Rule 18b denies hand-typed `openssl s_client` / `curl` / `wget`
+  over sdb shell, pointing at `investigate --allow-network-probe` and
+  `probe run --allow-network-probe` instead.
+
 ## [1.4.3] — 2026-10-13
 
 Two fixes for the CLI-runner lookup blocks on Windows, the standalone `tizen-sdk` CLI becomes
@@ -1468,7 +1546,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...HEAD
+[1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
 [1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1

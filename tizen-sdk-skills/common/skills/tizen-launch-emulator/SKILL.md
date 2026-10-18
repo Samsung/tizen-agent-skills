@@ -1,6 +1,6 @@
 ---
 name: tizen-launch-emulator
-description: Tizen launch emulator, 타이젠 에뮬레이터 실행, 에뮬레이터 켜기, 에뮬레이터 시작, emulator launch, start emulator, em-cli launch, 에뮬레이터 부팅, 에뮬레이터 켜줘, launch emulator VM, start emulator VM. Use this skill to launch an existing Tizen emulator VM via em-cli. If no VM name is given, launches the first VM from the list. Waits for the emulator to connect via sdb.
+description: Tizen launch emulator, 타이젠 에뮬레이터 실행, 에뮬레이터 켜기, 에뮬레이터 시작, emulator launch, start emulator, em-cli launch, 에뮬레이터 부팅, 에뮬레이터 켜줘, launch emulator VM, start emulator VM. Use this skill to launch an existing Tizen emulator VM via em-cli. If no VM name is given, selects a VM by profile (default "tizen") — among VMs of the same profile, the one with the highest platform version is preferred. Waits for the emulator to connect via sdb. To LIST the existing / available emulator VMs without launching one ("list emulators", "에뮬레이터 목록"), use tizen-create-emulator (its `list-vm` action) instead.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-07-31"
@@ -28,13 +28,15 @@ metadata:
 
 **Pick the ONE block for the shell your terminal / tool runs — the prompt tells you: `$` is Bash (Linux, macOS, Claude Code's Git Bash on Windows, Codex on Linux / macOS) → Bash block; `PS C:\…>` is PowerShell (Codex on Windows, Cline PowerShell terminal) → PowerShell block; `C:\…>` is cmd.exe (Cline cmd.exe terminal) → cmd.exe block. Run that block as-is: a block pasted into another shell, or wrapped in `powershell -Command "…"`, is a parse error.**
 
+**Run the `node` line exactly as written and read the JSON envelope it prints to stdout. Do NOT redirect or capture the output (`> file`, `2>&1 | tee`, `Out-File`, `| Out-String`), do NOT wrap the line in `cmd /c`, `powershell -Command "…"` or any second shell, and do NOT mix shell dialects: `%TEMP%` and `2>nul` are cmd.exe only, `$env:TEMP` and `Out-File` are PowerShell only — in the other shell they are literal text or a parse error. A tool message that the command's completion or output "could not be observed / captured" means the terminal is still busy with an earlier command or its shell-integration hooks have broken, not that the runner failed: open a NEW terminal and re-run the SAME line unchanged. Runners that drive em-cli, sdb or a JVM can take 10–30 s and print the envelope only when they exit — wait for it rather than retrying with a redirect.**
+
 **Bash — Linux / macOS / Ubuntu, and Windows Git Bash (Claude Code):**
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" launch [--vm-name <name>] [--timeout <seconds>]
+node "$CLI" launch [--vm-name <name>] [--profile tizen|tv] [--timeout <seconds>]
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**
@@ -42,7 +44,7 @@ node "$CLI" launch [--vm-name <name>] [--timeout <seconds>]
 ```powershell
 $h = ".cline"; if ($env:CODEX_THREAD_ID -or $env:CODEX_SANDBOX_NETWORK_DISABLED -or $env:CODEX_SANDBOX -or $env:CODEX_VERSION) { $h = ".codex" }; if ($env:GEMINI_CLI) { $h = ".gemini" }; if ($env:CLAUDECODE) { $h = ".claude" }
 $CLI = $null; foreach ($d in @($h, ".claude", ".cline", ".codex", ".gemini")) { $CLI = Get-ChildItem "$env:USERPROFILE\$d\plugins\cache\tizen-platform\tizen-sdk-skills\*\lib\cli\emulator-manager-cli.js" -ErrorAction SilentlyContinue | Sort-Object { [version]$_.Directory.Parent.Parent.Name }, FullName | Select-Object -Last 1 -ExpandProperty FullName; if ($CLI) { break } }
-if (-not $CLI) { throw 'tizen-sdk-skills runner not found: $CLI is empty. Run the two lookup lines above in THIS PowerShell session first; if they still find nothing, the tizen-sdk-skills plugin is not installed.' }; node "$CLI" launch [--vm-name <name>] [--timeout <seconds>]
+if (-not $CLI) { throw 'tizen-sdk-skills runner not found: $CLI is empty. Run the two lookup lines above in THIS PowerShell session first; if they still find nothing, the tizen-sdk-skills plugin is not installed.' }; node "$CLI" launch [--vm-name <name>] [--profile tizen|tv] [--timeout <seconds>]
 ```
 
 **Windows — cmd.exe terminal only (Cline with a cmd.exe terminal). `&` and `2>nul` are cmd.exe syntax — in a PowerShell terminal run the PowerShell block above instead; Claude Code on Windows runs Git Bash — use the Bash block above. cmd.exe cannot version-sort, so this only lists every copy: pick your own host's highest version and paste it into the `node "<found-path>"` step below:**
@@ -54,7 +56,7 @@ cmd /c dir /s /b "%USERPROFILE%\.claude\plugins\cache\tizen-platform\tizen-sdk-s
 Pick the highest-version path (the PowerShell form above already resolved `$CLI`), then:
 
 ```
-node "<found-path>" launch [--vm-name <name>] [--timeout <seconds>]
+node "<found-path>" launch [--vm-name <name>] [--profile tizen|tv] [--timeout <seconds>]
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
@@ -87,19 +89,23 @@ not a result: the runner is still running.
 
 ## Arguments
 
-1. **vmName** (optional) — emulator VM name to launch. If omitted, the first VM from `em-cli list-vm` is launched.
-2. **timeoutSec** (1–540, default 300) — the **maximum time to wait for the emulator to appear in `sdb devices`**. It is a wait cap, not a run duration: the runner returns as soon as the VM connects (a warm boot takes 30–120 s, so a 300 s timeout usually ends early), and when the cap is hit it fails with `emulator_boot_failed`. **It never stops or closes the emulator** — there is no auto-shutdown after N seconds. To stop a running emulator use `tizen-device-manager` (`--action stop`). When a user asks for "a 300 second timeout", say this in one sentence so they do not expect the emulator to close (issue #98).
+1. **vmName** (optional) — emulator VM name to launch. If omitted, the runner lists all VMs with `em-cli list-vm --detail`, filters by **profile** (default `tizen`), and selects the one with the highest platform version. This prevents a TV VM from being launched when the user asked for a "Tizen emulator" (issue #270). Pass `--profile tv` to target a TV VM instead.
+2. **profile** (optional, default `tizen`) — when vmName is omitted, selects which profile to filter VMs by. Values: `tizen`, `tv`, `mobile`, `wearable`, `iot` (the profile `list-vm --detail` reports for each VM; anything else fails with `invalid_parameters`). Ignored when `--vm-name` is given. When no VM of that profile exists the runner fails with `emulator_not_found` and lists the profiles that do exist — it never falls back to a VM of another profile.
+3. **timeoutSec** (1–540, default 300) — the **maximum time to wait for the emulator to appear in `sdb devices`**. It is a wait cap, not a run duration: the runner returns as soon as the VM connects (a warm boot takes 30–120 s, so a 300 s timeout usually ends early), and when the cap is hit it fails with `emulator_boot_failed`. **It never stops or closes the emulator** — there is no auto-shutdown after N seconds. To stop a running emulator use `tizen-device-manager` (`--action stop`). When a user asks for "a 300 second timeout", say this in one sentence so they do not expect the emulator to close (issue #98).
 
 > **Note:** the runner resolves sdb from the SDK itself (`<TIZEN_SDK>/tools`) — do not look for it.
 
 ### Examples
 
 ```bash
-# Launch the first available VM (default behavior)
+# Launch the newest tizen-profile VM (default: selected by profile and platform version, not list order)
 node "$CLI" launch
 
 # Launch a specific VM
 node "$CLI" launch --vm-name my-vm
+
+# Launch a TV-profile VM (when no name is given)
+node "$CLI" launch --profile tv
 
 # Wait up to 120 s for the VM to show up in `sdb devices` (returns as soon as it connects;
 # does NOT stop the emulator afterwards)
@@ -155,13 +161,13 @@ Only the `--hw-virtualization yes` fix is a runner command you may run yourself
 (once, then retry the launch once). Package installation and WSL2 configuration are
 the user's to do — surface the details and stop.
 
-## WSL: home screen crash loop (automatic)
+## WSL / Remote Linux: home screen crash loop (automatic)
 
-On WSL the standard `tizen` profile's home screen (`org.tizen.homescreen`, a
-Flutter app) fails to pick an EGL config when launched through launchpad, aborts,
-and `starter` retries it forever — leaving an "Unable to launch
-org.tizen.homescreen." dialog on screen while crash dumps fill `/opt` until
-unrelated things start failing.
+On WSL or a headless remote Linux server the standard `tizen` profile's home
+screen (`org.tizen.homescreen`, a Flutter app) fails to pick an EGL config when
+launched through launchpad, aborts, and `starter` retries it forever — leaving
+an "Unable to launch org.tizen.homescreen." dialog on screen while crash dumps
+fill `/opt` until unrelated things start failing.
 
 The launch flow handles this automatically and reports `homescreen_fix` in the
 result: `ok` (healthy), `fixed`, `popup_fixed`, `fix_failed`, or the field is
@@ -169,8 +175,9 @@ absent when the check does not apply. The fix masks starter's user units and
 stops them in the running session, clears the crash dumps, and starts the home
 screen directly (bypassing launchpad).
 
-It only applies to the **standard tizen emulator profile on WSL** — real devices,
-TV/wearable images and non-WSL hosts are skipped untouched.
+It only applies to the **standard tizen emulator profile on Linux (WSL or native
+Linux)** — real devices, TV/wearable images and non-Linux hosts are skipped
+untouched.
 
 To apply it to an already-running emulator without relaunching:
 
@@ -186,7 +193,7 @@ plus a guest reboot.
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = WSL + tizen emulator only, `force` = anywhere (unverified), `off` = never |
+| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = Linux + tizen emulator only, `force` = anywhere (unverified), `off` = never |
 | `TIZEN_HOMESCREEN_LAUNCH` | `1` | `0` = stop the retry loop only, leave the display empty |
 | `TIZEN_HOMESCREEN_MASK_STARTER` | `1` | `0` = leave starter alone |
 | `TIZEN_HOMESCREEN_CHECK_TIMEOUT` | `30` | Seconds to poll for the crash signature after connect |
@@ -197,7 +204,7 @@ plus a guest reboot.
 | Task | Use this skill (`tizen-launch-emulator`) | Use `tizen-device-manager` | Use `tizen-create-emulator` |
 |------|:---:|:---:|:---:|
 | Launch an **existing** emulator VM by name | ✅ | | |
-| Launch the **first available** VM (no name) | ✅ | | |
+| Launch the **newest VM of a profile** (no name; `--profile`, default `tizen`) | ✅ | | |
 | Find connected device via sdb | | ✅ | |
 | Stop/shut down running emulator VMs | | ✅ | |
 | Create a **custom** emulator VM | | | ✅ |
@@ -230,7 +237,7 @@ plus a guest reboot.
 }
 ```
 
-`vm_name` is `null` when the first VM from the list was launched (no name specified).
+`vm_name` is always set: when `--vm-name` is omitted, the runner auto-selects a VM by profile (default `tizen`) and reports the selected name.
 `timeout_sec` is the wait cap that was in effect and `waited_ms` how long the launch actually
 took — the emulator stays running after the runner returns (`emulator_keeps_running`); the
 timeout does not shut it down.

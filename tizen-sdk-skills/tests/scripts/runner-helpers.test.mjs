@@ -26,6 +26,7 @@ import { parseAllDocuments } from "yaml";
 import {
   parseFixturesEnv,
   expandArgv,
+  launcherArgv,
   parseSkipRequires,
   missingCapabilities,
   parseArgs,
@@ -153,6 +154,59 @@ check("non-placeholder args pass through untouched", () => {
   assert(
     r.expanded[0] === "plain" && r.expanded[1].includes("$DOLLAR"),
     "args mutated",
+  );
+});
+
+// ── launcherArgv ──────────────────────────────────────────────────────────
+// The executor is always the standalone `tizen-sdk` launcher, so the leading
+// program token of the TC argv is dropped regardless of the launcher's file
+// name (the former `endsWith("tizen-sdk.js")` kind inference kept it for a
+// renamed/wrapped TC_LAUNCHER_JS and broke every TC).
+
+check("launcherArgv strips the leading tizen-sdk token", () => {
+  const r = launcherArgv(["tizen-sdk", "check-node", "--json"]);
+  assert(
+    r.length === 2 && r[0] === "check-node" && r[1] === "--json",
+    `token not stripped: ${JSON.stringify(r)}`,
+  );
+});
+
+check("launcherArgv leaves argv without the token untouched", () => {
+  const r = launcherArgv(["--capabilities"]);
+  assert(
+    r.length === 1 && r[0] === "--capabilities",
+    `argv mutated: ${JSON.stringify(r)}`,
+  );
+});
+
+check("launcherArgv strips only the first token", () => {
+  const r = launcherArgv(["tizen-sdk", "sdk-init", "--sdk-path", "tizen-sdk"]);
+  assert(
+    r.length === 3 && r[2] === "tizen-sdk",
+    `inner token touched: ${JSON.stringify(r)}`,
+  );
+});
+
+check("every TC argv starts with the tizen-sdk token", () => {
+  const tcDir = join(ROOT, "tc");
+  const offenders = [];
+  const walk = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith(".yaml")) {
+        for (const doc of parseAllDocuments(readFileSync(p, "utf-8"))) {
+          const tc = doc.toJS();
+          const argv = tc?.lanes?.cli?.argv;
+          if (argv && argv[0] !== "tizen-sdk") offenders.push(tc.id);
+        }
+      }
+    }
+  };
+  walk(tcDir);
+  assert(
+    offenders.length === 0,
+    `argv[0] !== tizen-sdk: ${offenders.join(", ")}`,
   );
 });
 

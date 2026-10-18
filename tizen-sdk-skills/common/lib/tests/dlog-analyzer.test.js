@@ -64,6 +64,7 @@ const {
   deviceProfile,
   investigate,
   runProbe,
+  manageRules,
   manageSnapshot,
   runTimeline,
   manageKernel,
@@ -783,6 +784,33 @@ check(
   );
 })();
 
+// manageRules — validates subcommand and ruleId requirement
+(async () => {
+  const r = await manageRules("invalid");
+  check("rules bad sub → failure", r.status, "failure");
+  check(
+    "rules bad sub → invalid_parameters",
+    r.errors[0].category,
+    "invalid_parameters",
+  );
+  // rules show without ruleId
+  const r2 = await manageRules("show");
+  check("rules show no id → failure", r2.status, "failure");
+  check(
+    "rules show no id → invalid_parameters",
+    r2.errors[0].category,
+    "invalid_parameters",
+  );
+  // rules test without ruleId
+  const r3 = await manageRules("test");
+  check("rules test no id → failure", r3.status, "failure");
+  check(
+    "rules test no id → invalid_parameters",
+    r3.errors[0].category,
+    "invalid_parameters",
+  );
+})();
+
 // manageSnapshot — validates subcommand
 (async () => {
   const r = await manageSnapshot("invalid");
@@ -872,6 +900,7 @@ check(
   true,
 );
 check("CLI runner accepts probe", cliSource.includes('"probe"'), true);
+check("CLI runner accepts rules", cliSource.includes('"rules"'), true);
 check("CLI runner accepts snapshot", cliSource.includes('"snapshot"'), true);
 check("CLI runner accepts timeline", cliSource.includes('"timeline"'), true);
 check("CLI runner accepts kernel", cliSource.includes('"kernel"'), true);
@@ -890,6 +919,53 @@ check(
     .every(Boolean),
   true,
 );
+check(
+  "CLI runner parses investigate options",
+  [
+    "--rules-dir",
+    "--parallel",
+    "--max-workers",
+    "--deduplicate",
+    "--similarity-threshold",
+    "--allow-heavy",
+    "--no-noise-filter",
+    "--fuzzy-symptoms",
+    "--symptom-map",
+  ]
+    .map((f) => cliSource.includes(`"${f}"`))
+    .every(Boolean),
+  true,
+);
+check(
+  "CLI runner parses probe options",
+  ["--app-id", "--allow-network-probe"]
+    .map((f) => cliSource.includes(`"${f}"`))
+    .every(Boolean),
+  true,
+);
+{
+  // `--app-id` binds to the shared `category` key (the binary's alias of
+  // --category), so the probe case must resolve the app id from there —
+  // `options.appId` is never set by the parser (regression guard).
+  const probeCase = cliSource.slice(
+    cliSource.indexOf('case "probe":'),
+    cliSource.indexOf('case "rules":'),
+  );
+  check(
+    "CLI probe case resolves --app-id via the shared category key",
+    probeCase.includes("Array.isArray(options.category)") &&
+      probeCase.includes("appId,") &&
+      probeCase.includes(
+        "allowNetworkProbe: options.allowNetworkProbe === true",
+      ),
+    true,
+  );
+  check(
+    "CLI probe case never reads the non-existent options.appId key",
+    probeCase.includes("options.appId"),
+    false,
+  );
+}
 if (fs.existsSync(tsSpec)) {
   const tsSource = fs.readFileSync(tsSpec, "utf-8");
   check("tizen-cli spec offers search", tsSource.includes('"search"'), true);
@@ -1315,6 +1391,99 @@ if (fs.existsSync(tsSpec)) {
     startCall ? startCall[1].includes("o.outputDir") : true,
     false,
   );
+  {
+    // `probe run` carries two ids. The probe id is --probe-id (or, legacy,
+    // --app-id); the app the probe is scoped to is --app-id only when
+    // --probe-id names the probe — never the same value as the probe id.
+    const probeCase = tsSource.slice(
+      tsSource.indexOf('case "probe":'),
+      tsSource.indexOf('case "rules":'),
+    );
+    check(
+      "tizen-cli spec wires probe --allow-network-probe",
+      probeCase.includes("allowNetworkProbe: o.allowNetworkProbe"),
+      true,
+    );
+    check(
+      "tizen-cli spec takes the probe id from --probe-id, falling back to --app-id",
+      probeCase.includes("o.probeId ?? o.appId"),
+      true,
+    );
+    check(
+      "tizen-cli spec scopes the probe to --app-id only when --probe-id names the probe",
+      probeCase.includes("o.probeId ? o.appId : undefined"),
+      true,
+    );
+    check(
+      "tizen-cli spec never forwards the probe id as the app id",
+      probeCase.includes("appId: o.appId"),
+      false,
+    );
+  }
+}
+
+// Test 14c: manageRules builds the binary's per-subcommand argument list
+console.log("\nTest 14c: manageRules argument construction");
+{
+  const rulesBody = domainSource.slice(
+    domainSource.indexOf("async function manageRules("),
+    domainSource.indexOf("async function runProbe("),
+  );
+  // The binary accepts --format on `rules list` and `rules test` only;
+  // `rules show` / `rules validate` reject it ("No such option: --format").
+  check(
+    "manageRules forwards --format to list/test only",
+    rulesBody.includes('(sub === "list" || sub === "test") && opts.format'),
+    true,
+  );
+  check(
+    "manageRules never forwards --format unconditionally",
+    /\n\s*if \(opts\.format\) args\.push\("--format"/.test(rulesBody),
+    false,
+  );
+  check(
+    "manageRules forwards --family to list only",
+    rulesBody.includes('sub === "list" && opts.family'),
+    true,
+  );
+  check(
+    "manageRules forwards --expect to test only",
+    rulesBody.includes('sub === "test" && opts.expect'),
+    true,
+  );
+  check(
+    "manageRules names the test positional a fixture, not a rule id",
+    rulesBody.includes("A JSON fixture path is required for 'rules test'"),
+    true,
+  );
+}
+
+// Test 14b: consent and app-scoping flags reach the binary
+console.log("\nTest 14b: --allow-network-probe / --app-id reach the binary");
+{
+  const investigateBody = domainSource.slice(
+    domainSource.indexOf("async function investigate("),
+    domainSource.indexOf("async function manageRules("),
+  );
+  const runProbeBody = domainSource.slice(
+    domainSource.indexOf("async function runProbe("),
+    domainSource.indexOf("async function manageSnapshot("),
+  );
+  check(
+    "core investigate passes --allow-network-probe to the binary",
+    investigateBody.includes('args.push("--allow-network-probe")'),
+    true,
+  );
+  check(
+    "core runProbe passes --app-id to the binary",
+    runProbeBody.includes('args.push("--app-id", opts.appId)'),
+    true,
+  );
+  check(
+    "core runProbe passes --allow-network-probe to the binary",
+    runProbeBody.includes('args.push("--allow-network-probe")'),
+    true,
+  );
 }
 
 // Test 15: startDlogAnalyzer refuses a legacy output directory up front
@@ -1505,7 +1674,7 @@ for (const marker of [
 check(
   "check / error-analyze / kernel analyze attach report_format",
   (domainSource.match(/report_format: REPORT_FORMAT_HINT/g) || []).length,
-  3,
+  5,
 );
 const skeletonHeading = "## Final report — the only accepted shape";
 for (const rel of [
@@ -1960,7 +2129,7 @@ console.log("\nTest 21: UnicodeEncodeError recovery");
       (domainSource.match(/= recoverEncodingCrash\(error\)/g) || []).length,
       (domainSource.match(/output_truncated: true/g) || []).length,
     ],
-    [2, 2],
+    [3, 3],
   );
 }
 // The version-directory rule is the one findLatestVersionDir() applies, not a

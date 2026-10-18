@@ -25,6 +25,7 @@
  *   node .../emulator-manager-cli.js modify --vm-name my-vm --size 1080
  *   node .../emulator-manager-cli.js modify --vm-name my-vm --ram-size 512 --file-sharing-path /home/me/share
  *   node .../emulator-manager-cli.js launch --vm-name my-vm --timeout 300
+ *   node .../emulator-manager-cli.js launch --profile tv           # newest TV-profile VM
  *   node .../emulator-manager-cli.js reset --vm-name my-vm --confirm
  *   node .../emulator-manager-cli.js create-image --vm-name my-vm --output-dir /tmp/images --compress
  *   node .../emulator-manager-cli.js delete --vm-name my-vm
@@ -48,7 +49,9 @@
  *                           runs only — an interactive caller should ask the user.
  *   --template <name>       Exact template name; overrides --size
  *   --platform <name>       Platform image name; auto-detected for create
- *   --profile <profile>     tizen (default) or tv
+ *   --profile <profile>     tizen (default) or tv. For launch without --vm-name it
+ *                           picks which profile's VM to auto-select (also accepts
+ *                           the legacy mobile/wearable/iot image profiles).
  *   --launch                Launch the VM after creating (create only)
  *   --skin <1|2>            Skin style: 1 general-purpose, 2 profile-specific
  *   --ram-size <mib>        RAM: 512, 768, or 1024
@@ -88,7 +91,7 @@ const USAGE =
   "[--hw-virtualization yes|no] [--hw-gl-acceleration yes|no] " +
   "[--custom-path <path>] [--raw-image-path <path>] | " +
   "delete --vm-name <name> | " +
-  "launch [--vm-name <name>] [--timeout <sec>] [--emulator-path <path>] | " +
+  "launch [--vm-name <name>] [--profile tizen|tv] [--timeout <sec>] [--emulator-path <path>] | " +
   "list-vm [--detail] [--count] [--platform <name>] [--profile tizen|tv] | " +
   "list-platform|list-template [--detail] [--profile tizen|tv] [--platform <name>] | " +
   "detail [--vm-name <name>] | " +
@@ -147,7 +150,8 @@ if (extraPositionals.length > 0) {
 
 // Actions that cannot do anything without a VM to act on. detail is absent on
 // purpose: with no --vm-name it reports the emulator manager itself. launch is
-// absent too: it falls back to the first VM from list-vm.
+// absent too: it auto-selects the newest VM of --profile (default tizen) from
+// list-vm --detail.
 const VM_NAME_REQUIRED = [
   "create",
   "delete",

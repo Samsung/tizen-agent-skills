@@ -1,0 +1,19 @@
+# File mode: kernel analyze --file with a non-existent file fails before
+# touching the binary or the device.
+# Source: core/dlog-analyzer.js — manageKernel file-mode branch checks fs.existsSync
+id: tizen-sdk.dlog-analyzer.file-kernel-analyze-nonexistent
+plugin: tizen-sdk
+command: dlog-analyzer
+tier: safe
+status: approved
+since_cli: 1.0.0
+description: "dlog-analyzer --action kernel --subcommand analyze --file <nonexistent> fails with invalid_parameters"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "dlog-analyzer", "--action", "kernel", "--subcommand", "analyze", "--file", "/tmp/does-not-exist.log"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - error_category: invalid_parameters

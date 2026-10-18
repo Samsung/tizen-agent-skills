@@ -168,8 +168,8 @@ instrumented directly — only the outcome "works on WSL" is field-verified.)
 
 > **Correction:** earlier versions of this document claimed "WSL's 9p filesystem
 > rejects the chown". That explanation does not hold, for the two reasons below,
-> and has been removed. The symptom itself (the home screen dies only on WSL) is
-> field-verified and still stands.
+> and has been removed. The symptom itself (the home screen dies on WSL and on
+> headless / GPU-less Linux hosts) is field-verified and still stands.
 
 **1. The Linux root is not 9p — 9p is on the Windows drive side**
 
@@ -486,9 +486,9 @@ automatically on WSL. After the emulator connects to sdb it:
 > EPERM), so the stop has to run **as the session user via `su`, on its user bus**.
 > `starter.path` must be stopped too or it reactivates the service.
 
-**This applies only to the standard `tizen` emulator profile on WSL.** Real devices,
-TV/wearable images and non-WSL hosts are left completely untouched, with no status
-line emitted at all.
+**This applies only to the standard `tizen` emulator profile on a Linux host (WSL
+or native Linux, e.g. a headless remote server).** Real devices, TV/wearable images
+and non-Linux hosts are left completely untouched, with no status line emitted at all.
 
 To apply it to an already-running emulator (no relaunch needed):
 
@@ -507,7 +507,7 @@ Tuning via environment variables:
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = WSL + tizen emulator only, `force` = anywhere (unverified), `off` = never |
+| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = Linux (WSL or native) + tizen emulator only, `force` = anywhere (unverified), `off` = never |
 | `TIZEN_HOMESCREEN_LAUNCH` | `1` | `0` = stop the retry loop only, leave the display empty |
 | `TIZEN_HOMESCREEN_MASK_STARTER` | `1` | `0` = leave starter alone |
 | `TIZEN_HOMESCREEN_CHECK_TIMEOUT` | `30` | Seconds to poll for the crash signature after connect |

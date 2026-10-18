@@ -1,6 +1,6 @@
 ---
 name: tizen-create-emulator
-description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성. Use this agent to CREATE a custom Tizen emulator VM with a selectable screen size (default 1080) plus configurable platform and profile via em-cli. Supports listing available screen sizes/platforms/templates/VMs, creating new VMs, and deleting VMs. Templates here are EMULATOR VM templates (screen sizes/resolutions) — for APP/project templates, use tizen-create-project instead. For LAUNCHING (booting) an existing emulator VM, use tizen-launch-emulator instead.
+description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, list emulators, available emulators, 에뮬레이터 목록, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성. Use this agent to CREATE a custom Tizen emulator VM with a selectable screen size (default 1080) plus configurable platform and profile via em-cli. Lists screen sizes/platforms/templates/VMs, creates and deletes VMs. ANY "list the available emulators" request is this agent's `list-vm --detail`, never a manual search; report each VM's `profile` from the envelope (tizen-* is the unified tizen profile, not Mobile). Templates here are EMULATOR VM templates (screen sizes/resolutions) — for APP/project templates, use tizen-create-project instead. For LAUNCHING (booting) an existing emulator VM, use tizen-launch-emulator instead.
 tools: Bash, Read, Glob, Grep
 model: sonnet
 maxTurns: 30
@@ -46,8 +46,10 @@ node "$CLI" create --vm-name my-vm
 # List available platforms:
 node "$CLI" list-platform
 
-# List existing VMs:
+# List existing VMs ("which emulators do I have / are available?"; --detail adds
+# platform, profile, resolution, RAM — never ls/find the SDK dirs or run em-cli yourself):
 node "$CLI" list-vm
+node "$CLI" list-vm --detail
 
 # List available templates and their resolutions (the supported screen sizes):
 node "$CLI" list-template --profile tizen
@@ -268,13 +270,42 @@ the profile) so `--size` still applies — it no longer falls back to em-cli's 7
 }
 ```
 
-**List-vm success (`exit 0`):**
+**List-vm success (`exit 0`)** — `vm_details` is filled with `--detail`; its `profile` is
+derived from the platform image (`tizen-*` → `tizen`, the unified Tizen profile — **not**
+Mobile; `tv-*` → `tv`; `""` for an unrecognised, e.g. user-named, image) and is the value the
+caller must show, never a guess from the name:
 
 ```json
 {
   "status": "success",
   "result": {
-    "vms": ["my-vm", "tizen-vm-default"],
+    "vms": ["my-vm", "my-tv-vm"],
+    "vm_details": [
+      {
+        "name": "my-vm",
+        "platform": "tizen-10.0-x86_64",
+        "template": "HD1080 Tizen",
+        "resolution": "1920x1080",
+        "ram": "1024",
+        "cpu_arch": "x86_64",
+        "cpu_count": "4",
+        "type": "standard",
+        "skin_path": "/home/user/tizen-sdk/platforms/common/tizen/emulator-resources/skins/tizen-general-3btn",
+        "profile": "tizen"
+      },
+      {
+        "name": "my-tv-vm",
+        "platform": "tv-samsung-10.0-x86_64",
+        "template": "HD1080 TV",
+        "resolution": "1920x1080",
+        "ram": "1024",
+        "cpu_arch": "x86_64",
+        "cpu_count": "4",
+        "type": "standard",
+        "skin_path": "/home/user/tizen-sdk/platforms/tizen-10.0/tv-samsung/emulator-resources/skins/tv-1920x1080",
+        "profile": "tv"
+      }
+    ],
     "count": 2
   }
 }
@@ -328,7 +359,9 @@ invoked directly by the scripts, not by you.
    - "에뮬레이터 만들어줘" / "create emulator" → `create`
    - "어떤 플랫폼 있어?" / "list platforms" → `list-platform`
    - "어떤 템플릿/사이즈 있어?" / "list templates" / "what sizes are supported?" → `list-template`
-   - "있는 VM 뭐가 있어?" / "list VMs" → `list-vm`
+   - "있는 VM 뭐가 있어?" / "list VMs" / "provide the list of emulators available" /
+     "which emulators do I have?" / "에뮬레이터 목록" → `list-vm --detail` (the runner;
+     never `ls`/`find` the SDK's `emulator/vms` directory or run `em-cli` yourself)
    - "이 VM 지워줘" / "delete emulator" → `delete`
    - "이 에뮬 사이즈가 뭐야?" / "what size is my emulator?" / "에뮬 해상도/RAM 알려줘"
      → `list-vm --detail` (all VMs) or `detail --vm-name <name>` (one VM)

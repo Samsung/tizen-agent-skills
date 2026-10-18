@@ -167,7 +167,7 @@ EGL config 선택 경로를 타지 않습니다. 크래시 루프도, 그에 딸
 
 > **정정 안내:** 이 문서의 이전 버전은 "WSL의 9p 파일시스템이 chown을 거부해서"라고
 > 설명했습니다. 아래 두 가지 이유로 그 설명은 성립하지 않아 삭제했습니다.
-> 증상 자체(WSL에서만 홈 화면이 죽는다)는 실측이며 여전히 유효합니다.
+> 증상 자체(WSL 및 헤드리스·GPU 없는 Linux 호스트에서 홈 화면이 죽는다)는 실측이며 여전히 유효합니다.
 
 **1. 리눅스 루트는 9p가 아닙니다 — 9p는 Windows 드라이브 쪽입니다**
 
@@ -470,8 +470,9 @@ E/BUXTON: sqlite.c: set_sqlite_related_file_perms(183) > Failed to set permissio
 > EPERM으로 거부) **세션 사용자로 `su`해서 사용자 버스에 접속해 정지**시켜야 합니다.
 > `starter.path`도 함께 멈춰야 서비스가 재활성화되지 않습니다.
 
-**적용 대상은 WSL의 표준 `tizen` 프로필 에뮬레이터뿐입니다.** 실기기, TV·wearable
-이미지, 비-WSL 호스트에서는 아무것도 하지 않고 상태 라인도 내보내지 않습니다.
+**적용 대상은 Linux 호스트(WSL 또는 네이티브 Linux, 예: 헤드리스 원격 서버)의 표준
+`tizen` 프로필 에뮬레이터뿐입니다.** 실기기, TV·wearable 이미지, 비-Linux 호스트에서는
+아무것도 하지 않고 상태 라인도 내보내지 않습니다.
 
 이미 떠 있는 에뮬레이터에 적용하려면 (재기동 불필요):
 
@@ -489,7 +490,7 @@ node <plugin>/lib/cli/emulator-manager-cli.js fix-homescreen [--vm-name <name>]
 
 | 변수 | 기본값 | 의미 |
 |---|---|---|
-| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = WSL + tizen 에뮬레이터만, `force` = 어디서나(미검증), `off` = 절대 |
+| `TIZEN_HOMESCREEN_CHECK` | `auto` | `auto` = Linux 호스트(WSL 또는 네이티브) + tizen 에뮬레이터만, `force` = 어디서나(미검증), `off` = 절대 |
 | `TIZEN_HOMESCREEN_LAUNCH` | `1` | `0` = 재시도 루프만 멈추고 홈 화면은 띄우지 않음 |
 | `TIZEN_HOMESCREEN_MASK_STARTER` | `1` | `0` = starter를 건드리지 않음 |
 | `TIZEN_HOMESCREEN_CHECK_TIMEOUT` | `30` | 연결 후 크래시 시그니처를 폴링하는 시간(초) |

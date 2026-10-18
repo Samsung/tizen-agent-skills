@@ -1,6 +1,6 @@
 ---
 name: tizen-create-emulator
-description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성, emulator-manager, 에뮬레이터 수정, 에뮬레이터 정보, 에뮬레이터 초기화, modify emulator, emulator detail, emulator RAM, reset emulator, create emulator image. CREATE a custom Tizen emulator VM with a user-selected screen size (default 1080) plus platform and profile via em-cli; list screen sizes/platforms/emulator templates/VMs; delete VMs. Also covers the emulator-manager command (inspect a VM's resolution/RAM, modify it, reset its disk, capture it as a platform image). Templates here are EMULATOR VM templates — app/project templates belong to tizen-list-templates. For LAUNCHING an existing VM, use tizen-launch-emulator.
+description: Tizen create emulator, 타이젠 에뮬레이터 생성, custom emulator, 커스텀 에뮬레이터, em-cli, 에뮬레이터 만들기, 에뮬레이터 VM 생성, 에뮬레이터 사이즈, 에뮬레이터 해상도, emulator size, emulator resolution, list platforms, list emulator templates, 에뮬레이터 템플릿, list VMs, list emulators, available emulators, 에뮬레이터 목록, delete emulator, 에뮬레이터 삭제, TV 에뮬레이터 생성, emulator-manager, 에뮬레이터 수정, 에뮬레이터 정보, 에뮬레이터 초기화, modify emulator, emulator detail, emulator RAM, reset emulator, create emulator image. CREATE a custom Tizen emulator VM with a user-selected screen size (default 1080) plus platform and profile via em-cli; list screen sizes/platforms/emulator templates/VMs; delete VMs. "List the available emulators" is `--action list-vm --detail`, never a manual search; report `profile` from the envelope (tizen-* = tizen, not Mobile). Also the emulator-manager command (VM detail / modify / reset / create-image). Templates here are EMULATOR VM templates — app/project templates belong to tizen-list-templates. For LAUNCHING an existing VM, use tizen-launch-emulator.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-07-31"
@@ -156,7 +156,7 @@ tizen-cli tizen-sdk emulator-manager --action <action> [options]
 | `reset`          | **Destructive** — format the VM's disk, deleting every app installed on it    | ❌ |
 | `create-image`   | Capture a VM as a platform image into `--output-dir` (must already exist)     | ❌ |
 | `launch`         | Boot a VM — prefer the dedicated `launch-emulator` (see `tizen-launch-emulator`) | ❌ |
-| `fix-homescreen` | Re-apply the WSL home screen fix to an already-running VM without relaunching — documented in `tizen-launch-emulator` | ❌ |
+| `fix-homescreen` | Re-apply the Linux (WSL/remote) home screen fix to an already-running VM without relaunching — documented in `tizen-launch-emulator` | ❌ |
 
 Reading an existing VM's screen size and RAM comes from `--action detail` or
 `--action list-vm --detail` — the plain `list-vm` output carries names only.
@@ -204,7 +204,7 @@ tizen-cli tizen-sdk emulator-manager --action create-image --vm-name my-vm --out
 - **Create success** `result`: `vm_name`, `platform`, `template`, `size`, `resolution`, `size_applied`, `profile`, `launched`, `device_serial` (if launched), `raw_image_path` (if created from raw image), `status: "created"`.
 - **List-platform success** `result`: `platforms` (array), `count`, `profile` (`tizen` or `tv`).
 - **List-template success** `result`: `templates` (array), `template_details` (array of `{name, profile, resolution, size, ram}`), `available_sizes` (array), `default_size`, `count`, `profile`.
-- **List-vm success** `result`: `vms` (array), `count`.
+- **List-vm success** `result`: `vms` (array), `count`, and with `--detail` `vm_details` (array of `{name, platform, template, resolution, ram, cpu_arch, cpu_count, type, skin_path, profile}`). `profile` is derived from the platform image — `tizen-*` → `tizen` (the unified Tizen profile, **not** Mobile), `tv-*` → `tv` — report it as given instead of inferring one from the platform name.
 - **Delete success** `result`: `vm_name`, `action: "delete"`, `status: "deleted"`.
 - Failure: em-cli errors — surface `message`; a missing `--size` returns `user_input_required` and an unsupported one returns `invalid_parameters`, both listing the supported sizes (ask the user, then retry); SDK not installed → run `sdk-install` first; TV SDK not installed → run `tizen-tv-sdk-install`.
 - `size_applied: false` means em-cli rejected the template and the VM was created at em-cli's own size — tell the user, and point at the `em-cli modify` command in the warnings.

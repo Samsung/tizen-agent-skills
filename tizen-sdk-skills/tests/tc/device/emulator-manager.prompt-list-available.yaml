@@ -1,0 +1,23 @@
+# TC-P-120: Prompt — "Provide the list of emulators available" routes to emulator-manager list-vm (issue #268)
+id: tizen-sdk.emulator-manager.prompt-list-available
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: draft
+since_cli: 1.4.3
+description: >-
+  LLM resolves a plain 'provide the list of emulators available' to
+  emulator-manager list-vm instead of searching the SDK directories or
+  running em-cli by hand (issue #268). The second prompt of the report —
+  the first was an unrelated SDK-path question — must still route here.
+
+lanes:
+  prompt:
+    text: "Provide the list of emulators available."
+    timeout_sec: 300
+    max_tool_calls: 4
+    expect:
+      must_call_tool: tizen_cli_run_commands
+      must_resolve_command: "tizen-sdk emulator-manager"
+      envelope_status: success
+    pass_rate: "3/3"

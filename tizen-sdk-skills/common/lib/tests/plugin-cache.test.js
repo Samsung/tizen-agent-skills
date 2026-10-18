@@ -406,9 +406,20 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           const ps = lastBefore(i, (l) => l.includes(gen.PS_BLOCK_MARKER));
           const bash = lastBefore(i, (l) => l.trim() === gen.NEW_BASE_LINE);
           const pick = lastBefore(i, (l) => l.trim() === gen.SHELL_PICK_LINE);
-          if (!(prevCmd < pick && pick < bash && bash < ps)) {
+          const note = lastBefore(i, (l) => l.trim() === gen.RUN_NOTE);
+          // The run note sits between the shell-pick line and the Bash block,
+          // exactly once per section (the section grammar emits it only at
+          // the section head; a second copy would be a leaked chunk).
+          const notes = lines
+            .slice(pick + 1, i)
+            .filter((l) => l.trim() === gen.RUN_NOTE).length;
+          if (!(prevCmd < pick && pick < note && note < bash && bash < ps)) {
             stale.push(
-              `${rel}:${i + 1} (cmd.exe lookup must follow the shell-pick line, the Bash block and the PowerShell block, in that order)`,
+              `${rel}:${i + 1} (cmd.exe lookup must follow the shell-pick line, the run note, the Bash block and the PowerShell block, in that order)`,
+            );
+          } else if (notes !== 1) {
+            stale.push(
+              `${rel}:${i + 1} (section carries ${notes} run notes, expected exactly 1)`,
             );
           } else {
             const open = lastBefore(bash, (l) => l.trim().startsWith("```"));
@@ -548,12 +559,28 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     check("  the generated chain is a fixed point", rw(chainX), chainX);
 
     // Test 6: lookup section order — a cmd.exe-first section is re-emitted
-    // as shell-pick → Bash → PowerShell → cmd.exe → node step → note, a
+    // as shell-pick → run note → Bash → PowerShell → cmd.exe → node step → note, a
     // hand-written Bash heading is canonicalised, a section without a
     // PowerShell block or a `node "<found-path>"` step gains them (node
     // arguments taken from the Bash block), and the result is a fixed point.
     console.log("\nTest 6: lookup section order");
     const rwAll = (s) => gen.rewrite(s, { psBlocks: true });
+    // classifyChunk compares these paragraphs verbatim after trim(), so each
+    // must be one trimmed line; the generator also asserts this at load time.
+    check(
+      "  verbatim-matched paragraphs are single trimmed lines",
+      Object.entries(gen.VERBATIM_PARAGRAPHS)
+        .filter(([, t]) => t.includes("\n") || t !== t.trim())
+        .map(([n]) => n),
+      [],
+    );
+    check(
+      "  VERBATIM_PARAGRAPHS covers the shell-pick line and the run note",
+      ["SHELL_PICK_LINE", "RUN_NOTE"].every(
+        (n) => gen.VERBATIM_PARAGRAPHS[n] === gen[n],
+      ),
+      true,
+    );
     const bashFence = [
       "```bash",
       gen.NEW_BASE_LINE,
@@ -577,6 +604,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     const section = (withNote) =>
       [
         gen.SHELL_PICK_LINE,
+        gen.RUN_NOTE,
         gen.BASH_BLOCK_HEADING,
         bashFence,
         gen.PS_BLOCK_HEADING,
@@ -630,6 +658,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       wrap(
         [
           gen.SHELL_PICK_LINE,
+          gen.RUN_NOTE,
           gen.PS_BLOCK_HEADING,
           psFenceX.replace(` run --flag\n\`\`\``, "\n```"),
           gen.CMD_BLOCK_HEADING,
@@ -660,6 +689,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     ].join("\n");
     const sectionXNoBash = [
       gen.SHELL_PICK_LINE,
+      gen.RUN_NOTE,
       gen.PS_BLOCK_HEADING,
       psFenceX,
       gen.CMD_BLOCK_HEADING,
@@ -669,6 +699,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     ].join("\n\n");
     const sectionY = [
       gen.SHELL_PICK_LINE,
+      gen.RUN_NOTE,
       gen.BASH_BLOCK_HEADING,
       bashFenceY,
       gen.PS_BLOCK_HEADING,
@@ -703,6 +734,78 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     check(
       "  two adjacent reordered sections are a fixed point",
       rwAll(wrap(`${sectionXNoBash}\n\n${sectionY}`)),
+      wrap(`${sectionXNoBash}\n\n${sectionY}`),
+    );
+    // The run note, like the shell-pick line, only ever opens a section.
+    // Backward from the cmd.exe fence it is collected wherever it sits before
+    // the fence, and the section is re-emitted with exactly one copy at its
+    // head. Forward from a fence it is refused, so a following section that
+    // carries the note but no shell-pick line keeps it (and the Bash block
+    // after it) for itself instead of lending them to the previous section.
+    check(
+      "  a run note between the blocks moves to the section head",
+      rwAll(
+        wrap(
+          [
+            gen.SHELL_PICK_LINE,
+            gen.BASH_BLOCK_HEADING,
+            bashFence,
+            gen.PS_BLOCK_HEADING,
+            psFenceX,
+            gen.RUN_NOTE,
+            gen.CMD_BLOCK_HEADING,
+            cmdFence,
+            pickThen,
+            nodeFound,
+            note,
+          ].join("\n\n"),
+        ),
+      ),
+      wrap(section(true)),
+    );
+    check(
+      "  a section with no run note gains exactly one",
+      (() => {
+        const out = rwAll(
+          wrap(
+            [
+              gen.SHELL_PICK_LINE,
+              gen.BASH_BLOCK_HEADING,
+              bashFence,
+              gen.PS_BLOCK_HEADING,
+              psFenceX,
+              gen.CMD_BLOCK_HEADING,
+              cmdFence,
+              pickThen,
+              nodeFound,
+            ].join("\n\n"),
+          ),
+        );
+        return [
+          out === wrap(section(false)),
+          out.split(gen.RUN_NOTE).length - 1,
+        ];
+      })(),
+      [true, 1],
+    );
+    check(
+      "  a following section's run note (no shell-pick line) is not pulled into the previous section",
+      rwAll(
+        wrap(
+          [
+            sectionXNoBash,
+            gen.RUN_NOTE,
+            gen.BASH_BLOCK_HEADING,
+            bashFenceY,
+            gen.PS_BLOCK_HEADING,
+            psFenceY,
+            gen.CMD_BLOCK_HEADING,
+            cmdFenceY,
+            pickThen,
+            '```\nnode "<found-path>" go\n```',
+          ].join("\n\n"),
+        ),
+      ),
       wrap(`${sectionXNoBash}\n\n${sectionY}`),
     );
     // A heading is re-emitted from its canonical text, so a paragraph that

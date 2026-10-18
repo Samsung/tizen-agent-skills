@@ -55,6 +55,10 @@ translated from an English draft.)
 - Evidence → 근거
 - Occurrences → 발생 횟수
 - Additional Findings → 추가 발견 사항
+- Ruled Out → 제외된 가설
+- Unexplained Anomalies → 설명되지 않은 이상 징후
+- Confidence → 신뢰도
+- Role → 역할
 - Solution Suggestions → 해결 방안 제안
 - Code available → 코드가 있는 경우
 - Code not available → 코드가 없는 경우
@@ -89,6 +93,10 @@ One bullet per distinct root cause, most severe first:
 
 - **[Severity: Critical/High/Medium/Low] —** one-sentence plain-language
   statement of the cause
+  - Confidence: confirmed | suspected _(from the conclusion's
+    `confidence` field; omit if the binary does not provide conclusions)_
+  - Role: primary | secondary | contributing _(from the
+    conclusion's `role` field)_
   - Evidence: the specific log tag/message/pattern that points to it (short
     quote, not the whole dump)
   - Occurrences: count, if the tool reported deduplication counts
@@ -102,13 +110,38 @@ ambiguous, or worth noting (unfamiliar error codes, repeated warnings,
 deprecation notices, unclassified messages) — quote plus short explanation.
 If none: "No additional anomalies observed."
 
+### 2a. Ruled Out
+
+_(only if the `ruled_out` array is non-empty)_
+
+One line per rejected hypothesis — what was tested and why it was ruled out
+(by a confirmation probe). If empty or absent: omit this section entirely.
+
+### 2b. Unexplained Anomalies
+
+_(only if the `unexplained` array is non-empty)_
+
+Top 3 signals that no rule matched, ordered by severity. If empty or absent:
+omit this section entirely.
+
 ### 3. Solution Suggestions
 
 - **Code available:** file(s)/function(s) most likely responsible plus the
   concrete code change, then a prompt to apply it and reproduce for another
-  analysis pass.
+  analysis pass. _(fix lines come from the conclusion's `fix`
+  array — exact paths/keys; the agent may add context but must not replace
+  them with generic advice.)_
 - **Code not available:** which log lines/modules/components need developer
   attention, since a fix can't be authored without the source.
+
+_(masking note: placeholders like `<ISSUER_1>` are reproduced
+as-is. If `redaction_summary.total` > 0, add: "N items were redacted; run
+locally to see real values.")_
+
+_(disagreement note: if you disagree with a conclusion, say so
+and cite the evidence line. Silent override is not allowed — the agent may
+add context but must not replace a conclusion's `fix` array with generic
+advice.)_
 
 ### 4. Workarounds
 
@@ -149,6 +182,8 @@ required."
 서로 다른 근본 원인마다 불릿 하나, 심각한 것부터:
 
 - **[심각도: 심각/높음/중간/낮음] —** 원인을 한 문장으로 쉽게 설명
+  - 신뢰도: confirmed | suspected _(결론의 `confidence` 필드; 제공되지 않으면 생략)_
+  - 역할: primary | secondary | contributing _(결론의 `role` 필드)_
   - 근거: 원인을 가리키는 구체적인 로그 태그/메시지/패턴 (짧은 인용, 전체 덤프
     금지)
   - 발생 횟수: 도구가 중복 제거 횟수를 보고했다면 그 수
@@ -161,12 +196,31 @@ required."
 (낯선 에러 코드, 반복되는 경고, deprecation 안내, 미분류 메시지) — 인용 + 짧은
 설명. 없으면: "추가로 관찰된 이상 징후가 없습니다."
 
+### 2a. 제외된 가설
+
+_(`ruled_out` 배열이 비어 있지 않은 경우에만)_
+
+각 기각된 가설을 한 줄로 — 무엇을 테스트했고 왜 제외되었는지 (확인 프로브에 의해).
+비어 있거나 없으면 이 섹션을 생략한다.
+
+### 2b. 설명되지 않은 이상 징후
+
+_(`unexplained` 배열이 비어 있지 않은 경우에만)_
+
+규칙이 매칭되지 않은 신호를 심각도순 최대 3개. 비어 있거나 없으면 이 섹션을 생략한다.
+
 ### 3. 해결 방안 제안
 
 - **코드가 있는 경우:** 원인일 가능성이 가장 높은 파일/함수와 구체적인 코드
-  변경, 그리고 적용 후 재현하여 다시 분석하자는 안내.
+  변경, 그리고 적용 후 재현하여 다시 분석하자는 안내. _(수정 라인은
+  결론의 `fix` 배열에서 옴 — 정확한 경로/키; 에이전트는 맥락을 추가할 수 있지만
+  일반적인 조언으로 대체할 수 없다.)_
 - **코드가 없는 경우:** 소스 없이는 수정할 수 없으므로 개발자가 확인해야 할 로그
   라인/모듈/컴포넌트.
+
+_(마스킹 안내: `<ISSUER_1>` 같은 자리표시자는 그대로 재현한다.
+`redaction_summary.total` > 0이면 "N개 항목이 마스킹되었습니다; 실제 값을 보려면
+로컬에서 실행하세요."를 추가한다.)_
 
 ### 4. 임시 해결 방법
 

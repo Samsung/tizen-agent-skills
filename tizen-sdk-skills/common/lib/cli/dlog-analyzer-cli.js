@@ -28,6 +28,7 @@
  *   device-profile   — Detect and print the connected device's profile
  *   investigate      — Run a one-shot first-pass investigation and emit a budgeted report
  *   probe            — List and run evidence probes from the data-driven catalog
+ *   rules            — List, show, validate, and test analysis rules
  *   snapshot         — Create, list, and compare system snapshots
  *   timeline         — Analyze and visualize probe history across snapshots
  *   kernel           — Kernel log collection (collect = background, stop, analyze) (kmsg/dmesg)
@@ -52,7 +53,8 @@
  *   node dlog-analyzer-cli.js search <pattern> [pattern ...] [--pattern <p>]... [--category <app-id|_general|_unparsed>]... [--regex] [--case-sensitive] [--invert] [--all] [--context <n>] [--after-context <n>] [--before-context <n>] [--since <s>] [--until <s>] [--priority <p>] [--tag <t>] [--count] [--format text|json] [--output <file>] [--max-matches <n>] [--max-lines <n>] [--max-chars <n>]
  *   node dlog-analyzer-cli.js device-profile [serial] [--refresh] [--max-age <n>] [--format <f>]
  *   node dlog-analyzer-cli.js investigate [general|app] [app-id] [serial] [--format <f>] [--max-lines <n>] [--max-chars <n>]
- *   node dlog-analyzer-cli.js probe list|run [probe-id] [serial] [--format <f>]
+ *   node dlog-analyzer-cli.js probe list|run [probe-id] [serial] [--format <f>] [--app-id <id>] [--allow-network-probe]
+ *   node dlog-analyzer-cli.js rules list|show|validate|test [rule-id|fixture.json|path] [--family <f>] [--rules-dir <path>] [--expect <rule_id>[,<rule_id>]|none] [--format <f>]
  *   node dlog-analyzer-cli.js snapshot create|list|diff [id1] [id2] [serial]
  *   node dlog-analyzer-cli.js timeline [--format <f>] [--max-lines <n>]
  *   node dlog-analyzer-cli.js kernel collect|stop|analyze [serial] [--format <f>]
@@ -101,6 +103,7 @@ const {
   manageSnapshot,
   runTimeline,
   manageKernel,
+  manageRules,
   dumpDeviceLogs,
   clearDeviceLogs,
 } = require("../core/sdk-commands");
@@ -134,14 +137,25 @@ const OPTION_FLAGS = {
   "--budget": "budget",
   "--budget-tokens": "budgetTokens",
   "--probe-id": "probeId",
+  "--rules-dir": "rulesDir",
+  "--max-workers": "maxWorkers",
+  "--similarity-threshold": "similarityThreshold",
+  "--symptom-map": "symptomMap",
+  "--family": "family",
+  "--expect": "expect",
   // search only
   "--pattern": "pattern",
   "--category": "category",
-  "--app-id": "category", // the binary's alias of --category
+  "--app-id": "appId", // file-mode declared app label (collection-mode alias of --category is handled in the search handler)
   "--context": "context",
   "--after-context": "afterContext",
   "--before-context": "beforeContext",
   "--max-matches": "maxMatches",
+  // file-mode options
+  "--file": "file",
+  "--pid": "pid",
+  "--noise-tag": "noiseTag",
+  "--level": "level",
 };
 const BOOLEAN_FLAGS = {
   "--confirm": "confirm",
@@ -149,16 +163,31 @@ const BOOLEAN_FLAGS = {
   "--with-context": "withContext",
   "--with-kernel": "withKernel",
   "--allow-network-probe": "allowNetworkProbe",
+  "--parallel": "parallel",
+  "--deduplicate": "deduplicate",
+  "--allow-heavy": "allowHeavy",
+  "--no-noise-filter": "noNoiseFilter",
+  "--fuzzy-symptoms": "fuzzySymptoms",
   // search only
   "--regex": "regex",
   "--case-sensitive": "caseSensitive",
   "--invert": "invert",
   "--all": "all",
   "--count": "count",
+  // kernel file-mode
+  "--with-dlog": "withDlog",
 };
-// `--tag` is repeatable for app-log and search alike; `--category` and its
-// alias `--app-id` share one key, so mixing them yields a single array.
-const REPEATABLE_FLAGS = ["--pattern", "--category", "--app-id", "--tag"];
+// `--tag` is repeatable for app-log and search alike; `--category` and
+// `--app-id` each have their own key now (in file mode `--app-id` is a declared
+// app label, not a category alias); `--pid` and `--noise-tag` are file-mode only.
+const REPEATABLE_FLAGS = [
+  "--pattern",
+  "--category",
+  "--app-id",
+  "--tag",
+  "--pid",
+  "--noise-tag",
+];
 
 // --- Main entry point ---
 const { options, positional } = parseArgsOrExit(
@@ -186,6 +215,7 @@ const VALID_ACTIONS = [
   "device-profile",
   "investigate",
   "probe",
+  "rules",
   "snapshot",
   "timeline",
   "kernel",
@@ -247,10 +277,42 @@ runCli(COMMAND, async () => {
     case "stop-collect":
       return stopCollectAppLogs();
     case "error-analyze":
-      // error-analyze reads the locally collected log file — no serial needed
+      // error-analyze reads the locally collected log file — no serial needed.
+      // In file mode, --file selects a saved dlog file; --app-id is a declared
+      // label (not a verified identity), --pid selects historical capture PIDs.
+      if (options.file) {
+        return analyzeErrors(options.appId, options.format, {
+          file: options.file,
+          pids: options.pid,
+          noiseTags: options.noiseTag,
+          tags: options.tag,
+          categories: options.category,
+          withContext: options.withContext === true,
+          maxLines: options.maxLines,
+          maxChars: options.maxChars,
+        });
+      }
       return analyzeErrors(param1, param2);
     case "app-log":
-      // app-log <app-id> [serial] — filter options from flags
+      // app-log <app-id> [serial] — filter options from flags.
+      // In file mode, --file selects a saved dlog file; --pid selects records.
+      if (options.file) {
+        return appLog(null, {
+          file: options.file,
+          pids: options.pid,
+          noiseTags: options.noiseTag,
+          categories: options.category,
+          since: options.since,
+          until: options.until,
+          priority: options.priority,
+          tags: options.tag,
+          keywords: options.keyword,
+          format: options.format,
+          output: options.output,
+          maxLines: options.maxLines,
+          maxChars: options.maxChars,
+        });
+      }
       return appLog(param1, {
         since: options.since,
         until: options.until,
@@ -267,8 +329,39 @@ runCli(COMMAND, async () => {
       // a pattern (any one matches unless --all); each --pattern (repeatable)
       // adds one more, e.g. for a pattern that starts with "--". Reads the
       // collected files: no serial.
+      // In file mode, --file selects a saved dlog file; --app-id is a declared
+      // app label (not a category alias); --pid selects historical capture PIDs.
+      if (options.file) {
+        return searchLogs(
+          [...positional.slice(1), ...(options.pattern || [])],
+          {
+            file: options.file,
+            appLabels: options.appId,
+            pids: options.pid,
+            noiseTags: options.noiseTag,
+            categories: options.category,
+            regex: options.regex === true,
+            caseSensitive: options.caseSensitive === true,
+            invert: options.invert === true,
+            all: options.all === true,
+            context: options.context,
+            afterContext: options.afterContext,
+            beforeContext: options.beforeContext,
+            since: options.since,
+            until: options.until,
+            priority: options.priority,
+            tags: options.tag,
+            count: options.count === true,
+            format: options.format,
+            output: options.output,
+            maxMatches: options.maxMatches,
+            maxLines: options.maxLines,
+            maxChars: options.maxChars,
+          },
+        );
+      }
       return searchLogs([...positional.slice(1), ...(options.pattern || [])], {
-        categories: options.category,
+        categories: [...(options.category || []), ...(options.appId || [])],
         regex: options.regex === true,
         caseSensitive: options.caseSensitive === true,
         invert: options.invert === true,
@@ -303,11 +396,36 @@ runCli(COMMAND, async () => {
         budget: options.budget,
         budgetTokens: options.budgetTokens,
         allowNetworkProbe: options.allowNetworkProbe === true,
+        rulesDir: options.rulesDir,
+        parallel: options.parallel === true,
+        maxWorkers: options.maxWorkers,
+        deduplicate: options.deduplicate === true,
+        similarityThreshold: options.similarityThreshold,
+        allowHeavy: options.allowHeavy === true,
+        noNoiseFilter: options.noNoiseFilter === true,
+        fuzzySymptoms: options.fuzzySymptoms === true,
+        symptomMap: options.symptomMap,
       });
-    case "probe":
-      // probe list|run [probe-id] [serial] [--format <f>]
+    case "probe": {
+      // probe list|run [probe-id] [serial] [--format <f>] [--app-id <id>] [--allow-network-probe]
+      // `--app-id` binds to the shared `category` key (the binary's alias of
+      // --category, repeatable) — the last one wins for one app-scoped probe.
+      const appId = Array.isArray(options.category)
+        ? options.category[options.category.length - 1]
+        : options.category;
       return runProbe(param1, param2, param3, {
         format: options.format,
+        appId,
+        allowNetworkProbe: options.allowNetworkProbe === true,
+      });
+    }
+    case "rules":
+      // rules list|show|validate|test [rule-id|fixture.json|path] [--family <f>] [--rules-dir <path>] [--expect <rule_id>[,<rule_id>]|none] [--format <f>]
+      return manageRules(param1, param2, {
+        rulesDir: options.rulesDir,
+        format: options.format,
+        family: options.family,
+        expect: options.expect,
       });
     case "snapshot":
       // snapshot create|list|compare|delete [id1] [id2] [serial]
@@ -321,8 +439,17 @@ runCli(COMMAND, async () => {
       });
     case "kernel":
       // kernel collect|stop|analyze [serial] [--format <f>]
+      // In file mode, --file selects a saved kernel log file; --level sets the
+      // minimum level; --with-dlog correlates with collected dlog.
       return manageKernel(param1, param2, {
         format: options.format,
+        file: options.file,
+        since: options.since,
+        level: options.level,
+        withDlog: options.withDlog === true,
+        appId: options.appId,
+        maxLines: options.maxLines,
+        maxChars: options.maxChars,
       });
     case "log-dump":
       // log-dump [serial] — filter / lines / output come from the flags

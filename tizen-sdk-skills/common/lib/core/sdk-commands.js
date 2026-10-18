@@ -288,6 +288,7 @@ module.exports = {
   deviceProfile: dlogAnalyzer.deviceProfile,
   investigate: dlogAnalyzer.investigate,
   runProbe: dlogAnalyzer.runProbe,
+  manageRules: dlogAnalyzer.manageRules,
   manageSnapshot: dlogAnalyzer.manageSnapshot,
   runTimeline: dlogAnalyzer.runTimeline,
   manageKernel: dlogAnalyzer.manageKernel,

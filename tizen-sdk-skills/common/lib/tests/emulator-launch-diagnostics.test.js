@@ -2325,6 +2325,35 @@ const HS_BASE = {
   }
 }
 
+// 9i. Host gate in auto mode (TIZEN_HOMESCREEN_CHECK unset → auto). The gate is
+// "$OS = linux" from detect_os, so WSL and native Linux (remote headless servers
+// included) both run the check, while macOS / Git Bash on Windows skip it with
+// no status line. The expectation therefore depends on where the tests run, and
+// both branches are asserted so the gate is pinned on every CI runner.
+{
+  const r = runLaunch(makeTree(), {
+    ...HS_BASE,
+    STUB_HS_CRASH: "1",
+    TIZEN_HOMESCREEN_CHECK: "",
+  });
+  if (process.platform === "linux") {
+    check(
+      "hs host gate (auto, Linux host): check runs and the fix applies",
+      r.output.includes("HOMESCREEN_STATUS=fixed") &&
+        r.state.includes("starter_masked"),
+      `${r.output}\nstate=${r.state.join(",")}`,
+    );
+  } else {
+    check(
+      "hs host gate (auto, non-Linux host): skipped with no status line",
+      !r.output.includes("HOMESCREEN_STATUS=") &&
+        !r.state.includes("starter_masked") &&
+        /not Linux — skipping the home screen check/.test(r.output),
+      `${r.output}\nstate=${r.state.join(",")}`,
+    );
+  }
+}
+
 console.log(
   `\n=== ${failures === 0 ? "ALL PASSED" : `${failures} FAILED`} ===`,
 );

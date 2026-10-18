@@ -22,8 +22,12 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
 4. **`tz build`/`pack`은 `-w <프로젝트 디렉토리>`** — `-p` 아님. 빌드 기본은 **항상
    `-b Debug`** (사용자가 명시적으로 Release를 요청할 때만 Release).
 5. **`sdb`는 `<sdk>/tools/sdb`(.exe) 파일** — `tools/tizen-core/` 아래도, `sdb/sdb`도
-   아닙니다. 디바이스 목록은 `sdb devices`, 에뮬레이터 목록은 `tz emul list-vm`
-   (`tz list-device`는 없음).
+   아닙니다. 디바이스 목록은 `sdb devices` (`tz list-device`는 없음). 에뮬레이터 목록
+   ("어떤 에뮬레이터 있어?", "사용 가능한 에뮬레이터 목록")은 `tizen-create-emulator`
+   스킬의 러너(`emulator-manager-cli.js list-vm --detail`)로만 — `em-cli` 직접 실행이나
+   `<sdk>-data/emulator/vms` 디렉터리를 `ls`/`find`/`Get-ChildItem` 으로 뒤지는 것은
+   금지입니다. 각 VM 의 프로필은 envelope 의 `profile` 값을 그대로 쓰세요 — `tizen-*`
+   플랫폼 이미지는 통합 `tizen` 프로필이지 Mobile 이 아닙니다.
 6. **gdbserver / 포트 포워딩 / 대화형 gdb 수동 구성 금지** — gdb-debug 러너가 전부
    처리합니다(항상 setup-only). 대화형 gdb·netcoredbg CLI를 도구 호출로 직접 띄우면
    터미널이 멈춥니다 — 사용자가 붙여넣을 명령을 envelope로 전달하세요.
