@@ -2566,7 +2566,7 @@ function resolveModifySize(ctx, scriptPath) {
     platform = lookupVmPlatform(scriptPath, ctx.vmName);
     if (platform) {
       ctx.warnings.push(
-        `No platform was given; resolved size ${requestedSize} against VM '${ctx.vmName}''s own platform '${platform}'.`,
+        `No platform was given; resolved size ${requestedSize} against the platform of VM '${ctx.vmName}' ('${platform}').`,
       );
     }
   }
