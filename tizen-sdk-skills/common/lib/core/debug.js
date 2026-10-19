@@ -296,7 +296,7 @@ function debugSetupSuccess(command, startTime, result, warnings) {
 /** Known GDB setup-script failures, checked in order. */
 const GDB_SETUP_FAILURES = [
   {
-    pattern: /No connected device/i,
+    pattern: /No devices found|No connected device/i,
     category: "device_not_found",
     message: () => NO_DEVICE_MESSAGE,
   },
@@ -346,7 +346,8 @@ function buildGdbSetupResult(output, ctx) {
   const { command, startTime, appId, binaryPath, values } = ctx;
   const { serial, launch, port, breakpoints } = values;
   // Success marker parsing
-  const initFile = matchTrimmed(output, /GDB init file:\s*(.+)$/m);
+  // [ \t]* (not \s*) so an empty marker cannot borrow the next line.
+  const initFile = matchTrimmed(output, /GDB init file:[ \t]*(\S[^\r\n]*)/);
   // Unix script outputs single line without label: "<gdb>" -x "<init>"
   const gdbCommand = parseDebuggerCommand(
     output,
@@ -889,7 +890,7 @@ const DOTNET_SETUP_FAILURES = [
       `Attach mode not supported for this app (no CoreCLR debug transport). Use launch mode (the default) instead — the app restarts under a netcoredbg DAP server.`,
   },
   {
-    pattern: /netcoredbg.*not found|package.*not found/i,
+    pattern: /netcoredbg.*not found/i,
     category: "io_error",
     message: () =>
       `netcoredbg package not found in the SDK. Install the platform's on-demand tools (tizen-sdk-install), then retry.`,
@@ -1112,8 +1113,8 @@ function buildDotnetSetupResult(output, ctx) {
       breakpoints: splitBreakpoints(breakpoints),
       app_pid: parseAppPid(output),
       netcoredbg_status: "installed",
-      // launch mode: the script forwarded the DAP port
-      port_forwarded: launch ? /forward/i.test(output) : false,
+      // launch mode: the script's "Port <N> forwarded" success marker
+      port_forwarded: launch ? /Port \d+ forwarded/i.test(output) : false,
       debug_command: !launch ? debugCommand : null,
       launch_config: guidance.launchConfig,
       note: launch ? guidance.launchNote : dotnetAttachNote(debugCommand),

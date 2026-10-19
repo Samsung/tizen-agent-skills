@@ -45,6 +45,14 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   lookup fails it keeps the previous behaviour.
 - **`launchEmulator` JSDoc** (issue #60) now describes the profile-based VM selection
   instead of "the first VM".
+- **`gdb-debug` accepted an empty `GDB init file:` marker** (issue #63;
+  `common/lib/core/debug.js`). The marker only counts when a path follows on the same line;
+  an empty one no longer reports success or reads the next output line as the init file.
+- **`dotnet-debug` reported any "package … not found" as a missing netcoredbg** (issue #64).
+  Only netcoredbg-specific output is classified that way; anything else gets the generic
+  setup error with the script output.
+- **Debug setup output matching tightened** (issue #65). DotNET `port_forwarded` keys on the
+  script's `Port <N> forwarded` marker, and GDB recognises `No devices found` like DotNET.
 
 ## [1.4.5] — 2026-10-19
 

@@ -41,6 +41,14 @@
   템플릿 목록을 쓰고, 경고로 알려 줍니다. 조회에 실패하면 이전 동작을 유지합니다.
 - **`launchEmulator` JSDoc** (issue #60)이 "첫 번째 VM" 대신 프로필 기준 VM 선택 규칙을
   설명하도록 고쳤습니다.
+- **`gdb-debug`가 비어 있는 `GDB init file:` 표시를 받아들이던 문제** (issue #63;
+  `common/lib/core/debug.js`). 같은 줄에 경로가 있을 때만 인정합니다. 비어 있으면 더 이상
+  성공으로 보고하지 않고, 다음 출력 줄을 init 파일로 잘못 읽지도 않습니다.
+- **`dotnet-debug`가 모든 "package … not found"를 netcoredbg 없음으로 보고하던 문제**
+  (issue #64). netcoredbg 관련 출력만 그렇게 분류하고, 나머지는 스크립트 출력이 담긴 일반
+  설정 오류로 보고합니다.
+- **디버그 설정 출력 판별을 더 엄격하게** (issue #65). DotNET `port_forwarded`는 스크립트의
+  `Port <N> forwarded` 표시를 기준으로 하고, GDB도 DotNET처럼 `No devices found`를 인식합니다.
 
 ## [1.4.5] — 2026-10-19
 
