@@ -1671,10 +1671,12 @@ for (const marker of [
     true,
   );
 }
+// error-analyze builds both of its lanes' envelopes in one helper
+// (runErrorAnalyze), so it accounts for a single occurrence.
 check(
   "check / error-analyze / kernel analyze attach report_format",
   (domainSource.match(/report_format: REPORT_FORMAT_HINT/g) || []).length,
-  5,
+  4,
 );
 const skeletonHeading = "## Final report — the only accepted shape";
 for (const rel of [
@@ -2123,13 +2125,15 @@ console.log("\nTest 21: UnicodeEncodeError recovery");
     }),
     null,
   );
+  // error-analyze runs the binary through runBinary(), so runBinary is the
+  // one call site that recovers; runBinary and runErrorAnalyze flag it.
   check(
-    "both binary call sites recover and flag the output",
+    "every binary call site recovers and flags the output",
     [
       (domainSource.match(/= recoverEncodingCrash\(error\)/g) || []).length,
       (domainSource.match(/output_truncated: true/g) || []).length,
     ],
-    [3, 3],
+    [1, 2],
   );
 }
 // The version-directory rule is the one findLatestVersionDir() applies, not a
