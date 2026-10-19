@@ -2264,7 +2264,9 @@ function launchedResult(output, { vmName, timeout, command, startTime }) {
 /**
  * Launch an existing Tizen emulator VM via em-cli.
  *
- * If no vmName is given, launches the first VM from `em-cli list-vm`.
+ * If no vmName is given, picks a VM from `em-cli list-vm --detail`: the
+ * highest platform version among the VMs of the requested profile
+ * (see selectVmForLaunch).
  * After launching, waits for the emulator to connect via sdb.
  *
  * @param {object} opts - Options object
@@ -2280,7 +2282,8 @@ async function launchEmulator(
   command = "tizen-sdk launch-emulator",
 ) {
   let vmName = opts.vmName;
-  const timeoutSec = opts.timeoutSec || 300;
+  // Only an absent value takes the default; 0 must reach the range check.
+  const timeoutSec = isBlank(opts.timeoutSec) ? 300 : opts.timeoutSec;
   const startTime = Date.now();
 
   try {
@@ -2556,13 +2559,25 @@ function resolveModifySize(ctx, scriptPath) {
   const requestedSize = normalizeSize(opts.size);
   if (!requestedSize) return invalidSizeError(command, opts.size);
 
+  // Without --platform, em-cli lists templates by profile, not for the VM
+  // being modified. Use the VM's own platform, as create does (issue #48).
+  let platform = opts.platform;
+  if (!platform) {
+    platform = lookupVmPlatform(scriptPath, ctx.vmName);
+    if (platform) {
+      ctx.warnings.push(
+        `No platform was given; resolved size ${requestedSize} against VM '${ctx.vmName}''s own platform '${platform}'.`,
+      );
+    }
+  }
+
   let details = [];
   try {
     details = parseTemplateDetails(
       runEmulatorScript(scriptPath, {
         action: "list-template",
         profile,
-        platform: opts.platform,
+        platform,
       }),
     );
   } catch (error) {
@@ -2582,12 +2597,33 @@ function resolveModifySize(ctx, scriptPath) {
       command,
       requestedSize,
       profile,
-      undefined,
+      platform,
       details,
     );
   }
   ctx.template = matched.name;
   return null;
+}
+
+/**
+ * The platform of an existing VM, from `list-vm --detail`.
+ *
+ * @returns {string|undefined} undefined when the lookup fails or the VM is not
+ *   listed — the caller then keeps its previous behaviour
+ */
+function lookupVmPlatform(scriptPath, vmName) {
+  try {
+    const vm = parseVmDetails(
+      runEmulatorScript(scriptPath, {
+        action: "list-vm",
+        profile: "tizen",
+        detail: true,
+      }),
+    ).find((record) => record.name === vmName);
+    return (vm && vm.platform) || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function vmCommandFailureError(ctx, error) {
