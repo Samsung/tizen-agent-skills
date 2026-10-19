@@ -15,8 +15,8 @@
 
 - **Claude Code PR 리뷰 워크플로** (`.github/workflows/claude-review-tizen-sdk-skills.yml`).
   `tizen-sdk-skills/`를 수정하는 PR에 `anthropics/claude-code-action`이 자동으로 1차 리뷰를
-  남깁니다. fork PR과 Draft PR은 건너뜁니다. Claude GitHub App 설치와 `ANTHROPIC_API_KEY`
-  저장소 시크릿이 필요합니다.
+  남깁니다. fork PR과 Draft PR은 건너뜁니다. 코멘트는 기본 `GITHUB_TOKEN`으로
+  작성하며, `ANTHROPIC_API_KEY` 저장소 시크릿만 필요합니다.
 
 ## [1.4.5] — 2026-10-19
 

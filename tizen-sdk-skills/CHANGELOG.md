@@ -15,8 +15,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 - **Claude Code PR review workflow** (`.github/workflows/claude-review-tizen-sdk-skills.yml`).
   Pull requests that touch `tizen-sdk-skills/` get an automatic first-pass review from
-  `anthropics/claude-code-action`. Fork and draft PRs are skipped. Requires the Claude GitHub
-  App and an `ANTHROPIC_API_KEY` repository secret.
+  `anthropics/claude-code-action`. Fork and draft PRs are skipped. Comments are posted with the
+  built-in `GITHUB_TOKEN`; only an `ANTHROPIC_API_KEY` repository secret is required.
 
 ## [1.4.5] — 2026-10-19
 
