@@ -5,8 +5,15 @@ Windows Cline에서는 훅이 동작하지 않으므로(SR 위키) 이 Rule이 �
 Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 함께 동작하며, 이 Rule은
 사전 안내 역할을 합니다.)
 
-1. **`tizen` CLI 금지** — 이 환경에 존재하지 않습니다 (`tizen.bat`/`tizen.exe`/`tizen.sh`
-   포함). 항상 `tz`를 쓰되, 명령을 직접 조립하지 말고 **스킬의 CLI 러너를 우선** 사용하세요.
+이 규칙과 훅은 **Tizen 작업**에 관한 것입니다. 훅의 Tizen 도구 규칙은 이 플러그인으로 SDK를
+설정한 뒤(`~/.tizen.sdk.path.config` — `tizen-sdk-init`·설치기가 기록)에만 적용되며, Tizen과
+무관한 프로젝트나 그 파일이 없는 PC에서는 `which sdb`, `tizen version`, PATH 설정 같은 환경
+확인을 막지 않습니다(issue #47). 훅은 `tizen` CLI 자체나 sdb 위치 확인을 금지하지 않습니다.
+
+1. **Tizen 작업 중에는 `tizen`/`tz` 명령을 직접 조립하지 말고 스킬의 CLI 러너를 우선** 사용하세요.
+   플러그인의 도구는 `tz`이며, Tizen Studio의 `tizen` CLI는 설치되어 있을 수도 아닐 수도
+   있습니다 — 러너는 그것을 필요로 하지 않습니다. ("tizen CLI가 설치돼 있나?"에 `tizen version`으로
+   답하는 것은 괜찮습니다.)
    러너(`*-cli.js`)는 스킬 폴더(`~/.cline/skills/<스킬>/` — SKILL.md 등 마크다운만 있음)에
    **없습니다**. 러너는 `~/.cline/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/cli/<러너>-cli.js`
    이며(`<VERSION>` 은 가장 높은 숫자 버전 디렉터리, `1.10.0` > `1.3.1`), 각 SKILL.md 의
@@ -21,8 +28,11 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
    `-s`/`-d`/`-b`/`-w`는 없습니다. 설치는 install-app 러너(`project-manager-cli.js`)를 쓰세요.
 4. **`tz build`/`pack`은 `-w <프로젝트 디렉토리>`** — `-p` 아님. 빌드 기본은 **항상
    `-b Debug`** (사용자가 명시적으로 Release를 요청할 때만 Release).
-5. **`sdb`는 `<sdk>/tools/sdb`(.exe) 파일** — `tools/tizen-core/` 아래도, `sdb/sdb`도
-   아닙니다. 디바이스 목록은 `sdb devices` (`tz list-device`는 없음). 에뮬레이터 목록
+5. **`sdb`는 설정된 SDK의 `<sdk>/tools/sdb`(.exe) 파일만** — `~/.tizen.sdk.path.config`에 적힌
+   SDK의 것이며, `tools/tizen-core/` 아래도, `sdb/sdb`도 아닙니다. 다른 디렉터리의 sdb(두 번째
+   SDK 설치본, 복사본)를 실행하면 훅이 차단합니다 — 러너와 다른 sdb 서버·Device Manager 상태를
+   보게 되기 때문입니다. 그 SDK를 쓰려면 먼저 `tizen-sdk-init`으로 설정을 바꾸세요.
+   디바이스 목록은 `sdb devices` (`tz list-device`는 없음). 에뮬레이터 목록
    ("어떤 에뮬레이터 있어?", "사용 가능한 에뮬레이터 목록")은 `tizen-create-emulator`
    스킬의 러너(`emulator-manager-cli.js list-vm --detail`)로만 — `em-cli` 직접 실행이나
    `<sdk>-data/emulator/vms` 디렉터리를 `ls`/`find`/`Get-ChildItem` 으로 뒤지는 것은

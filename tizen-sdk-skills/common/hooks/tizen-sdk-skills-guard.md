@@ -5,9 +5,18 @@ supports one (Claude Code, Codex CLI, Gemini CLI, Cline on macOS/Linux). Where
 hooks are unavailable or not yet trusted, follow them as written. They exist
 because each one is a mistake the model has actually made.
 
-1. **Never call the `tizen` CLI** (`tizen`, `tizen.bat`, `tizen.exe`, `tizen.sh`) —
-   it does not exist in this environment. The Tizen tool is `tz`, and you should not
-   assemble `tz` commands by hand either: **use the skill's CLI runner** (`*-cli.js`).
+The rules — and the hook — are about **Tizen work**. The hook applies its Tizen
+tooling rules only when an SDK has been configured through this plugin
+(`~/.tizen.sdk.path.config`, written by `tizen-sdk-init` and the installer); in a
+project that has nothing to do with Tizen, or on a machine without that file, an
+environment check such as `which sdb`, `tizen version` or a PATH export is not
+second-guessed (issue #47). The hook never forbids the `tizen` CLI or looking up
+where sdb is.
+
+1. **Inside a Tizen workflow, do not assemble `tizen` / `tz` commands by hand** —
+   **use the skill's CLI runner** (`*-cli.js`). The plugin's own tool is `tz`; the Tizen
+   Studio `tizen` CLI may or may not be installed on the host, and the runners do not
+   need it. (Answering "is the tizen CLI installed?" with `tizen version` is fine.)
 2. **Never hand-write Tizen project files** — do not create `config.xml` or
    `tizen-manifest.xml` from memory. Hand-made scaffolds do not build or package.
    Create projects only with the `tizen-create-project` skill (real `tz new`
@@ -17,11 +26,15 @@ because each one is a mistake the model has actually made.
    (`project-manager-cli.js`).
 4. **`tz build` / `tz pack` take `-w <project dir>`**, not `-p`. Default build type is
    **always `-b Debug`**; use Release only when the user explicitly asks.
-5. **Never look for or run `sdb` yourself.** Do not search for the binary (`which`/`where`/
-   `Get-Command sdb`, `find -name sdb`, `command -v sdb`), do not parse `sdb devices`, and do
-   not type `sdb …` from memory — every sdb action has a runner that resolves sdb
-   (`<sdk>/tools/sdb`, `.exe` on Windows; not under `tools/tizen-core/`, not `sdb/sdb`) on its
-   own: shell / forward / reboot / launch / kill → `tizen-sdb-helper`
+5. **In a Tizen workflow, do not run `sdb` yourself — and when you do, it is the configured
+   SDK's.** Do not go hunting for the binary or parse `sdb devices` to drive a device action,
+   and do not type `sdb …` from memory — every sdb action has a runner that resolves sdb
+   from the SDK in `~/.tizen.sdk.path.config` (`<sdk>/tools/sdb`, `.exe` on Windows; not
+   under `tools/tizen-core/`, not `sdb/sdb`) on its own. An sdb invoked from any **other**
+   directory (a second SDK install, a stray copy) is denied by the hook: it runs a
+   different sdb server and sees different Device Manager state than the runners do;
+   repoint the config with `tizen-sdk-init` if that other SDK is the intended one.
+   The runners: shell / forward / reboot / launch / kill → `tizen-sdb-helper`
    (`sdb-helper-cli.js --request "<the user's ask>"`); device logs — view / tail / save /
    clear, `dlog` → `tizen-dlog-analyzer` (`dlog-analyzer-cli.js log-dump`, `log-clear
    --confirm`, `start start-monitoring`; sdb-helper hands log requests off there); the
