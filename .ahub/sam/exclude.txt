@@ -1,0 +1,2 @@
+tizen-sdk-skills/tizen-cli/dist/
+tizen-sdk-skills/common/lib/vendor/
