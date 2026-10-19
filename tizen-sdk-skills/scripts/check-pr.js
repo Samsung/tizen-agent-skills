@@ -9,6 +9,7 @@
  * Usage:
  *   node scripts/check-pr.js --base origin/main                  # text
  *   node scripts/check-pr.js --base origin/main --format jsonl   # one JSON object per finding
+ *   node scripts/check-pr.js --base origin/main --format github  # GitHub Actions annotations
  *
  * Compares the working tree with the merge base of --base, so committed and
  * uncommitted changes to tracked files are both checked (stage a new file with
@@ -194,6 +195,24 @@ function checkChangelog(changed) {
   ];
 }
 
+/** GitHub Actions workflow command; prefix makes the path repository-relative. */
+function formatGithub(f, prefix) {
+  const prop = (v) =>
+    String(v)
+      .replace(/%/g, "%25")
+      .replace(/\r/g, "%0D")
+      .replace(/\n/g, "%0A")
+      .replace(/:/g, "%3A")
+      .replace(/,/g, "%2C");
+  const data = f.message
+    .replace(/%/g, "%25")
+    .replace(/\r/g, "%0D")
+    .replace(/\n/g, "%0A");
+  const level = f.severity === "ERROR" ? "error" : "warning";
+  const line = f.line ? `,line=${f.line}` : "";
+  return `::${level} file=${prop(prefix + f.file)}${line},title=${prop(f.rule)}::${data}`;
+}
+
 /** Parse `git diff -U0` output into { file: [{ line, text }] }. */
 function parseAddedLines(diff) {
   const added = {};
@@ -239,7 +258,7 @@ function git(args) {
 function usage(message) {
   console.error(`check-pr: ${message}`);
   console.error(
-    "usage: node scripts/check-pr.js --base <rev> [--format text|jsonl]",
+    "usage: node scripts/check-pr.js --base <rev> [--format text|jsonl|github]",
   );
   process.exit(2);
 }
@@ -257,8 +276,8 @@ function parseCli(argv) {
     }
   }
   if (!opts.base) usage("--base is required");
-  if (!["text", "jsonl"].includes(opts.format)) {
-    usage(`--format must be text or jsonl, got ${opts.format}`);
+  if (!["text", "jsonl", "github"].includes(opts.format)) {
+    usage(`--format must be text, jsonl or github, got ${opts.format}`);
   }
   return opts;
 }
@@ -312,9 +331,13 @@ function main() {
     ...checkChangelog(changed),
   ];
 
+  const prefix =
+    opts.format === "github" ? git(["rev-parse", "--show-prefix"]).trim() : "";
   for (const f of findings) {
     if (opts.format === "jsonl") {
       console.log(JSON.stringify(f));
+    } else if (opts.format === "github") {
+      console.log(formatGithub(f, prefix));
     } else {
       const where = f.line ? `${f.file}:${f.line}` : f.file;
       console.log(`${f.severity} ${f.rule} ${where} ${f.message}`);
@@ -336,6 +359,7 @@ module.exports = {
   checkH1,
   checkName,
   checkChangelog,
+  formatGithub,
   parseAddedLines,
   parseNameStatus,
 };

@@ -16,6 +16,7 @@ const {
   checkH1,
   checkName,
   checkChangelog,
+  formatGithub,
   parseAddedLines,
   parseNameStatus,
 } = require("../../../scripts/check-pr");
@@ -150,6 +151,36 @@ check(
   [],
 );
 check("docs only", rules(checkChangelog(new Set(["README.md"]))), []);
+
+// GitHub annotations
+check(
+  "warning with line",
+  formatGithub(
+    {
+      severity: "WARN",
+      rule: "S-PRIVATE",
+      file: "a.md",
+      line: 3,
+      message: "m",
+    },
+    "plugin/",
+  ),
+  "::warning file=plugin/a.md,line=3,title=S-PRIVATE::m",
+);
+check(
+  "error without line, escaped",
+  formatGithub(
+    {
+      severity: "ERROR",
+      rule: "V-SYNC",
+      file: "a,b.json",
+      line: 0,
+      message: "50%\nx",
+    },
+    "",
+  ),
+  "::error file=a%2Cb.json,title=V-SYNC::50%25%0Ax",
+);
 
 // Parsers
 check(
