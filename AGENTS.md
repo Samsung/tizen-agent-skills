@@ -85,7 +85,8 @@ bash common/hooks/hooks.test.sh
 node scripts/rewrite-runner-snippets.js --check
 node scripts/add-spdx-headers.js --check
 
-# Rules on the files this change touches (authoring; add --format jsonl when reviewing)
+# Rules on the files this change touches (authoring; add --format jsonl when reviewing,
+# CI uses --format github to annotate the pull request's Files changed tab)
 node scripts/check-pr.js --base origin/main
 
 # Standalone CLI compiles

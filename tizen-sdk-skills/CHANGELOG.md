@@ -17,7 +17,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   `ci.yml`). Checks the files a pull request changes against the mechanical rules in
   `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
   documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
-  rule ID. CI runs it on every pull request.
+  rule ID. CI runs it on every pull request with `--format github`, so each finding also
+  appears as an annotation on the pull request's changed files.
 
 ## [1.4.5] — 2026-10-19
 
