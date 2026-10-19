@@ -222,12 +222,16 @@ function probeCdpEndpoint(port) {
 }
 
 /**
- * parseInt() an option with a default, accepted only within [1, max].
- * @returns {number|null} the value, or null when it is not a finite in-range integer
+ * Parse a whole-number option with a default, accepted only within [1, max].
+ * The whole value must be digits — parseInt() alone would turn "9222abc" into
+ * 9222, "1.9" into 1 and "30s" into 30 and run with a value nobody typed.
+ * @returns {number|null} the value, or null when it is not an in-range whole number
  */
 function parseBoundedInt(raw, defaultValue, max) {
-  const n = parseInt(raw === undefined ? defaultValue : raw, 10);
-  return Number.isFinite(n) && n >= 1 && n <= max ? n : null;
+  const text = String(raw === undefined ? defaultValue : raw).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= 1 && n <= max ? n : null;
 }
 
 /**
@@ -236,13 +240,14 @@ function parseBoundedInt(raw, defaultValue, max) {
  *
  * @returns {{serial: string, port: number, setupTimeout: number, timeout: number}|{failure: object}}
  */
-function validateRunOptions(appId, opts, command) {
-  const invalid = (message, suggestedCommand) => ({
+function validateRunOptions(appId, opts, command, startTime) {
+  const invalid = (message, suggestedCommand = null) => ({
     failure: formatError(
       command,
       "invalid_parameters",
       message,
       suggestedCommand,
+      startTime,
     ),
   });
   if (!appId) {
@@ -373,10 +378,11 @@ function checkTestRuntime(projectDir, command, startTime) {
  * Step 4 of runPlaywrightTest: CDP setup (or probe an existing endpoint with
  * --no-setup).
  *
- * `failed` is a separate flag (not a truthy envelope) because a failed setup
- * hands back setupWebappDebug()'s own return value unchanged, whatever it is.
+ * A failed setup hands back setupWebappDebug()'s own envelope unchanged; a
+ * missing result (undefined/null) becomes an io_error envelope so the caller
+ * always returns a Standard JSON Envelope.
  *
- * @returns {Promise<{failed: true, envelope: *}|{failed: false, setupResult: object|null}>}
+ * @returns {Promise<{failed: true, envelope: object}|{failed: false, setupResult: object|null}>}
  */
 async function prepareCdpEndpoint(appId, params, opts, command, startTime) {
   const { serial, port, setupTimeout, cdpEndpoint } = params;
@@ -401,7 +407,19 @@ async function prepareCdpEndpoint(appId, params, opts, command, startTime) {
     { serial, port, timeout: setupTimeout },
     command,
   );
-  if (!setup || setup.status !== "success") {
+  if (!setup) {
+    return {
+      failed: true,
+      envelope: formatError(
+        command,
+        "io_error",
+        "webapp debug setup returned no result",
+        null,
+        startTime,
+      ),
+    };
+  }
+  if (setup.status !== "success") {
     // The setup envelope already carries the right category mapping
     // (device_not_found / invalid_parameters / inspector_not_available / ...).
     return { failed: true, envelope: setup };
@@ -501,7 +519,7 @@ async function runPlaywrightTest(
   const startTime = Date.now();
   try {
     // --- Step 1: parameter validation ---
-    const params = validateRunOptions(appId, opts, command);
+    const params = validateRunOptions(appId, opts, command, startTime);
     if (params.failure) return params.failure;
     const { port, timeout } = params;
 
@@ -614,6 +632,7 @@ async function scaffoldPlaywrightTest(
         "invalid_parameters",
         "Missing required parameter: projectDir",
         'scaffoldPlaywrightTest({ projectDir: "./pwtest", appId: "abcDEF1234.MyWebApp" })',
+        startTime,
       );
     }
     const projectDir = path.resolve(opts.projectDir);
@@ -631,14 +650,18 @@ async function scaffoldPlaywrightTest(
         command,
         "invalid_parameters",
         `Invalid app id: ${opts.appId}`,
+        null,
+        startTime,
       );
     }
-    const port = parseInt(opts.port === undefined ? 9222 : opts.port, 10);
-    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    const port = parseBoundedInt(opts.port, 9222, 65535);
+    if (port === null) {
       return formatError(
         command,
         "invalid_parameters",
         `Invalid port: ${opts.port}`,
+        null,
+        startTime,
       );
     }
 

@@ -59,6 +59,16 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   setup error with the script output.
 - **Debug setup output matching tightened** (issue #65). DotNET `port_forwarded` keys on the
   script's `Port <N> forwarded` marker, and GDB recognises `No devices found` like DotNET.
+- **`playwright-test` accepted partial numbers such as `9222abc`, `1.9` or `30s`** (issue #67;
+  `common/lib/core/playwright-test.js`). `--port`, `--setup-timeout` and `--timeout` (and
+  the scaffold `--port`) now accept whole numbers only; anything else fails with the
+  existing `invalid_parameters` message instead of being truncated by `parseInt`.
+- **`install-app` / `playwright-test` early validation errors omitted the start time**
+  (issue #68). Every failure envelope from `installApp()` and `runPlaywrightTest()` now
+  passes the same `startTime`, so `duration_ms` is measured from the same point.
+- **`playwright-test` could return a missing `setupWebappDebug()` result as-is** (issue #69).
+  An `undefined`/`null` setup result is now reported as an `io_error` envelope
+  ("webapp debug setup returned no result").
 
 ## [1.4.5] — 2026-10-19
 

@@ -54,6 +54,16 @@
   설정 오류로 보고합니다.
 - **디버그 설정 출력 판별을 더 엄격하게** (issue #65). DotNET `port_forwarded`는 스크립트의
   `Port <N> forwarded` 표시를 기준으로 하고, GDB도 DotNET처럼 `No devices found`를 인식합니다.
+- **`playwright-test`가 `9222abc`, `1.9`, `30s` 같은 불완전한 숫자를 받아들이던 문제**
+  (issue #67; `common/lib/core/playwright-test.js`). `--port`, `--setup-timeout`,
+  `--timeout`(그리고 scaffold의 `--port`)은 이제 정수만 받습니다. 그 밖의 값은 `parseInt`로
+  잘리지 않고 기존 `invalid_parameters` 메시지로 실패합니다.
+- **`install-app` / `playwright-test`의 초기 검증 오류에 시작 시각이 빠지던 문제** (issue #68).
+  이제 `installApp()`과 `runPlaywrightTest()`의 모든 실패 envelope가 같은 `startTime`을
+  넘기므로 `duration_ms`의 기준 시점이 같습니다.
+- **`playwright-test`가 비어 있는 `setupWebappDebug()` 결과를 그대로 반환할 수 있던 문제**
+  (issue #69). `undefined`/`null` 결과는 이제 `io_error` envelope("webapp debug setup
+  returned no result")로 보고합니다.
 
 ## [1.4.5] — 2026-10-19
 
