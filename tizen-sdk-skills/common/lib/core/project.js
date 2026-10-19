@@ -2066,7 +2066,15 @@ function runInstallScript(command, startTime, ctx) {
   const { resolvedPath, resolvedSerial, runAfterInstall } = ctx;
   const resolved = resolveScript("tizen-install-app");
   if (resolved.error) {
-    return { failure: formatError(command, "io_error", resolved.error) };
+    return {
+      failure: formatError(
+        command,
+        "io_error",
+        resolved.error,
+        null,
+        startTime,
+      ),
+    };
   }
 
   console.error(
