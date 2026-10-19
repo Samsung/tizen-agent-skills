@@ -90,6 +90,12 @@ npm run lint        # TC schema dry-run + doc-stats + runner helper tests (same 
 npm run test:safe   # safe-tier TCs, no SDK or device required
 ```
 
+Then check the rules on the files your change touches (same as CI):
+
+```bash
+node scripts/check-pr.js --base origin/main
+```
+
 ## 7. Test tiers
 
 Tiers are defined in

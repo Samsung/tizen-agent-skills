@@ -11,6 +11,14 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
+  `ci.yml`). Checks the files a pull request changes against the mechanical rules in
+  `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
+  documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
+  rule ID. CI runs it on every pull request.
+
 ## [1.4.5] — 2026-10-19
 
 The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
