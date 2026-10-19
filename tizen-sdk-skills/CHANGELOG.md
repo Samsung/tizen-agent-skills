@@ -27,6 +27,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   the failure and result builders move into module-private helpers, lowering cyclomatic
   complexity (114 → 16, 46 → 11, 53 → 7). No behaviour change: the exported API, envelopes,
   messages and error codes are unchanged.
+- **`setupGdbDebug` and `setupDotnetDebug` split into shared helpers**
+  (`common/lib/core/debug.js`). Option validation, script arguments, the setup-script run
+  and failure classification are shared between the two, lowering cyclomatic complexity
+  (52 → 6, 85 → 6). No behaviour change: the exported API, envelopes, script arguments and
+  the generated `launch.json` / `tasks.json` are unchanged.
 
 ### Fixed
 
