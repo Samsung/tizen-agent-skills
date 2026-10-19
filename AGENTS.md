@@ -120,3 +120,11 @@ The check cannot judge these, so its silence is not approval:
 
 No build step or test suite yet. Verify that `plugin.json` and `package.json`
 versions are in sync and that the skill README renders correctly.
+
+## Reviewing a pull request
+
+To review someone else's `tizen-sdk-skills` pull request, follow
+[`.claude/skills/tizen-sdk-skills-review/SKILL.md`](.claude/skills/tizen-sdk-skills-review/SKILL.md).
+It runs `check-pr.js` and the matching safe-tier checks, rechecks earlier
+review findings, and posts one English review comment after the reviewer
+confirms the draft. Agents never approve, request changes or merge.
