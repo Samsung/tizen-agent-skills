@@ -28,6 +28,19 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   complexity (114 → 16, 46 → 11, 53 → 7). No behaviour change: the exported API, envelopes,
   messages and error codes are unchanged.
 
+### Fixed
+
+- **`launch-emulator --timeout 0` waited 300 s instead of failing** (issue #58;
+  `common/lib/core/emulator.js`). Only an absent `--timeout` now takes the 300 s default;
+  `0` is rejected with `invalid_parameters` like any value outside 1–540, matching
+  `create --launch`.
+- **`emulator-manager modify --size` without `--platform` resolved the size against the
+  wrong template list** (issue #59). It now looks up the VM's own platform with
+  `list-vm --detail`, lists templates for that platform and says so in a warning; if the
+  lookup fails it keeps the previous behaviour.
+- **`launchEmulator` JSDoc** (issue #60) now describes the profile-based VM selection
+  instead of "the first VM".
+
 ## [1.4.5] — 2026-10-19
 
 The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply

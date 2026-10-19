@@ -26,6 +26,18 @@
   모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(114 → 16, 46 → 11, 53 → 7). 동작 변화는
   없습니다. export API, 응답 envelope, 메시지, 오류 코드는 그대로입니다.
 
+### Fixed
+
+- **`launch-emulator --timeout 0`이 실패하지 않고 300초를 기다리던 문제** (issue #58;
+  `common/lib/core/emulator.js`). 이제 `--timeout`을 아예 주지 않았을 때만 기본값 300초를
+  씁니다. `0`은 1–540 범위를 벗어난 다른 값처럼 `invalid_parameters`로 거부되며,
+  `create --launch`와 동작이 같아졌습니다.
+- **`emulator-manager modify --size`를 `--platform` 없이 쓰면 잘못된 템플릿 목록에서 크기를
+  찾던 문제** (issue #59). 이제 `list-vm --detail`로 VM 자신의 플랫폼을 찾아 그 플랫폼의
+  템플릿 목록을 쓰고, 경고로 알려 줍니다. 조회에 실패하면 이전 동작을 유지합니다.
+- **`launchEmulator` JSDoc** (issue #60)이 "첫 번째 VM" 대신 프로필 기준 VM 선택 규칙을
+  설명하도록 고쳤습니다.
+
 ## [1.4.5] — 2026-10-19
 
 명령 가드 훅의 적용 범위를 Tizen 작업으로 한정했습니다 (fixes #47): Tizen 도구 규칙은
