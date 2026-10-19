@@ -85,6 +85,10 @@ bash common/hooks/hooks.test.sh
 node scripts/rewrite-runner-snippets.js --check
 node scripts/add-spdx-headers.js --check
 
+# Rules on the files this change touches (authoring; add --format jsonl when reviewing,
+# CI uses --format github to annotate the pull request's Files changed tab)
+node scripts/check-pr.js --base origin/main
+
 # Standalone CLI compiles
 cd tizen-cli && pnpm install --frozen-lockfile && pnpm exec tsc --noEmit && pnpm run build
 
@@ -99,7 +103,28 @@ npm run test:safe   # safe-tier TCs, no SDK or device required
 [tizen-sdk-skills/tests/README.md](tizen-sdk-skills/tests/README.md#tier-classification).
 Record which tiers you ran in the PR's Testing section.
 
+`check-pr.js` reports each finding with a rule ID. `ERROR` blocks the pull
+request; fix every one. `WARN` does not block, but each one must be fixed or
+explained in the pull request description before approval. A run always ends
+with a summary line such as `check-pr: 0 ERROR, 0 WARN (12 files, 0.05s)`; if
+nothing is printed, the check did not run, so check the `--base` revision.
+
+The check cannot judge these, so its silence is not approval:
+
+- logic duplicated into a host wrapper instead of `common/`;
+- a spawned process whose exit code is not checked;
+- a `.sh` change without the matching `.ps1` change (or the reverse);
+- personal information inside an added image or screenshot.
+
 ### tizen-action-skills
 
 No build step or test suite yet. Verify that `plugin.json` and `package.json`
 versions are in sync and that the skill README renders correctly.
+
+## Reviewing a pull request
+
+To review someone else's `tizen-sdk-skills` pull request, follow
+[`.claude/skills/tizen-sdk-skills-review/SKILL.md`](.claude/skills/tizen-sdk-skills-review/SKILL.md).
+It runs `check-pr.js` and the matching safe-tier checks, rechecks earlier
+review findings, and posts one English review comment after the reviewer
+confirms the draft. Agents never approve, request changes or merge.

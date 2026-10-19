@@ -4,7 +4,7 @@ name: CI (tizen-sdk-skills)
 # targets the tizen-sdk-skills/ project directory. Every path below is
 # therefore prefixed with tizen-sdk-skills/.
 #
-# No `paths:` filter on purpose: the three jobs are required status checks
+# No `paths:` filter on purpose: Lint & Type Check, Build and Test are required status checks
 # on main, and a filtered workflow never reports them for a PR that only
 # touches repository-root files (README, SECURITY, CODEOWNERS, ...), which
 # would leave such a PR unmergeable.
@@ -80,6 +80,29 @@ jobs:
       - name: Type check (tizen-cli)
         working-directory: tizen-sdk-skills/tizen-cli
         run: pnpm exec tsc --noEmit
+
+  # AGENTS.md / CONTRIBUTING.md rules on the files this PR changes. A job of
+  # its own so it gets its own line in the pull request's checks list.
+  # ERROR fails the job; WARN must be fixed or explained in the PR.
+  pr-check:
+    name: PR Check
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # check-pr.js diffs against the merge base with the target branch.
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: tizen-sdk-skills/.nvmrc
+
+      - name: PR check
+        working-directory: tizen-sdk-skills
+        run: node scripts/check-pr.js --base origin/${{ github.base_ref }} --format github
 
   build:
     name: Build

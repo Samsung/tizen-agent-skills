@@ -114,10 +114,12 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 ls "$HOME"/.{claude,cline,codex,gemini}/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-init-cli.js
 
 # 3. 훅 스모크 테스트 — Gemini 어댑터 (Codex/Claude는 같은 페이로드를 tool_name "Bash"로
-#    ~/.codex/hooks/tizen-sdk-skills/check-tizen-commands.sh에 파이프)
-printf '%s' '{"tool_name":"run_shell_command","tool_input":{"command":"tizen build-native"}}' \
+#    ~/.codex/hooks/tizen-sdk-skills/check-tizen-commands.sh에 파이프).
+#    Tizen 도구 규칙은 ~/.tizen.sdk.path.config가 있을 때만 적용됩니다(issue #47) —
+#    SDK를 아직 설정하지 않았다면 먼저 tizen-sdk-init을 실행하세요.
+printf '%s' '{"tool_name":"run_shell_command","tool_input":{"command":"tz build -p /tmp/app"}}' \
   | bash ~/.gemini/hooks/tizen-sdk-skills/BeforeTool
-# → {"decision":"deny","reason":"The tizen CLI ... is NOT available ..."}
+# → {"decision":"deny","reason":"tz build/pack take the project directory via -w, NOT -p. ..."}
 
 # 4. 마크다운 스니펫과 plugin-cache.js의 호스트 목록 일치(단위 테스트로도 검사):
 node scripts/rewrite-runner-snippets.js --check

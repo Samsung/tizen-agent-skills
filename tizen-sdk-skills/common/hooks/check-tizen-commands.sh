@@ -15,6 +15,12 @@
 # stdin : {"tool_name":"Bash","tool_input":{"command":"..."},...}
 # stdout: {"hookSpecificOutput":{"hookEventName":"PreToolUse","permissionDecision":"deny","permissionDecisionReason":"..."}}
 # exit  : always 0 (deny is signalled via JSON, not exit code)
+#
+# Scope: the shell-syntax rules apply everywhere; the Tizen tooling rules apply
+# only when ~/.tizen.sdk.path.config exists (an SDK configured through this
+# plugin) — see the gate below (issue #47). The hook never forbids the `tizen`
+# CLI or looking up where sdb is; it only keeps a hand-typed sdb on the
+# configured SDK's tools/sdb.
 
 input="$(cat)"
 
@@ -116,145 +122,15 @@ has() { printf '%s' "$cmd" | grep -Eq -e "$1"; }
 # Case-insensitive variant, for tokens that appear upper-cased in real commands.
 has_i() { printf '%s' "$cmd" | grep -Eiq -e "$1"; }
 
-# Rule 1 — `tz build` / `tz pack` with -p (tz build has no -p; project dir is -w)
-if has 'tz[[:space:]]+(build|pack)\b' && has '[[:space:]]-p\b'; then
-  deny "tz build/pack take the project directory via -w, NOT -p. Use: tz build -b Debug -w <project-dir> then tz pack -w <project-dir>. (-p is only for tz install, the package path.) Prefer invoking the tizen-build-project skill, which runs the wrapper script."
-fi
-
-# Rule 2 — `tz install` with a wrong flag: -s/-d (serial flag is -e) or -b/-w (tz build
-# flags; observed: "$TZ" install -w <project> -b Debug conflating build and install).
-# The tz token also matches variable-style invocations ($TZ, "$TZ", tz.exe) — the
-# observed miss was the binary path stored in a TZ variable.
-if has '(^|[^[:alnum:]])(tz|TZ)(\.exe)?["\\]*[[:space:]]+install\b'; then
-  # Scope the flag test to the tz install invocation ITSELF: in a compound command
-  # like `tz install -e emu -p /a.tpk && sdb -s emu shell ...` the -s belongs to
-  # sdb, not tz install. Cut the segment at the first & / | / ; before testing.
-  # (No \b in the sed pattern — BSD sed on macOS doesn't support it; the grep
-  # guard above already enforced the word boundary.)
-  tz_seg="$(printf '%s' "$cmd" | sed -nE 's/.*(^|[^[:alnum:]])((tz|TZ)(\.exe)?["\\]*[[:space:]]+install([[:space:]][^;|&]*)?).*/\2/p')"
-  [ -n "$tz_seg" ] || tz_seg="$cmd"
-  if printf '%s' "$tz_seg" | grep -Eq '[[:space:]]-[sdbw]\b'; then
-    deny "tz install takes ONLY -e (or --serial) for the device serial and -p for the ABSOLUTE package path — not -s/-d (serial is -e) and not -b/-w (those are tz build flags; install takes a built .tpk/.wgt, not a project dir). Build first if needed (tz build -b Debug -w <project-dir>), then install via the install runner: node <plugin>/lib/cli/project-manager-cli.js install --package <package> [--device-serial serial] [--run] — it does push + tz install + verification and returns a JSON envelope."
-  fi
-fi
-
-# Rule 3 — sdb treated as a directory (sdb/sdb), e.g. tools/sdb/sdb
-if has 'sdb/sdb'; then
-  deny "sdb is a FILE at <sdk>/tools/sdb (Windows: tools/sdb.exe), not a folder. Do not use tools/sdb/sdb. Run <sdk>/tools/sdb devices, or use the tizen-device-manager skill."
-fi
-
-# Rule 4 — manual gdbserver / raw remote-debug setup (exclude the wrapper script itself)
-if has 'gdbserver' && ! has 'tizen-native-gdb-debug'; then
-  deny "Do not launch gdbserver or wire up remote GDB by hand. Use the tizen-gdb-debug skill (tizen-native-gdb-debug script): it handles gdbserver, sdb port forwarding, the SDK-bundled gdb, and breakpoints. Pass -l (launch mode) to break at main before it runs."
-fi
-
-# Rule 5 — the `tizen` CLI (not available; use tz). Guard: the char before "tizen"
-# must be start-of-string or a non-alnum, non-hyphen char, so that:
-#   - words like citizen don't match (preceding char is alnum);
-#   - a hyphenated OWNER name like `flutter-tizen build` doesn't match (preceding char
-#     is "-", so it reads as a different tool, not the Tizen Studio CLI);
-#   - a real path-invoked CLI still matches (e.g. /opt/.../bin/tizen — preceding "/").
-# (\.bat|\.exe|\.sh)? covers the real launchers: tizen.bat / tizen.exe on Windows and,
-# on Ubuntu, BOTH the extensionless `tizen` and `tizen.sh` (both ship in Tizen Studio's
-# CLI bin). The optional suffix also matches the plain `tizen`. The leading boundary is
-# [^[:alnum:]-] (non-alnum AND non-hyphen) so: words like citizen don't match; a
-# hyphenated OWNER name like `flutter-tizen build` doesn't match (preceding "-", a
-# separate tool, not the Tizen Studio CLI); a path-invoked CLI still matches (e.g.
-# /opt/.../bin/tizen — preceding "/"). A hyphenated SUFFIX like tizen-create-project
-# won't match either — after "tizen" comes "-", not a launcher suffix or whitespace.
-# The verb list includes `version` and `list <something>` (observed in the wild:
-# `tizen version; tizen list templates`) — ANY tizen CLI invocation must be redirected,
-# not just the build/install ones.
-if has '(^|[^[:alnum:]-])tizen(\.bat|\.exe|\.sh)?[[:space:]]+(build|install|run|create|new|package|version|list([[:space:]]|-)+[a-z-]+)'; then
-  deny "The tizen CLI (including tizen.bat / tizen.exe / tizen.sh) is NOT available in this environment. Use tz instead: tz build / tz install / tz run / tz new. There is no 'tz list-device' — list connected devices with sdb devices, or emulators with tz emul list-vm. To create a project or LIST TEMPLATES, do NOT use any tizen CLI — use the tizen-create-project skill: run node <plugin>/lib/cli/project-manager-cli.js list-templates --type <type> to list templates, then node <plugin>/lib/cli/project-manager-cli.js create --type <type> --template <template> --parent-path <parentPath> --name <appName> to create."
-fi
-
-# Rule 6 — wrong sdb path (sdb is in tools/, not tools/tizen-core/)
-if has 'tools/tizen-core/sdb'; then
-  deny "sdb is at <sdk>/tools/sdb (Windows: tools/sdb.exe), NOT under tools/tizen-core/. Only tz and the other tizen-core tools live in tools/tizen-core/."
-fi
-
-# Rule 7 — tizen-studio toolchain (standardize on tizen-sdk). [/\\]+ tolerates the
-# JSON-escaped backslash in Windows paths (tizen-studio\\tools).
-if has 'tizen-studio[/\\]+tools'; then
-  deny "Use the tizen-sdk install, not tizen-studio. Tools live under <sdk>/tools (tz at tools/tizen-core/tz, sdb at tools/sdb). Point TIZEN_SDK_PATH at your tizen-sdk directory."
-fi
-
-# Rule 8 — tz install with a RELATIVE -p package path (must be absolute).
-# Extract the -p argument (stripping any wrapping quotes — raw ' or the
-# JSON-escaped \") and ALLOW it when it starts with / or ~ (absolute), a Windows
-# drive letter (X:), or $ — a $(realpath ...) command substitution or a $VAR
-# reference resolves at runtime, and is exactly what the deny message suggests.
-# Everything else (MyApp.tpk, ./MyApp.tpk) is a relative path and is denied.
-if has 'tz[[:space:]]+install\b' && has '[[:space:]]-p[[:space:]]+[^[:space:]]'; then
-  p_arg="$(printf '%s' "$cmd" | sed -nE "s/.*[[:space:]]-p[[:space:]]+[\\\"']*([^[:space:]]+).*/\1/p")"
-  case "$p_arg" in
-    /*|~*|[A-Za-z]:*|\$*) : ;;  # absolute path, home, drive letter, substitution/variable
-    *) deny "tz install needs an ABSOLUTE package path with -p; relative paths cause resolution errors. Linux/macOS: -p \$(realpath <pkg>). Windows (PowerShell): -p (Resolve-Path <pkg>).Path. Or use the tizen-install-app skill." ;;
-  esac
-fi
-
-# Rule 9 — manual sdb port forwarding for a DEBUGGER session (exclude the wrapper
-# scripts and sdb-helper). This fires only when the SAME command also names a
-# debugger (gdb/gdbserver, netcoredbg, lldb, vsdbg). A bare
-# `sdb forward tcp:<host> tcp:<device>` is legitimate non-debug forwarding (web
-# inspector, a custom TCP service): it is the command the tizen-sdb-helper RUNNER
-# emits, and the runner's confirmed-gated-command path has the model run that exact
-# string — the old rule denied every `forward tcp:` and then pointed at that skill,
-# so there was NO allowed way to forward a port (issue #84).
-# The debugger tokens are matched case-insensitively: the .NET launch line spells
-# it NETCOREDBG (launch_app ... __AUL_SDK__ NETCOREDBG ...).
-if has 'sdb' && has 'forward[[:space:]]+tcp:' && has_i '(gdb|netcoredbg|lldb|vsdbg)' \
-   && ! has 'tizen-native-gdb-debug' && ! has 'tizen-dotnet-debug' && ! has 'tizen-sdb-helper' && ! has 'sdb-helper'; then
-  deny "Do not set up sdb port forwarding for a debugger by hand. For Native (C/C++) apps use the tizen-gdb-debug skill (tizen-native-gdb-debug script); for .NET apps use the tizen-dotnet-debug skill (netcoredbg DAP server). Both handle the forwarding themselves. Plain non-debug port forwarding (web inspector, custom TCP services) goes through the tizen-sdb-helper runner: node <plugin>/lib/cli/sdb-helper-cli.js --request 'forward port <host_port>'."
-fi
-
-# Rule 16 — hunting for the sdb binary on the host (which/where/command -v/type/
-# Get-Command sdb, find -name sdb). Every sdb action has a skill runner that resolves
-# sdb from the SDK itself; the model searching for it is the first step of the
-# raw-sdb detour reported in issue #96 ("manually started search for the sdb
-# location"). Runner invocations (*-cli.js) and the skills' own lookup snippets never
-# search for sdb, so nothing legitimate matches. `has_i` because PowerShell cmdlets
-# are case-insensitive (get-command). The trailing boundary keeps sdb-helper,
-# sdb-helper-cli.js and sdbd out of the match.
-if has_i '(^|[^[:alnum:]_./-])(which|whereis|where(\.exe)?|type|command[[:space:]]+-v|Get-Command)[[:space:]]+(-[[:alnum:]]+[[:space:]]+)*["'"'"'\\]*sdb(\.exe)?["'"'"'\\]*([[:space:]]|$|;|&|\|)' \
-   || has_i 'find[[:space:]].*-i?name[[:space:]]+["'"'"'\\]*sdb(\.exe)?["'"'"'\\]*([[:space:]]|$|;|&|\|)'; then
-  deny "Do not search for the sdb binary yourself. Every sdb action goes through a skill runner that locates sdb (<sdk>/tools/sdb) on its own: device shell/forward/reboot/launch/kill -> tizen-sdb-helper (node <plugin>/lib/cli/sdb-helper-cli.js --request '<the user ask>'); device logs (view/save/clear, dlog) -> tizen-dlog-analyzer (node <plugin>/lib/cli/dlog-analyzer-cli.js log-dump | log-clear --confirm | start start-monitoring); connect to an IP -> tizen-remote-device (remote-device-cli.js connect <ip>); list devices -> tizen-device-manager; push/pull -> tizen-file-transfer. Run the runner and report its JSON envelope."
-fi
-
-# Rule 20 — finding the emulator VMs by hand (issue #268). Asked to "provide the list
-# of emulators available", the model skipped the tizen-create-emulator skill and went
-# looking itself: a raw `em-cli list-vm`, or `ls` / `find` / `Get-ChildItem` over the
-# SDK data directory that holds the VMs (<sdk>-data/emulator/vms). Both bypass the
-# runner (which resolves em-cli from the configured SDK, tells a broken em-cli apart
-# from "no VMs", and reports each VM's profile). Exempt: the runners / wrapper scripts,
-# whose command line names them (`node "$CLI" …` included — a runner flag may carry a
-# path under emulator/vms, e.g. --file-sharing-path). The em-cli token must look like an
-# INVOCATION, not a mention: followed by an em-cli subcommand or flag (`em-cli list-vm`,
-# `"$SDK/tools/emulator/bin/em-cli" -h`), or standing at the start of a simple command
-# with an optional path prefix (`cd …/bin && ./em-cli`). A bare mention of the word —
-# `grep -r em-cli SKILL.md`, a commit message — is not. The runner's own file name
-# (emulator-manager-cli.js) contains "-cli" but not "em-cli". $EMCLI / $EM_CLI variable
-# forms are the same detour spelled differently and take the same subcommand test.
-emcli_sub='(list-(vm|vms|platform|platforms|template|templates)|create(-image)?|delete|launch|detail|modify|reset|-[-a-zA-Z])'
-if ! has '(-cli\.js|\$CLI["\\]*[[:space:]]|tizen-emulator-manager|tizen-device-manager|tizen-launch-emulator)' \
-   && { has '(^|[^[:alnum:]_-])em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
-        || has '(^|[;&|(][[:space:]]*)([^[:space:];&|"'"'"']*/)?em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]*($|;|&|\|)' \
-        || has_i '\$\{?EM_?CLI\}?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
-        || has_i 'emulator[/\\]+vms([^[:alnum:]_]|$)'; }; then
-  deny "Do not look for emulator VMs yourself - no raw em-cli, and no ls/find/Get-ChildItem over <sdk>-data/emulator/vms. Listing, inspecting, creating and deleting emulator VMs is the tizen-create-emulator skill: node <plugin>/lib/cli/emulator-manager-cli.js list-vm --detail lists the existing VMs with platform, profile, resolution and RAM (list-platform / list-template --profile tizen|tv for the images and sizes, create / delete / detail / modify for the rest); launching one is tizen-launch-emulator (emulator-manager-cli.js launch --vm-name <name>). The runner locates em-cli from the configured SDK on its own and returns a JSON envelope - report that envelope, and take each VM's profile from it (tizen-* images are the unified tizen profile, not Mobile)."
-fi
+# ---------------------------------------------------------------------------
+# Shell-syntax rules. These catch host pitfalls (Git Bash vs PowerShell), not
+# Tizen policy, so they apply to every command regardless of SDK setup.
+# ---------------------------------------------------------------------------
 
 # Rule 10 — powershell -File given an MSYS path (/c/...). PowerShell needs a Windows
 # path; a Git Bash `find` result is an MSYS path. \\?\"? tolerates the JSON-escaped quote.
 if has 'powershell' && has '-File[[:space:]]+\\?"?/'; then
   deny "PowerShell -File requires a Windows path, but a Git Bash find result is an MSYS path like /c/Users/... . Convert it first: WINPATH=\$(cygpath -w RESULT) then pass -File WINPATH. (Or use a path that starts with a drive letter, e.g. C: with backslashes.)"
-fi
-
-# Rule 11 — hand-rolled gdb session (gdb invoked with a -x init file) outside the
-# wrapper. The wrapper command contains 'tizen-native-gdb-debug' so it is excluded.
-if has 'gdb' && has '[[:space:]]-x[[:space:]]' && ! has 'tizen-native-gdb-debug'; then
-  deny "Don't run gdb with a hand-written -x init file. Use the tizen-gdb-debug skill (tizen-native-gdb-debug script): it writes a BOM-free init file, converts paths for gdb, launches gdbserver, forwards the port, and sets breakpoints. Pass -l for launch mode (break at main)."
 fi
 
 # Rule 12 — improvised Start-Process wrapper to background a script with stream
@@ -295,6 +171,185 @@ fi
 if [ "$tool" != "PowerShell" ] && has '(^|[[:space:]])[A-Za-z]:[\][\][[:alnum:]_.]'; then
   deny "Unquoted Windows path with backslashes in a Bash command — Bash strips the backslashes (cd C:(backslash)Users(backslash)x becomes C:Usersx: No such file or directory). Put the path in quotes, or use forward slashes: cd C:/Users/... or /c/Users/... (Git Bash). For PowerShell -File args, quote the path or convert with cygpath -w."
 fi
+
+# ---------------------------------------------------------------------------
+# Scope of the Tizen tooling rules (issue #47). The hook is registered for EVERY
+# shell command of the harness, in every project, so the rules below apply only
+# once the user has configured an SDK through this plugin: ~/.tizen.sdk.path.config,
+# written by tizen-sdk-init and by the installer's auto-init. On a machine without
+# that file — someone who installed the plugin but is working on something else,
+# or a Tizen Studio user who never ran sdk-init — a `which sdb`, a `tizen version`
+# or a PATH export must not be second-guessed, and the hook stays out of the way.
+# TIZEN_SDK_SKILLS_SDK_CONFIG overrides the config file location (used by the tests).
+# ---------------------------------------------------------------------------
+sdk_cfg="${TIZEN_SDK_SKILLS_SDK_CONFIG:-${HOME:-}/.tizen.sdk.path.config}"
+sdk_path=""
+if [ -n "${HOME:-}${TIZEN_SDK_SKILLS_SDK_CONFIG:-}" ] && [ -f "$sdk_cfg" ]; then
+  sdk_path="$(tr -d '\r\n' < "$sdk_cfg" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
+fi
+[ -n "$sdk_path" ] || exit 0
+# JSON-safe copy for deny messages (a Windows path carries backslashes).
+sdk_json="$(printf '%s' "$sdk_path" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')"
+
+# Rule 1 — `tz build` / `tz pack` with -p (tz build has no -p; project dir is -w)
+if has 'tz[[:space:]]+(build|pack)\b' && has '[[:space:]]-p\b'; then
+  deny "tz build/pack take the project directory via -w, NOT -p. Use: tz build -b Debug -w <project-dir> then tz pack -w <project-dir>. (-p is only for tz install, the package path.) Prefer invoking the tizen-build-project skill, which runs the wrapper script."
+fi
+
+# Rule 2 — `tz install` with a wrong flag: -s/-d (serial flag is -e) or -b/-w (tz build
+# flags; observed: "$TZ" install -w <project> -b Debug conflating build and install).
+# The tz token also matches variable-style invocations ($TZ, "$TZ", tz.exe) — the
+# observed miss was the binary path stored in a TZ variable.
+if has '(^|[^[:alnum:]])(tz|TZ)(\.exe)?["\\]*[[:space:]]+install\b'; then
+  # Scope the flag test to the tz install invocation ITSELF: in a compound command
+  # like `tz install -e emu -p /a.tpk && sdb -s emu shell ...` the -s belongs to
+  # sdb, not tz install. Cut the segment at the first & / | / ; before testing.
+  # (No \b in the sed pattern — BSD sed on macOS doesn't support it; the grep
+  # guard above already enforced the word boundary.)
+  tz_seg="$(printf '%s' "$cmd" | sed -nE 's/.*(^|[^[:alnum:]])((tz|TZ)(\.exe)?["\\]*[[:space:]]+install([[:space:]][^;|&]*)?).*/\2/p')"
+  [ -n "$tz_seg" ] || tz_seg="$cmd"
+  if printf '%s' "$tz_seg" | grep -Eq '[[:space:]]-[sdbw]\b'; then
+    deny "tz install takes ONLY -e (or --serial) for the device serial and -p for the ABSOLUTE package path — not -s/-d (serial is -e) and not -b/-w (those are tz build flags; install takes a built .tpk/.wgt, not a project dir). Build first if needed (tz build -b Debug -w <project-dir>), then install via the install runner: node <plugin>/lib/cli/project-manager-cli.js install --package <package> [--device-serial serial] [--run] — it does push + tz install + verification and returns a JSON envelope."
+  fi
+fi
+
+# Rule 3 — sdb treated as a directory (sdb/sdb), e.g. tools/sdb/sdb
+if has 'sdb/sdb'; then
+  deny "sdb is a FILE at <sdk>/tools/sdb (Windows: tools/sdb.exe), not a folder. Do not use tools/sdb/sdb. Run <sdk>/tools/sdb devices, or use the tizen-device-manager skill."
+fi
+
+# Rule 4 — manual gdbserver / raw remote-debug setup (exclude the wrapper script itself)
+if has 'gdbserver' && ! has 'tizen-native-gdb-debug'; then
+  deny "Do not launch gdbserver or wire up remote GDB by hand. Use the tizen-gdb-debug skill (tizen-native-gdb-debug script): it handles gdbserver, sdb port forwarding, the SDK-bundled gdb, and breakpoints. Pass -l (launch mode) to break at main before it runs."
+fi
+
+# (Rule 5, which denied every Tizen Studio `tizen` CLI invocation, was removed in
+# 1.4.5 — issue #47. The CLI does exist for Tizen Studio users; the skills still
+# steer the model to the runners, the hook no longer forbids the tool itself.)
+
+# Rule 6 — wrong sdb path (sdb is in tools/, not tools/tizen-core/)
+if has 'tools/tizen-core/sdb'; then
+  deny "sdb is at <sdk>/tools/sdb (Windows: tools/sdb.exe), NOT under tools/tizen-core/. Only tz and the other tizen-core tools live in tools/tizen-core/."
+fi
+
+# Rule 7 — sdb run from a directory other than the configured SDK's tools/ (issue #47;
+# replaces the old "tizen-studio is not tizen-sdk" rule, which denied any mention of a
+# tizen-studio/tools path even when that WAS the user's configured SDK). Every runner
+# resolves sdb from the SDK named in ~/.tizen.sdk.path.config; a hand-typed sdb that
+# points somewhere else — a second SDK install, tools/tizen-core/, a stray copy — talks
+# to a different sdb server and Device Manager state than the runners do. Only an sdb
+# invoked WITH a directory prefix is checked: a bare `sdb devices` (PATH-resolved), a
+# `$SDK`/`%VAR%` prefix (resolved at runtime) and a cwd-relative `./sdb` are left alone,
+# since the hook cannot tell where they resolve. The comparison normalises quotes,
+# backslashes (JSON-escaped `\\`), MSYS drive prefixes (/c/ -> c:/), a leading ~ and
+# case. A quoted path with spaces compares as a suffix of the command text up to the
+# `/sdb`, so "C:\Program Files\Tizen\tools\sdb.exe" does not false-positive on the space.
+# `=` is a token boundary so that `SDB=~/sdk/tools/sdb` compares the path, not `SDB=~/…`.
+case "$cmd" in *[sS][dD][bB]*) cmd_has_sdb_token=1 ;; *) cmd_has_sdb_token=0 ;; esac
+sdb_outside_sdk() {
+  # The paths go in through the environment, not -v: awk expands escape sequences
+  # in -v values, so a Windows path like C:\tizen-sdk would arrive with a TAB in it.
+  printf '%s' "$cmd" | GUARD_SDK_PATH="$sdk_path" GUARD_HOME="${HOME:-}" awk '
+    function norm(s) {
+      gsub(/\\"/, "", s); gsub("\047", "", s)
+      gsub(/\\+/, "/", s); gsub(/\/\/+/, "/", s)
+      return tolower(s)
+    }
+    # /c/foo (MSYS) -> c:/foo
+    function drive(s) { if (s ~ /^\/[a-z]\//) s = substr(s, 2, 1) ":" substr(s, 3); return s }
+    function strip_slash(s) { sub(/\/+$/, "", s); return s }
+    BEGIN {
+      want = drive(strip_slash(norm(ENVIRON["GUARD_SDK_PATH"]))) "/tools"
+      h = drive(strip_slash(norm(ENVIRON["GUARD_HOME"])))
+      bad = 0
+    }
+    {
+      c = norm($0); off = 0; rest = c
+      while (match(rest, /\/sdb(\.exe)?([[:space:];&|()]|$)/)) {
+        pos = off + RSTART
+        prefix = substr(c, 1, pos - 1)
+        dir = prefix; sub(/.*[[:space:];&|()=]/, "", dir)
+        off = pos; rest = substr(c, pos + 1)
+        if (dir ~ /[$%]/) continue                      # variable, resolved at runtime
+        if (dir == "" || dir == "." || dir ~ /^\.\.?\//) continue   # relative to cwd
+        if (dir ~ /^~(\/|$)/) { if (drive(h substr(dir, 2)) == want) continue; bad = 1; break }
+        if (drive(dir) == want) continue
+        if (length(prefix) >= length(want) && substr(prefix, length(prefix) - length(want) + 1) == want) continue
+        bad = 1; break
+      }
+    }
+    END { exit bad ? 0 : 1 }
+  '
+}
+if [ "$cmd_has_sdb_token" -eq 1 ] && sdb_outside_sdk; then
+  deny "Use only the sdb of the configured Tizen SDK: $sdk_json/tools/sdb (Windows: tools/sdb.exe). That is the SDK named in ~/.tizen.sdk.path.config and the one every skill runner talks to; an sdb from another directory (another SDK install, tools/tizen-core/, a copy) runs a different sdb server and sees different Device Manager state. If that other SDK is the one you want, point the config at it first (tizen-sdk-init / node <plugin>/lib/cli/sdk-init-cli.js --sdk-path <dir>), then retry."
+fi
+
+# Rule 8 — tz install with a RELATIVE -p package path (must be absolute).
+# Extract the -p argument (stripping any wrapping quotes — raw ' or the
+# JSON-escaped \") and ALLOW it when it starts with / or ~ (absolute), a Windows
+# drive letter (X:), or $ — a $(realpath ...) command substitution or a $VAR
+# reference resolves at runtime, and is exactly what the deny message suggests.
+# Everything else (MyApp.tpk, ./MyApp.tpk) is a relative path and is denied.
+if has 'tz[[:space:]]+install\b' && has '[[:space:]]-p[[:space:]]+[^[:space:]]'; then
+  p_arg="$(printf '%s' "$cmd" | sed -nE "s/.*[[:space:]]-p[[:space:]]+[\\\"']*([^[:space:]]+).*/\1/p")"
+  case "$p_arg" in
+    /*|~*|[A-Za-z]:*|\$*) : ;;  # absolute path, home, drive letter, substitution/variable
+    *) deny "tz install needs an ABSOLUTE package path with -p; relative paths cause resolution errors. Linux/macOS: -p \$(realpath <pkg>). Windows (PowerShell): -p (Resolve-Path <pkg>).Path. Or use the tizen-install-app skill." ;;
+  esac
+fi
+
+# Rule 9 — manual sdb port forwarding for a DEBUGGER session (exclude the wrapper
+# scripts and sdb-helper). This fires only when the SAME command also names a
+# debugger (gdb/gdbserver, netcoredbg, lldb, vsdbg). A bare
+# `sdb forward tcp:<host> tcp:<device>` is legitimate non-debug forwarding (web
+# inspector, a custom TCP service): it is the command the tizen-sdb-helper RUNNER
+# emits, and the runner's confirmed-gated-command path has the model run that exact
+# string — the old rule denied every `forward tcp:` and then pointed at that skill,
+# so there was NO allowed way to forward a port (issue #84).
+# The debugger tokens are matched case-insensitively: the .NET launch line spells
+# it NETCOREDBG (launch_app ... __AUL_SDK__ NETCOREDBG ...).
+if has 'sdb' && has 'forward[[:space:]]+tcp:' && has_i '(gdb|netcoredbg|lldb|vsdbg)' \
+   && ! has 'tizen-native-gdb-debug' && ! has 'tizen-dotnet-debug' && ! has 'tizen-sdb-helper' && ! has 'sdb-helper'; then
+  deny "Do not set up sdb port forwarding for a debugger by hand. For Native (C/C++) apps use the tizen-gdb-debug skill (tizen-native-gdb-debug script); for .NET apps use the tizen-dotnet-debug skill (netcoredbg DAP server). Both handle the forwarding themselves. Plain non-debug port forwarding (web inspector, custom TCP services) goes through the tizen-sdb-helper runner: node <plugin>/lib/cli/sdb-helper-cli.js --request 'forward port <host_port>'."
+fi
+
+# (Rule 16, which denied looking the sdb binary up on the host — which / where /
+# Get-Command / find -name sdb — was removed in 1.4.5, issue #47. A read-only lookup
+# is a legitimate environment check; the runner skills still tell the model not to go
+# hunting during a Tizen workflow, and Rule 7 above keeps a found sdb that is not the
+# configured SDK's from being run.)
+
+# Rule 20 — finding the emulator VMs by hand (issue #268). Asked to "provide the list
+# of emulators available", the model skipped the tizen-create-emulator skill and went
+# looking itself: a raw `em-cli list-vm`, or `ls` / `find` / `Get-ChildItem` over the
+# SDK data directory that holds the VMs (<sdk>-data/emulator/vms). Both bypass the
+# runner (which resolves em-cli from the configured SDK, tells a broken em-cli apart
+# from "no VMs", and reports each VM's profile). Exempt: the runners / wrapper scripts,
+# whose command line names them (`node "$CLI" …` included — a runner flag may carry a
+# path under emulator/vms, e.g. --file-sharing-path). The em-cli token must look like an
+# INVOCATION, not a mention: followed by an em-cli subcommand or flag (`em-cli list-vm`,
+# `"$SDK/tools/emulator/bin/em-cli" -h`), or standing at the start of a simple command
+# with an optional path prefix (`cd …/bin && ./em-cli`). A bare mention of the word —
+# `grep -r em-cli SKILL.md`, a commit message — is not. The runner's own file name
+# (emulator-manager-cli.js) contains "-cli" but not "em-cli". $EMCLI / $EM_CLI variable
+# forms are the same detour spelled differently and take the same subcommand test.
+emcli_sub='(list-(vm|vms|platform|platforms|template|templates)|create(-image)?|delete|launch|detail|modify|reset|-[-a-zA-Z])'
+if ! has '(-cli\.js|\$CLI["\\]*[[:space:]]|tizen-emulator-manager|tizen-device-manager|tizen-launch-emulator)' \
+   && { has '(^|[^[:alnum:]_-])em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
+        || has '(^|[;&|(][[:space:]]*)([^[:space:];&|"'"'"']*/)?em-cli(\.bat|\.exe)?["'"'"'\\]*[[:space:]]*($|;|&|\|)' \
+        || has_i '\$\{?EM_?CLI\}?["'"'"'\\]*[[:space:]]+'"$emcli_sub" \
+        || has_i 'emulator[/\\]+vms([^[:alnum:]_]|$)'; }; then
+  deny "Do not look for emulator VMs yourself - no raw em-cli, and no ls/find/Get-ChildItem over <sdk>-data/emulator/vms. Listing, inspecting, creating and deleting emulator VMs is the tizen-create-emulator skill: node <plugin>/lib/cli/emulator-manager-cli.js list-vm --detail lists the existing VMs with platform, profile, resolution and RAM (list-platform / list-template --profile tizen|tv for the images and sizes, create / delete / detail / modify for the rest); launching one is tizen-launch-emulator (emulator-manager-cli.js launch --vm-name <name>). The runner locates em-cli from the configured SDK on its own and returns a JSON envelope - report that envelope, and take each VM's profile from it (tizen-* images are the unified tizen profile, not Mobile)."
+fi
+
+# Rule 11 — hand-rolled gdb session (gdb invoked with a -x init file) outside the
+# wrapper. The wrapper command contains 'tizen-native-gdb-debug' so it is excluded.
+if has 'gdb' && has '[[:space:]]-x[[:space:]]' && ! has 'tizen-native-gdb-debug'; then
+  deny "Don't run gdb with a hand-written -x init file. Use the tizen-gdb-debug skill (tizen-native-gdb-debug script): it writes a BOM-free init file, converts paths for gdb, launches gdbserver, forwards the port, and sets breakpoints. Pass -l for launch mode (break at main)."
+fi
+
+# (Rules 10, 12–15 — the shell-syntax pitfalls — run before the SDK-config gate, above.)
 
 # Rule 17 — kernel log by hand over sdb (issue #213). After `dlog-collect` the model
 # went on to `sdb shell dmesg` / `cat /proc/kmsg` / `dlogutil -b kmsg` instead of the
