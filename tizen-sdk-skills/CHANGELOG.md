@@ -11,6 +11,13 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **Claude Code PR review workflow** (`.github/workflows/claude-review-tizen-sdk-skills.yml`).
+  Pull requests that touch `tizen-sdk-skills/` get an automatic first-pass review from
+  `anthropics/claude-code-action`. Fork and draft PRs are skipped. Requires the Claude GitHub
+  App and an `ANTHROPIC_API_KEY` repository secret.
+
 ## [1.4.5] — 2026-10-19
 
 The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
