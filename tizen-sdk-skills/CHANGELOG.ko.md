@@ -11,6 +11,81 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
+  `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
+  규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
+  항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서
+  `--format github`으로 실행하므로, 각 항목이 PR의 변경된 파일에 주석으로도 표시됩니다.
+
+### Changed
+
+- **`createEmulator`, `launchEmulator`, `manageEmulator`를 헬퍼로 분리**
+  (`common/lib/core/emulator.js`). 옵션 파싱, 검증, 크기/템플릿 결정, 실패·결과 빌더를
+  모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(114 → 16, 46 → 11, 53 → 7). 동작 변화는
+  없습니다. export API, 응답 envelope, 메시지, 오류 코드는 그대로입니다.
+- **`setupGdbDebug`, `setupDotnetDebug`를 공통 헬퍼로 분리**
+  (`common/lib/core/debug.js`). 옵션 검증, 스크립트 인자, 설정 스크립트 실행, 실패 분류를 두
+  함수가 함께 쓰도록 바꿔 순환 복잡도를 낮췄습니다(52 → 6, 85 → 6). 동작 변화는 없습니다.
+  export API, 응답 envelope, 스크립트 인자, 생성되는 `launch.json` / `tasks.json`은 그대로입니다.
+
+### Fixed
+
+- **`launch-emulator --timeout 0`이 실패하지 않고 300초를 기다리던 문제** (issue #58;
+  `common/lib/core/emulator.js`). 이제 `--timeout`을 아예 주지 않았을 때만 기본값 300초를
+  씁니다. `0`은 1–540 범위를 벗어난 다른 값처럼 `invalid_parameters`로 거부되며,
+  `create --launch`와 동작이 같아졌습니다.
+- **`emulator-manager modify --size`를 `--platform` 없이 쓰면 잘못된 템플릿 목록에서 크기를
+  찾던 문제** (issue #59). 이제 `list-vm --detail`로 VM 자신의 플랫폼을 찾아 그 플랫폼의
+  템플릿 목록을 쓰고, 경고로 알려 줍니다. 조회에 실패하면 이전 동작을 유지합니다.
+- **`launchEmulator` JSDoc** (issue #60)이 "첫 번째 VM" 대신 프로필 기준 VM 선택 규칙을
+  설명하도록 고쳤습니다.
+- **`gdb-debug`가 비어 있는 `GDB init file:` 표시를 받아들이던 문제** (issue #63;
+  `common/lib/core/debug.js`). 같은 줄에 경로가 있을 때만 인정합니다. 비어 있으면 더 이상
+  성공으로 보고하지 않고, 다음 출력 줄을 init 파일로 잘못 읽지도 않습니다.
+- **`dotnet-debug`가 모든 "package … not found"를 netcoredbg 없음으로 보고하던 문제**
+  (issue #64). netcoredbg 관련 출력만 그렇게 분류하고, 나머지는 스크립트 출력이 담긴 일반
+  설정 오류로 보고합니다.
+- **디버그 설정 출력 판별을 더 엄격하게** (issue #65). DotNET `port_forwarded`는 스크립트의
+  `Port <N> forwarded` 표시를 기준으로 하고, GDB도 DotNET처럼 `No devices found`를 인식합니다.
+
+## [1.4.5] — 2026-10-19
+
+명령 가드 훅의 적용 범위를 Tizen 작업으로 한정했습니다 (fixes #47): Tizen 도구 규칙은
+플러그인으로 SDK를 설정한 뒤에만 적용되고, `tizen` CLI나 sdb 위치 확인을 더 이상 금지하지
+않으며, 직접 입력한 sdb는 설정된 SDK의 `tools/sdb`여야 합니다.
+
+### Fixed
+
+- **명령 가드 훅이 SDK 스킬 워크플로 밖의 일반 `sdb` / `tizen` 명령을 차단** (issue #47;
+  `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `docs/deployment/HARNESS_SETUP.{md,en.md}`). 훅은 하네스의 모든 프로젝트, 모든 셸 명령에
+  등록되므로 Tizen 스킬을 쓰지 않는 상황의 단순 환경 확인 — `which sdb`, `command -v sdb`,
+  CLI가 설치된 상태의 `tizen version`, `export PATH="$HOME/tizen-studio/tools:$PATH"` — 까지
+  거부되었고, `which sdb && sdb devices`는 통째로 막혔습니다. 세 가지를 바꿨습니다.
+  - **범위 게이트.** Tizen 도구 규칙(tz 플래그, sdb 경로, gdbserver, em-cli, dlog 프로브,
+    타이머 대기)은 이제 `~/.tizen.sdk.path.config` — `tizen-sdk-init`과 설치기의 자동 초기화가
+    기록하는 파일 — 가 있을 때만 동작합니다. 그 파일이 없으면(플러그인은 설치했지만 Tizen과
+    무관한 프로젝트, 또는 sdk-init을 한 번도 실행하지 않은 Tizen Studio 사용자) 훅은 셸 문법
+    규칙(`powershell -File`에 MSYS 경로, `Start-Process` 리다이렉트, Bash의 `$null`, 백슬래시
+    경로)만 유지합니다 — Tizen 정책이 아니라 호스트 셸의 함정이기 때문입니다.
+    `TIZEN_SDK_SKILLS_SDK_CONFIG`로 테스트에서 설정 파일 위치를 바꿀 수 있습니다.
+  - **규칙 5·16 제거.** Tizen Studio의 `tizen` CLI(Tizen Studio 사용자에게는 실제로 존재)와
+    sdb 바이너리 조회(`which` / `where` / `Get-Command sdb`, `find -name sdb`)를 더 이상
+    거부하지 않습니다. Tizen 워크플로 중에는 스킬이 여전히 러너로 유도하며, 가드 규칙 문서는
+    CLI가 "존재하지 않는다"고 단정하는 대신 그 점을 설명합니다.
+  - **규칙 7 재작성: sdb는 설정된 SDK의 것이어야 합니다.** 기존 규칙은 사용자의 설정된 SDK가
+    `tizen-studio`일 때조차 그 경로의 언급만으로 거부했습니다. 이제 직접 입력한
+    `<dir>/sdb[.exe]`의 디렉터리를 `<~/.tizen.sdk.path.config>/tools`와 비교해 — 따옴표,
+    JSON 이스케이프된 백슬래시, MSYS `/c/` 접두사, 선행 `~`, 대소문자를 정규화하고 따옴표로
+    감싼 경로의 공백을 허용 — 다른 디렉터리의 sdb(두 번째 SDK 설치본, `tools/tizen-core/`,
+    복사본)를 설정 경로와 `tizen-sdk-init`을 안내하는 메시지로 거부합니다. 맨 `sdb devices`
+    (PATH 해석), `$SDK` / `%VAR%` 접두사, cwd 상대 `./sdb`는 건드리지 않습니다.
+  - 훅 테스트는 임시 설정(POSIX·Windows·공백 포함 SDK 경로)과 설정 없음 패스로 게이트를
+    검증하며, HARNESS_SETUP 스모크 테스트는 제거된 tizen-CLI 규칙 대신 `tz build -p`를 씁니다.
+
 ## [1.4.4] — 2026-10-16
 
 테스트 러너가 이제 PATH의 전역 설치 `tizen-cli`/`tizen-sdk` 바이너리를 찾지 않고 항상

@@ -84,6 +84,12 @@ npm run lint        # TC 스키마 dry-run + doc-stats + 러너 헬퍼 테스트
 npm run test:safe   # safe 티어 TC, SDK나 디바이스 불필요
 ```
 
+이어서 변경한 파일에 대한 규칙을 검사합니다 (CI와 동일):
+
+```bash
+node scripts/check-pr.js --base origin/main
+```
+
 ## 7. 테스트 티어
 
 티어 정의는

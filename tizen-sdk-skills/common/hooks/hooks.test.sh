@@ -20,6 +20,17 @@ cd "$(dirname "$0")" || exit 1
 
 failures=0
 
+# The Tizen tooling rules of check-tizen-commands.sh apply only when an SDK is
+# configured (~/.tizen.sdk.path.config, issue #47). Point the hook at a test
+# config so the rule tests do not depend on the machine running them; the
+# "scope gate" section below swaps in a missing / other config on purpose.
+cfg_tmp="$(mktemp -d)"
+printf '/opt/tizen-sdk\n' > "$cfg_tmp/posix.config"
+printf 'C:\\tizen-sdk\r\n' > "$cfg_tmp/windows.config"
+printf '/opt/tizen studio/sdk\n' > "$cfg_tmp/spaces.config"
+export TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/posix.config"
+trap 'rm -rf "$cfg_tmp"' EXIT
+
 # run <hook> <command-json-escaped> -> echoes "deny" or "allow"
 run() {
   printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$2" \
@@ -68,7 +79,7 @@ check $H deny 'git-foo tz build -p x'
 # the whole line once the first token was git/gh, so `git … && <anything>`
 # skipped every rule (review finding D1).
 check $H deny 'git --version && tools/sdb/sdb devices'
-check $H deny 'git log -1 && which sdb'
+check $H deny 'git log -1 && /opt/tizen-studio/tools/sdb devices'
 check $H deny 'git status; tz build -p /w/app'
 check $H deny 'git rev-parse HEAD | xargs echo && gdbserver :1234 ./app'
 check $H deny 'cd /w/app && git init && tz build -p /w/app'
@@ -88,7 +99,7 @@ echo "--- check-tizen-commands: sdb port forwarding (issue #84) ---"
 # leaving no permitted way to forward a port.
 check $H allow 'sdb forward tcp:8080 tcp:8080'
 check $H allow 'sdb -s emulator-26101 forward tcp:9222 tcp:9222'
-check $H allow '/c/tizen-sdk/tools/sdb.exe -s emulator-26101 forward tcp:9090 tcp:8080'
+check $H allow '/opt/tizen-sdk/tools/sdb -s emulator-26101 forward tcp:9090 tcp:8080'
 check $H allow '\"$TIZEN_SDK_PATH/tools/sdb\" -s 0123456789ABCDEF forward tcp:8000 tcp:8000'
 check $H allow 'sdb -s emulator-26101 forward --list'
 check $H allow 'sdb -s emulator-26101 forward --remove tcp:8080'
@@ -101,27 +112,91 @@ check $H allow 'bash tizen-native-gdb-debug.sh -a org.example.app # sdb forward 
 check $H allow 'node tizen-dotnet-debug-cli.js --forward tcp:4711 tcp:4711 netcoredbg'
 
 echo
-echo "--- check-tizen-commands: hunting for the sdb binary (issue #96) ---"
-# The first step of the raw-sdb detour: locating sdb on the host instead of running
-# the skill runner (which resolves sdb itself).
-check $H deny 'which sdb'
-check $H deny 'command -v sdb'
-check $H deny 'type sdb'
-check $H deny 'where sdb'
-check $H deny 'where.exe sdb.exe'
-check $H deny 'Get-Command sdb'
-check $H deny 'get-command sdb.exe'
-check $H deny 'find / -name sdb 2>/dev/null'
-check $H deny 'find \"$HOME/tizen-sdk\" -iname sdb.exe'
-check $H deny 'which sdb || ls ~/tizen-sdk/tools'
-# Legitimate commands that merely contain the token must stay allowed.
+echo "--- check-tizen-commands: tizen CLI and sdb lookups are not blocked (issue #47) ---"
+# Rules 5 and 16 are gone: a read-only check for the tooling is a legitimate
+# environment question, and the tizen CLI does exist for Tizen Studio users.
+check $H allow 'which sdb'
+check $H allow 'command -v sdb'
+check $H allow 'type sdb'
+check $H allow 'where.exe sdb.exe'
+check $H allow 'Get-Command sdb'
+check $H allow 'find / -name sdb 2>/dev/null'
+check $H allow 'which sdb && sdb devices'
+check $H allow 'tizen version'
+check $H allow 'tizen version; tizen list templates'
+check $H allow 'tizen build-native -- /w/app'
+check $H allow 'tizen security-profiles list'
+check $H allow 'export PATH=\"$HOME/tizen-studio/tools:$PATH\"'
+check $H allow 'sdb devices'
+check $H allow 'sdb version'
+# …and the runners / unrelated commands that merely contain the token, as before.
 check $H allow 'node sdb-helper-cli.js --request \"forward port 8080\"'
 check $H allow 'node \"$CLI\" --request \"run shell command ls -la\"'
 check $H allow 'ls ~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdb-helper-cli.js'
 check $H allow 'which node'
 check $H allow 'find . -name sdb-helper-cli.js'
 check $H allow 'sdb -s emulator-26101 shell reboot'
-check $H allow 'git commit -m \"hook: deny which sdb\"'
+
+echo
+echo "--- check-tizen-commands: sdb outside the configured SDK (Rule 7, issue #47) ---"
+# The configured SDK is /opt/tizen-sdk (test config). An sdb invoked from another
+# directory is denied; the configured one, variables, cwd-relative and bare sdb pass.
+check $H deny '/opt/tizen-studio/tools/sdb devices'
+check $H deny '~/tizen-studio/tools/sdb devices'
+check $H deny '\"/opt/tizen-studio/tools/sdb\" -s emulator-26101 shell ls'
+check $H deny '/opt/tizen-sdk/tools/tizen-core/sdb devices'
+check $H deny 'ls /opt/other-sdk/tools && /opt/other-sdk/tools/sdb devices'
+check $H deny 'SDB=/opt/tizen-studio/tools/sdb; $SDB devices'
+check $H deny '& \"C:\\tizen-studio\\tools\\sdb.exe\" devices'
+check $H deny '/c/tizen-studio/tools/sdb.exe devices'
+check $H allow '/opt/tizen-sdk/tools/sdb devices'
+check $H allow '/opt/tizen-sdk/tools/sdb -s emulator-26101 shell ls'
+check $H allow '\"/opt/tizen-sdk/tools/sdb\" devices'
+check $H allow '/opt/tizen-sdk//tools/sdb devices'
+check $H allow 'SDB=/opt/tizen-sdk/tools/sdb; $SDB devices'
+check $H allow '\"$TIZEN_SDK_PATH/tools/sdb\" devices'
+check $H allow '$SDK/tools/sdb devices'
+check $H allow '%TIZEN_SDK%\\tools\\sdb.exe devices'
+check $H allow 'cd /opt/tizen-sdk/tools && ./sdb devices'
+check $H allow 'sdb devices'
+check $H allow 'cat /opt/tizen-studio/tools/sdbd.conf'
+check $H allow 'node /opt/tizen-studio/tools/sdb-helper-cli.js'
+check $H allow 'git commit -m \"use /opt/tizen-studio/tools/sdb\"'
+# A tilde resolves against $HOME.
+HOME=/opt check $H allow '~/tizen-sdk/tools/sdb devices'
+HOME=/home/user check $H deny '~/tizen-sdk/tools/sdb devices'
+# Windows SDK path in the config: backslash / forward-slash / MSYS spellings all match.
+# (An UNQUOTED C:\\… path in a Bash command is Rule 15's business and denied there.)
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H allow '& \"C:\\tizen-sdk\\tools\\sdb.exe\" devices'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H allow '\"C:\\tizen-sdk\\tools\\sdb.exe\" devices'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H allow 'c:/tizen-sdk/tools/sdb.exe devices'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H allow '/c/tizen-sdk/tools/sdb.exe -s emulator-26101 forward tcp:9090 tcp:8080'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H deny '& \"C:\\tizen-studio\\tools\\sdb.exe\" devices'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/windows.config" check $H deny '/opt/tizen-sdk/tools/sdb devices'
+# A configured path with a space in it: the quoted sdb path must not be split on it.
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/spaces.config" check $H allow '\"/opt/tizen studio/sdk/tools/sdb\" devices'
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/spaces.config" check $H deny '\"/opt/tizen studio/other/tools/sdb\" devices'
+
+echo
+echo "--- check-tizen-commands: scope gate — no SDK configured (issue #47) ---"
+# Without ~/.tizen.sdk.path.config the Tizen tooling rules do not apply at all;
+# the shell-syntax rules still do.
+check_nocfg() { TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/missing.config" check "$@"; }
+check_nocfg $H allow 'tz build -p /w/app'
+check_nocfg $H allow 'tools/sdb/sdb devices'
+check_nocfg $H allow '/opt/tizen-studio/tools/sdb devices'
+check_nocfg $H allow 'which sdb && sdb devices'
+check_nocfg $H allow 'tizen version'
+check_nocfg $H allow 'export PATH=\"$HOME/tizen-studio/tools:$PATH\"'
+check_nocfg $H allow 'em-cli list-vm'
+check_nocfg $H allow 'sdb shell dmesg'
+check_nocfg $H allow 'gdbserver :1234 ./app'
+check_nocfg $H deny 'powershell -File /c/Users/me/setup.ps1'
+check_nocfg $H deny 'ls C:\\Users\\me\\app'
+check_nocfg $H deny 'ls 2>$null'
+# An empty config file counts as "not configured".
+: > "$cfg_tmp/empty.config"
+TIZEN_SDK_SKILLS_SDK_CONFIG="$cfg_tmp/empty.config" check $H allow 'tz build -p /w/app'
 
 echo
 echo "--- check-tizen-commands: finding emulator VMs by hand (issue #268) ---"
