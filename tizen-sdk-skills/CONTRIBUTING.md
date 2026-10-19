@@ -144,7 +144,7 @@ tree (`_repo-root/UPLOAD.md` applies them; CI verifies them with
    module's functions through its `sdkCommands` export — the aggregators
    (`sdk-commands.js`, `envelope.js`, `command-specs/internal-specs.ts`) load
    internal modules optionally and never name them.
-2. **Prose** about the feature inside a file that *is* published (a shared
+2. **Prose** about the feature inside a file that _is_ published (a shared
    skill, `CHANGELOG.md`) sits between `<!-- internal-only:begin -->` and
    `<!-- internal-only:end -->` lines.
 3. **Terms** that only the feature uses (its command names, service names)
