@@ -11,6 +11,49 @@
 
 ## [Unreleased]
 
+### Added
+
+- **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
+  `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
+  규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
+  항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서 실행합니다.
+
+## [1.4.5] — 2026-10-19
+
+명령 가드 훅의 적용 범위를 Tizen 작업으로 한정했습니다 (fixes #47): Tizen 도구 규칙은
+플러그인으로 SDK를 설정한 뒤에만 적용되고, `tizen` CLI나 sdb 위치 확인을 더 이상 금지하지
+않으며, 직접 입력한 sdb는 설정된 SDK의 `tools/sdb`여야 합니다.
+
+### Fixed
+
+- **명령 가드 훅이 SDK 스킬 워크플로 밖의 일반 `sdb` / `tizen` 명령을 차단** (issue #47;
+  `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `docs/deployment/HARNESS_SETUP.{md,en.md}`). 훅은 하네스의 모든 프로젝트, 모든 셸 명령에
+  등록되므로 Tizen 스킬을 쓰지 않는 상황의 단순 환경 확인 — `which sdb`, `command -v sdb`,
+  CLI가 설치된 상태의 `tizen version`, `export PATH="$HOME/tizen-studio/tools:$PATH"` — 까지
+  거부되었고, `which sdb && sdb devices`는 통째로 막혔습니다. 세 가지를 바꿨습니다.
+  - **범위 게이트.** Tizen 도구 규칙(tz 플래그, sdb 경로, gdbserver, em-cli, dlog 프로브,
+    타이머 대기)은 이제 `~/.tizen.sdk.path.config` — `tizen-sdk-init`과 설치기의 자동 초기화가
+    기록하는 파일 — 가 있을 때만 동작합니다. 그 파일이 없으면(플러그인은 설치했지만 Tizen과
+    무관한 프로젝트, 또는 sdk-init을 한 번도 실행하지 않은 Tizen Studio 사용자) 훅은 셸 문법
+    규칙(`powershell -File`에 MSYS 경로, `Start-Process` 리다이렉트, Bash의 `$null`, 백슬래시
+    경로)만 유지합니다 — Tizen 정책이 아니라 호스트 셸의 함정이기 때문입니다.
+    `TIZEN_SDK_SKILLS_SDK_CONFIG`로 테스트에서 설정 파일 위치를 바꿀 수 있습니다.
+  - **규칙 5·16 제거.** Tizen Studio의 `tizen` CLI(Tizen Studio 사용자에게는 실제로 존재)와
+    sdb 바이너리 조회(`which` / `where` / `Get-Command sdb`, `find -name sdb`)를 더 이상
+    거부하지 않습니다. Tizen 워크플로 중에는 스킬이 여전히 러너로 유도하며, 가드 규칙 문서는
+    CLI가 "존재하지 않는다"고 단정하는 대신 그 점을 설명합니다.
+  - **규칙 7 재작성: sdb는 설정된 SDK의 것이어야 합니다.** 기존 규칙은 사용자의 설정된 SDK가
+    `tizen-studio`일 때조차 그 경로의 언급만으로 거부했습니다. 이제 직접 입력한
+    `<dir>/sdb[.exe]`의 디렉터리를 `<~/.tizen.sdk.path.config>/tools`와 비교해 — 따옴표,
+    JSON 이스케이프된 백슬래시, MSYS `/c/` 접두사, 선행 `~`, 대소문자를 정규화하고 따옴표로
+    감싼 경로의 공백을 허용 — 다른 디렉터리의 sdb(두 번째 SDK 설치본, `tools/tizen-core/`,
+    복사본)를 설정 경로와 `tizen-sdk-init`을 안내하는 메시지로 거부합니다. 맨 `sdb devices`
+    (PATH 해석), `$SDK` / `%VAR%` 접두사, cwd 상대 `./sdb`는 건드리지 않습니다.
+  - 훅 테스트는 임시 설정(POSIX·Windows·공백 포함 SDK 경로)과 설정 없음 패스로 게이트를
+    검증하며, HARNESS_SETUP 스모크 테스트는 제거된 tizen-CLI 규칙 대신 `tz build -p`를 씁니다.
+
 ## [1.4.4] — 2026-10-16
 
 테스트 러너가 이제 PATH의 전역 설치 `tizen-cli`/`tizen-sdk` 바이너리를 찾지 않고 항상

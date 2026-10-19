@@ -121,10 +121,12 @@ Hooks are inert on Windows; the Rules file covers that case).
 ls "$HOME"/.{claude,cline,codex,gemini}/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-init-cli.js
 
 # 3. Hook smoke test — Gemini adapter (Codex/Claude: pipe the same payload into
-#    ~/.codex/hooks/tizen-sdk-skills/check-tizen-commands.sh with tool_name "Bash")
-printf '%s' '{"tool_name":"run_shell_command","tool_input":{"command":"tizen build-native"}}' \
+#    ~/.codex/hooks/tizen-sdk-skills/check-tizen-commands.sh with tool_name "Bash").
+#    The Tizen tooling rules apply only when ~/.tizen.sdk.path.config exists
+#    (issue #47) — run tizen-sdk-init first if the SDK is not configured yet.
+printf '%s' '{"tool_name":"run_shell_command","tool_input":{"command":"tz build -p /tmp/app"}}' \
   | bash ~/.gemini/hooks/tizen-sdk-skills/BeforeTool
-# → {"decision":"deny","reason":"The tizen CLI ... is NOT available ..."}
+# → {"decision":"deny","reason":"tz build/pack take the project directory via -w, NOT -p. ..."}
 
 # 4. Markdown snippets and plugin-cache.js agree on the host list (also a unit test):
 node scripts/rewrite-runner-snippets.js --check

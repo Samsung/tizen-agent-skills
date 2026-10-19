@@ -34,6 +34,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # check-pr.js diffs against the merge base with the target branch.
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -71,6 +74,13 @@ jobs:
       - name: Runner snippet check
         working-directory: tizen-sdk-skills
         run: node scripts/rewrite-runner-snippets.js --check
+
+      # AGENTS.md / CONTRIBUTING.md rules on the files this PR changes.
+      # ERROR fails the job; WARN must be fixed or explained in the PR.
+      - name: PR check
+        if: github.event_name == 'pull_request'
+        working-directory: tizen-sdk-skills
+        run: node scripts/check-pr.js --base origin/${{ github.base_ref }}
 
       # tizen-cli and the VS Code extension are pnpm-managed (pnpm-lock.yaml).
       - name: Install dependencies (tizen-cli)

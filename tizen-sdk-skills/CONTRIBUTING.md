@@ -90,6 +90,12 @@ npm run lint        # TC schema dry-run + doc-stats + runner helper tests (same 
 npm run test:safe   # safe-tier TCs, no SDK or device required
 ```
 
+Then check the rules on the files your change touches (same as CI):
+
+```bash
+node scripts/check-pr.js --base origin/main
+```
+
 ## 7. Test tiers
 
 Tiers are defined in
@@ -138,7 +144,7 @@ tree (`_repo-root/UPLOAD.md` applies them; CI verifies them with
    module's functions through its `sdkCommands` export — the aggregators
    (`sdk-commands.js`, `envelope.js`, `command-specs/internal-specs.ts`) load
    internal modules optionally and never name them.
-2. **Prose** about the feature inside a file that *is* published (a shared
+2. **Prose** about the feature inside a file that _is_ published (a shared
    skill, `CHANGELOG.md`) sits between `<!-- internal-only:begin -->` and
    `<!-- internal-only:end -->` lines.
 3. **Terms** that only the feature uses (its command names, service names)

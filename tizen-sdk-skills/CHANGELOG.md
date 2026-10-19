@@ -11,6 +11,54 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
+  `ci.yml`). Checks the files a pull request changes against the mechanical rules in
+  `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
+  documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
+  rule ID. CI runs it on every pull request.
+
+## [1.4.5] — 2026-10-19
+
+The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
+only once an SDK is configured through the plugin, it no longer forbids the `tizen` CLI or
+looking up where sdb is, and a hand-typed sdb must be the configured SDK's `tools/sdb`.
+
+### Fixed
+
+- **Command guard hook blocked ordinary `sdb` / `tizen` commands outside SDK skill
+  workflows** (issue #47; `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `docs/deployment/HARNESS_SETUP.{md,en.md}`). The hook is registered for every shell command
+  of the harness in every project, so a plain environment check — `which sdb`,
+  `command -v sdb`, `tizen version` with the CLI installed, `export PATH="$HOME/tizen-studio/tools:$PATH"`
+  — was denied even with no Tizen skill in play, and `which sdb && sdb devices` fell as a
+  whole. Three changes:
+  - **Scope gate.** The Tizen tooling rules (tz flags, sdb paths, gdbserver, em-cli, dlog
+    probes, timer waits) now run only when `~/.tizen.sdk.path.config` exists — the file
+    `tizen-sdk-init` and the installer's auto-init write. Without it (the plugin installed
+    but a non-Tizen project, or a Tizen Studio user who never ran sdk-init) the hook only
+    keeps its shell-syntax rules (MSYS path to `powershell -File`, `Start-Process` redirects,
+    `$null` in Bash, backslash paths), which are host pitfalls rather than Tizen policy.
+    `TIZEN_SDK_SKILLS_SDK_CONFIG` overrides the config location for tests.
+  - **Rules 5 and 16 removed.** The hook no longer denies the Tizen Studio `tizen` CLI
+    (it does exist for Tizen Studio users) nor a lookup of the sdb binary (`which` / `where` /
+    `Get-Command sdb`, `find -name sdb`). The skills still steer the model to the runners
+    during a Tizen workflow; the guard-rule documents say so instead of claiming the CLI
+    does not exist.
+  - **Rule 7 rewritten: an sdb must be the configured SDK's.** The old rule denied any
+    mention of a `tizen-studio/tools` path, even when that was the user's configured SDK.
+    It now compares the directory of a hand-typed `<dir>/sdb[.exe]` against
+    `<~/.tizen.sdk.path.config>/tools` — normalising quotes, JSON-escaped backslashes, MSYS
+    `/c/` prefixes, a leading `~` and case, and tolerating spaces in a quoted path — and denies
+    an sdb from any other directory (a second SDK install, `tools/tizen-core/`, a stray copy)
+    with a message naming the configured path and `tizen-sdk-init`. A bare `sdb devices`
+    (PATH-resolved), a `$SDK` / `%VAR%` prefix and a cwd-relative `./sdb` are left alone.
+  - The hook test suite runs against a temporary config (POSIX, Windows and
+    space-containing SDK paths) plus a no-config pass for the gate; the HARNESS_SETUP smoke
+    test uses `tz build -p` instead of the removed tizen-CLI rule.
+
 ## [1.4.4] — 2026-10-16
 
 The test runner now always executes the locally built launcher instead of looking up
