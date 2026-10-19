@@ -18,6 +18,13 @@
   규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
   항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서 실행합니다.
 
+### Changed
+
+- **`createEmulator`, `launchEmulator`, `manageEmulator`를 헬퍼로 분리**
+  (`common/lib/core/emulator.js`). 옵션 파싱, 검증, 크기/템플릿 결정, 실패·결과 빌더를
+  모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(114 → 16, 46 → 11, 53 → 7). 동작 변화는
+  없습니다. export API, 응답 envelope, 메시지, 오류 코드는 그대로입니다.
+
 ## [1.4.5] — 2026-10-19
 
 명령 가드 훅의 적용 범위를 Tizen 작업으로 한정했습니다 (fixes #47): Tizen 도구 규칙은

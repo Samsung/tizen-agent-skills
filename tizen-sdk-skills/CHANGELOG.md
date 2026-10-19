@@ -19,6 +19,14 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
   rule ID. CI runs it on every pull request.
 
+### Changed
+
+- **`createEmulator`, `launchEmulator` and `manageEmulator` split into helpers**
+  (`common/lib/core/emulator.js`). Option parsing, validation, size/template resolution and
+  the failure and result builders move into module-private helpers, lowering cyclomatic
+  complexity (114 → 16, 46 → 11, 53 → 7). No behaviour change: the exported API, envelopes,
+  messages and error codes are unchanged.
+
 ## [1.4.5] — 2026-10-19
 
 The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
