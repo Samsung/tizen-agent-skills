@@ -25,6 +25,10 @@
   (`common/lib/core/emulator.js`). 옵션 파싱, 검증, 크기/템플릿 결정, 실패·결과 빌더를
   모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(114 → 16, 46 → 11, 53 → 7). 동작 변화는
   없습니다. export API, 응답 envelope, 메시지, 오류 코드는 그대로입니다.
+- **`setupGdbDebug`, `setupDotnetDebug`를 공통 헬퍼로 분리**
+  (`common/lib/core/debug.js`). 옵션 검증, 스크립트 인자, 설정 스크립트 실행, 실패 분류를 두
+  함수가 함께 쓰도록 바꿔 순환 복잡도를 낮췄습니다(52 → 6, 85 → 6). 동작 변화는 없습니다.
+  export API, 응답 envelope, 스크립트 인자, 생성되는 `launch.json` / `tasks.json`은 그대로입니다.
 
 ### Fixed
 
