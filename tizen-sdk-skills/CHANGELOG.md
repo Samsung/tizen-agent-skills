@@ -32,6 +32,12 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   and failure classification are shared between the two, lowering cyclomatic complexity
   (52 → 6, 85 → 6). No behaviour change: the exported API, envelopes, script arguments and
   the generated `launch.json` / `tasks.json` are unchanged.
+- **`installApp` and `runPlaywrightTest` split into helpers** (`common/lib/core/project.js`,
+  `common/lib/core/playwright-test.js`). Validation, device resolution, the RDS attempt, the
+  install-script run and the test-run classification move into one helper per step,
+  lowering cyclomatic complexity (57 → 13, 53 → 12). No behaviour change: the exported API,
+  envelopes, messages and script arguments are unchanged; `install-app-args.test.js` pins
+  the install-script arguments.
 
 ### Fixed
 

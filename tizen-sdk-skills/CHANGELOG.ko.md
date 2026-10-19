@@ -29,6 +29,11 @@
   (`common/lib/core/debug.js`). 옵션 검증, 스크립트 인자, 설정 스크립트 실행, 실패 분류를 두
   함수가 함께 쓰도록 바꿔 순환 복잡도를 낮췄습니다(52 → 6, 85 → 6). 동작 변화는 없습니다.
   export API, 응답 envelope, 스크립트 인자, 생성되는 `launch.json` / `tasks.json`은 그대로입니다.
+- **`installApp`, `runPlaywrightTest`를 헬퍼로 분리** (`common/lib/core/project.js`,
+  `common/lib/core/playwright-test.js`). 검증, 디바이스 결정, RDS 시도, 설치 스크립트 실행,
+  테스트 결과 분류를 단계별 헬퍼로 나눠 순환 복잡도를 낮췄습니다(57 → 13, 53 → 12). 동작
+  변화는 없습니다. export API, 응답 envelope, 메시지, 스크립트 인자는 그대로이며,
+  `install-app-args.test.js`가 설치 스크립트 인자를 고정합니다.
 
 ### Fixed
 
