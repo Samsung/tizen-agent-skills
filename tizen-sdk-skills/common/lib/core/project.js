@@ -358,6 +358,7 @@ async function createProject(
         "invalid_parameters",
         "Missing required parameters: type, template, parentPath, appName",
         'createProject("dotnet", "TizenNUITemplate", "/path/to", "MyTizenDotnetApp")',
+        startTime,
       );
     }
 
@@ -366,6 +367,8 @@ async function createProject(
         command,
         "invalid_parameters",
         `Invalid project type: ${type}. Must be one of: ${VALID_PROJECT_TYPES.join(", ")}`,
+        null,
+        startTime,
       );
     }
 
@@ -379,6 +382,7 @@ async function createProject(
         "invalid_parameters",
         pkgIdCheck.message,
         'Use an app name with at least 10 alphanumeric characters, e.g., "MyTizenApp01"',
+        startTime,
       );
     }
 
@@ -395,6 +399,7 @@ async function createProject(
         "io_error",
         `Parent directory does not exist: ${normalizedParentPath}\nPlease ensure the directory exists or use the current working directory.`,
         `createProject("${type}", "${template}", "${process.cwd()}", "${appName}")`,
+        startTime,
       );
     }
 
@@ -500,7 +505,7 @@ async function createProject(
 
     const resolved = resolveScript("tizen-create-project");
     if (resolved.error) {
-      return formatError(command, "io_error", resolved.error);
+      return formatError(command, "io_error", resolved.error, null, startTime);
     }
 
     // All validation passed — now (and only now) clear the existing target.
@@ -890,6 +895,7 @@ async function deleteProject(
         "invalid_parameters",
         "Missing required parameter: projectPath",
         'deleteProject("/path/to/MyApp")',
+        startTime,
       );
     }
 
@@ -1144,6 +1150,7 @@ async function buildProject(
         "invalid_parameters",
         "Missing required parameter: projectPath",
         'buildProject("/path/to/MyApp", "Debug")',
+        startTime,
       );
     }
 
@@ -1156,6 +1163,8 @@ async function buildProject(
         command,
         "invalid_parameters",
         `Invalid build type: ${buildType}. Must be one of: ${VALID_BUILD_TYPES.join(", ")}`,
+        null,
+        startTime,
       );
     }
 
@@ -1380,12 +1389,20 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
         command,
         "invalid_parameters",
         `Invalid type: ${type} (use: ${VALID_PROJECT_TYPES.join(", ")})`,
+        null,
+        envelope.startTime,
       );
     }
 
     const resolved = resolveScript("tizen-create-project");
     if (resolved.error) {
-      return formatError(command, "io_error", resolved.error);
+      return formatError(
+        command,
+        "io_error",
+        resolved.error,
+        null,
+        envelope.startTime,
+      );
     }
 
     const winArgs = `-ListTemplates${type ? ` -Type ${type.toLowerCase()}` : ""}`;

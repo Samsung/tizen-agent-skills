@@ -65,7 +65,10 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   existing `invalid_parameters` message instead of being truncated by `parseInt`.
 - **`install-app` / `playwright-test` early validation errors omitted the start time**
   (issue #68). Every failure envelope from `installApp()` and `runPlaywrightTest()` now
-  passes the same `startTime`, so `duration_ms` is measured from the same point.
+  passes the same `startTime`, so `duration_ms` is measured from the same point. The
+  remaining early errors in `common/lib/core/project.js` (`createProject()`,
+  `deleteProject()`, `buildProject()`, `listTemplates()`) do the same, and
+  `early-error-start-time.test.js` pins it.
 - **`playwright-test` could return a missing `setupWebappDebug()` result as-is** (issue #69).
   An `undefined`/`null` setup result is now reported as an `io_error` envelope
   ("webapp debug setup returned no result").
