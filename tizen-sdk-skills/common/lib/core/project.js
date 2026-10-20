@@ -68,6 +68,14 @@ function isPlatformProject(projectPath) {
 }
 
 /**
+ * Target architectures for `gbs build -A` on Platform projects — the same list
+ * the tizen-cli `--arch` option accepts. x86_64 (default) and i586 run on the
+ * emulator; armv7l is 32-bit ARM and aarch64 is 64-bit ARM hardware.
+ */
+const GBS_ARCHES = ["armv7l", "aarch64", "i586", "x86_64"];
+const DEFAULT_GBS_ARCH = "x86_64";
+
+/**
  * Standalone RPK resource projects are packaged by the legacy `tizen` CLI
  * (`tizen package -t rpk`), not by `tz build`/`tz pack`. Mirrors the marker
  * the build scripts use to pick that path.
@@ -1128,7 +1136,9 @@ function saveBuildLog(output) {
  * @param {string} projectPath - project root (absolute path recommended)
  * @param {string} buildType - Debug (default) | Release | Test
  * @param {string} [signProfile] - signing profile (optional)
- * @param {string} [arch] - target architecture for GBS/platform builds (default x86_64)
+ * @param {string} [arch] - target architecture for GBS/platform builds: armv7l |
+ *   aarch64 | i586 | x86_64 (default x86_64). Ignored, with a warning, for
+ *   Native/DotNET/WebApp/RPK projects.
  * @param {boolean} [clean] - remove previous build output on the SDK host before
  *   building (forces a full, non-incremental rebuild — compiler warnings reappear)
  * @returns {object} Standard JSON Envelope — result.artifacts = [{path, format, size_bytes}]
@@ -1137,7 +1147,7 @@ async function buildProject(
   projectPath,
   buildType = "Debug",
   signProfile,
-  arch = "x86_64",
+  arch,
   clean = false,
   command = "tizen-sdk build-project",
 ) {
@@ -1191,8 +1201,9 @@ async function buildProject(
     // Standalone RPK projects are the exception: the scripts package them with
     // the legacy `tizen package -t rpk`, which has no default-certificate
     // fallback, so a missing profile is still rejected up front for them.
+    const platformProject = isPlatformProject(normalizedProjectPath);
     let usingDefaultCertificates = false;
-    if (!isPlatformProject(normalizedProjectPath)) {
+    if (!platformProject) {
       const signingPreflight = preflightSigningProfile({
         profileName: signProfile,
         allowDefaultCertificates: !isRpkProject(normalizedProjectPath),
@@ -1221,15 +1232,18 @@ async function buildProject(
         startTime,
       );
     }
-    if (arch && !/^[A-Za-z0-9_-]+$/.test(arch)) {
+    // Only the names gbs knows: a near miss such as "arm" or "arm64" would
+    // otherwise reach `gbs build -A` and fail minutes into the build.
+    if (arch && !GBS_ARCHES.includes(arch)) {
       return formatError(
         command,
         "invalid_parameters",
-        `Invalid architecture "${arch}".`,
+        `Invalid architecture "${arch}". Must be one of: ${GBS_ARCHES.join(", ")} (32-bit ARM → armv7l, 64-bit ARM / arm64 → aarch64, emulator → x86_64).`,
         null,
         startTime,
       );
     }
+    const gbsArch = arch || DEFAULT_GBS_ARCH;
 
     // So is the project path itself (-w "<path>").
     const unsafeProject = checkShellSafe(
@@ -1260,7 +1274,7 @@ async function buildProject(
       const winPath = normalizedProjectPath.replace(/\\/g, "/");
       const profileArgWin = signProfile ? ` -s "${signProfile}"` : "";
       const profileArgUnix = signProfile ? ` -s "${signProfile}"` : "";
-      const archArgUnix = ` --arch="${arch}"`;
+      const archArgUnix = ` --arch="${gbsArch}"`;
       const cleanArgWin = clean ? " -Clean" : "";
       const cleanArgUnix = clean ? " --clean" : "";
       output = execPluginScript(
@@ -1323,6 +1337,11 @@ async function buildProject(
 
     const warnings = summarizeBuildOutput(output);
     if (sdkInfoNote) warnings.push(sdkInfoNote);
+    if (arch && !platformProject) {
+      warnings.push(
+        `--arch ${arch} was ignored: it selects the GBS target and applies only to Platform projects (CMakeLists.txt + packaging/*.spec). This project was built with its own toolchain settings.`,
+      );
+    }
     if (usingDefaultCertificates) {
       warnings.push(
         "Signed with Tizen default developer certificates (tempMobile.p12) because no signing profile is set or active. The package installs on the emulator; real Samsung devices and store submission need a custom signing profile — create one with tizen-certificate-manager and rebuild with --sign-profile.",

@@ -69,6 +69,9 @@ Options:
   -w, --proj-dir <path>     Project directory (required)
   -b, --build-type <type>   Build type: Debug (default), Release, Test
   -s, --sign-profile <name> Signing profile name (optional)
+  -A, --arch <arch>         GBS target architecture for Platform projects:
+                            x86_64 (default, emulator), i586, armv7l (32-bit
+                            ARM), aarch64 (64-bit ARM). Ignored otherwise.
   -c, --clean               Remove previous build output before building
                             (forces a full, non-incremental rebuild)
   -h, --help                Show this help message
@@ -85,6 +88,9 @@ Examples:
 
   # Force a full clean rebuild
   ./tizen-build-project.sh -w /path/to/project --clean
+
+  # Platform (GBS) project for a 32-bit ARM device
+  ./tizen-build-project.sh -w /path/to/platform-project -A armv7l
 EOF
     exit 0
 fi
@@ -97,6 +103,12 @@ fi
 # Validate build type
 if [[ ! "$BUILD_TYPE" =~ ^(Debug|Release|Test)$ ]]; then
     echo "Error: Invalid build type '$BUILD_TYPE'. Must be Debug, Release, or Test" >&2
+    exit 1
+fi
+
+# Validate the GBS architecture (same list as buildProject() in lib/core/project.js)
+if [[ ! "$ARCH" =~ ^(armv7l|aarch64|i586|x86_64)$ ]]; then
+    echo "Error: Invalid architecture '$ARCH'. Must be armv7l, aarch64, i586, or x86_64 (32-bit ARM -> armv7l, 64-bit ARM -> aarch64)" >&2
     exit 1
 fi
 

@@ -30,6 +30,8 @@ node "$CLI" build --project "<absolute-project-path>" --build-type Debug
 # complete compiler warning list is needed (incremental builds skip unchanged
 # files, so their warnings do NOT reappear). Never rm -rf Debug/ yourself.
 # node "$CLI" build --project "<absolute-project-path>" --build-type Debug --clean
+# Platform (GBS) project only — target architecture (default x86_64 = emulator):
+# node "$CLI" build --project "<absolute-project-path>" --build-type Debug --arch armv7l
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
@@ -161,11 +163,27 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    > Release builds omit these — suitable for production only.
    > **NO AMBIGUITY:** If the request doesn't explicitly say "Release", use `Debug`.
 
+   > **Platform (GBS) target architecture:** a Platform project (`CMakeLists.txt` +
+   > `packaging/*.spec`) builds RPMs for one architecture, chosen with `--arch`. The default
+   > `x86_64` installs only on the emulator. Map the request:
+   >
+   > - emulator / nothing said about the target → `--arch x86_64` (default)
+   > - arm, armv7, armv7l, 32-bit ARM, 32비트 ARM → `--arch armv7l`
+   > - arm64, aarch64, 64-bit ARM, 64비트 ARM → `--arch aarch64`
+   > - i586 / 32-bit x86 emulator image → `--arch i586`
+   >
+   > If the RPM is for a real device and no architecture is given, return to the caller
+   > asking which one (`x86_64` / `armv7l` / `aarch64`) instead of building `x86_64`; a
+   > connected device's `cpu_arch` (from `tizen-sdb-helper` `device-info`) answers it.
+   > Only these four names are accepted — `arm`, `arm64` or `armv7` fail with
+   > `invalid_parameters` before GBS runs. `--arch` is ignored (with a warning) for
+   > Native/DotNET/WebApp/RPK projects.
+
 4. **Return the envelope** — one verbatim fenced `json` block, nothing else (see
    "Final message — envelope JSON ONLY" below; the caller writes the user-facing summary).
    Success: `result.artifacts` contains the produced `.tpk`/`.wgt`/`.rpm` path(s) — the CLI
    already verified they exist. For Platform (GBS) builds, artifacts are `.rpm` files under
-   `~/GBS-ROOT/local/repos/<arch>/RPMS/`. Failure: the JSON already carries
+   `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`. Failure: the JSON already carries
    `errors[0].message` (exit code, key error lines, full-log path) — keep it intact.
 
 > **ℹ️ Signing profile (default certificates):** When no signing profile is specified and no
