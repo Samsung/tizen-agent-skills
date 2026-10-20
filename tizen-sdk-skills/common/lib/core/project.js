@@ -1897,12 +1897,15 @@ function validateInstallRequest(
   resolvedPath,
   deviceSerial,
   runAfterInstall,
+  startTime,
 ) {
   if (!fs.existsSync(resolvedPath)) {
     return formatError(
       command,
       "io_error",
       `App package not found: ${resolvedPath}`,
+      null,
+      startTime,
     );
   }
   if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
@@ -1910,6 +1913,8 @@ function validateInstallRequest(
       command,
       "invalid_parameters",
       `Invalid app package: ${resolvedPath}. Must be a .tpk, .wgt, .rpk, or .rpm file.`,
+      null,
+      startTime,
     );
   }
   if (/\.rpk$/i.test(resolvedPath) && runAfterInstall) {
@@ -1917,6 +1922,8 @@ function validateInstallRequest(
       command,
       "invalid_parameters",
       "RPK resource packages cannot be launched. Install the package without --run so the resource package chain can refresh its associated applications.",
+      null,
+      startTime,
     );
   }
 
@@ -1926,11 +1933,15 @@ function validateInstallRequest(
       command,
       "invalid_parameters",
       `Invalid device serial: ${deviceSerial}`,
+      null,
+      startTime,
     );
   }
 
   // The package path is spliced into -PackagePath "<path>" / -p "<path>".
-  return checkShellSafe(resolvedPath, "package path", command) || null;
+  return (
+    checkShellSafe(resolvedPath, "package path", command, startTime) || null
+  );
 }
 
 /**
@@ -2055,7 +2066,15 @@ function runInstallScript(command, startTime, ctx) {
   const { resolvedPath, resolvedSerial, runAfterInstall } = ctx;
   const resolved = resolveScript("tizen-install-app");
   if (resolved.error) {
-    return { failure: formatError(command, "io_error", resolved.error) };
+    return {
+      failure: formatError(
+        command,
+        "io_error",
+        resolved.error,
+        null,
+        startTime,
+      ),
+    };
   }
 
   console.error(
@@ -2219,6 +2238,7 @@ async function installApp(
         "invalid_parameters",
         "Missing required parameter: packagePath (.tpk, .wgt, .rpk, or .rpm)",
         'installApp("/absolute/path/MyApp-1.0.0.tpk")',
+        startTime,
       );
     }
 
@@ -2238,6 +2258,7 @@ async function installApp(
       resolvedPath,
       deviceSerial,
       runAfterInstall,
+      startTime,
     );
     if (invalid) return invalid;
 

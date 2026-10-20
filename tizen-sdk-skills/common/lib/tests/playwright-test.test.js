@@ -234,6 +234,22 @@ async function validationCategory(name, args, expectedFragment) {
     ["good.App", { ...V, timeout: 9999 }],
     "9999",
   );
+  // Partial numbers must not be truncated by parseInt (#67).
+  for (const [label, opt, value] of [
+    ["port with trailing letters", "port", "9222abc"],
+    ["fractional port", "port", "1.9"],
+    ["negative port", "port", "-1"],
+    ["fractional setup-timeout", "setupTimeout", "1.9"],
+    ["setup-timeout with unit", "setupTimeout", "30s"],
+    ["timeout with unit", "timeout", "30s"],
+    ["empty timeout", "timeout", ""],
+  ]) {
+    await validationCategory(
+      label,
+      ["good.App", { ...V, [opt]: value }],
+      `${value}`,
+    );
+  }
   await validationCategory(
     "missing test file",
     ["good.App", { projectDir: validDir }],
@@ -516,6 +532,43 @@ async function validationCategory(name, args, expectedFragment) {
     );
   }
 
+  // 5f. setupWebappDebug() returning nothing → io_error envelope (#69)
+  {
+    const corePath = require.resolve("../core/playwright-test");
+    const debugPath = require.resolve("../core/webapp-debug");
+    const savedCore = require.cache[corePath];
+    const savedDebug = require.cache[debugPath];
+    delete require.cache[corePath];
+    require.cache[debugPath] = {
+      id: debugPath,
+      filename: debugPath,
+      loaded: true,
+      exports: { setupWebappDebug: async () => undefined },
+    };
+    try {
+      const stubbed = require("../core/playwright-test");
+      const env = await stubbed.runPlaywrightTest("good.App", {
+        testFile: path.join(stubDir, "pass.test.js"),
+        port,
+      });
+      check("  no setup result: status", env && env.status, "failure");
+      check(
+        "  no setup result: error_category",
+        env && env.errors && env.errors[0].error_category,
+        "io_error",
+      );
+      check(
+        "  no setup result: message",
+        env && env.errors && env.errors[0].message,
+        "webapp debug setup returned no result",
+      );
+    } finally {
+      require.cache[corePath] = savedCore;
+      if (savedDebug) require.cache[debugPath] = savedDebug;
+      else delete require.cache[debugPath];
+    }
+  }
+
   // Test 6: scaffoldPlaywrightTest
   console.log("\nTest 6: scaffoldPlaywrightTest");
   {
@@ -532,6 +585,20 @@ async function validationCategory(name, args, expectedFragment) {
       projectDir: path.join(stubDir, "no-such-dir"),
     });
     check("  nonexistent projectDir: status", env.status, "failure");
+  }
+  {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pwscaf-"));
+    const env = await scaffoldPlaywrightTest({
+      projectDir: dir,
+      port: "9222abc",
+    });
+    check("  partial-number port: status", env.status, "failure");
+    check(
+      "  partial-number port: nothing written",
+      fs.existsSync(path.join(dir, "tizen-playwright.test.js")),
+      false,
+    );
+    fs.rmSync(dir, { recursive: true, force: true });
   }
   {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pwscaf-"));
