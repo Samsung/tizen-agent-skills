@@ -42,6 +42,11 @@
  *     (issue #226); `start stop` is answered with "run 'stop'"
  *   - the final-report skeleton is present in every lane's skill text and
  *     travels with check / error-analyze / kernel analyze
+ *   - crash-report: both default crash-dump directories (/opt/usr/share/crash
+ *     /dump and DA's /run/crash/dump) are searched, a daemon is matched by its
+ *     process name (also in its 15-character comm form), unreadable
+ *     directories turn into a root hint, and the dlog packed with a dump is
+ *     handed to error-analyze --file
  */
 
 const fs = require("fs");
@@ -84,6 +89,16 @@ const {
   searchLogs,
   buildSearchArgs,
   summarizeSearchOutput,
+  CRASH_DUMP_DIRS,
+  parseCrashDumpDirs,
+  buildCrashListScript,
+  parseCrashListing,
+  describeCrashEntry,
+  matchesCrashProcess,
+  selectCrashEntries,
+  buildCrashExtractScript,
+  summarizeCrashInfo,
+  collectCrashReports,
 } = require("../core/dlog-analyzer");
 const { VERSION_DIR_RE } = require("../core/plugin-cache");
 
@@ -2229,10 +2244,289 @@ check(
   [true, true, false, false, false, false],
 );
 
+// Test 23: crash-report — crash-worker dumps outside the collected dlog.
+// A system daemon has no app id, and DA targets keep their dumps in
+// /run/crash/dump, so both used to be unreachable from this runner.
+console.log("\nTest 23: crash-report helpers");
+check(
+  "default dirs include /opt/usr/share/crash/dump and /run/crash/dump",
+  CRASH_DUMP_DIRS,
+  ["/opt/usr/share/crash/dump", "/run/crash/dump"],
+);
+check("no --dump-dir → defaults", parseCrashDumpDirs(undefined), {
+  dirs: CRASH_DUMP_DIRS,
+});
+check(
+  "--dump-dir adds a directory once (trailing slash ignored)",
+  parseCrashDumpDirs(["/var/crash/", "/run/crash/dump", "/var/crash"]),
+  { dirs: [...CRASH_DUMP_DIRS, "/var/crash"] },
+);
+check(
+  "--dump-dir relative path rejected",
+  "error" in parseCrashDumpDirs("crash"),
+  true,
+);
+check(
+  "--dump-dir '..' rejected",
+  "error" in parseCrashDumpDirs("/opt/../etc"),
+  true,
+);
+check(
+  "--dump-dir shell syntax rejected",
+  "error" in parseCrashDumpDirs("/tmp;id"),
+  true,
+);
+check(
+  "list script visits every directory",
+  CRASH_DUMP_DIRS.every((d) =>
+    buildCrashListScript(CRASH_DUMP_DIRS).includes(`ls -1t ${d}`),
+  ),
+  true,
+);
+check(
+  "app entry",
+  describeCrashEntry("org.tizen.homescreen_1234_20261020101112.zip"),
+  {
+    process: "org.tizen.homescreen",
+    pid: 1234,
+    timestamp: "2026-10-20 10:11:12",
+    kind: "zip",
+  },
+);
+check(
+  "daemon entry with '_' in its name, directory form",
+  describeCrashEntry("media_server_77_20261020101112"),
+  {
+    process: "media_server",
+    pid: 77,
+    timestamp: "2026-10-20 10:11:12",
+    kind: "dir",
+  },
+);
+check(
+  "bare info file",
+  describeCrashEntry("deviced_9_20261020101112.info").kind,
+  "info",
+);
+check("unknown name", describeCrashEntry("README.txt").process, null);
+
+const listing = parseCrashListing(
+  [
+    "@@CRASH dir /opt/usr/share/crash/dump\r",
+    "org.example.app_10_20261019080000.zip\r",
+    "deviced_20_20261020090000.zip\r",
+    "evil;rm -rf",
+    "@@CRASH missing /var/crash",
+    "@@CRASH dir /run/crash/dump",
+    "deviced_21_20261020100000.tar",
+    "@@CRASH denied /opt/usr/share/crash/temp",
+  ].join("\n"),
+);
+check("listing: per-directory status and counts", listing.dirs, [
+  { dir: "/opt/usr/share/crash/dump", status: "ok", entries: 2 },
+  { dir: "/var/crash", status: "missing", entries: 0 },
+  { dir: "/run/crash/dump", status: "ok", entries: 1 },
+  { dir: "/opt/usr/share/crash/temp", status: "denied", entries: 0 },
+]);
+check("listing: unsafe name skipped", listing.skipped, [
+  "/opt/usr/share/crash/dump/evil;rm -rf",
+]);
+check(
+  "daemon by process name, newest first across directories",
+  selectCrashEntries(listing.entries, "deviced").map((e) => e.path),
+  [
+    "/run/crash/dump/deviced_21_20261020100000.tar",
+    "/opt/usr/share/crash/dump/deviced_20_20261020090000.zip",
+  ],
+);
+check(
+  "no process → everything, newest first",
+  selectCrashEntries(listing.entries, "").map((e) => e.pid),
+  [21, 20, 10],
+);
+check(
+  "15-character comm matches the full process name",
+  matchesCrashProcess(
+    { name: "x", process: "very-long-daemo" },
+    "very-long-daemon-name",
+  ),
+  true,
+);
+check(
+  "prefix of a short name does not match",
+  matchesCrashProcess({ name: "x", process: "devic" }, "deviced"),
+  false,
+);
+check(
+  "zip extract uses unzip -p with a fallback marker",
+  /unzip -p \/run\/crash\/dump\/a\.zip '\*\.info'.*@@CRASH no-unzip/.test(
+    buildCrashExtractScript(
+      { path: "/run/crash/dump/a.zip", kind: "zip" },
+      "info",
+    ),
+  ),
+  true,
+);
+check(
+  "core dump has nothing to print",
+  buildCrashExtractScript({ path: "/x/a.coredump", kind: "core" }, "info"),
+  null,
+);
+check(
+  "info file is its own report",
+  buildCrashExtractScript({ path: "/x/a.info", kind: "info" }, "info"),
+  "cat /x/a.info",
+);
+const INFO = [
+  "Executable File Path: /usr/bin/deviced",
+  "Signal: 11",
+  "      (SIGSEGV)",
+  "PID: 21",
+  "Callstack Information (PID:21)",
+  "Call Stack Count: 2",
+  " 0: crash_me + 0x10 (0xb6f00010) [/usr/bin/deviced] + 0x1010",
+  " 1: main + 0x20 (0xb6f00020) [/usr/bin/deviced] + 0x1020",
+  "End of Call Stack",
+  " 9: not a frame",
+].join("\n");
+check("info summary", summarizeCrashInfo(INFO), {
+  pid: "21",
+  executable: "/usr/bin/deviced",
+  signal: "11 (SIGSEGV)",
+  callstack: [
+    "0: crash_me + 0x10 (0xb6f00010) [/usr/bin/deviced] + 0x1010",
+    "1: main + 0x20 (0xb6f00020) [/usr/bin/deviced] + 0x1020",
+  ],
+});
+
+console.log("\nTest 23b: crash-report end to end (sdb stubbed)");
+const crashReportTest = (async () => {
+  check(
+    "invalid --process rejected before any device access",
+    (await collectCrashReports(undefined, { process: "a;b" })).errors[0]
+      .category,
+    "invalid_parameters",
+  );
+  check(
+    "invalid --limit rejected",
+    (await collectCrashReports(undefined, { limit: "-1" })).errors[0].category,
+    "invalid_parameters",
+  );
+
+  const childProcess = require("child_process");
+  const sdbModule = require("../core/sdb");
+  const domainPath = require.resolve("../core/dlog-analyzer");
+  const savedDomain = require.cache[domainPath];
+  const realExec = childProcess.execFileSync;
+  const realResolveBinary = sdbModule.resolveSdbBinary;
+  const realResolveSerial = sdbModule.resolveSerial;
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-crash-"));
+  const scripts = [];
+  let listOutput = "";
+  childProcess.execFileSync = (_sdb, args) => {
+    const script = args[args.length - 1];
+    scripts.push(args);
+    if (script.includes("ls -1t")) return listOutput;
+    if (script.includes("'*.info'")) return INFO;
+    if (script.includes("'*.log'"))
+      return "10-20 10:00:00.000 E/DEVICED( 21): boom\n";
+    return "";
+  };
+  sdbModule.resolveSdbBinary = () => ({ sdbPath: "/fake/sdb" });
+  sdbModule.resolveSerial = () => ({ serial: "emulator-26101" });
+  delete require.cache[domainPath];
+  try {
+    const stubbed = require("../core/dlog-analyzer");
+    listOutput = [
+      "@@CRASH denied /opt/usr/share/crash/dump",
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000.zip",
+      "org.example.app_10_20261019080000.zip",
+    ].join("\n");
+    const r = await stubbed.collectCrashReports(undefined, {
+      process: [undefined, "deviced"],
+      output: tmp,
+    });
+    check("daemon dump found in /run/crash/dump", r.status, "success");
+    check("… one match", r.result && r.result.total_matches, 1);
+    const rep = r.result && r.result.reports[0];
+    check("… summary parsed", rep && rep.summary.signal, "11 (SIGSEGV)");
+    check("… report saved", rep && fs.existsSync(rep.report_file), true);
+    check("… dlog saved", rep && fs.existsSync(rep.dlog_file), true);
+    check(
+      "… next step is error-analyze --file with the daemon label",
+      rep && rep.next_step.includes("--app-id deviced --pid 21"),
+      true,
+    );
+    check(
+      "… the unreadable directory is a root warning",
+      Array.isArray(r.warnings) &&
+        r.warnings.some(
+          (w) => /root/.test(w) && w.includes("/opt/usr/share/crash/dump"),
+        ),
+      true,
+    );
+    check(
+      "… every device command is one argv shell script (no host shell)",
+      scripts.length > 0 &&
+        scripts.every(
+          (a) =>
+            a.length === 4 &&
+            a.slice(0, 3).join(" ") === "-s emulator-26101 shell",
+        ),
+      true,
+    );
+
+    listOutput = [
+      "@@CRASH denied /opt/usr/share/crash/dump",
+      "@@CRASH denied /run/crash/dump",
+    ].join("\n");
+    const denied = await stubbed.collectCrashReports(undefined, {});
+    check(
+      "every directory unreadable → permission_denied",
+      denied.errors && denied.errors[0].category,
+      "permission_denied",
+    );
+    check(
+      "… with a root-on suggested fix",
+      denied.errors && /root on/.test(denied.errors[0].suggested_fix.command),
+      true,
+    );
+
+    listOutput =
+      "@@CRASH missing /opt/usr/share/crash/dump\n@@CRASH dir /run/crash/dump\n";
+    const none = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+    });
+    check(
+      "no dumps → success with zero matches",
+      [none.status, none.result.total_matches],
+      ["success", 0],
+    );
+  } finally {
+    childProcess.execFileSync = realExec;
+    sdbModule.resolveSdbBinary = realResolveBinary;
+    sdbModule.resolveSerial = realResolveSerial;
+    require.cache[domainPath] = savedDomain;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+})();
+
+check(
+  "CLI runner and tizen-cli spec both expose crash-report",
+  [
+    cliSource.includes('"crash-report"') &&
+      cliSource.includes('"--process"') &&
+      cliSource.includes('"--dump-dir"'),
+    fs.readFileSync(tsSpec, "utf-8").includes('"crash-report"'),
+  ],
+  [true, true],
+);
+
 // The other async checks (Tests 11 and 15) settle within the current
-// macrotask queue; Test 19 polls real timers and Test 22 restores its stubs
-// asynchronously, so the summary waits for both.
-Promise.all([lockTests, analyzeCrashTest]).then(() =>
+// macrotask queue; Test 19 polls real timers and Tests 22 / 23b restore their
+// stubs asynchronously, so the summary waits for them.
+Promise.all([lockTests, analyzeCrashTest, crashReportTest]).then(() =>
   setImmediate(() => {
     console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
     process.exit(failures === 0 ? 0 : 1);

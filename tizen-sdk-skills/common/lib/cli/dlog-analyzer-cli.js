@@ -34,6 +34,8 @@
  *   kernel           — Kernel log collection (collect = background, stop, analyze) (kmsg/dmesg)
  *   log-dump        — One-shot dlog buffer dump (sdb dlog -d), tail in the envelope, full dump in a file
  *   log-clear       — Clear the device dlog buffer (sdb dlog -c); requires --confirm
+ *   crash-report    — Find crash dumps (/opt/usr/share/crash/dump, /run/crash/dump, --dump-dir …)
+ *                     for an app id or any process name, extract the report and its dlog
  *
  * Collected logs are stored by the native binary under <sdk-data>/dloganalyzer/
  * (resolved from ~/.tizen.sdk.path.config); there is no output-directory
@@ -60,6 +62,7 @@
  *   node dlog-analyzer-cli.js kernel collect|stop|analyze [serial] [--format <f>]
  *   node dlog-analyzer-cli.js log-dump [serial] [--filter "<spec> ..."] [--lines <n>] [--output <file>]
  *   node dlog-analyzer-cli.js log-clear [serial] [--confirm]
+ *   node dlog-analyzer-cli.js crash-report [serial] [--process <name>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]
  *
  * Examples:
  *   node .../dlog-analyzer-cli.js start start-monitoring emulator-26101
@@ -79,6 +82,8 @@
  *   node .../dlog-analyzer-cli.js log-dump --output ./device.log --lines 0
  *   node .../dlog-analyzer-cli.js log-clear                     # refused: user_input_required
  *   node .../dlog-analyzer-cli.js log-clear emulator-26101 --confirm
+ *   node .../dlog-analyzer-cli.js crash-report --process deviced
+ *   node .../dlog-analyzer-cli.js crash-report --app-id org.example.myapp --limit 1
  *
  * Exit code: success=0, failure/error=1
  */
@@ -106,6 +111,7 @@ const {
   manageRules,
   dumpDeviceLogs,
   clearDeviceLogs,
+  collectCrashReports,
 } = require("../core/sdk-commands");
 
 const COMMAND = "tizen-sdk dlog-analyzer";
@@ -156,6 +162,10 @@ const OPTION_FLAGS = {
   "--pid": "pid",
   "--noise-tag": "noiseTag",
   "--level": "level",
+  // crash-report only
+  "--process": "process",
+  "--dump-dir": "dumpDir",
+  "--limit": "limit",
 };
 const BOOLEAN_FLAGS = {
   "--confirm": "confirm",
@@ -187,6 +197,7 @@ const REPEATABLE_FLAGS = [
   "--tag",
   "--pid",
   "--noise-tag",
+  "--dump-dir",
 ];
 
 // --- Main entry point ---
@@ -221,6 +232,7 @@ const VALID_ACTIONS = [
   "kernel",
   "log-dump",
   "log-clear",
+  "crash-report",
 ];
 const VALID_SUBCOMMANDS = [
   "dlog-collect",
@@ -461,6 +473,16 @@ runCli(COMMAND, async () => {
     case "log-clear":
       // log-clear [serial] [--confirm] — refused without --confirm
       return clearDeviceLogs(param1, options.confirm === true);
+    case "crash-report":
+      // crash-report [serial] — --app-id is an alias of --process (an app id
+      // is just the name crash-worker files an app's dump under).
+      return collectCrashReports(param1, {
+        process: [options.appId, options.process].flat(),
+        dumpDir: options.dumpDir,
+        limit: options.limit,
+        lines: options.lines,
+        output: options.output,
+      });
     default:
       return formatError(
         COMMAND,

@@ -28,8 +28,10 @@
  *   manageKernel        — Kernel log collection (background, like dlog-collect) / stop / analysis (kmsg/dmesg)
  *   dumpDeviceLogs     — One-shot dlog buffer dump via sdb (`dlog -d`), optional tag/priority filter
  *   clearDeviceLogs    — Clear the device dlog buffer via sdb (`dlog -c`), confirmation-gated
+ *   collectCrashReports — Find crash-worker dumps (/opt/usr/share/crash/dump, /run/crash/dump …)
+ *                        for an app id or a daemon's process name and extract their reports
  *
- * The last two are plain sdb actions (no native binary involved). They live
+ * The last three are plain sdb actions (no native binary involved). They live
  * here — not in sdb-helper — so that every device-log request has ONE owner:
  * sdb-helper hands its log intents off to this skill, and this runner covers
  * both the quick one-shot operations and the continuous collect/analyze flow.
@@ -2104,6 +2106,543 @@ async function clearDeviceLogs(serial, confirm, commandLabel) {
 }
 
 // ---------------------------------------------------------------------------
+// Crash-dump reports (plain sdb, no native binary)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where crash-worker leaves its reports. `/opt/usr/share/crash/dump` is the
+ * usual place; DA (digital appliance) and other RAM-backed targets keep them
+ * in `/run/crash/dump`. `--dump-dir` adds more. The native binary reads dlog
+ * only, so before this action a crash that never reached the collected dlog
+ * (a system daemon, a crash before collection started) was invisible.
+ */
+const CRASH_DUMP_DIRS = ["/opt/usr/share/crash/dump", "/run/crash/dump"];
+// Directories and entry names are spliced into the device shell command
+// unquoted, so both are limited to characters no shell treats specially.
+const CRASH_DIR_RE = /^\/[A-Za-z0-9._/-]+$/;
+const CRASH_ENTRY_NAME_RE = /^[A-Za-z0-9._@+-]+$/;
+// crash-worker names an entry `<process>_<pid>_<YYYYMMDDhhmmss>[.<ext>]`;
+// <process> is the app id for apps and the process name for daemons.
+const CRASH_NAME_RE = /^(.+?)_(\d+)_(\d{14})(?:\.([A-Za-z0-9.]+))?$/;
+// Marker lines of the listing / extraction scripts.
+const CRASH_MARK = "@@CRASH";
+const DEFAULT_CRASH_LIMIT = 3;
+const DEFAULT_CRASH_REPORT_LINES = 80;
+const MAX_CALLSTACK_FRAMES = 20;
+// /proc/<pid>/comm — the name a daemon's report is filed under — is cut here.
+const TASK_COMM_LEN = 15;
+const CRASH_REPORT_DIR = path.join(STATE_DIR, "crash-reports");
+
+/**
+ * The default crash-dump directories plus every `--dump-dir`, de-duplicated.
+ * @returns {{dirs: string[]}|{error: string}}
+ */
+function parseCrashDumpDirs(extra) {
+  const dirs = [...CRASH_DUMP_DIRS];
+  for (const raw of presentValues(extra)) {
+    const dir = String(raw).trim().replace(/\/+$/, "");
+    if (
+      !CRASH_DIR_RE.test(dir) ||
+      dir.split("/").some((part) => part === "..")
+    ) {
+      return {
+        error: `Invalid --dump-dir: ${JSON.stringify(raw)}. Use an absolute device path made of letters, digits, '.', '_', '-' and '/' (no '..').`,
+      };
+    }
+    if (!dirs.includes(dir)) dirs.push(dir);
+  }
+  return { dirs };
+}
+
+/**
+ * One device shell command that lists every directory newest first, each
+ * block headed by `@@CRASH dir|missing|denied <dir>`. A directory the shell
+ * user cannot read (crash dumps are root-only on most targets) is reported,
+ * not skipped silently.
+ */
+function buildCrashListScript(dirs) {
+  return dirs
+    .map(
+      (d) =>
+        `if [ ! -e ${d} ]; then echo ${CRASH_MARK} missing ${d}; ` +
+        `elif ! ls -1t ${d} >/dev/null 2>&1; then echo ${CRASH_MARK} denied ${d}; ` +
+        `else echo ${CRASH_MARK} dir ${d}; ls -1t ${d}; fi`,
+    )
+    .join("; ");
+}
+
+/** What kind of crash-worker entry a file name denotes. */
+function crashEntryKind(ext) {
+  if (!ext) return "dir";
+  const e = ext.toLowerCase();
+  if (e === "zip") return "zip";
+  if (e === "tar") return "tar";
+  if (e === "tar.gz" || e === "tgz") return "tar.gz";
+  if (e === "info" || e === "txt" || e === "cs") return "info";
+  if (e === "log") return "log";
+  if (e === "coredump" || e === "core") return "core";
+  return "other";
+}
+
+/**
+ * Split an entry name into process / pid / timestamp / kind. Names that do
+ * not follow the crash-worker pattern keep `process: null`.
+ */
+function describeCrashEntry(name) {
+  const m = CRASH_NAME_RE.exec(name);
+  if (!m) {
+    const ext = /\.([A-Za-z0-9]+)$/.exec(name);
+    return {
+      process: null,
+      pid: null,
+      timestamp: null,
+      kind: crashEntryKind(ext ? ext[1] : null),
+    };
+  }
+  const t = m[3];
+  return {
+    process: m[1],
+    pid: parseInt(m[2], 10),
+    timestamp: `${t.slice(0, 4)}-${t.slice(4, 6)}-${t.slice(6, 8)} ${t.slice(8, 10)}:${t.slice(10, 12)}:${t.slice(12, 14)}`,
+    kind: crashEntryKind(m[4]),
+  };
+}
+
+/**
+ * Parse the output of buildCrashListScript().
+ * @returns {{dirs: Array<{dir: string, status: string, entries: number}>,
+ *            entries: Array<object>, skipped: string[]}}
+ */
+function parseCrashListing(output) {
+  const dirs = [];
+  const entries = [];
+  const skipped = [];
+  let current = null;
+  const markRe = new RegExp(`^${CRASH_MARK} (dir|missing|denied) (\\S+)$`);
+  for (const raw of sanitizeDlogOutput(output).split("\n")) {
+    const line = raw.trim();
+    if (!line) continue;
+    const mark = markRe.exec(line);
+    if (mark) {
+      current = {
+        dir: mark[2],
+        status: mark[1] === "dir" ? "ok" : mark[1],
+        entries: 0,
+      };
+      dirs.push(current);
+      continue;
+    }
+    if (!current || current.status !== "ok") continue;
+    if (/permission denied/i.test(line)) {
+      current.status = "denied";
+      continue;
+    }
+    if (!CRASH_ENTRY_NAME_RE.test(line)) {
+      skipped.push(`${current.dir}/${line}`);
+      continue;
+    }
+    current.entries++;
+    entries.push({
+      dir: current.dir,
+      name: line,
+      path: `${current.dir}/${line}`,
+      ...describeCrashEntry(line),
+    });
+  }
+  return { dirs, entries, skipped };
+}
+
+/**
+ * Does an entry belong to `name` (an app id or a process name)? A daemon's
+ * report is filed under its 15-character comm, so a longer name matches the
+ * truncated form too.
+ */
+function matchesCrashProcess(entry, name) {
+  if (!name) return true;
+  if (!entry.process) return entry.name.startsWith(`${name}_`);
+  if (entry.process === name) return true;
+  return (
+    entry.process.length === TASK_COMM_LEN && name.startsWith(entry.process)
+  );
+}
+
+/** Matching entries, newest first across every directory. */
+function selectCrashEntries(entries, name) {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => matchesCrashProcess(entry, name))
+    .sort((a, b) => {
+      const ta = a.entry.timestamp || "";
+      const tb = b.entry.timestamp || "";
+      if (ta !== tb) return ta < tb ? 1 : -1;
+      return a.index - b.index;
+    })
+    .map(({ entry }) => entry);
+}
+
+/**
+ * Device shell command that prints one member of an entry: the crash report
+ * (`info`, the .info text with signal, registers and call stack) or the
+ * dlog/system-state dump packed next to it (`log`). null = nothing to print.
+ */
+function buildCrashExtractScript(entry, member) {
+  const p = entry.path;
+  const glob = member === "info" ? "*.info" : "*.log";
+  const re = member === "info" ? "[.]info$" : "[.]log$";
+  switch (entry.kind) {
+    case "info":
+    case "log":
+      return entry.kind === member ? `cat ${p}` : null;
+    case "dir":
+      return `cat ${p}/${glob} 2>/dev/null`;
+    case "zip":
+      return (
+        `if command -v unzip >/dev/null 2>&1; then unzip -p ${p} '${glob}' 2>/dev/null; ` +
+        `else echo ${CRASH_MARK} no-unzip; fi`
+      );
+    case "tar":
+    case "tar.gz": {
+      const z = entry.kind === "tar.gz" ? "z" : "";
+      return (
+        `m=$(tar -t${z}f ${p} 2>/dev/null | grep '${re}' | head -n 1); ` +
+        `if [ -n "$m" ]; then tar -x${z}Of ${p} $m; fi`
+      );
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * The fields a reader looks for first in a crash-worker .info report. The
+ * format differs a little between platform versions, so every field is
+ * optional.
+ */
+function summarizeCrashInfo(text) {
+  const body = typeof text === "string" ? text : "";
+  const field = (re) => {
+    const m = re.exec(body);
+    return m ? m[1].trim() : null;
+  };
+  const summary = {};
+  const set = (key, value) => {
+    if (value) summary[key] = value;
+  };
+  set("process_name", field(/^\s*Process Name\s*:\s*(.+)$/im));
+  set("pid", field(/^\s*PID\s*:\s*(\d+)/im));
+  set("executable", field(/^\s*Executable File Path\s*:\s*(.+)$/im));
+  set("package_id", field(/^\s*Package ID\s*:\s*(.+)$/im));
+  set("app_id", field(/^\s*App(?:lication)? ID\s*:\s*(.+)$/im));
+  const signal =
+    /^\s*Signal\s*:\s*(\d+)[ \t]*(?:\(\s*(SIG\w+)\s*\))?(?:[ \t]*\n\s*\(\s*(SIG\w+)\s*\))?/im.exec(
+      body,
+    );
+  if (signal) {
+    const sigName = signal[2] || signal[3];
+    summary.signal = sigName ? `${signal[1]} (${sigName})` : signal[1];
+  }
+  const frames = [];
+  let inStack = false;
+  for (const line of body.split("\n")) {
+    if (/^\s*End of Call\s*Stack/i.test(line)) break;
+    if (/Call\s*Stack/i.test(line)) {
+      inStack = true;
+      continue;
+    }
+    if (inStack && /^\s*\d+\s*:/.test(line)) {
+      frames.push(line.trim());
+      if (frames.length >= MAX_CALLSTACK_FRAMES) break;
+    }
+  }
+  if (frames.length) summary.callstack = frames;
+  return summary;
+}
+
+/** First `limit` lines of a report (0 = all). */
+function headLines(text, limit) {
+  const lines = text.replace(/\n$/, "").split("\n");
+  if (!limit || lines.length <= limit) {
+    return {
+      text: lines.join("\n"),
+      truncated: false,
+      total_lines: lines.length,
+    };
+  }
+  return {
+    text: lines.slice(0, limit).join("\n"),
+    truncated: true,
+    total_lines: lines.length,
+  };
+}
+
+/**
+ * Run one device shell command. argv form — no host shell, so the command
+ * string reaches the DEVICE shell exactly as written (same reasoning as
+ * samsung-duid.js runDeviceShellCommand()).
+ */
+function runCrashShell(device, script, timeout) {
+  return sanitizeDlogOutput(
+    execFileSync(device.sdbPath, ["-s", device.serial, "shell", script], {
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      maxBuffer: 32 * 1024 * 1024,
+      timeout,
+      windowsHide: true,
+    }),
+  );
+}
+
+/** Pull one member of an entry and save it under `outDir`. */
+function extractCrashMember(device, entry, member, outDir) {
+  const script = buildCrashExtractScript(entry, member);
+  if (!script) return { text: "" };
+  let text;
+  try {
+    text = runCrashShell(device, script, 60000);
+  } catch (error) {
+    const stderr = error.stderr ? error.stderr.toString().trim() : "";
+    return { error: stderr || error.message };
+  }
+  if (text.includes(`${CRASH_MARK} no-unzip`))
+    return { noUnzip: true, text: "" };
+  if (!text.trim()) return { text: "" };
+  const suffix = member === "info" ? "info.txt" : "dlog.log";
+  const file = path.join(outDir, `${entry.name}.${suffix}`);
+  fs.writeFileSync(file, text);
+  return { text, file };
+}
+
+/** Report object for one selected entry. */
+function buildCrashReport(device, entry, outDir, reportLines, warnings) {
+  const report = {
+    path: entry.path,
+    process: entry.process,
+    pid: entry.pid,
+    timestamp: entry.timestamp,
+    kind: entry.kind,
+  };
+  const info = extractCrashMember(device, entry, "info", outDir);
+  if (info.error) report.error = `Could not read the report: ${info.error}`;
+  if (info.noUnzip) {
+    warnings.push(
+      `unzip is not available on device ${device.serial}, so ${entry.path} could not be opened there. Pull it with tizen-file-transfer and open it on the host.`,
+    );
+  }
+  if (info.file) {
+    report.report_file = info.file;
+    report.summary = summarizeCrashInfo(info.text);
+    const head = headLines(info.text, reportLines);
+    report.report = head.text;
+    report.report_truncated = head.truncated;
+  }
+  const log = extractCrashMember(device, entry, "log", outDir);
+  if (log.file) {
+    report.dlog_file = log.file;
+    // A daemon has no app id and was never collected under app/<app-id>/;
+    // file mode analyzes the dlog packed with the dump directly.
+    const label =
+      entry.process && entry.pid
+        ? ` --app-id ${entry.process} --pid ${entry.pid}`
+        : "";
+    report.next_step = `error-analyze --file "${log.file}"${label} --format summary`;
+  }
+  if (!info.file && !log.file && !report.error && !info.noUnzip) {
+    report.note =
+      entry.kind === "core" || entry.kind === "other"
+        ? "This entry holds no text report (e.g. a bare core dump). Pull it with tizen-file-transfer to inspect it."
+        : "No .info report or .log dump was found in this entry.";
+  }
+  return report;
+}
+
+function parseCountOption(name, value, fallback) {
+  if (value === undefined || value === null || value === "")
+    return { value: fallback };
+  const n = Number.parseInt(String(value), 10);
+  if (!Number.isInteger(n) || n < 0 || String(n) !== String(value).trim()) {
+    return {
+      error: `${name} must be a non-negative integer (0 = unlimited), got ${JSON.stringify(value)}.`,
+    };
+  }
+  return { value: n };
+}
+
+function crashReportParamError(command, message) {
+  return {
+    command,
+    status: "failure",
+    errors: [{ category: "invalid_parameters", message }],
+  };
+}
+
+/** toArray() without the undefined / null / "" an absent flag leaves. */
+function presentValues(value) {
+  return toArray(value).filter(
+    (v) => v !== undefined && v !== null && String(v).trim() !== "",
+  );
+}
+
+/** --process / --app-id may each be repeated; the last value wins. */
+function lastValue(value) {
+  const list = presentValues(value);
+  return list.length ? String(list[list.length - 1]).trim() : "";
+}
+
+/**
+ * Find the crash-worker reports on the device and return the newest ones
+ * with their crash summary (signal, executable, call stack). Works for any
+ * process — an app id or a system daemon's process name — so a crash is
+ * found even when no app id exists and nothing was collected beforehand.
+ *
+ * The .info report and the dlog packed with each dump are saved under
+ * `--output` (default $TMPDIR/tizen-dlog-analyzer/crash-reports/<serial>/);
+ * the saved dlog is ready for `error-analyze --file`.
+ *
+ * @param {string} [serial] - Optional device serial
+ * @param {object} [opts]
+ * @param {string|string[]} [opts.process] - App id or process name (last wins); omitted = every process
+ * @param {string|string[]} [opts.dumpDir] - Extra device directories to search
+ * @param {number|string} [opts.limit] - Reports to open (default 3, 0 = all matches)
+ * @param {number|string} [opts.lines] - Report lines returned inline (default 80, 0 = all)
+ * @param {string} [opts.output] - Host directory for the extracted files
+ * @param {string} [commandLabel] - Envelope command label
+ */
+async function collectCrashReports(serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer crash-report";
+  const options = opts || {};
+
+  const processName = lastValue(options.process);
+  if (processName && !isValidAppId(processName)) {
+    return crashReportParamError(
+      command,
+      `Invalid process name: ${processName}. Allowed characters: letters, digits, '.', '_', '-'.`,
+    );
+  }
+  const limit = parseCountOption("--limit", options.limit, DEFAULT_CRASH_LIMIT);
+  if (limit.error) return crashReportParamError(command, limit.error);
+  const lines = parseCountOption(
+    "--lines",
+    options.lines,
+    DEFAULT_CRASH_REPORT_LINES,
+  );
+  if (lines.error) return crashReportParamError(command, lines.error);
+  const parsedDirs = parseCrashDumpDirs(options.dumpDir);
+  if (parsedDirs.error) return crashReportParamError(command, parsedDirs.error);
+
+  const device = resolveDevice(serial);
+  if (device.error) return deviceErrorEnvelope(command, device);
+
+  const listScript = buildCrashListScript(parsedDirs.dirs);
+  let listing;
+  try {
+    listing = parseCrashListing(runCrashShell(device, listScript, 30000));
+  } catch (error) {
+    const stderr = error.stderr ? error.stderr.toString().trim() : "";
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "crash_report_failed",
+          message: `Failed to list the crash-dump directories on device ${device.serial}: ${stderr || error.message}`,
+        },
+      ],
+    };
+  }
+
+  const denied = listing.dirs
+    .filter((d) => d.status === "denied")
+    .map((d) => d.dir);
+  const readable = listing.dirs.filter((d) => d.status === "ok");
+  const rootFix = {
+    command: `tizen-sdk sdb-helper --request "root on"${serial ? ` --serial ${device.serial}` : ""}`,
+    auto_fixable: false,
+  };
+  if (readable.length === 0 && denied.length > 0) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "permission_denied",
+          message:
+            `The crash-dump directories on device ${device.serial} are not readable by the sdb shell user: ${denied.join(", ")}. ` +
+            "They are root-only on most targets. Ask the user, switch sdb to root with the tizen-sdb-helper skill (root on, confirmation-gated), then re-run crash-report.",
+          suggested_fix: rootFix,
+        },
+      ],
+    };
+  }
+
+  const matched = selectCrashEntries(listing.entries, processName);
+  const selected = limit.value ? matched.slice(0, limit.value) : matched;
+  const outDir = options.output
+    ? path.resolve(String(options.output))
+    : path.join(
+        CRASH_REPORT_DIR,
+        device.serial.replace(/[^A-Za-z0-9._-]/g, "_"),
+      );
+  const warnings = [];
+  if (selected.length) {
+    try {
+      fs.mkdirSync(outDir, { recursive: true });
+    } catch (error) {
+      return {
+        command,
+        status: "failure",
+        errors: [
+          {
+            category: "io_error",
+            message: `Could not create ${outDir} for the extracted crash reports: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+  const reports = selected.map((entry) =>
+    buildCrashReport(device, entry, outDir, lines.value, warnings),
+  );
+
+  if (denied.length) {
+    warnings.push(
+      `Not readable without root, so not searched: ${denied.join(", ")}. Reports there are missing from this result; switch sdb to root with the tizen-sdb-helper skill (root on) and re-run to include them.`,
+    );
+  }
+  if (listing.skipped.length) {
+    warnings.push(
+      `Skipped ${listing.skipped.length} entr${listing.skipped.length === 1 ? "y" : "ies"} whose name contains characters outside [A-Za-z0-9._@+-]: ${listing.skipped.slice(0, 5).join(", ")}`,
+    );
+  }
+
+  const who = processName ? ` for "${processName}"` : "";
+  let message;
+  if (matched.length === 0) {
+    message = `No crash dumps${who} in ${readable.map((d) => d.dir).join(", ") || "any searched directory"} on device ${device.serial}.`;
+  } else {
+    message =
+      `Found ${matched.length} crash dump${matched.length === 1 ? "" : "s"}${who} on device ${device.serial}; ` +
+      `opened the newest ${reports.length}. Extracted files: ${outDir}`;
+  }
+
+  return {
+    command,
+    status: "success",
+    result: {
+      device_serial: device.serial,
+      process: processName || null,
+      searched_dirs: listing.dirs,
+      total_matches: matched.length,
+      returned: reports.length,
+      truncated: reports.length < matched.length,
+      output_dir: reports.length ? outDir : null,
+      reports,
+      message,
+    },
+    ...(warnings.length ? { warnings } : {}),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // New v0.1.3 commands: app-log, device-profile, investigate, probe,
 // snapshot, timeline, kernel
 // ---------------------------------------------------------------------------
@@ -3303,7 +3842,17 @@ module.exports = {
   // One-shot device-log actions
   dumpDeviceLogs,
   clearDeviceLogs,
+  collectCrashReports,
   // Pure helpers (unit-tested without a device)
+  CRASH_DUMP_DIRS,
+  parseCrashDumpDirs,
+  buildCrashListScript,
+  parseCrashListing,
+  describeCrashEntry,
+  matchesCrashProcess,
+  selectCrashEntries,
+  buildCrashExtractScript,
+  summarizeCrashInfo,
   resolveLogBaseDir,
   appLogFile,
   isValidAppId,
