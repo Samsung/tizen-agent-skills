@@ -1137,8 +1137,8 @@ function saveBuildLog(output) {
  * @param {string} buildType - Debug (default) | Release | Test
  * @param {string} [signProfile] - signing profile (optional)
  * @param {string} [arch] - target architecture for GBS/platform builds: armv7l |
- *   aarch64 | i586 | x86_64 (default x86_64). Ignored, with a warning, for
- *   Native/DotNET/WebApp/RPK projects.
+ *   aarch64 | i586 | x86_64 (default x86_64). Ignored for Native/DotNET/WebApp/RPK
+ *   projects, with a warning when a non-default value was given.
  * @param {boolean} [clean] - remove previous build output on the SDK host before
  *   building (forces a full, non-incremental rebuild — compiler warnings reappear)
  * @returns {object} Standard JSON Envelope — result.artifacts = [{path, format, size_bytes}]
@@ -1337,7 +1337,9 @@ async function buildProject(
 
     const warnings = summarizeBuildOutput(output);
     if (sdkInfoNote) warnings.push(sdkInfoNote);
-    if (arch && !platformProject) {
+    // Only a non-default value is worth a warning: tizen-cli always passes its
+    // --arch default (x86_64), so an untouched option must stay silent.
+    if (arch && arch !== DEFAULT_GBS_ARCH && !platformProject) {
       warnings.push(
         `--arch ${arch} was ignored: it selects the GBS target and applies only to Platform projects (CMakeLists.txt + packaging/*.spec). This project was built with its own toolchain settings.`,
       );

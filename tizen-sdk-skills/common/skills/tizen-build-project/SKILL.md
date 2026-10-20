@@ -105,8 +105,8 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
    on the SDK host, and deleting a local path is a silent no-op for remote clients.
 5. **`--arch <arch>`** (optional, **Platform/GBS projects only**, default `x86_64`) — the
    `gbs build -A` target: `x86_64` | `armv7l` | `aarch64` | `i586`. See
-   "Platform (GBS) target architecture" below. Ignored, with a warning, for
-   Native/DotNET/WebApp/RPK projects.
+   "Platform (GBS) target architecture" below. Ignored for Native/DotNET/WebApp/RPK
+   projects (a non-default value adds a warning).
 
 Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error envelope.
 
@@ -195,9 +195,12 @@ node "$CLI" build --project "<platform-project>" --build-type Debug --arch armv7
 - **Ask before building when the target is unclear.** If the user wants the RPM for a real
   device ("디바이스에 설치할 RPM", "for my board") but names no architecture, ask which one
   (`x86_64` / `armv7l` / `aarch64`) instead of silently building `x86_64`.
-- **A connected device tells you.** `tizen-sdb-helper` → `device-info` (`sdb capability`)
-  reports `cpu_arch`: `armv7*` / `arm` → `armv7l`, `aarch64` / `arm64` → `aarch64`,
-  `x86_64` → `x86_64`. Prefer this over guessing from the device model.
+- **A connected device tells you.** Run `uname -m` on it through `tizen-sdb-helper`'s
+  shell action (never a hand-typed `sdb shell`). The kernel reports the same names GBS
+  uses: `x86_64` → `--arch x86_64`, `aarch64` → `--arch aarch64`, any other `arm…`
+  (`armv7l`, `armv7hl`, …) → `--arch armv7l`, `i686` / `i586` → `--arch i586` — the
+  mapping `tizen-dotnet-debug` already applies to pick its debugger build. Prefer this over
+  guessing from the device model.
 - **Only these four names are accepted.** `arm`, `arm64` or `armv7` are rejected with
   `invalid_parameters` before GBS runs — map them as in the table, do not retry the same value.
 - The RPMs land in `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`; `result.artifacts` already

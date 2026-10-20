@@ -4,7 +4,7 @@ description: Build a Tizen app/project (Native, DotNET, WebApp, standalone RPK r
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-10-20"
   keywords:
     - 빌드
     - 빌드해줘
@@ -45,7 +45,7 @@ tizen-cli tizen-sdk build-project --project <path>
 | `--project <path>`      | **yes**  | —        | Project root directory                                           |
 | `--build-type <type>`   | no       | `Debug`  | `Debug` \| `Release` \| `Test`                                   |
 | `--sign-profile <name>` | no       | —        | Signing profile name                                             |
-| `--arch <arch>`         | no       | `x86_64` | GBS platform builds: `armv7l` \| `aarch64` \| `i586` \| `x86_64` |
+| `--arch <arch>`         | no       | `x86_64` | GBS platform builds: `armv7l` \| `aarch64` \| `i586` \| `x86_64` — see "Target architecture" below |
 | `--clean`               | no       | off      | Remove previous build output on the SDK host before building — forces a full, non-incremental rebuild |
 
 Builds can take a while — set the Bash tool timeout to 600000 ms.
@@ -119,6 +119,28 @@ The build script automatically:
 - Runs `gbs build -A <arch> --include-all` from the project directory
 - Searches for `.tpk`/`.wgt`/`.rpm` artifacts in both the project dir and `~/GBS-ROOT`
 
+### Target architecture (`--arch`)
+
+A Platform build produces RPMs for **one** CPU architecture. Without `--arch` it builds
+**`x86_64`**, which installs only on the emulator — an x86_64 RPM on an ARM device fails at
+`rpm -i`. Map the request:
+
+| User says | Pass |
+|---|---|
+| emulator, x86, 에뮬레이터 (or nothing about the target) | `--arch x86_64` (default) |
+| arm, armv7, armv7l, 32-bit ARM, 32비트 ARM | `--arch armv7l` |
+| arm64, aarch64, 64-bit ARM, 64비트 ARM | `--arch aarch64` |
+| i586, 32-bit x86 | `--arch i586` |
+
+- **Ask when the target is unclear.** If the RPM is for a real device but no architecture is
+  named, ask which one (`x86_64` / `armv7l` / `aarch64`) instead of silently building `x86_64`.
+- **A connected device tells you.** `tizen-cli tizen-sdk sdb-helper --request "run shell command uname -m"`
+  prints the same names GBS uses: `x86_64`, `aarch64`, or an `arm…` name (`armv7l`, `armv7hl`
+  → `--arch armv7l`).
+- **Only these four names are accepted** — `arm`, `arm64` or `armv7` are rejected by the
+  option's choices; map them as in the table. `--arch` has no effect on Native/DotNET/WebApp/RPK
+  projects.
+
 ### DALi projects require C++17
 
 Tizen 9.0 `dali2` headers use `std::string_view` / `std::any`, so a DALi project built
@@ -135,7 +157,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## Output
 
-- Success `result.artifacts`: array of `{ path, format, size_bytes }` — the produced `.tpk`/`.wgt`/`.rpk`/`.rpm` package paths. For Platform (GBS) builds, artifacts are `.rpm` files under `~/GBS-ROOT/local/repos/<arch>/RPMS/`. `warnings` may carry a build-output summary.
+- Success `result.artifacts`: array of `{ path, format, size_bytes }` — the produced `.tpk`/`.wgt`/`.rpk`/`.rpm` package paths. For Platform (GBS) builds, artifacts are `.rpm` files under `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`. `warnings` may carry a build-output summary.
 - Failure: the envelope already contains the compile diagnostics — `errors[0].message` carries the headline, the diagnostic lines (compiler errors first) and the full-log path; `errors[0].details` carries the same diagnostic lines as a string array. Read the host log file only when `details` is empty or insufficient.
 
 ### On failure — read the errors before retrying
