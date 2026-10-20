@@ -195,12 +195,22 @@ node "$CLI" build --project "<platform-project>" --build-type Debug --arch armv7
 - **Ask before building when the target is unclear.** If the user wants the RPM for a real
   device ("디바이스에 설치할 RPM", "for my board") but names no architecture, ask which one
   (`x86_64` / `armv7l` / `aarch64`) instead of silently building `x86_64`.
-- **A connected device tells you.** Run `uname -m` on it through `tizen-sdb-helper`'s
-  shell action (never a hand-typed `sdb shell`). The kernel reports the same names GBS
-  uses: `x86_64` → `--arch x86_64`, `aarch64` → `--arch aarch64`, any other `arm…`
-  (`armv7l`, `armv7hl`, …) → `--arch armv7l`, `i686` / `i586` → `--arch i586` — the
-  mapping `tizen-dotnet-debug` already applies to pick its debugger build. Prefer this over
-  guessing from the device model.
+- **A connected device tells you.** Ask `tizen-sdb-helper`'s shell action (never a
+  hand-typed `sdb shell`) to run `uname -m; ls -d /usr/lib*`. `uname -m` names the CPU
+  family; the library directories name the word size of the userspace the RPM installs
+  into — Tizen's 64-bit images (`aarch64`, `x86_64`) have `/usr/lib64`, 32-bit images
+  (`armv7l`, `i586`) only `/usr/lib`. Check both: `uname -m` reports the **kernel**, so a
+  64-bit kernel under a 32-bit userspace still prints `aarch64`, and an `aarch64` RPM does
+  not install there.
+
+  | `uname -m` | `/usr/lib64` listed? | Pass |
+  |---|---|---|
+  | `aarch64` | yes | `--arch aarch64` |
+  | `aarch64`, `armv8l`, `armv7l` (any `arm…`) | no | `--arch armv7l` |
+  | `x86_64` | yes | `--arch x86_64` |
+  | `x86_64`, `i686`, `i586` | no | `--arch i586` |
+
+  Prefer this over guessing from the device model.
 - **Only these four names are accepted.** `arm`, `arm64` or `armv7` are rejected with
   `invalid_parameters` before GBS runs — map them as in the table, do not retry the same value.
 - The RPMs land in `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`; `result.artifacts` already

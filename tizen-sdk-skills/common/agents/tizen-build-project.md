@@ -174,8 +174,11 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    >
    > If the RPM is for a real device and no architecture is given, return to the caller
    > asking which one (`x86_64` / `armv7l` / `aarch64`) instead of building `x86_64`. A
-   > connected device answers it: `uname -m` through `tizen-sdb-helper`'s shell action
-   > prints `x86_64`, `aarch64`, or an `arm…` name (`armv7l`, `armv7hl` → `--arch armv7l`).
+   > connected device answers it: run `uname -m; ls -d /usr/lib*` through
+   > `tizen-sdb-helper`'s shell action. `/usr/lib64` exists only on a 64-bit userspace, so
+   > `aarch64` / `x86_64` **with** `/usr/lib64` → `--arch aarch64` / `--arch x86_64`;
+   > without it → `--arch armv7l` (any ARM) / `--arch i586` (x86). `uname -m` alone names
+   > the kernel and says `aarch64` on a 64-bit kernel with a 32-bit userspace.
    > Only these four names are accepted — `arm`, `arm64` or `armv7` fail with
    > `invalid_parameters` before GBS runs. `--arch` is ignored for
    > Native/DotNET/WebApp/RPK projects (a non-default value adds a warning).

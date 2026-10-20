@@ -134,9 +134,13 @@ A Platform build produces RPMs for **one** CPU architecture. Without `--arch` it
 
 - **Ask when the target is unclear.** If the RPM is for a real device but no architecture is
   named, ask which one (`x86_64` / `armv7l` / `aarch64`) instead of silently building `x86_64`.
-- **A connected device tells you.** `tizen-cli tizen-sdk sdb-helper --request "run shell command uname -m"`
-  prints the same names GBS uses: `x86_64`, `aarch64`, or an `arm…` name (`armv7l`, `armv7hl`
-  → `--arch armv7l`).
+- **A connected device tells you.**
+  `tizen-cli tizen-sdk sdb-helper --request "run shell command uname -m; ls -d /usr/lib*"`
+  prints the CPU family and the library directories. `/usr/lib64` exists only on a 64-bit
+  userspace (`aarch64`, `x86_64`); 32-bit images (`armv7l`, `i586`) have only `/usr/lib`.
+  So `aarch64` / `x86_64` **with** `/usr/lib64` → `--arch aarch64` / `--arch x86_64`, and
+  without it → `--arch armv7l` (any ARM) / `--arch i586` (x86). Check both: `uname -m`
+  names the kernel, which is `aarch64` even under a 32-bit userspace.
 - **Only these four names are accepted** — `arm`, `arm64` or `armv7` are rejected by the
   option's choices; map them as in the table. `--arch` has no effect on Native/DotNET/WebApp/RPK
   projects.
