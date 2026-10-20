@@ -11,6 +11,105 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
+  `ci.yml`). Checks the files a pull request changes against the mechanical rules in
+  `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
+  documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
+  rule ID. CI runs it on every pull request with `--format github`, so each finding also
+  appears as an annotation on the pull request's changed files.
+
+### Changed
+
+- **`createEmulator`, `launchEmulator` and `manageEmulator` split into helpers**
+  (`common/lib/core/emulator.js`). Option parsing, validation, size/template resolution and
+  the failure and result builders move into module-private helpers, lowering cyclomatic
+  complexity (114 → 16, 46 → 11, 53 → 7). No behaviour change: the exported API, envelopes,
+  messages and error codes are unchanged.
+- **`setupGdbDebug` and `setupDotnetDebug` split into shared helpers**
+  (`common/lib/core/debug.js`). Option validation, script arguments, the setup-script run
+  and failure classification are shared between the two, lowering cyclomatic complexity
+  (52 → 6, 85 → 6). No behaviour change: the exported API, envelopes, script arguments and
+  the generated `launch.json` / `tasks.json` are unchanged.
+- **`installApp` and `runPlaywrightTest` split into helpers** (`common/lib/core/project.js`,
+  `common/lib/core/playwright-test.js`). Validation, device resolution, the RDS attempt, the
+  install-script run and the test-run classification move into one helper per step,
+  lowering cyclomatic complexity (57 → 13, 53 → 12). No behaviour change: the exported API,
+  envelopes, messages and script arguments are unchanged; `install-app-args.test.js` pins
+  the install-script arguments.
+
+### Fixed
+
+- **`launch-emulator --timeout 0` waited 300 s instead of failing** (issue #58;
+  `common/lib/core/emulator.js`). Only an absent `--timeout` now takes the 300 s default;
+  `0` is rejected with `invalid_parameters` like any value outside 1–540, matching
+  `create --launch`.
+- **`emulator-manager modify --size` without `--platform` resolved the size against the
+  wrong template list** (issue #59). It now looks up the VM's own platform with
+  `list-vm --detail`, lists templates for that platform and says so in a warning; if the
+  lookup fails it keeps the previous behaviour.
+- **`launchEmulator` JSDoc** (issue #60) now describes the profile-based VM selection
+  instead of "the first VM".
+- **`gdb-debug` accepted an empty `GDB init file:` marker** (issue #63;
+  `common/lib/core/debug.js`). The marker only counts when a path follows on the same line;
+  an empty one no longer reports success or reads the next output line as the init file.
+- **`dotnet-debug` reported any "package … not found" as a missing netcoredbg** (issue #64).
+  Only netcoredbg-specific output is classified that way; anything else gets the generic
+  setup error with the script output.
+- **Debug setup output matching tightened** (issue #65). DotNET `port_forwarded` keys on the
+  script's `Port <N> forwarded` marker, and GDB recognises `No devices found` like DotNET.
+- **`playwright-test` accepted partial numbers such as `9222abc`, `1.9` or `30s`** (issue #67;
+  `common/lib/core/playwright-test.js`). `--port`, `--setup-timeout` and `--timeout` (and
+  the scaffold `--port`) now accept whole numbers only; anything else fails with the
+  existing `invalid_parameters` message instead of being truncated by `parseInt`.
+- **`install-app` / `playwright-test` early validation errors omitted the start time**
+  (issue #68). Every failure envelope from `installApp()` and `runPlaywrightTest()` now
+  passes the same `startTime`, so `duration_ms` is measured from the same point.
+- **`playwright-test` could return a missing `setupWebappDebug()` result as-is** (issue #69).
+  An `undefined`/`null` setup result is now reported as an `io_error` envelope
+  ("webapp debug setup returned no result").
+
+## [1.4.5] — 2026-10-19
+
+The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
+only once an SDK is configured through the plugin, it no longer forbids the `tizen` CLI or
+looking up where sdb is, and a hand-typed sdb must be the configured SDK's `tools/sdb`.
+
+### Fixed
+
+- **Command guard hook blocked ordinary `sdb` / `tizen` commands outside SDK skill
+  workflows** (issue #47; `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
+  `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
+  `docs/deployment/HARNESS_SETUP.{md,en.md}`). The hook is registered for every shell command
+  of the harness in every project, so a plain environment check — `which sdb`,
+  `command -v sdb`, `tizen version` with the CLI installed, `export PATH="$HOME/tizen-studio/tools:$PATH"`
+  — was denied even with no Tizen skill in play, and `which sdb && sdb devices` fell as a
+  whole. Three changes:
+  - **Scope gate.** The Tizen tooling rules (tz flags, sdb paths, gdbserver, em-cli, dlog
+    probes, timer waits) now run only when `~/.tizen.sdk.path.config` exists — the file
+    `tizen-sdk-init` and the installer's auto-init write. Without it (the plugin installed
+    but a non-Tizen project, or a Tizen Studio user who never ran sdk-init) the hook only
+    keeps its shell-syntax rules (MSYS path to `powershell -File`, `Start-Process` redirects,
+    `$null` in Bash, backslash paths), which are host pitfalls rather than Tizen policy.
+    `TIZEN_SDK_SKILLS_SDK_CONFIG` overrides the config location for tests.
+  - **Rules 5 and 16 removed.** The hook no longer denies the Tizen Studio `tizen` CLI
+    (it does exist for Tizen Studio users) nor a lookup of the sdb binary (`which` / `where` /
+    `Get-Command sdb`, `find -name sdb`). The skills still steer the model to the runners
+    during a Tizen workflow; the guard-rule documents say so instead of claiming the CLI
+    does not exist.
+  - **Rule 7 rewritten: an sdb must be the configured SDK's.** The old rule denied any
+    mention of a `tizen-studio/tools` path, even when that was the user's configured SDK.
+    It now compares the directory of a hand-typed `<dir>/sdb[.exe]` against
+    `<~/.tizen.sdk.path.config>/tools` — normalising quotes, JSON-escaped backslashes, MSYS
+    `/c/` prefixes, a leading `~` and case, and tolerating spaces in a quoted path — and denies
+    an sdb from any other directory (a second SDK install, `tools/tizen-core/`, a stray copy)
+    with a message naming the configured path and `tizen-sdk-init`. A bare `sdb devices`
+    (PATH-resolved), a `$SDK` / `%VAR%` prefix and a cwd-relative `./sdb` are left alone.
+  - The hook test suite runs against a temporary config (POSIX, Windows and
+    space-containing SDK paths) plus a no-config pass for the gate; the HARNESS_SETUP smoke
+    test uses `tz build -p` instead of the removed tizen-CLI rule.
+
 ## [1.4.4] — 2026-10-16
 
 The test runner now always executes the locally built launcher instead of looking up

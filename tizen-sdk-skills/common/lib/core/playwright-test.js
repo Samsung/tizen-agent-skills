@@ -222,6 +222,282 @@ function probeCdpEndpoint(port) {
 }
 
 /**
+ * Parse a whole-number option with a default, accepted only within [1, max].
+ * The whole value must be digits — parseInt() alone would turn "9222abc" into
+ * 9222, "1.9" into 1 and "30s" into 30 and run with a value nobody typed.
+ * @returns {number|null} the value, or null when it is not an in-range whole number
+ */
+function parseBoundedInt(raw, defaultValue, max) {
+  const text = String(raw === undefined ? defaultValue : raw).trim();
+  if (!/^\d+$/.test(text)) return null;
+  const n = Number(text);
+  return n >= 1 && n <= max ? n : null;
+}
+
+/**
+ * Step 1 of runPlaywrightTest: parameter validation (same style as
+ * setupWebappDebug).
+ *
+ * @returns {{serial: string, port: number, setupTimeout: number, timeout: number}|{failure: object}}
+ */
+function validateRunOptions(appId, opts, command, startTime) {
+  const invalid = (message, suggestedCommand = null) => ({
+    failure: formatError(
+      command,
+      "invalid_parameters",
+      message,
+      suggestedCommand,
+      startTime,
+    ),
+  });
+  if (!appId) {
+    return invalid(
+      "Missing required parameter: appId",
+      'runPlaywrightTest("abcDEF1234.MyWebApp", { projectDir: "./pwtest" })',
+    );
+  }
+  // Allow only safe characters in shell args
+  if (!/^[A-Za-z0-9._-]+$/.test(appId)) {
+    return invalid(`Invalid app id: ${appId}`);
+  }
+  const serial = opts.serial || "";
+  if (serial && !/^[A-Za-z0-9._:-]+$/.test(serial)) {
+    return invalid(`Invalid serial: ${serial}`);
+  }
+  const port = parseBoundedInt(opts.port, 9222, 65535);
+  if (port === null) return invalid(`Invalid port: ${opts.port}`);
+  const setupTimeout = parseBoundedInt(opts.setupTimeout, 30, 300);
+  if (setupTimeout === null) {
+    return invalid(
+      `Invalid setup-timeout: ${opts.setupTimeout}. Must be 1-300 seconds.`,
+    );
+  }
+  const timeout = parseBoundedInt(opts.timeout, 120, 600);
+  if (timeout === null) {
+    return invalid(`Invalid timeout: ${opts.timeout}. Must be 1-600 seconds.`);
+  }
+  return { serial, port, setupTimeout, timeout };
+}
+
+/**
+ * Step 2 of runPlaywrightTest: resolve the test file and project dir.
+ *
+ * @returns {{testFile: string, projectDir: string}|{failure: object}}
+ */
+function resolveTestTarget(opts, command, startTime) {
+  const invalid = (message) => ({
+    failure: formatError(
+      command,
+      "invalid_parameters",
+      message,
+      null,
+      startTime,
+    ),
+  });
+  let projectDir = opts.projectDir ? path.resolve(opts.projectDir) : null;
+  let testFile = opts.testFile ? path.resolve(opts.testFile) : null;
+  if (!testFile) {
+    projectDir = projectDir || process.cwd();
+    testFile = path.join(projectDir, DEFAULT_TEST_FILE);
+    if (!fs.existsSync(testFile)) {
+      return invalid(
+        `No test file found (looked for ${testFile}). Pass --test-file <path>, or scaffold one with --scaffold --project-dir <dir>.`,
+      );
+    }
+  } else {
+    if (!fs.existsSync(testFile)) {
+      return invalid(`Test file not found: ${testFile}`);
+    }
+    projectDir = projectDir || path.dirname(testFile);
+  }
+  if (!/\.(js|mjs|cjs)$/i.test(testFile)) {
+    return invalid(
+      `Test file must be .js/.mjs/.cjs (got: ${path.basename(testFile)}) — it is executed with node.`,
+    );
+  }
+  if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
+    return invalid(`Project directory not found: ${projectDir}`);
+  }
+  return { testFile, projectDir };
+}
+
+/**
+ * Step 3 of runPlaywrightTest: resolve the Node.js runtime and check that
+ * playwright resolves from the test project (no device needed; MUST precede
+ * CDP setup).
+ *
+ * @returns {{nodeRuntime: object, warnings: string[]}|{failure: object}}
+ */
+function checkTestRuntime(projectDir, command, startTime) {
+  const nodeRuntime = resolveNodeRuntime();
+  if (nodeRuntime.error) {
+    const failure = describeNodeRuntimeFailure(nodeRuntime);
+    return {
+      failure: formatError(
+        command,
+        failure.category,
+        failure.message,
+        failure.suggestedFix,
+        startTime,
+      ),
+    };
+  }
+
+  const warnings = [];
+  const nodeMajor = parseInt(nodeRuntime.version.replace(/^v/, ""), 10);
+  if (Number.isFinite(nodeMajor) && nodeMajor < 20) {
+    warnings.push(
+      `Node.js ${nodeRuntime.version} detected — playwright requires Node >= 20; the test child may fail to start.`,
+    );
+  }
+
+  const dep = spawnSync(
+    nodeRuntime.executable,
+    ["-e", "require.resolve('playwright')"],
+    {
+      cwd: projectDir,
+      timeout: 15000,
+      stdio: "ignore",
+    },
+  );
+  if (dep.status !== 0) {
+    return {
+      failure: formatError(
+        command,
+        "dependency_missing",
+        `Playwright is not installed in ${projectDir}. Run "npm install playwright" in that directory, then retry.`,
+        "npm install playwright",
+        startTime,
+      ),
+    };
+  }
+  return { nodeRuntime, warnings };
+}
+
+/**
+ * Step 4 of runPlaywrightTest: CDP setup (or probe an existing endpoint with
+ * --no-setup).
+ *
+ * A failed setup hands back setupWebappDebug()'s own envelope unchanged; a
+ * missing result (undefined/null) becomes an io_error envelope so the caller
+ * always returns a Standard JSON Envelope.
+ *
+ * @returns {Promise<{failed: true, envelope: object}|{failed: false, setupResult: object|null}>}
+ */
+async function prepareCdpEndpoint(appId, params, opts, command, startTime) {
+  const { serial, port, setupTimeout, cdpEndpoint } = params;
+  if (opts.skipSetup) {
+    const alive = await probeCdpEndpoint(port);
+    if (!alive) {
+      return {
+        failed: true,
+        envelope: formatError(
+          command,
+          "inspector_not_available",
+          `CDP endpoint ${cdpEndpoint} is not answering — run the tizen-webapp-debug setup first (an app restart invalidates the RWI port), or drop --no-setup.`,
+          null,
+          startTime,
+        ),
+      };
+    }
+    return { failed: false, setupResult: null };
+  }
+  const setup = await setupWebappDebug(
+    appId,
+    { serial, port, timeout: setupTimeout },
+    command,
+  );
+  if (!setup) {
+    return {
+      failed: true,
+      envelope: formatError(
+        command,
+        "io_error",
+        "webapp debug setup returned no result",
+        null,
+        startTime,
+      ),
+    };
+  }
+  if (setup.status !== "success") {
+    // The setup envelope already carries the right category mapping
+    // (device_not_found / invalid_parameters / inspector_not_available / ...).
+    return { failed: true, envelope: setup };
+  }
+  return { failed: false, setupResult: setup.result };
+}
+
+/**
+ * Step 6 of runPlaywrightTest: map the test child's outcome to an envelope.
+ *
+ * @returns {object|null} failure envelope, or null when the run passed
+ */
+function classifyTestRun(run, ctx, command, startTime) {
+  const { combined, summary, tail, timeout, port, cdpEndpoint, projectDir } =
+    ctx;
+  // ENOBUFS must be checked BEFORE the timeout branch: exceeding maxBuffer
+  // also kills the child with killSignal, so run.signal is set and the
+  // generic `|| run.signal` test below would misreport it as test_timeout
+  // (and steer the user into raising --timeout, which cannot help).
+  if (run.error && run.error.code === "ENOBUFS") {
+    return formatError(
+      command,
+      "io_error",
+      "Test output exceeded the 10 MiB capture limit and the child was killed — reduce console output in the test (e.g. remove per-frame or per-event logging).",
+      null,
+      startTime,
+      { output_tail: tail },
+    );
+  }
+  if ((run.error && run.error.code === "ETIMEDOUT") || run.signal) {
+    return formatError(
+      command,
+      "test_timeout",
+      `Test run exceeded ${timeout}s and was killed. Increase --timeout, or check for a hung await (a selector that never appears, or a missing process.exit/browser.close in the test).`,
+      null,
+      startTime,
+      { output_tail: tail },
+    );
+  }
+  if (run.error) {
+    return formatError(
+      command,
+      "io_error",
+      `Could not run the test child: ${run.error.message}`,
+      null,
+      startTime,
+    );
+  }
+  if (run.status === 0) return null;
+
+  const econnrefused = new RegExp(`ECONNREFUSED[^\\n]*:${port}`).test(combined);
+  if (econnrefused) {
+    return formatError(
+      command,
+      "inspector_not_available",
+      `The test could not reach ${cdpEndpoint} — the RWI port died (app restarted?). Re-run without --no-setup so the debug setup runs again.`,
+      null,
+      startTime,
+      { output_tail: tail },
+    );
+  }
+  const screenshotNote = /test-failure\.png/.test(combined)
+    ? ` A failure screenshot was saved to ${path.join(projectDir, "test-failure.png")}.`
+    : "";
+  const summaryNote = summary
+    ? `: ${summary.failed}/${summary.total} assertions failed${summary.errors ? `, ${summary.errors} page error(s)` : ""}`
+    : "";
+  return formatError(
+    command,
+    "test_failed",
+    `Test run failed (exit code ${run.status})${summaryNote}.${screenshotNote}`,
+    null,
+    startTime,
+    { exit_code: run.status, summary, output_tail: tail },
+  );
+}
+
+/**
  * Run a Playwright test file against a Tizen Web app over CDP.
  *
  * @param {string} appId - Tizen web app ID (required, e.g. "abcDEF1234.MyWebApp")
@@ -242,179 +518,32 @@ async function runPlaywrightTest(
 ) {
   const startTime = Date.now();
   try {
-    // --- Step 1: parameter validation (same style as setupWebappDebug) ---
-    if (!appId) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        "Missing required parameter: appId",
-        'runPlaywrightTest("abcDEF1234.MyWebApp", { projectDir: "./pwtest" })',
-      );
-    }
-    // Allow only safe characters in shell args
-    if (!/^[A-Za-z0-9._-]+$/.test(appId)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid app id: ${appId}`,
-      );
-    }
-    const serial = opts.serial || "";
-    if (serial && !/^[A-Za-z0-9._:-]+$/.test(serial)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid serial: ${serial}`,
-      );
-    }
-    const port = parseInt(opts.port === undefined ? 9222 : opts.port, 10);
-    if (!Number.isFinite(port) || port < 1 || port > 65535) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid port: ${opts.port}`,
-      );
-    }
-    const setupTimeout = parseInt(
-      opts.setupTimeout === undefined ? 30 : opts.setupTimeout,
-      10,
-    );
-    if (
-      !Number.isFinite(setupTimeout) ||
-      setupTimeout < 1 ||
-      setupTimeout > 300
-    ) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid setup-timeout: ${opts.setupTimeout}. Must be 1-300 seconds.`,
-      );
-    }
-    const timeout = parseInt(
-      opts.timeout === undefined ? 120 : opts.timeout,
-      10,
-    );
-    if (!Number.isFinite(timeout) || timeout < 1 || timeout > 600) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid timeout: ${opts.timeout}. Must be 1-600 seconds.`,
-      );
-    }
+    // --- Step 1: parameter validation ---
+    const params = validateRunOptions(appId, opts, command, startTime);
+    if (params.failure) return params.failure;
+    const { port, timeout } = params;
 
     // --- Step 2: resolve test file / project dir ---
-    let projectDir = opts.projectDir ? path.resolve(opts.projectDir) : null;
-    let testFile = opts.testFile ? path.resolve(opts.testFile) : null;
-    if (!testFile) {
-      projectDir = projectDir || process.cwd();
-      testFile = path.join(projectDir, DEFAULT_TEST_FILE);
-      if (!fs.existsSync(testFile)) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          `No test file found (looked for ${testFile}). Pass --test-file <path>, or scaffold one with --scaffold --project-dir <dir>.`,
-          null,
-          startTime,
-        );
-      }
-    } else {
-      if (!fs.existsSync(testFile)) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          `Test file not found: ${testFile}`,
-          null,
-          startTime,
-        );
-      }
-      projectDir = projectDir || path.dirname(testFile);
-    }
-    if (!/\.(js|mjs|cjs)$/i.test(testFile)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Test file must be .js/.mjs/.cjs (got: ${path.basename(testFile)}) — it is executed with node.`,
-        null,
-        startTime,
-      );
-    }
-    if (!fs.existsSync(projectDir) || !fs.statSync(projectDir).isDirectory()) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Project directory not found: ${projectDir}`,
-        null,
-        startTime,
-      );
-    }
+    const target = resolveTestTarget(opts, command, startTime);
+    if (target.failure) return target.failure;
+    const { testFile, projectDir } = target;
 
-    const nodeRuntime = resolveNodeRuntime();
-    if (nodeRuntime.error) {
-      const failure = describeNodeRuntimeFailure(nodeRuntime);
-      return formatError(
-        command,
-        failure.category,
-        failure.message,
-        failure.suggestedFix,
-        startTime,
-      );
-    }
-
-    const warnings = [];
-    const nodeMajor = parseInt(nodeRuntime.version.replace(/^v/, ""), 10);
-    if (Number.isFinite(nodeMajor) && nodeMajor < 20) {
-      warnings.push(
-        `Node.js ${nodeRuntime.version} detected — playwright requires Node >= 20; the test child may fail to start.`,
-      );
-    }
-
-    // --- Step 3: dependency check (no device needed; MUST precede CDP setup) ---
-    const dep = spawnSync(
-      nodeRuntime.executable,
-      ["-e", "require.resolve('playwright')"],
-      {
-        cwd: projectDir,
-        timeout: 15000,
-        stdio: "ignore",
-      },
-    );
-    if (dep.status !== 0) {
-      return formatError(
-        command,
-        "dependency_missing",
-        `Playwright is not installed in ${projectDir}. Run "npm install playwright" in that directory, then retry.`,
-        "npm install playwright",
-        startTime,
-      );
-    }
+    // --- Step 3: Node.js runtime + dependency check ---
+    const runtime = checkTestRuntime(projectDir, command, startTime);
+    if (runtime.failure) return runtime.failure;
+    const { nodeRuntime, warnings } = runtime;
 
     // --- Step 4: CDP setup (or probe an existing endpoint with --no-setup) ---
     const cdpEndpoint = `http://127.0.0.1:${port}`;
-    let setupResult = null;
-    if (opts.skipSetup) {
-      const alive = await probeCdpEndpoint(port);
-      if (!alive) {
-        return formatError(
-          command,
-          "inspector_not_available",
-          `CDP endpoint ${cdpEndpoint} is not answering — run the tizen-webapp-debug setup first (an app restart invalidates the RWI port), or drop --no-setup.`,
-          null,
-          startTime,
-        );
-      }
-    } else {
-      const setup = await setupWebappDebug(
-        appId,
-        { serial, port, timeout: setupTimeout },
-        command,
-      );
-      if (!setup || setup.status !== "success") {
-        // The setup envelope already carries the right category mapping
-        // (device_not_found / invalid_parameters / inspector_not_available / ...).
-        return setup;
-      }
-      setupResult = setup.result;
-    }
+    const cdp = await prepareCdpEndpoint(
+      appId,
+      { ...params, cdpEndpoint },
+      opts,
+      command,
+      startTime,
+    );
+    if (cdp.failed) return cdp.envelope;
+    const { setupResult } = cdp;
 
     // --- Step 5: spawn the test child ---
     // No shell string assembly (argv array + no shell): injection-proof and
@@ -441,68 +570,13 @@ async function runPlaywrightTest(
     const tail = outputTail(combined);
 
     // --- Step 6: map the outcome to an envelope ---
-    // ENOBUFS must be checked BEFORE the timeout branch: exceeding maxBuffer
-    // also kills the child with killSignal, so run.signal is set and the
-    // generic `|| run.signal` test below would misreport it as test_timeout
-    // (and steer the user into raising --timeout, which cannot help).
-    if (run.error && run.error.code === "ENOBUFS") {
-      return formatError(
-        command,
-        "io_error",
-        "Test output exceeded the 10 MiB capture limit and the child was killed — reduce console output in the test (e.g. remove per-frame or per-event logging).",
-        null,
-        startTime,
-        { output_tail: tail },
-      );
-    }
-    if ((run.error && run.error.code === "ETIMEDOUT") || run.signal) {
-      return formatError(
-        command,
-        "test_timeout",
-        `Test run exceeded ${timeout}s and was killed. Increase --timeout, or check for a hung await (a selector that never appears, or a missing process.exit/browser.close in the test).`,
-        null,
-        startTime,
-        { output_tail: tail },
-      );
-    }
-    if (run.error) {
-      return formatError(
-        command,
-        "io_error",
-        `Could not run the test child: ${run.error.message}`,
-        null,
-        startTime,
-      );
-    }
-    if (run.status !== 0) {
-      const econnrefused = new RegExp(`ECONNREFUSED[^\\n]*:${port}`).test(
-        combined,
-      );
-      if (econnrefused) {
-        return formatError(
-          command,
-          "inspector_not_available",
-          `The test could not reach ${cdpEndpoint} — the RWI port died (app restarted?). Re-run without --no-setup so the debug setup runs again.`,
-          null,
-          startTime,
-          { output_tail: tail },
-        );
-      }
-      const screenshotNote = /test-failure\.png/.test(combined)
-        ? ` A failure screenshot was saved to ${path.join(projectDir, "test-failure.png")}.`
-        : "";
-      const summaryNote = summary
-        ? `: ${summary.failed}/${summary.total} assertions failed${summary.errors ? `, ${summary.errors} page error(s)` : ""}`
-        : "";
-      return formatError(
-        command,
-        "test_failed",
-        `Test run failed (exit code ${run.status})${summaryNote}.${screenshotNote}`,
-        null,
-        startTime,
-        { exit_code: run.status, summary, output_tail: tail },
-      );
-    }
+    const failure = classifyTestRun(
+      run,
+      { combined, summary, tail, timeout, port, cdpEndpoint, projectDir },
+      command,
+      startTime,
+    );
+    if (failure) return failure;
 
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
@@ -558,6 +632,7 @@ async function scaffoldPlaywrightTest(
         "invalid_parameters",
         "Missing required parameter: projectDir",
         'scaffoldPlaywrightTest({ projectDir: "./pwtest", appId: "abcDEF1234.MyWebApp" })',
+        startTime,
       );
     }
     const projectDir = path.resolve(opts.projectDir);
@@ -575,14 +650,18 @@ async function scaffoldPlaywrightTest(
         command,
         "invalid_parameters",
         `Invalid app id: ${opts.appId}`,
+        null,
+        startTime,
       );
     }
-    const port = parseInt(opts.port === undefined ? 9222 : opts.port, 10);
-    if (!Number.isFinite(port) || port < 1 || port > 65535) {
+    const port = parseBoundedInt(opts.port, 9222, 65535);
+    if (port === null) {
       return formatError(
         command,
         "invalid_parameters",
         `Invalid port: ${opts.port}`,
+        null,
+        startTime,
       );
     }
 

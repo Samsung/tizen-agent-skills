@@ -12,6 +12,14 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+### Added
+
+- **Pull request review skill** (`.claude/skills/tizen-sdk-skills-review/SKILL.md`). A
+  reviewer asks their coding agent to review a `tizen-sdk-skills` pull request; the agent
+  runs `check-pr.js` and the matching safe-tier checks, rechecks earlier findings, and
+  posts one English review comment after the reviewer confirms. `.gitignore` now tracks
+  `.claude/skills/` while still ignoring the rest of `.claude/`.
+
 ## [1.1.1] — 2026-10-16
 
 Repository-wide release that ships `tizen-sdk-skills` 1.4.4 and `tizen-action-skills` 1.0.0.

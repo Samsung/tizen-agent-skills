@@ -1821,6 +1821,387 @@ function rdsEligible(projectDir, resolvedPath) {
   );
 }
 
+/** Success envelope for install-app, stamped with the call's start time. */
+function installSuccess(command, startTime, result, options) {
+  const envelope = new Envelope(command);
+  envelope.startTime = startTime;
+  return envelope.success(result, options);
+}
+
+/**
+ * installApp's --reset-rds mode: clear host-side RDS state for the package's
+ * project and return without installing.
+ *
+ * RDS recovery is deliberately handled before normal package validation:
+ * the package may have been removed or become stale while the project's
+ * host-side .tizen-rds state is still corrupt. The package path is used
+ * only to locate the Tizen project root; no device or install script is
+ * touched in reset mode.
+ *
+ * @returns {object} Standard JSON Envelope
+ */
+function resetRdsForPackage(command, resolvedPath, runAfterInstall, startTime) {
+  if (runAfterInstall) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      "--reset-rds cannot be combined with --run; reset clears host-side RDS state without installing the package.",
+      null,
+      startTime,
+    );
+  }
+  if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      `Invalid app package path: ${resolvedPath}. Use the path to a .tpk, .wgt, .rpk, or .rpm package so its project can be located.`,
+      null,
+      startTime,
+    );
+  }
+
+  const resetProjectDir = resolveProjectDirFromPackage(resolvedPath);
+  if (!resetProjectDir) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      `Could not locate a Tizen project for package path: ${resolvedPath}. Pass a package path inside the project build output directory.`,
+      null,
+      startTime,
+    );
+  }
+
+  if (!resetAllRdsState(resetProjectDir)) {
+    return formatError(
+      command,
+      "io_error",
+      `Could not remove RDS state at ${path.join(resetProjectDir, ".tizen-rds")} — a file may be locked by another process. Close editors or tools holding it open and retry.`,
+      null,
+      startTime,
+    );
+  }
+  return installSuccess(command, startTime, {
+    project_path: resetProjectDir,
+    rds_state: "reset",
+  });
+}
+
+/**
+ * Host-side checks on the install request (package file, --run/RPK combo,
+ * serial and path shell safety) — nothing here touches a device.
+ *
+ * @returns {object|null} failure envelope, or null when the request is valid
+ */
+function validateInstallRequest(
+  command,
+  resolvedPath,
+  deviceSerial,
+  runAfterInstall,
+  startTime,
+) {
+  if (!fs.existsSync(resolvedPath)) {
+    return formatError(
+      command,
+      "io_error",
+      `App package not found: ${resolvedPath}`,
+      null,
+      startTime,
+    );
+  }
+  if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      `Invalid app package: ${resolvedPath}. Must be a .tpk, .wgt, .rpk, or .rpm file.`,
+      null,
+      startTime,
+    );
+  }
+  if (/\.rpk$/i.test(resolvedPath) && runAfterInstall) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      "RPK resource packages cannot be launched. Install the package without --run so the resource package chain can refresh its associated applications.",
+      null,
+      startTime,
+    );
+  }
+
+  // Allow only safe characters in shell args
+  if (deviceSerial && !/^[A-Za-z0-9._:-]+$/.test(deviceSerial)) {
+    return formatError(
+      command,
+      "invalid_parameters",
+      `Invalid device serial: ${deviceSerial}`,
+      null,
+      startTime,
+    );
+  }
+
+  // The package path is spliced into -PackagePath "<path>" / -p "<path>".
+  return (
+    checkShellSafe(resolvedPath, "package path", command, startTime) || null
+  );
+}
+
+/**
+ * Resolve the target device once, in JS, before anything runs: an explicit
+ * serial is taken as is; otherwise exactly one online device must be
+ * connected. "No device" and "more than one device" are decided HERE, with
+ * the same categories every sibling command (screenshot, file-transfer,
+ * sdb-helper) returns — device_not_found (DEVICE_E001) and
+ * multiple_devices (DEVICE_E002). Before, the install script exited 1 with
+ * "Multiple devices found" and the caller filed that under io_error
+ * (IO_E001) with the full shell command line in the message.
+ *
+ * The serial is also what the RDS attempt and the install script
+ * (via -s/-DeviceSerial) both target, so they cannot disagree.
+ *
+ * @returns {{serial: string|null}|{failure: object}}
+ */
+function resolveInstallSerial(command, deviceSerial, startTime) {
+  if (deviceSerial) return { serial: deviceSerial };
+  const deviceResolution = resolveInstallTargetDevice();
+  if (
+    deviceResolution.errorCategory === "device_not_found" ||
+    deviceResolution.errorCategory === "multiple_devices"
+  ) {
+    const failure = describeSerialFailure(deviceResolution, {
+      serialOption: INSTALL_SERIAL_OPTION,
+    });
+    return {
+      failure: formatError(
+        command,
+        failure.category,
+        // install-app's own no-device text names the retry (device_serial).
+        failure.category === "device_not_found"
+          ? NO_DEVICE_MESSAGE
+          : failure.message,
+        failure.suggestedFix,
+        startTime,
+        failure.detailLines,
+      ),
+    };
+  }
+  // io_error (sdb itself failed) or no sdb binary: fall through and let the
+  // install script report the SDK/tool problem it will hit first.
+  return { serial: deviceResolution.serial || null };
+}
+
+/**
+ * Try an RDS delta / fast-deploy instead of a full install.
+ *
+ * @returns {Promise<object|null>} tryRdsDeploy()'s result, or null when RDS
+ *   does not apply or the attempt threw (non-fatal — the caller falls through
+ *   to the full install)
+ */
+async function attemptRdsDeploy(
+  projectDir,
+  resolvedSerial,
+  resolvedPath,
+  runAfterInstall,
+) {
+  if (
+    !resolvedSerial ||
+    !rdsEligible(projectDir, resolvedPath) ||
+    !rdsStateExists(projectDir) // a delta needs a prior baseline to diff against
+  ) {
+    return null;
+  }
+  try {
+    // With an explicit --device-serial the `sdb devices` call was
+    // skipped, so the RDS primitives' execFile-based sdb calls may be the
+    // first of the session — a cold daemon would hang them (see
+    // ensureSdbServer). Cheap no-op when the server is already up.
+    const sdbResolved = resolveSdbBinary();
+    if (!sdbResolved.error) ensureSdbServer(sdbResolved.sdbPath);
+
+    return await tryRdsDeploy(projectDir, resolvedSerial, runAfterInstall);
+  } catch (err) {
+    // Non-fatal — falls through to the full install.
+    console.error("[RDS] deploy attempt failed:", err.message);
+    return null;
+  }
+}
+
+/**
+ * Success envelope for a package deployed through RDS (delta or fast-deploy).
+ *
+ * @returns {object} Standard JSON Envelope
+ */
+function rdsDeploySuccess(command, startTime, ctx, rdsResult) {
+  const { projectDir, resolvedPath, resolvedSerial, runAfterInstall } = ctx;
+  // Same meaning as the full-install path's app_id (the launchable ID
+  // from `app_launcher -l`): web `<tizen:application id>`, native/dotnet
+  // `<ui-application appid>` — NOT the package ID.
+  const appType = detectAppType(projectDir);
+  const appId =
+    (appType === "web"
+      ? parseWebAppId(projectDir)
+      : parseManifestAppId(projectDir)) ?? null;
+
+  return installSuccess(
+    command,
+    startTime,
+    {
+      package_path: resolvedPath,
+      device_serial: resolvedSerial,
+      app_id: appId,
+      installation_status: "completed",
+      app_launched: Boolean(runAfterInstall),
+      app_running: null, // no app_launcher -S check on this path
+      deploy_type: rdsResult.type, // "rds" | "fast-deploy"
+      ...(rdsResult.rdsTimings ? { rds_timings: rdsResult.rdsTimings } : {}),
+    },
+    { warnings: [] },
+  );
+}
+
+/**
+ * Run scripts/tizen-install-app and check its output for the success marker.
+ *
+ * @returns {{output: string}|{failure: object}}
+ */
+function runInstallScript(command, startTime, ctx) {
+  const { resolvedPath, resolvedSerial, runAfterInstall } = ctx;
+  const resolved = resolveScript("tizen-install-app");
+  if (resolved.error) {
+    return {
+      failure: formatError(
+        command,
+        "io_error",
+        resolved.error,
+        null,
+        startTime,
+      ),
+    };
+  }
+
+  console.error(
+    `[tizen-install] Installing ${resolvedPath}${resolvedSerial ? ` on ${resolvedSerial}` : ""}`,
+  );
+
+  // Pass forward slash paths to Windows script (Node.js compatible)
+  const winPath = resolvedPath.replace(/\\/g, "/");
+  const serialArg = (flag) =>
+    resolvedSerial ? ` ${flag} "${resolvedSerial}"` : "";
+  const runArg = (flag) => (runAfterInstall ? ` ${flag}` : "");
+  const winArgs =
+    `-PackagePath "${winPath}"` +
+    serialArg("-DeviceSerial") +
+    runArg("-RunAfterInstall");
+  const unixArgs = `-p "${resolvedPath}"` + serialArg("-s") + runArg("-r");
+
+  let output;
+  try {
+    // captureViaTempFile required: if script's sdb call starts new sdb server daemon,
+    // daemon inherits stdout pipe and execSync blocks forever.
+    output = execPluginScript(resolved.scriptPath, winArgs, unixArgs, {
+      captureViaTempFile: true,
+    });
+  } catch (error) {
+    const combined = `${error.stdout || ""}\n${error.stderr || ""}`;
+    return {
+      failure: classifyInstallFailure(command, combined, error, startTime),
+    };
+  }
+
+  // The script prints this marker only on the exit-0 path — if it is missing
+  // (or an install error line is present) treat the run as failed even when
+  // the process exit code was 0, so a script bug can't report a false success.
+  if (
+    !/Installation completed successfully/i.test(output) ||
+    /failed to install the package|\[ERROR\] Installation failed/i.test(output)
+  ) {
+    const detail = summarizeInstallOutput(output).join(" | ");
+    return {
+      failure: formatError(
+        command,
+        "io_error",
+        `App installation failed${detail ? `: ${detail}` : ""}`,
+        null,
+        startTime,
+      ),
+    };
+  }
+  return { output };
+}
+
+/**
+ * RDS: record a full install as the new baseline for the device, so a
+ * future install-app can fast-deploy/RDS-delta against it.
+ *
+ * @returns {Promise<object|null>} rds_timings, or null when not recorded
+ */
+async function recordRdsBaseline(projectDir, installedSerial, resolvedPath) {
+  if (!installedSerial || !rdsEligible(projectDir, resolvedPath)) return null;
+  const rdsResult = await updateRdsState(
+    projectDir,
+    installedSerial,
+    "full",
+  ).catch(() => {});
+  return rdsResult && rdsResult.rdsTimings ? rdsResult.rdsTimings : null;
+}
+
+/**
+ * Success envelope for a full script install, parsed from the script output.
+ *
+ * @returns {Promise<object>} Standard JSON Envelope
+ */
+async function fullInstallSuccess(command, startTime, ctx, output) {
+  const { projectDir, resolvedPath, resolvedSerial } = ctx;
+  // Success marker parsing (script must output on success)
+  const serialMatch = output.match(/^Device Serial:\s*(.+)$/m);
+  const appIdMatch = output.match(/^Found app ID:\s*(.+)$/m);
+  const launched = /App launched successfully/i.test(output);
+
+  // app_launched only proves launchpad accepted the launch; APP_RUNNING is
+  // the script's post-launch verdict — app_launcher -S for tpk/wgt, a pgrep
+  // poll of /usr/bin/<name> for rpm platform apps. true/false when the check
+  // gave a clear answer, null when it could not be verified (install-only,
+  // -S unusable on this profile, old script).
+  const appRunning = parseAppRunning(output);
+
+  const warnings = summarizeInstallOutput(output);
+  // The /opt crash-dump advice is for app_launcher-managed apps; for rpm the
+  // script already surfaces /tmp/<name>.log lines plus a display/library hint.
+  if (appRunning === false && !/\.rpm$/i.test(resolvedPath)) {
+    warnings.unshift(
+      "App launched but exited immediately — check /opt disk space (sdb shell df -h /opt) and crash dumps at /opt/usr/share/crash/dump (cleanup requires 'sdb root on'; see the tizen-sdb-helper skill).",
+    );
+  }
+
+  // Uses the serial the script actually reported, not the possibly-unresolved
+  // parameter/pre-resolved value.
+  const installedSerial = serialMatch
+    ? serialMatch[1].trim()
+    : resolvedSerial || null;
+  const rdsTimings = await recordRdsBaseline(
+    projectDir,
+    installedSerial,
+    resolvedPath,
+  );
+
+  return installSuccess(
+    command,
+    startTime,
+    {
+      package_path: resolvedPath,
+      device_serial: installedSerial,
+      app_id: appIdMatch ? appIdMatch[1].trim() : null,
+      installation_status: "completed",
+      app_launched: launched,
+      app_running: appRunning,
+      deploy_type: "full",
+      ...(rdsTimings ? { rds_timings: rdsTimings } : {}),
+    },
+    {
+      // Key lines only (warnings/errors) instead of full installation log
+      warnings,
+    },
+  );
+}
+
 /**
  * Install Tizen app package (.tpk/.wgt/.rpk/.rpm) on connected device/emulator
  *
@@ -1857,306 +2238,55 @@ async function installApp(
         "invalid_parameters",
         "Missing required parameter: packagePath (.tpk, .wgt, .rpk, or .rpm)",
         'installApp("/absolute/path/MyApp-1.0.0.tpk")',
+        startTime,
       );
     }
 
     const resolvedPath = path.resolve(packagePath);
 
-    // RDS recovery is deliberately handled before normal package validation:
-    // the package may have been removed or become stale while the project's
-    // host-side .tizen-rds state is still corrupt. The package path is used
-    // only to locate the Tizen project root; no device or install script is
-    // touched in reset mode.
     if (resetRds) {
-      if (runAfterInstall) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          "--reset-rds cannot be combined with --run; reset clears host-side RDS state without installing the package.",
-          null,
-          startTime,
-        );
-      }
-      if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          `Invalid app package path: ${resolvedPath}. Use the path to a .tpk, .wgt, .rpk, or .rpm package so its project can be located.`,
-          null,
-          startTime,
-        );
-      }
-
-      const resetProjectDir = resolveProjectDirFromPackage(resolvedPath);
-      if (!resetProjectDir) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          `Could not locate a Tizen project for package path: ${resolvedPath}. Pass a package path inside the project build output directory.`,
-          null,
-          startTime,
-        );
-      }
-
-      if (!resetAllRdsState(resetProjectDir)) {
-        return formatError(
-          command,
-          "io_error",
-          `Could not remove RDS state at ${path.join(resetProjectDir, ".tizen-rds")} — a file may be locked by another process. Close editors or tools holding it open and retry.`,
-          null,
-          startTime,
-        );
-      }
-      const envelope = new Envelope(command);
-      envelope.startTime = startTime;
-      return envelope.success({
-        project_path: resetProjectDir,
-        rds_state: "reset",
-      });
-    }
-
-    if (!fs.existsSync(resolvedPath)) {
-      return formatError(
+      return resetRdsForPackage(
         command,
-        "io_error",
-        `App package not found: ${resolvedPath}`,
-      );
-    }
-    if (!/\.(tpk|wgt|rpk|rpm)$/i.test(resolvedPath)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid app package: ${resolvedPath}. Must be a .tpk, .wgt, .rpk, or .rpm file.`,
-      );
-    }
-    if (/\.rpk$/i.test(resolvedPath) && runAfterInstall) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        "RPK resource packages cannot be launched. Install the package without --run so the resource package chain can refresh its associated applications.",
+        resolvedPath,
+        runAfterInstall,
+        startTime,
       );
     }
 
-    // Allow only safe characters in shell args
-    if (deviceSerial && !/^[A-Za-z0-9._:-]+$/.test(deviceSerial)) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        `Invalid device serial: ${deviceSerial}`,
-      );
-    }
+    const invalid = validateInstallRequest(
+      command,
+      resolvedPath,
+      deviceSerial,
+      runAfterInstall,
+      startTime,
+    );
+    if (invalid) return invalid;
 
-    // The package path is spliced into -PackagePath "<path>" / -p "<path>".
-    const unsafePackage = checkShellSafe(resolvedPath, "package path", command);
-    if (unsafePackage) return unsafePackage;
-
-    // Resolve the target device once, in JS, before anything runs: an explicit
-    // serial is taken as is; otherwise exactly one online device must be
-    // connected. "No device" and "more than one device" are decided HERE, with
-    // the same categories every sibling command (screenshot, file-transfer,
-    // sdb-helper) returns — device_not_found (DEVICE_E001) and
-    // multiple_devices (DEVICE_E002). Before, the install script exited 1 with
-    // "Multiple devices found" and the caller filed that under io_error
-    // (IO_E001) with the full shell command line in the message.
-    //
-    // The serial is also what the RDS attempt below and the install script
-    // (via -s/-DeviceSerial) both target, so they cannot disagree.
-    let resolvedSerial = deviceSerial || null;
-    if (!resolvedSerial) {
-      const deviceResolution = resolveInstallTargetDevice();
-      if (
-        deviceResolution.errorCategory === "device_not_found" ||
-        deviceResolution.errorCategory === "multiple_devices"
-      ) {
-        const failure = describeSerialFailure(deviceResolution, {
-          serialOption: INSTALL_SERIAL_OPTION,
-        });
-        return formatError(
-          command,
-          failure.category,
-          // install-app's own no-device text names the retry (device_serial).
-          failure.category === "device_not_found"
-            ? NO_DEVICE_MESSAGE
-            : failure.message,
-          failure.suggestedFix,
-          startTime,
-          failure.detailLines,
-        );
-      }
-      // io_error (sdb itself failed) or no sdb binary: fall through and let the
-      // install script report the SDK/tool problem it will hit first.
-      resolvedSerial = deviceResolution.serial || null;
-    }
+    const target = resolveInstallSerial(command, deviceSerial, startTime);
+    if (target.failure) return target.failure;
+    const resolvedSerial = target.serial;
 
     // RDS: the project dir is only needed for the RDS attempt below. Gated
     // behind rdsEnabled() so the kill switch disables the RDS path entirely.
     const projectDir = rdsEnabled()
       ? resolveProjectDirFromPackage(resolvedPath)
       : null;
+    const ctx = { projectDir, resolvedPath, resolvedSerial, runAfterInstall };
 
-    let rdsResult = null;
-    if (
-      resolvedSerial &&
-      rdsEligible(projectDir, resolvedPath) &&
-      rdsStateExists(projectDir) // a delta needs a prior baseline to diff against
-    ) {
-      try {
-        // With an explicit --device-serial the `sdb devices` call above was
-        // skipped, so the RDS primitives' execFile-based sdb calls may be the
-        // first of the session — a cold daemon would hang them (see
-        // ensureSdbServer). Cheap no-op when the server is already up.
-        const sdbResolved = resolveSdbBinary();
-        if (!sdbResolved.error) ensureSdbServer(sdbResolved.sdbPath);
-
-        rdsResult = await tryRdsDeploy(
-          projectDir,
-          resolvedSerial,
-          runAfterInstall,
-        );
-      } catch (err) {
-        // Non-fatal — falls through to the full install below.
-        console.error("[RDS] deploy attempt failed:", err.message);
-      }
-    }
-
+    const rdsResult = await attemptRdsDeploy(
+      projectDir,
+      resolvedSerial,
+      resolvedPath,
+      runAfterInstall,
+    );
     if (rdsResult && rdsResult.deployed) {
-      // Same meaning as the full-install path's app_id (the launchable ID
-      // from `app_launcher -l`): web `<tizen:application id>`, native/dotnet
-      // `<ui-application appid>` — NOT the package ID.
-      const appType = detectAppType(projectDir);
-      const appId =
-        (appType === "web"
-          ? parseWebAppId(projectDir)
-          : parseManifestAppId(projectDir)) ?? null;
-
-      const envelope = new Envelope(command);
-      envelope.startTime = startTime;
-      return envelope.success(
-        {
-          package_path: resolvedPath,
-          device_serial: resolvedSerial,
-          app_id: appId,
-          installation_status: "completed",
-          app_launched: Boolean(runAfterInstall),
-          app_running: null, // no app_launcher -S check on this path
-          deploy_type: rdsResult.type, // "rds" | "fast-deploy"
-          ...(rdsResult.rdsTimings
-            ? { rds_timings: rdsResult.rdsTimings }
-            : {}),
-        },
-        { warnings: [] },
-      );
+      return rdsDeploySuccess(command, startTime, ctx, rdsResult);
     }
 
-    const resolved = resolveScript("tizen-install-app");
-    if (resolved.error) {
-      return formatError(command, "io_error", resolved.error);
-    }
+    const install = runInstallScript(command, startTime, ctx);
+    if (install.failure) return install.failure;
 
-    console.error(
-      `[tizen-install] Installing ${resolvedPath}${resolvedSerial ? ` on ${resolvedSerial}` : ""}`,
-    );
-
-    // Pass forward slash paths to Windows script (Node.js compatible)
-    const winPath = resolvedPath.replace(/\\/g, "/");
-    const winArgs =
-      `-PackagePath "${winPath}"` +
-      (resolvedSerial ? ` -DeviceSerial "${resolvedSerial}"` : "") +
-      (runAfterInstall ? " -RunAfterInstall" : "");
-    const unixArgs =
-      `-p "${resolvedPath}"` +
-      (resolvedSerial ? ` -s "${resolvedSerial}"` : "") +
-      (runAfterInstall ? " -r" : "");
-
-    let output;
-    try {
-      // captureViaTempFile required: if script's sdb call starts new sdb server daemon,
-      // daemon inherits stdout pipe and execSync blocks forever.
-      output = execPluginScript(resolved.scriptPath, winArgs, unixArgs, {
-        captureViaTempFile: true,
-      });
-    } catch (error) {
-      const combined = `${error.stdout || ""}\n${error.stderr || ""}`;
-      return classifyInstallFailure(command, combined, error, startTime);
-    }
-
-    // The script prints this marker only on the exit-0 path — if it is missing
-    // (or an install error line is present) treat the run as failed even when
-    // the process exit code was 0, so a script bug can't report a false success.
-    if (
-      !/Installation completed successfully/i.test(output) ||
-      /failed to install the package|\[ERROR\] Installation failed/i.test(
-        output,
-      )
-    ) {
-      const detail = summarizeInstallOutput(output).join(" | ");
-      return formatError(
-        command,
-        "io_error",
-        `App installation failed${detail ? `: ${detail}` : ""}`,
-        null,
-        startTime,
-      );
-    }
-
-    // Success marker parsing (script must output on success)
-    const serialMatch = output.match(/^Device Serial:\s*(.+)$/m);
-    const appIdMatch = output.match(/^Found app ID:\s*(.+)$/m);
-    const launched = /App launched successfully/i.test(output);
-
-    // app_launched only proves launchpad accepted the launch; APP_RUNNING is
-    // the script's post-launch verdict — app_launcher -S for tpk/wgt, a pgrep
-    // poll of /usr/bin/<name> for rpm platform apps. true/false when the check
-    // gave a clear answer, null when it could not be verified (install-only,
-    // -S unusable on this profile, old script).
-    const appRunning = parseAppRunning(output);
-
-    const warnings = summarizeInstallOutput(output);
-    // The /opt crash-dump advice is for app_launcher-managed apps; for rpm the
-    // script already surfaces /tmp/<name>.log lines plus a display/library hint.
-    if (appRunning === false && !/\.rpm$/i.test(resolvedPath)) {
-      warnings.unshift(
-        "App launched but exited immediately — check /opt disk space (sdb shell df -h /opt) and crash dumps at /opt/usr/share/crash/dump (cleanup requires 'sdb root on'; see the tizen-sdb-helper skill).",
-      );
-    }
-
-    // RDS: record this full install as the new baseline for the device, so a
-    // future install-app can fast-deploy/RDS-delta against it. Uses the
-    // serial the script actually reported, not the possibly-unresolved
-    // parameter/pre-resolved value.
-    const installedSerial = serialMatch
-      ? serialMatch[1].trim()
-      : resolvedSerial || null;
-    let rdsTimings = null;
-    if (installedSerial && rdsEligible(projectDir, resolvedPath)) {
-      const rdsResult = await updateRdsState(
-        projectDir,
-        installedSerial,
-        "full",
-      ).catch(() => {});
-      if (rdsResult && rdsResult.rdsTimings) {
-        rdsTimings = rdsResult.rdsTimings;
-      }
-    }
-
-    const envelope = new Envelope(command);
-    envelope.startTime = startTime;
-    return envelope.success(
-      {
-        package_path: resolvedPath,
-        device_serial: installedSerial,
-        app_id: appIdMatch ? appIdMatch[1].trim() : null,
-        installation_status: "completed",
-        app_launched: launched,
-        app_running: appRunning,
-        deploy_type: "full",
-        ...(rdsTimings ? { rds_timings: rdsTimings } : {}),
-      },
-      {
-        // Key lines only (warnings/errors) instead of full installation log
-        warnings,
-      },
-    );
+    return await fullInstallSuccess(command, startTime, ctx, install.output);
   } catch (error) {
     return formatError(
       command,
