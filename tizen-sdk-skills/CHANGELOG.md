@@ -41,6 +41,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   (macOS Homebrew coreutils) when `timeout` is not on `PATH`.
   `screenshot-fallbacks.test.js` checks that the `.sh` and `.ps1` stay in step, and tests
   the envelope warnings.
+- **dlog-analyzer `crash-report` action for crash-worker dumps** (`common/lib/core/dlog-analyzer.js`,
+  `common/lib/cli/dlog-analyzer-cli.js`, `tizen-cli/src/command-specs/dlog-analyzer.ts`). The
+  analyzer read dlog only. It did not see the crash dumps on the device, including those that
+  DA targets keep in `/run/crash/dump`, and a system daemon needed a manual `--file`
+  workaround because it has no app id. `crash-report` lists `/opt/usr/share/crash/dump`,
+  `/run/crash/dump` and every `--dump-dir`, and matches the dumps by app id or by process name
+  (`--process deviced`; a 15-character comm also matches). For the newest ones (`--limit`, default 3)
+  it returns the signal, executable and call stack, saves the `.info` report and the dlog packed
+  with the dump, and gives the `error-analyze --file … --app-id <process> --pid <pid>` call for
+  that dlog. If the sdb shell user cannot read a directory, the result has a warning. If it can
+  read none of them, the action fails with `permission_denied` and suggests `root on`.
 
 ### Changed
 

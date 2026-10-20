@@ -24,7 +24,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--action <action>",
         description:
-          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (search every collected dlog category for text or a regex — --pattern required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), rules (list/show/validate/test analysis rules), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect)",
+          "Action: log-dump (one-shot dlog buffer dump — 'show/tail/save the logs'), log-clear (clear the device dlog buffer — requires --confirm), start (launch monitoring), stop (kill background process), check (read analyzed output), status (check if running), app-launch (launch an app), app-terminate (terminate an app), dlog-collect (start background app-specific log collection), stop-collect (stop app-specific log collection), error-analyze (analyze app logs for E/F errors), app-log (print full collected log for one app), search (search every collected dlog category for text or a regex — --pattern required), device-profile (detect and print device profile), investigate (one-shot first-pass investigation report, use --app-id for app-scoped), probe (list/run evidence probes), rules (list/show/validate/test analysis rules), snapshot (create/list/compare/delete system snapshots), timeline (show/report/analyze/export probe history across snapshots), kernel (kernel log collect/stop/analyze — collect runs in the background like dlog-collect), crash-report (find crash dumps in /opt/usr/share/crash/dump, /run/crash/dump and --dump-dir for an app id or any process name — system daemons included — and extract the crash report and its packed dlog)",
         choices: [
           "start",
           "stop",
@@ -46,6 +46,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           "kernel",
           "log-dump",
           "log-clear",
+          "crash-report",
         ],
         required: true,
       },
@@ -58,7 +59,23 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--app-id <id>",
         description:
-          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search (collection mode): same as --category (restrict the search to this app's logs). For --action error-analyze / search --file: declared app label (not a verified identity), used with --pid. For --action kernel analyze --file --with-dlog: app ID for dlog correlation. For --action probe --subcommand run: the app whose PID/app id the probe substitutes (app-process, io, ...) when --probe-id names the probe; without --probe-id it is read as the probe id itself (legacy form). For --action rules: the rule id (show), fixture path (test) or rule file/dir (validate).",
+          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search (collection mode): same as --category (restrict the search to this app's logs). For --action error-analyze / search --file: declared app label (not a verified identity), used with --pid. For --action kernel analyze --file --with-dlog: app ID for dlog correlation. For --action probe --subcommand run: the app whose PID/app id the probe substitutes (app-process, io, ...) when --probe-id names the probe; without --probe-id it is read as the probe id itself (legacy form). For --action rules: the rule id (show), fixture path (test) or rule file/dir (validate). For --action crash-report: same as --process.",
+      },
+      {
+        flags: "--process <name>",
+        description:
+          "For --action crash-report: only dumps of this app id or process name (e.g. deviced — a system daemon needs no app id). Default: every process.",
+      },
+      {
+        flags: "--dump-dir <path>",
+        description:
+          "For --action crash-report: one more device directory to search, in addition to /opt/usr/share/crash/dump and /run/crash/dump (repeatable).",
+        repeatable: true,
+      },
+      {
+        flags: "--limit <n>",
+        description:
+          "For --action crash-report: how many of the newest matching dumps to open (default 3; 0 = all).",
       },
       {
         flags: "--format <format>",
@@ -139,12 +156,12 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--lines <n>",
         description:
-          "For --action log-dump only: how many trailing lines to return in the envelope (default 200; 0 = all). The complete dump is always written to --output / the default dump file.",
+          "For --action log-dump: how many trailing lines to return in the envelope (default 200; 0 = all). The complete dump is always written to --output / the default dump file. For --action crash-report: report lines returned inline per dump (default 80; 0 = all); the full report is saved to a file.",
       },
       {
         flags: "--output <file>",
         description:
-          "For --action log-dump: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log). For --action app-log / search: file that receives the complete output (--max-lines/--max-chars apply to stdout only). For --action timeline export: the JSON file.",
+          "For --action log-dump: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log). For --action app-log / search: file that receives the complete output (--max-lines/--max-chars apply to stdout only). For --action timeline export: the JSON file. For --action crash-report: host directory for the extracted reports (default: <tmp>/tizen-dlog-analyzer/crash-reports/<serial>/).",
       },
       {
         flags: "--confirm",
@@ -513,6 +530,18 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           );
         case "log-clear":
           return sdkCommands.clearDeviceLogs(o.serial, o.confirm, commandLabel);
+        case "crash-report":
+          return sdkCommands.collectCrashReports(
+            o.serial,
+            {
+              process: [o.appId, o.process],
+              dumpDir: o.dumpDir,
+              limit: o.limit,
+              lines: o.lines,
+              output: o.output,
+            },
+            commandLabel,
+          );
 
         default:
           return Promise.resolve({
@@ -521,7 +550,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
             errors: [
               {
                 category: "invalid_parameters",
-                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, rules, snapshot, timeline, kernel, log-dump, log-clear`,
+                message: `Unknown action: ${o.action}. Must be one of: start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, rules, snapshot, timeline, kernel, log-dump, log-clear, crash-report`,
               },
             ],
           });

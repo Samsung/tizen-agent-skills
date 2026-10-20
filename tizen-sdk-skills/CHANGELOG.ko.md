@@ -38,6 +38,17 @@
   90초 Node 타임아웃을 넘기지 않도록 하고, `timeout` 명령이 없으면 `gtimeout`(macOS Homebrew
   coreutils)으로 폴백합니다. `screenshot-fallbacks.test.js`가 `.sh`와 `.ps1`이
   함께 바뀌었는지 확인하고 envelope 경고를 테스트합니다.
+- **crash-worker 덤프용 dlog-analyzer `crash-report` 액션** (`common/lib/core/dlog-analyzer.js`,
+  `common/lib/cli/dlog-analyzer-cli.js`, `tizen-cli/src/command-specs/dlog-analyzer.ts`).
+  분석기는 dlog만 읽었기 때문에 디바이스의 크래시 덤프를 보지 못했습니다. DA 타겟이
+  `/run/crash/dump`에 두는 덤프도 마찬가지였고, app id가 없는 시스템 데몬은 `--file`로
+  직접 우회해야 했습니다. `crash-report`는 `/opt/usr/share/crash/dump`, `/run/crash/dump`와
+  모든 `--dump-dir`를 조회하고, 덤프를 app id나 프로세스 이름(`--process deviced`, 15자로
+  잘린 comm도 일치)으로 찾습니다. 가장 최근 덤프(`--limit`, 기본 3개)마다 시그널,
+  실행 파일, 콜스택을 돌려주고, `.info` 리포트와 덤프에 함께 담긴 dlog를 저장하며, 그 dlog를
+  분석하는 `error-analyze --file … --app-id <process> --pid <pid>` 호출을 알려 줍니다.
+  sdb shell 사용자가 읽을 수 없는 디렉터리가 있으면 결과에 경고가 붙고, 하나도 읽을 수
+  없으면 `permission_denied`로 실패하며 `root on`을 제안합니다.
 
 ### Changed
 

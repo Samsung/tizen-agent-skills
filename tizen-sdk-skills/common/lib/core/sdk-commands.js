@@ -295,6 +295,7 @@ module.exports = {
   // One-shot device-log actions
   dumpDeviceLogs: dlogAnalyzer.dumpDeviceLogs,
   clearDeviceLogs: dlogAnalyzer.clearDeviceLogs,
+  collectCrashReports: dlogAnalyzer.collectCrashReports,
 
   // Internal-only domain modules (absent from the public tree) — see
   // internalCommands() above.

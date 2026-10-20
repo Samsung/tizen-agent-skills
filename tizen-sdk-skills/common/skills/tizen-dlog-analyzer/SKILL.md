@@ -129,7 +129,7 @@ Since these are non-terminating, the CLI runner (`dlog-analyzer-cli.js`) manages
 | `check`  | Read the temp file and return the latest analyzed output.        |
 | `status` | Check if the background process is still running.                |
 
-`dlog-collect <app-id>` / `stop-collect` and `kernel collect` / `kernel stop` are the app-scoped and kernel counterparts. Everything else (`investigate`, `probe`, `error-analyze`, `app-log`, `search`, `kernel analyze`, `device-profile`, `snapshot`, `timeline`, `log-dump`, `log-clear`) runs once and returns.
+`dlog-collect <app-id>` / `stop-collect` and `kernel collect` / `kernel stop` are the app-scoped and kernel counterparts. Everything else (`investigate`, `probe`, `error-analyze`, `app-log`, `search`, `kernel analyze`, `device-profile`, `snapshot`, `timeline`, `log-dump`, `log-clear`, `crash-report`) runs once and returns.
 
 ## Investigation workflow — a reported symptom
 
@@ -195,7 +195,13 @@ Use this for every "my app / the emulator does X" report (crash, freeze, high CP
    node "$CLI" app-log com.samsung.fh.youtube --priority W --since 10m --max-lines 300   # wider log, filtered
    node "$CLI" probe list                                          # then probe run <probe-id> for one more measurement
    ```
-   `search` is the targeted step between the two: when a finding names a string (an error message, a tag, a URL, a PID) or the user quotes one, search for it across every collected category — it tells you which process logged it and what happened right before (`--context`) without paging through a whole log. `app-log` without filters is the last resort, never the first call — the full log is the largest output and buries the E/F lines `error-analyze` already isolated. If option 2 ("nothing happened") was chosen, still run (a)–(c) once — silent errors are common — then ask whether to keep collecting or stop.
+   **For a crash** (the user says it crashed / died / restarted, or (a)–(c) report a fatal signal), also read the crash dump crash-worker left on the device — it holds the signal, registers and call stack that dlog does not:
+   ```bash
+   node "$CLI" crash-report --app-id com.samsung.fh.youtube        # an app
+   node "$CLI" crash-report --process deviced                      # a system daemon: its process name, no app id needed
+   node "$CLI" crash-report                                        # newest dumps of every process
+   ```
+   See "Crash dumps — `crash-report`" below. `search` is the targeted step between the two: when a finding names a string (an error message, a tag, a URL, a PID) or the user quotes one, search for it across every collected category — it tells you which process logged it and what happened right before (`--context`) without paging through a whole log. `app-log` without filters is the last resort, never the first call — the full log is the largest output and buries the E/F lines `error-analyze` already isolated. If option 2 ("nothing happened") was chosen, still run (a)–(c) once — silent errors are common — then ask whether to keep collecting or stop.
 
    **Second investigate**: after stopping collectors and running the analysis above, re-run `investigate --symptoms "<same symptoms>"` so the probes reflect the failing state. The second pass may confirm a `suspected` conclusion or match a rule the first pass missed.
 
@@ -291,6 +297,19 @@ node "$CLI" kernel analyze              # deduplicated kernel findings (OOM kill
 
 Kernel evidence matters for high CPU, freezes, memory pressure, graphics/video failures and anything that smells like a driver or platform problem. Start `kernel collect` alongside `start-monitoring` (step 3), stop and analyze it with the rest (step 5). Only one kernel collector runs at a time (`already_running` otherwise). **Never** run `sdb shell dmesg`, `cat /proc/kmsg`, `dlogutil -b kmsg` or a tizen-sdb-helper shell request for the kernel log — those bypass classification and the hooks deny them.
 
+## Crash dumps — `crash-report`
+
+```bash
+node "$CLI" crash-report [serial]                                   # newest 3 dumps of every process
+node "$CLI" crash-report --process <name>                           # one app id or process name (system daemons: e.g. deviced)
+node "$CLI" crash-report --app-id <app-id> --limit 1                # --app-id is an alias of --process
+node "$CLI" crash-report --dump-dir /opt/usr/share/crash/temp       # search one more device directory (repeatable)
+```
+
+crash-worker writes one entry per crash, named `<process>_<pid>_<YYYYMMDDhhmmss>` (`.zip`, `.tar`, `.info` or a directory), where `<process>` is the app id for an app and the process name for a daemon. `crash-report` lists `/opt/usr/share/crash/dump` and `/run/crash/dump` (DA and other RAM-backed targets) plus every `--dump-dir`, takes the newest matching entries (`--limit`, default 3, `0` = all), and for each one returns `summary` (`signal`, `executable`, `pid`, `package_id`, `callstack`), the first `--lines` lines of the `.info` report (default 80) and the files it saved under `result.output_dir` (`report_file`, plus `dlog_file` when the dump carries a dlog). `next_step` is the `error-analyze --file <dlog_file> --app-id <process> --pid <pid>` call that analyzes that dlog — this is how a **system daemon** (no app id, nothing under `app/<app-id>/`) gets the same E/F analysis an app gets. `result.searched_dirs` shows each directory as `ok`, `missing` or `denied`.
+
+The crash-dump directories are root-only on most targets: a `denied` directory becomes a `warnings` entry, and when none is readable the call fails with `permission_denied` and a `suggested_fix` to switch sdb to root through `tizen-sdb-helper` (`root on`, confirmation-gated — ask the user first). A dump without a text report (a bare core dump) or a device without `unzip` gets a note to pull the entry with `tizen-file-transfer`. Never `ls` / `cat` / `unzip` the crash directories over `sdb shell` yourself. Deleting dumps is `tizen-sdb-helper`'s `clean-crash-dumps` recipe, not this action.
+
 ## Evidence probes — `investigate` / `probe`
 
 ```bash
@@ -378,6 +397,7 @@ Run `error-analyze <app-id> summary` (app-specific) and/or `check` (system-wide)
 | `node "$CLI" kernel analyze --file <path> [--since <s>] [--level <l>] [--format <f>] [--with-dlog --app-id <id>]` | **File mode.** Analyze a saved kernel dmesg/kmsg file directly. `--level` sets the minimum level; `--with-dlog --app-id` correlates with collected dlog. |
 | `node "$CLI" log-dump [serial] [--filter "<spec> …"] [--lines <n>] [--output <file>]` | One-shot dump of the device dlog buffer (`sdb dlog -d -v threadtime`). Returns the last `--lines` lines (default 200, `0` = all) in `result.output`; the complete dump is written to `result.dump_file` (`--output` or `$TMPDIR/tizen-dlog-analyzer/dlog-dump.log`). `--filter` takes dlog filterspecs `<tag>[:<V|D|I|W|E|F|S>]` such as `"*:E"` or `"E20:W CHROMIUM"`. No native binary involved. |
 | `node "$CLI" log-clear [serial] [--confirm]` | Clears the device dlog buffer (`sdb dlog -c`). Without `--confirm` returns `user_input_required` with a `suggested_fix` and does nothing. Running collectors are not stopped (a `warnings` entry says so). |
+| `node "$CLI" crash-report [serial] [--process <name> \| --app-id <id>] [--dump-dir <dir>]… [--limit <n>] [--lines <n>] [--output <dir>]` | Finds crash-worker dumps in `/opt/usr/share/crash/dump`, `/run/crash/dump` and every `--dump-dir`, for an app id or any process name (system daemons included), newest first. Returns each dump's crash summary (signal, executable, call stack) and report head, saves the `.info` report and the packed dlog to `result.output_dir`, and gives the `error-analyze --file` call for that dlog in `next_step`. Unreadable (root-only) directories → warning, or `permission_denied` when none is readable. No native binary involved. |
 
 ## Final report — the only accepted shape
 
