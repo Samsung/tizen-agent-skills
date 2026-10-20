@@ -4,7 +4,7 @@ description: Build a Tizen app/project (Native, DotNET, WebApp, standalone RPK r
 
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-08-20"
+  last-updated: "2026-10-20"
   keywords:
     - 빌드
     - 빌드해줘
@@ -29,7 +29,7 @@ metadata:
 > Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
 
 1. Agent tool로 `tizen-build-project` 에이전트 호출 (개인 배포 또는 `tizen-sdk-skills:tizen-build-project`)
-2. 수집된 입력(프로젝트 경로, 빌드 타입, 프로필)을 프롬프트로 전달
+2. 수집된 입력(프로젝트 경로, 빌드 타입, 프로필, Platform 프로젝트면 `--arch`)을 프롬프트로 전달
 3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
    (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
 
@@ -103,6 +103,10 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
    warning list is needed (incremental builds skip unchanged files, so their
    warnings do NOT reappear). Do NOT `rm -rf Debug/` yourself — the project lives
    on the SDK host, and deleting a local path is a silent no-op for remote clients.
+5. **`--arch <arch>`** (optional, **Platform/GBS projects only**, default `x86_64`) — the
+   `gbs build -A` target: `x86_64` | `armv7l` | `aarch64` | `i586`. See
+   "Platform (GBS) target architecture" below. Ignored, with a warning, for
+   Native/DotNET/WebApp/RPK projects.
 
 Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error envelope.
 
@@ -170,6 +174,34 @@ Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error
 > for Platform projects.** A Native/DotNET/WebApp/RPK build never runs GBS — `tizen-manifest.xml`
 > is present in every Native app and is not a Platform marker. A native build that takes a
 > minute is `tz build` compiling, not GBS; do not describe it as a GBS build.
+
+## Platform (GBS) target architecture
+
+A Platform build produces RPMs for **one** CPU architecture, chosen with `--arch`. Without it
+the runner builds **`x86_64`**, which installs only on the emulator — an x86_64 RPM on an ARM
+device fails at `rpm -i`.
+
+| User says | Target | Pass |
+|---|---|---|
+| emulator, x86, 에뮬레이터 (or nothing about the target) | Tizen emulator | `--arch x86_64` (default) |
+| arm, armv7, armv7l, 32-bit ARM, 32비트 ARM | 32-bit ARM device or image | `--arch armv7l` |
+| arm64, aarch64, 64-bit ARM, 64비트 ARM | 64-bit ARM device or image | `--arch aarch64` |
+| i586, 32-bit x86 | legacy 32-bit x86 emulator image | `--arch i586` |
+
+```bash
+node "$CLI" build --project "<platform-project>" --build-type Debug --arch armv7l
+```
+
+- **Ask before building when the target is unclear.** If the user wants the RPM for a real
+  device ("디바이스에 설치할 RPM", "for my board") but names no architecture, ask which one
+  (`x86_64` / `armv7l` / `aarch64`) instead of silently building `x86_64`.
+- **A connected device tells you.** `tizen-sdb-helper` → `device-info` (`sdb capability`)
+  reports `cpu_arch`: `armv7*` / `arm` → `armv7l`, `aarch64` / `arm64` → `aarch64`,
+  `x86_64` → `x86_64`. Prefer this over guessing from the device model.
+- **Only these four names are accepted.** `arm`, `arm64` or `armv7` are rejected with
+  `invalid_parameters` before GBS runs — map them as in the table, do not retry the same value.
+- The RPMs land in `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`; `result.artifacts` already
+  lists them, so report the arch from those paths.
 
 > **RPK:** A standalone resource project is marked by `tizen_resource_project.yaml` and
 > is packaged internally with `tizen package -t rpk -- <project>`, not `tz build`.
@@ -239,9 +271,11 @@ Rules:
   - RPK is resource-only: install the `.rpk` without `--run`. The runner internally uses
     direct `sdb install` for RPK; do not replace it with `tz install`.
   - Platform (GBS) builds produce `.rpm` packages (not `.tpk`/`.wgt`).
-    RPMs are output to `~/GBS-ROOT/local/repos/<arch>/RPMS/` and **can** be installed
+    RPMs are output to `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/` and **can** be installed
     via `tizen-install-app` (which supports `.rpm` — it handles `sdb root on`, `rpm -i`,
     and app execution as `owner` user with proper Wayland/DBus environment internally).
     **NEVER run `sdb` or `rpm` directly** — always use `tizen-install-app` for RPM installation.
+    The RPM's architecture must match the target: the default `x86_64` build is for the
+    emulator — rebuild with `--arch armv7l` / `--arch aarch64` for an ARM device.
 
 - Debugging: Native → `tizen-gdb-debug`, DotNET → `tizen-dotnet-debug`

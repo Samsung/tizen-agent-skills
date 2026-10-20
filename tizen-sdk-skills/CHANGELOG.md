@@ -86,6 +86,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   author, distributor, import and profile flows now pass the call's `startTime`, like the
   later failures, so `duration_ms` is measured from the call (same gap as issue #68).
   `samsung-cert.test.js` pins it.
+- **Platform (GBS) builds always produced x86_64 RPMs** (`common/lib/core/project.js`,
+  `common/scripts/tizen-build-project/tizen-build-project.sh`,
+  `common/skills/tizen-build-project/SKILL.md`, `common/agents/tizen-build-project.md`).
+  The runner already took `--arch`, but the skill never mentioned it, so agents built the
+  emulator-only `x86_64` default even for ARM devices. The skill and agent now map the
+  request to `--arch x86_64` (emulator), `armv7l` (32-bit ARM) or `aarch64` (64-bit ARM),
+  ask when a device build names no architecture, and point to the device's `cpu_arch`.
+  `buildProject()` and the build script accept only `armv7l`, `aarch64`, `i586` and
+  `x86_64` — the tizen-cli `--arch` choices — so `arm` / `arm64` fail with
+  `invalid_parameters` before GBS runs; `--arch` on a non-Platform project adds a warning
+  that it was ignored. `build-project-arch.test.js` pins both.
 
 ## [1.4.5] — 2026-10-19
 

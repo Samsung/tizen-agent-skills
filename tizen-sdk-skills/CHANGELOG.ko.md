@@ -78,6 +78,17 @@
   author, distributor, import, profile 흐름의 검증, SDK 경로, Samsung Account, online-CA,
   비밀번호 저장 오류가 이제 이후 실패들처럼 호출의 `startTime`을 넘기므로 `duration_ms`가
   호출 시점부터 측정됩니다(issue #68과 같은 유형). `samsung-cert.test.js`가 이를 고정합니다.
+- **Platform(GBS) 빌드가 항상 x86_64 RPM만 만들던 문제** (`common/lib/core/project.js`,
+  `common/scripts/tizen-build-project/tizen-build-project.sh`,
+  `common/skills/tizen-build-project/SKILL.md`, `common/agents/tizen-build-project.md`).
+  러너는 이미 `--arch`를 받았지만 스킬에 안내가 없어서, 에이전트가 ARM 디바이스용으로도
+  에뮬레이터 전용 기본값 `x86_64`로 빌드했습니다. 이제 스킬과 에이전트가 요청을
+  `--arch x86_64`(에뮬레이터), `armv7l`(32비트 ARM), `aarch64`(64비트 ARM)로 매핑하고,
+  디바이스용 빌드인데 아키텍처가 없으면 사용자에게 묻고, 디바이스의 `cpu_arch`를 확인하도록
+  안내합니다. `buildProject()`와 빌드 스크립트는 tizen-cli `--arch` 선택지와 같은
+  `armv7l`, `aarch64`, `i586`, `x86_64`만 받으므로 `arm` / `arm64`는 GBS 실행 전에
+  `invalid_parameters`로 실패합니다. Platform이 아닌 프로젝트에 `--arch`를 주면 무시됐다는
+  경고를 붙입니다. `build-project-arch.test.js`가 두 동작을 고정합니다.
 
 ## [1.4.5] — 2026-10-19
 
