@@ -92,8 +92,10 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   The runner already took `--arch`, but the skill never mentioned it, so agents built the
   emulator-only `x86_64` default even for ARM devices. The skill and agent now map the
   request to `--arch x86_64` (emulator), `armv7l` (32-bit ARM) or `aarch64` (64-bit ARM),
-  ask when a device build names no architecture, and read it from the device's `uname -m`;
-  the tizen-cli build skill carries the same guidance. `buildProject()` and the build
+  ask when a device build names no architecture, and read it from the device's `uname -m`
+  plus whether `/usr/lib64` exists (only 64-bit userspaces have it, so a 64-bit kernel
+  under a 32-bit userspace still maps to `armv7l`); the tizen-cli build skill carries the
+  same guidance. `buildProject()` and the build
   script accept only `armv7l`, `aarch64`, `i586` and `x86_64` — the tizen-cli `--arch`
   choices — so `arm` / `arm64` fail with `invalid_parameters` before GBS runs; a
   non-default `--arch` on a non-Platform project adds a warning that it was ignored (the
