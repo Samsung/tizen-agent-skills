@@ -8,7 +8,9 @@
  * Date.now() is stubbed so the first call — the function's `startTime` —
  * returns BASE and every later call returns BASE + STEP. An envelope that was
  * given the caller's startTime reports duration_ms === STEP; one that fell
- * back to its own construction time reports 0.
+ * back to its own construction time reports 0. This relies on each function
+ * under test taking its startTime with the first Date.now() call; keep it
+ * the first statement there.
  *
  * plugin-cache is stubbed so no SDK script, sdb or device is touched.
  */
@@ -53,6 +55,7 @@ Module._load = function mockPluginCache(request, parent, isMain) {
 delete require.cache[projectPath];
 const {
   createProject,
+  importWgt,
   deleteProject,
   buildProject,
   listTemplates,
@@ -176,6 +179,32 @@ const touch = (name) => {
     await expectStartTime(
       "create: create script missing",
       () => createProject("webapp", "Basic", dir, "MyTizenApp01"),
+      "io_error",
+    );
+    scriptMissing = false;
+
+    console.log("\nimportWgt");
+    await expectStartTime(
+      "import-wgt: missing parameters",
+      () => importWgt(),
+      "invalid_parameters",
+    );
+    const wgt = touch("MyWidget.wgt");
+    await expectStartTime(
+      "import-wgt: invalid profile",
+      () => importWgt(wgt, "mobile", "10.0", dir),
+      "invalid_parameters",
+    );
+    const badName = touch("my-widget.wgt");
+    await expectStartTime(
+      "import-wgt: invalid file name",
+      () => importWgt(badName, "tizen", "10.0", dir),
+      "invalid_parameters",
+    );
+    scriptMissing = true;
+    await expectStartTime(
+      "import-wgt: import script missing",
+      () => importWgt(wgt, "tizen", "10.0", dir),
       "io_error",
     );
     scriptMissing = false;
