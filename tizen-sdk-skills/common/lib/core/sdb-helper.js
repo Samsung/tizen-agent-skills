@@ -887,44 +887,10 @@ async function runSdbCommand(
   const startTime = Date.now();
 
   try {
-    if (
-      !request ||
-      typeof request !== "string" ||
-      request.trim().length === 0
-    ) {
-      return formatError(
-        command,
-        "invalid_parameters",
-        "Missing required parameter: request (natural-language sdb request).",
-        'tizen-sdk sdb-helper --request "run shell command ls -la"',
-        startTime,
-      );
-    }
-
-    // 1. Resolve sdb binary
-    const sdbResolved = resolveSdb();
-    if (sdbResolved.error) {
-      return formatError(
-        command,
-        "sdk_path_not_set",
-        sdbResolved.error,
-        "tizen-sdk sdk-init --sdk-path <path>",
-        startTime,
-      );
-    }
-    const { sdbPath } = sdbResolved;
-
-    // 2. Verify sdb exists
-    const fs = require("fs");
-    if (!fs.existsSync(sdbPath)) {
-      return formatError(
-        command,
-        "io_error",
-        `sdb binary not found at: ${sdbPath}. Ensure the Tizen SDK is properly installed.`,
-        null,
-        startTime,
-      );
-    }
+    // 1-2. Validate the request, resolve and verify the sdb binary
+    const prepared = resolveSdbPathOrError(request, command, startTime);
+    if (prepared.error) return prepared.error;
+    const { sdbPath } = prepared;
 
     // The first sdb call of a session has to start the sdb server daemon,
     // which then keeps the stdout pipe open until the timeout (see sdb.js).
@@ -947,9 +913,7 @@ async function runSdbCommand(
     // 4. Handle handoff intents (install/uninstall → tizen-install-app,
     //    logs → tizen-dlog-analyzer, screenshot → tizen-screenshot, …)
     if (intent.handoff) {
-      const envelope = new Envelope(command);
-      envelope.startTime = startTime;
-      return envelope.success({
+      return successEnvelope(command, startTime, {
         intent: intent.id,
         handoff: intent.handoff,
         message: `Intent "${intent.id}" is handled by the ${intent.handoff} skill. Use that skill instead.`,
@@ -960,46 +924,17 @@ async function runSdbCommand(
 
     // 5. For list-devices, no serial needed
     if (intent.id === "list-devices") {
-      let output;
-      try {
-        // ensureSdbServer() above already started the daemon.
-        output = runSdb(sdbPath, "devices");
-      } catch (error) {
-        return formatError(
-          command,
-          "io_error",
-          `sdb devices failed: ${error.message}`,
-          null,
-          startTime,
-        );
-      }
-      const devices = parseDevices(output);
-      const envelope = new Envelope(command);
-      envelope.startTime = startTime;
-      return envelope.success({
-        intent: "list-devices",
-        command: "sdb devices",
-        devices: devices.map((d) => ({ serial: d.serial, state: d.state })),
-        device_count: devices.length,
-        output: output.trim(),
-      });
+      return listDevicesEnvelope(command, startTime, sdbPath);
     }
 
     // 6. Resolve serial if not provided
-    const serialResult = resolveSerial(sdbPath, serial);
-    if (serialResult.errorCategory) {
-      const failure = describeSerialFailure(serialResult, {
-        noDeviceFix: "tizen-sdk device-manager",
-      });
-      return formatError(
-        command,
-        failure.category,
-        failure.message,
-        failure.suggestedFix,
-        startTime,
-        failure.detailLines,
-      );
-    }
+    const serialResult = resolveSerialOrError(
+      sdbPath,
+      serial,
+      command,
+      startTime,
+    );
+    if (serialResult.error) return serialResult.error;
     const resolvedSerial = serialResult.serial;
 
     // 7. Build the sdb command
@@ -1019,9 +954,7 @@ async function runSdbCommand(
 
     // 8. Gated intents — return command for confirmation, do NOT execute
     if (intent.gated) {
-      const envelope = new Envelope(command);
-      envelope.startTime = startTime;
-      return envelope.success({
+      return successEnvelope(command, startTime, {
         intent: intent.id,
         gated: true,
         command: `sdb ${cmdInfo.command}`,
@@ -1032,153 +965,20 @@ async function runSdbCommand(
     }
 
     // 9. Read-only intents — execute immediately
-    //    For screenshot intent, try captureScreenshot() first (control panel
-    //    removal + display stitching), then fall back to sdb commands.
-    if (intent.id === "screenshot") {
-      // 1st priority: captureScreenshot() — full pipeline with control panel removal
-      try {
-        const { captureScreenshot } = require("./screenshot");
-        const screenshotResult = await captureScreenshot(resolvedSerial, null);
-        if (screenshotResult.status === "success") {
-          const envelope = new Envelope(command);
-          envelope.startTime = startTime;
-          return envelope.success({
-            intent: intent.id,
-            command: "captureScreenshot()",
-            device_serial: resolvedSerial,
-            output: screenshotResult.result.stdout || "Screenshot captured",
-            output_path: screenshotResult.result.output_path,
-            gated: false,
-            fallbacks_tried: ["captureScreenshot()"],
-            note: "Used captureScreenshot() — control panel auto-removed, display stitched",
-          });
-        }
-      } catch (_screenshotError) {
-        // captureScreenshot() failed — fall through to sdb fallbacks
-      }
-
-      // 2nd priority: sdb fallback chain (screencapture → capture_screen → xwd → /dev/fb0)
-      const run = runWithFallbacks(sdbPath, cmdInfo.command, cmdInfo.fallbacks);
-
-      if (run.succeeded) {
-        const envelope = new Envelope(command);
-        envelope.startTime = startTime;
-        return envelope.success({
-          intent: intent.id,
-          command: run.usedCommand,
-          device_serial: resolvedSerial,
-          output: run.output.trim(),
-          gated: false,
-          fallbacks_tried: [
-            "captureScreenshot() (failed)",
-            ...run.triedCommands,
-          ],
-          note: cmdInfo.note || null,
-        });
-      } else {
-        const errOutput = run.lastError.stderr || run.lastError.stdout || "";
-        return formatError(
-          command,
-          "io_error",
-          `All screenshot methods failed. Tried: captureScreenshot() → ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${errOutput ? ` — ${errOutput.trim()}` : ""}`,
-          'Try host-side screenshot: Linux: import -window "$(xdotool search --name emulator | head -1)" sshot.png',
-          startTime,
-        );
-      }
-    }
-
+    const ctx = {
+      command,
+      startTime,
+      intent,
+      serial: resolvedSerial,
+      sdbPath,
+      cmdInfo,
+    };
+    if (intent.id === "screenshot") return await runScreenshotIntent(ctx);
     // Other intents with fallbacks (non-screenshot)
     if (cmdInfo.fallbacks && cmdInfo.fallbacks.length > 0) {
-      const run = runWithFallbacks(
-        sdbPath,
-        cmdInfo.command,
-        cmdInfo.fallbacks,
-        cmdInfo.accept,
-      );
-
-      if (run.succeeded) {
-        const envelope = new Envelope(command);
-        envelope.startTime = startTime;
-        return envelope.success({
-          intent: intent.id,
-          command: run.usedCommand,
-          device_serial: resolvedSerial,
-          output: run.output.trim(),
-          gated: false,
-          fallbacks_tried: run.triedCommands,
-          note: cmdInfo.note || null,
-        });
-      } else {
-        const errOutput = run.lastError.stderr || run.lastError.stdout || "";
-        return formatError(
-          command,
-          "io_error",
-          `All methods failed. Tried: ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${errOutput ? ` — ${errOutput.trim()}` : ""}`,
-          null,
-          startTime,
-        );
-      }
+      return runFallbackIntent(ctx);
     }
-
-    // Non-fallback read-only intents — execute immediately
-    let output;
-    try {
-      output = runSdb(sdbPath, cmdInfo.command);
-    } catch (error) {
-      const errOutput = error.stderr || error.stdout || "";
-      return formatError(
-        command,
-        "io_error",
-        `sdb command failed: ${error.message}${errOutput ? ` — ${errOutput.trim()}` : ""}`,
-        null,
-        startTime,
-      );
-    }
-
-    // For shell-command, parse the __SDB_EXIT: marker to detect non-zero
-    // remote exit codes. sdb itself exits 0 even when the remote command
-    // fails, so without this the envelope would report success.
-    if (intent.id === "shell-command") {
-      const exitMatch = output.match(/__SDB_EXIT:(-?\d+)\s*$/);
-      if (exitMatch) {
-        const remoteExitCode = parseInt(exitMatch[1], 10);
-        // Strip the marker line from the output
-        const cleanOutput = output.replace(/__SDB_EXIT:-?\d+\s*$/, "").trim();
-
-        if (remoteExitCode !== 0) {
-          return formatError(
-            command,
-            "io_error",
-            `Remote shell command exited with code ${remoteExitCode}.${cleanOutput ? ` Output: ${cleanOutput}` : ""}`,
-            null,
-            startTime,
-          );
-        }
-
-        const envelope = new Envelope(command);
-        envelope.startTime = startTime;
-        return envelope.success({
-          intent: intent.id,
-          command: `sdb ${cmdInfo.command}`,
-          device_serial: resolvedSerial,
-          output: cleanOutput,
-          exit_code: 0,
-          gated: false,
-        });
-      }
-      // Marker not found — sdb may not support the echo trick (older platform)
-      // Fall through to normal success path
-    }
-
-    const envelope = new Envelope(command);
-    envelope.startTime = startTime;
-    return envelope.success({
-      intent: intent.id,
-      command: `sdb ${cmdInfo.command}`,
-      device_serial: resolvedSerial,
-      output: output.trim(),
-      gated: false,
-    });
+    return runPlainIntent(ctx);
   } catch (error) {
     return formatError(
       command,
@@ -1188,6 +988,261 @@ async function runSdbCommand(
       startTime,
     );
   }
+}
+
+/** Success envelope stamped with the request's start time. */
+function successEnvelope(command, startTime, result) {
+  const envelope = new Envelope(command);
+  envelope.startTime = startTime;
+  return envelope.success(result);
+}
+
+/** " — <stderr|stdout>" suffix for an sdb failure message ("" when empty). */
+function sdbErrorSuffix(error) {
+  const errOutput = error.stderr || error.stdout || "";
+  return errOutput ? ` — ${errOutput.trim()}` : "";
+}
+
+/**
+ * Validate the request and locate the sdb binary.
+ * @returns {{sdbPath: string}|{error: object}}
+ */
+function resolveSdbPathOrError(request, command, startTime) {
+  if (!request || typeof request !== "string" || request.trim().length === 0) {
+    return {
+      error: formatError(
+        command,
+        "invalid_parameters",
+        "Missing required parameter: request (natural-language sdb request).",
+        'tizen-sdk sdb-helper --request "run shell command ls -la"',
+        startTime,
+      ),
+    };
+  }
+
+  // 1. Resolve sdb binary
+  const sdbResolved = resolveSdb();
+  if (sdbResolved.error) {
+    return {
+      error: formatError(
+        command,
+        "sdk_path_not_set",
+        sdbResolved.error,
+        "tizen-sdk sdk-init --sdk-path <path>",
+        startTime,
+      ),
+    };
+  }
+  const { sdbPath } = sdbResolved;
+
+  // 2. Verify sdb exists
+  const fs = require("fs");
+  if (!fs.existsSync(sdbPath)) {
+    return {
+      error: formatError(
+        command,
+        "io_error",
+        `sdb binary not found at: ${sdbPath}. Ensure the Tizen SDK is properly installed.`,
+        null,
+        startTime,
+      ),
+    };
+  }
+  return { sdbPath };
+}
+
+/** Run `sdb devices` and report the parsed device list. */
+function listDevicesEnvelope(command, startTime, sdbPath) {
+  let output;
+  try {
+    // ensureSdbServer() already started the daemon.
+    output = runSdb(sdbPath, "devices");
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb devices failed: ${error.message}`,
+      null,
+      startTime,
+    );
+  }
+  const devices = parseDevices(output);
+  return successEnvelope(command, startTime, {
+    intent: "list-devices",
+    command: "sdb devices",
+    devices: devices.map((d) => ({ serial: d.serial, state: d.state })),
+    device_count: devices.length,
+    output: output.trim(),
+  });
+}
+
+/**
+ * Resolve the target device serial (auto-detect when not provided).
+ * @returns {{serial: string}|{error: object}}
+ */
+function resolveSerialOrError(sdbPath, serial, command, startTime) {
+  const serialResult = resolveSerial(sdbPath, serial);
+  if (serialResult.errorCategory) {
+    const failure = describeSerialFailure(serialResult, {
+      noDeviceFix: "tizen-sdk device-manager",
+    });
+    return {
+      error: formatError(
+        command,
+        failure.category,
+        failure.message,
+        failure.suggestedFix,
+        startTime,
+        failure.detailLines,
+      ),
+    };
+  }
+  return { serial: serialResult.serial };
+}
+
+/**
+ * Screenshot intent: try captureScreenshot() first (control panel removal +
+ * display stitching), then fall back to the sdb command chain.
+ */
+async function runScreenshotIntent(ctx) {
+  const { command, startTime, intent, serial, sdbPath, cmdInfo } = ctx;
+  // 1st priority: captureScreenshot() — full pipeline with control panel removal
+  try {
+    const { captureScreenshot } = require("./screenshot");
+    const screenshotResult = await captureScreenshot(serial, null);
+    if (screenshotResult.status === "success") {
+      return successEnvelope(command, startTime, {
+        intent: intent.id,
+        command: "captureScreenshot()",
+        device_serial: serial,
+        output: screenshotResult.result.stdout || "Screenshot captured",
+        output_path: screenshotResult.result.output_path,
+        gated: false,
+        fallbacks_tried: ["captureScreenshot()"],
+        note: "Used captureScreenshot() — control panel auto-removed, display stitched",
+      });
+    }
+  } catch (_screenshotError) {
+    // captureScreenshot() failed — fall through to sdb fallbacks
+  }
+
+  // 2nd priority: sdb fallback chain (screencapture → capture_screen → xwd → /dev/fb0)
+  const run = runWithFallbacks(sdbPath, cmdInfo.command, cmdInfo.fallbacks);
+
+  if (run.succeeded) {
+    return successEnvelope(command, startTime, {
+      intent: intent.id,
+      command: run.usedCommand,
+      device_serial: serial,
+      output: run.output.trim(),
+      gated: false,
+      fallbacks_tried: ["captureScreenshot() (failed)", ...run.triedCommands],
+      note: cmdInfo.note || null,
+    });
+  }
+  return formatError(
+    command,
+    "io_error",
+    `All screenshot methods failed. Tried: captureScreenshot() → ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${sdbErrorSuffix(run.lastError)}`,
+    'Try host-side screenshot: Linux: import -window "$(xdotool search --name emulator | head -1)" sshot.png',
+    startTime,
+  );
+}
+
+/** Non-screenshot intent with fallback commands. */
+function runFallbackIntent(ctx) {
+  const { command, startTime, intent, serial, sdbPath, cmdInfo } = ctx;
+  const run = runWithFallbacks(
+    sdbPath,
+    cmdInfo.command,
+    cmdInfo.fallbacks,
+    cmdInfo.accept,
+  );
+
+  if (run.succeeded) {
+    return successEnvelope(command, startTime, {
+      intent: intent.id,
+      command: run.usedCommand,
+      device_serial: serial,
+      output: run.output.trim(),
+      gated: false,
+      fallbacks_tried: run.triedCommands,
+      note: cmdInfo.note || null,
+    });
+  }
+  return formatError(
+    command,
+    "io_error",
+    `All methods failed. Tried: ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${sdbErrorSuffix(run.lastError)}`,
+    null,
+    startTime,
+  );
+}
+
+/**
+ * For shell-command, parse the __SDB_EXIT: marker to detect non-zero remote
+ * exit codes. sdb itself exits 0 even when the remote command fails, so
+ * without this the envelope would report success.
+ * @returns {object|null} envelope, or null when the marker is absent
+ */
+function shellCommandEnvelope(ctx, output) {
+  const { command, startTime, intent, serial, cmdInfo } = ctx;
+  const exitMatch = output.match(/__SDB_EXIT:(-?\d+)\s*$/);
+  // Marker not found — sdb may not support the echo trick (older platform);
+  // the caller falls through to the normal success path.
+  if (!exitMatch) return null;
+  const remoteExitCode = parseInt(exitMatch[1], 10);
+  // Strip the marker line from the output
+  const cleanOutput = output.replace(/__SDB_EXIT:-?\d+\s*$/, "").trim();
+
+  if (remoteExitCode !== 0) {
+    return formatError(
+      command,
+      "io_error",
+      `Remote shell command exited with code ${remoteExitCode}.${cleanOutput ? ` Output: ${cleanOutput}` : ""}`,
+      null,
+      startTime,
+    );
+  }
+
+  return successEnvelope(command, startTime, {
+    intent: intent.id,
+    command: `sdb ${cmdInfo.command}`,
+    device_serial: serial,
+    output: cleanOutput,
+    exit_code: 0,
+    gated: false,
+  });
+}
+
+/** Non-fallback read-only intent — execute immediately. */
+function runPlainIntent(ctx) {
+  const { command, startTime, intent, serial, sdbPath, cmdInfo } = ctx;
+  let output;
+  try {
+    output = runSdb(sdbPath, cmdInfo.command);
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb command failed: ${error.message}${sdbErrorSuffix(error)}`,
+      null,
+      startTime,
+    );
+  }
+
+  if (intent.id === "shell-command") {
+    const shellEnvelope = shellCommandEnvelope(ctx, output);
+    if (shellEnvelope) return shellEnvelope;
+  }
+
+  return successEnvelope(command, startTime, {
+    intent: intent.id,
+    command: `sdb ${cmdInfo.command}`,
+    device_serial: serial,
+    output: output.trim(),
+    gated: false,
+  });
 }
 
 // ─── RDS: argv-based sdb primitives ──────────────────────────────────────

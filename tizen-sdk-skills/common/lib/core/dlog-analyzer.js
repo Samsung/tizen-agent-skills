@@ -1707,28 +1707,9 @@ async function stopCollectAppLogs(commandLabel) {
 }
 
 /**
- * Analyze collected app logs for non-fatal runtime errors (E/F priority).
- * Delegates to: tizen-dlog-analyzer error-analyze --app-id <app-id> [--format <format>]
- *
- * The native binary reads <sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log
- * and handles deduplication, summary lines, and detail entries output.
- *
- * @param {string} appId - Tizen app ID (e.g. org.example.myapp)
- * @param {string} [format] - Output format: "summary", "details", or null (both)
- * @param {string} [commandLabel] - Envelope command label
+ * Validate error-analyze parameters. Returns a failure envelope, or null.
  */
-async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
-  // Backward-compatible signature: the 3rd arg may be a commandLabel string
-  // (old callers) or an opts object (new file-mode callers).
-  let opts = {};
-  let label = commandLabel;
-  if (typeof optsOrLabel === "string") {
-    label = optsOrLabel;
-  } else if (optsOrLabel && typeof optsOrLabel === "object") {
-    opts = optsOrLabel;
-  }
-  const command = label || "tizen-sdk dlog-analyzer error-analyze";
-
+function validateAnalyzeParams(command, appId, format, opts) {
   if (!appId && !opts.file) {
     return {
       command,
@@ -1759,86 +1740,87 @@ async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
       ],
     };
   }
+  return null;
+}
 
-  const nativeFormat = format || "both";
+/** Native `error-analyze --file` argv for file mode. */
+function buildErrorAnalyzeFileArgs(appId, nativeFormat, opts) {
+  const args = ["error-analyze", "--file", opts.file, "--format", nativeFormat];
+  if (appId) args.push("--app-id", appId);
+  if (opts.pids)
+    toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
+  if (opts.noiseTags)
+    toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
+  if (opts.categories)
+    toArray(opts.categories).forEach((c) => args.push("--category", c));
+  if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+  if (opts.withContext) args.push("--with-context");
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  return args;
+}
 
-  // --- File mode: analyze one saved local dlog file directly ---
-  if (opts.file) {
-    if (!fs.existsSync(opts.file))
-      return fileNotFoundError(command, opts.file, "dlog");
-    const binaryPath = resolveBinary();
-    if (!binaryPath) return binaryNotFoundError(command);
+/**
+ * Run the native error-analyze and wrap its stdout in the success envelope.
+ * The native binary writes the analysis (summary lines and/or detail
+ * entries, per --format) to stdout. Only the unique-error count is parsed out.
+ *
+ * @param {object} head - result fields placed before `error_count`
+ * @param {{failure: string, summary: string}} where - what was analyzed, as
+ *   named in the failure message and in the summary message
+ */
+function runErrorAnalyze(command, binaryPath, args, head, where) {
+  const run = runBinary(command, binaryPath, args, {
+    errorCategory: "error_analyze_failed",
+    errorPrefix: `Failed to analyze ${where.failure}`,
+  });
+  if (run.status !== "success") return run;
 
-    const args = [
-      "error-analyze",
-      "--file",
-      opts.file,
-      "--format",
-      nativeFormat,
-    ];
-    if (appId) args.push("--app-id", appId);
-    if (opts.pids)
-      toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
-    if (opts.noiseTags)
-      toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
-    if (opts.categories)
-      toArray(opts.categories).forEach((c) => args.push("--category", c));
-    if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
-    if (opts.withContext) args.push("--with-context");
-    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  const { warnings } = run;
+  const trimmedOutput = run.result.output;
+  const errorCount = parseErrorCount(trimmedOutput);
 
-    let output;
-    let warnings;
-    try {
-      output = execFileSync(binaryPath, args, {
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"],
-        timeout: 30000,
-      });
-    } catch (error) {
-      const recovered = recoverEncodingCrash(error);
-      if (!recovered) {
-        const stderr = error.stderr ? error.stderr.toString().trim() : "";
-        return {
-          command,
-          status: "failure",
-          errors: [
-            {
-              category: "error_analyze_failed",
-              message: `Failed to analyze file "${opts.file}": ${stderr || error.message}`,
-            },
-          ],
-        };
-      }
-      output = recovered.output;
-      warnings = [recovered.warning];
-    }
+  return {
+    command,
+    status: "success",
+    result: {
+      ...head,
+      error_count: errorCount,
+      output: trimmedOutput,
+      ...(warnings ? { output_truncated: true } : {}),
+      report_format: REPORT_FORMAT_HINT,
+      message:
+        errorCount > 0
+          ? `Found ${errorCount} unique runtime errors in ${where.summary}.`
+          : `No runtime errors (E/F priority) found in ${where.summary}.`,
+    },
+    ...(warnings ? { warnings } : {}),
+  };
+}
 
-    const trimmedOutput = output.trim();
-    const errorCount = parseErrorCount(trimmedOutput);
+/** File mode: analyze one saved local dlog file directly. */
+function analyzeErrorsInFile(command, appId, nativeFormat, opts) {
+  if (!fs.existsSync(opts.file))
+    return fileNotFoundError(command, opts.file, "dlog");
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return binaryNotFoundError(command);
 
-    return {
-      command,
-      status: "success",
-      result: {
-        file: opts.file,
-        ...(appId ? { app_id: appId } : {}),
-        format: nativeFormat,
-        error_count: errorCount,
-        output: trimmedOutput,
-        ...(warnings ? { output_truncated: true } : {}),
-        report_format: REPORT_FORMAT_HINT,
-        message:
-          errorCount > 0
-            ? `Found ${errorCount} unique runtime errors in ${opts.file}.`
-            : `No runtime errors (E/F priority) found in ${opts.file}.`,
-      },
-      ...(warnings ? { warnings } : {}),
-    };
-  }
+  const args = buildErrorAnalyzeFileArgs(appId, nativeFormat, opts);
+  return runErrorAnalyze(
+    command,
+    binaryPath,
+    args,
+    {
+      file: opts.file,
+      ...(appId ? { app_id: appId } : {}),
+      format: nativeFormat,
+    },
+    { failure: `file "${opts.file}"`, summary: opts.file },
+  );
+}
 
-  // --- Collection mode (existing behavior) ---
+/** Collection mode: analyze the logs collected for one app. */
+function analyzeErrorsInCollection(command, appId, nativeFormat) {
   const logBase = resolveLogBaseDir();
   if (logBase.error) return logBaseDirError(command, logBase.error);
   const logFile = appLogFile(appId, logBase.baseDir);
@@ -1859,59 +1841,50 @@ async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
   if (!binaryPath) return binaryNotFoundError(command);
 
   // Build the native binary command (it resolves the log directory itself)
-  // nativeFormat was already resolved above (before the file-mode branch)
   const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
-
-  let output;
-  let warnings;
-  try {
-    output = execFileSync(binaryPath, args, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-      timeout: 30000,
-    });
-  } catch (error) {
-    const recovered = recoverEncodingCrash(error);
-    if (!recovered) {
-      const stderr = error.stderr ? error.stderr.toString().trim() : "";
-      return {
-        command,
-        status: "failure",
-        errors: [
-          {
-            category: "error_analyze_failed",
-            message: `Failed to analyze logs for app "${appId}": ${stderr || error.message}`,
-          },
-        ],
-      };
-    }
-    output = recovered.output;
-    warnings = [recovered.warning];
-  }
-
-  // The native binary writes the analysis (summary lines and/or detail entries,
-  // per --format) to stdout. Only the unique-error count is parsed out.
-  const trimmedOutput = output.trim();
-  const errorCount = parseErrorCount(trimmedOutput);
-
-  return {
+  const where = `logs for app "${appId}"`;
+  return runErrorAnalyze(
     command,
-    status: "success",
-    result: {
-      app_id: appId,
-      format: nativeFormat,
-      log_file: logFile,
-      error_count: errorCount,
-      output: trimmedOutput,
-      ...(warnings ? { output_truncated: true } : {}),
-      report_format: REPORT_FORMAT_HINT,
-      message:
-        errorCount > 0
-          ? `Found ${errorCount} unique runtime errors in logs for app "${appId}".`
-          : `No runtime errors (E/F priority) found in logs for app "${appId}".`,
-    },
-    ...(warnings ? { warnings } : {}),
-  };
+    binaryPath,
+    args,
+    { app_id: appId, format: nativeFormat, log_file: logFile },
+    { failure: where, summary: where },
+  );
+}
+
+/**
+ * Analyze collected app logs for non-fatal runtime errors (E/F priority).
+ * Delegates to: tizen-dlog-analyzer error-analyze --app-id <app-id> [--format <format>]
+ *
+ * The native binary reads <sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log
+ * and handles deduplication, summary lines, and detail entries output.
+ *
+ * @param {string} appId - Tizen app ID (e.g. org.example.myapp)
+ * @param {string} [format] - Output format: "summary", "details", or null (both)
+ * @param {string} [commandLabel] - Envelope command label
+ */
+async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
+  // Backward-compatible signature: the 3rd arg may be a commandLabel string
+  // (old callers) or an opts object (new file-mode callers).
+  let opts = {};
+  let label = commandLabel;
+  if (typeof optsOrLabel === "string") {
+    label = optsOrLabel;
+  } else if (optsOrLabel && typeof optsOrLabel === "object") {
+    opts = optsOrLabel;
+  }
+  const command = label || "tizen-sdk dlog-analyzer error-analyze";
+
+  const invalid = validateAnalyzeParams(command, appId, format, opts);
+  if (invalid) return invalid;
+
+  const nativeFormat = format || "both";
+
+  // --- File mode: analyze one saved local dlog file directly ---
+  if (opts.file) return analyzeErrorsInFile(command, appId, nativeFormat, opts);
+
+  // --- Collection mode (existing behavior) ---
+  return analyzeErrorsInCollection(command, appId, nativeFormat);
 }
 
 /**
@@ -2418,79 +2391,10 @@ function summarizeSearchOutput(output, opts = {}) {
 }
 
 /**
- * Search every collected dlog category (each app, _general, _unparsed —
- * kernel excluded) for plain text or a regular expression — the binary's
- * `search` subcommand (TizenDLogAnalyzer v0.2.6+). Finds a string without
- * knowing which app wrote it; a match returns the whole entry including its
- * stack-trace continuation lines. Reads the collected files only — no device
- * is needed, but something must have been collected first.
- *
- * @param {string|string[]} patterns - one or more search patterns (any one
- *   matches unless opts.all)
- * @param {object} [opts] - see buildSearchArgs
- * @param {string} [commandLabel]
+ * Validate the integer limits, the free-text values and the output format of
+ * a search. Returns a failure envelope (via `invalid`), or null when valid.
  */
-async function searchLogs(patterns, opts = {}, commandLabel) {
-  const command = commandLabel || "tizen-sdk dlog-analyzer search";
-  const list = normalizePatterns(patterns);
-  if (list.length === 0) {
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "invalid_parameters",
-          message:
-            'At least one search pattern is required. Usage: search <pattern> [pattern ...] [--pattern <p>]... [--category <app-id|_general|_unparsed>]... [--regex] [--context <n>] [--priority <p>] [--since <t>] [--count] [--format json]. Use --pattern "<text>" for a pattern that starts with "--".',
-        },
-      ],
-    };
-  }
-  const invalid = (message) => ({
-    command,
-    status: "failure",
-    errors: [{ category: "invalid_parameters", message }],
-  });
-  // The binary is started with execFileSync(argv) — no shell — and every
-  // value sits behind its own flag, so a value cannot become a different
-  // option or a shell word. What is checked here is what the binary cannot
-  // make sense of: control characters (a pattern or tag spanning lines), an
-  // unknown priority letter, a non-integer limit, an unknown output format.
-  // A pattern may legitimately start with "-" and contain regex metacharacters.
-  const ctrl = list.find((p) => CONTROL_CHARS_RE.test(p));
-  if (ctrl !== undefined) {
-    return invalid(
-      `Invalid search pattern ${JSON.stringify(ctrl)}: control characters (newline, tab, NUL …) are not allowed.`,
-    );
-  }
-  // `--app-id` is a category alias in collection mode: merge it into
-  // `categories` so it gets the same isValidAppId validation and `no_logs`
-  // handling as `--category` on every lane. In file mode it stays a declared
-  // label that buildSearchArgs forwards as `--app-id`, not a category.
-  const categories = normalizeCategories(
-    opts.file
-      ? opts.categories
-      : [...(opts.categories || []), ...(opts.appLabels || [])],
-  );
-  for (const c of categories) {
-    if (!isValidAppId(c)) return invalidAppIdError(command, c);
-  }
-  const tags = normalizeTags(opts.tags);
-  const badTag = tags.find((t) => !VALID_TAG_RE.test(t));
-  if (badTag !== undefined) {
-    return invalid(
-      `Invalid dlog tag ${JSON.stringify(badTag)}: a tag has no whitespace or control characters.`,
-    );
-  }
-  let priority = opts.priority;
-  if (priority !== undefined && priority !== null && priority !== "") {
-    priority = String(priority).toUpperCase();
-    if (!DLOG_PRIORITIES.includes(priority)) {
-      return invalid(
-        `Invalid priority '${opts.priority}'. Must be one of ${DLOG_PRIORITIES.join(", ")}.`,
-      );
-    }
-  }
+function validateSearchLimits(opts, invalid) {
   for (const [name, value] of [
     ["--context", opts.context],
     ["--after-context", opts.afterContext],
@@ -2522,73 +2426,156 @@ async function searchLogs(patterns, opts = {}, commandLabel) {
       `Invalid format: '${opts.format}'. Must be 'text' (grep-like lines, default) or 'json'.`,
     );
   }
+  return null;
+}
 
-  // --- File mode: read one saved local dlog file, no collection dir needed ---
-  if (opts.file) {
-    if (!fs.existsSync(opts.file))
-      return fileNotFoundError(command, opts.file, "dlog");
-    const binaryPath = resolveBinary();
-    if (!binaryPath) return binaryNotFoundError(command);
-
-    const args = buildSearchArgs(list, {
-      ...opts,
-      categories,
-      tags,
-      priority,
-      appLabels: opts.appLabels,
-    });
-    const envelope = runBinary(command, binaryPath, args, {
-      result: {
-        patterns: list,
-        file: opts.file,
-        categories: categories.length ? categories : "all (reconstructed)",
-        regex: opts.regex === true,
-      },
-      errorCategory: "search_failed",
-      errorPrefix: `Search failed for ${JSON.stringify(list)}`,
-    });
-    if (envelope.status === "success") {
-      const summary = summarizeSearchOutput(envelope.result.output, opts);
-      const none =
-        summary.total_matches === 0 ||
-        (summary.matched === false && summary.total_matches === undefined);
-      envelope.result = {
-        ...envelope.result,
-        ...summary,
-        message: none
-          ? `No entry matches ${JSON.stringify(list)} in ${opts.file}. Widen the pattern, drop --priority/--since, or try a different file.`
-          : `Matching entries for ${JSON.stringify(list)} in ${opts.file} (match lines are "<category>:", context lines "<category>-").${summary.truncated ? " --max-matches cut the result; narrow the pattern or raise --max-matches." : ""}`,
-      };
-    }
-    return envelope;
+/**
+ * Validate and normalise the search options.
+ * @returns {{error: object}|{categories: string[], tags: string[], priority: *}}
+ */
+function validateSearchOptions(command, list, opts) {
+  const invalid = (message) => ({
+    error: {
+      command,
+      status: "failure",
+      errors: [{ category: "invalid_parameters", message }],
+    },
+  });
+  // The binary is started with execFileSync(argv) — no shell — and every
+  // value sits behind its own flag, so a value cannot become a different
+  // option or a shell word. What is checked here is what the binary cannot
+  // make sense of: control characters (a pattern or tag spanning lines), an
+  // unknown priority letter, a non-integer limit, an unknown output format.
+  // A pattern may legitimately start with "-" and contain regex metacharacters.
+  const ctrl = list.find((p) => CONTROL_CHARS_RE.test(p));
+  if (ctrl !== undefined) {
+    return invalid(
+      `Invalid search pattern ${JSON.stringify(ctrl)}: control characters (newline, tab, NUL …) are not allowed.`,
+    );
   }
+  // `--app-id` is a category alias in collection mode: merge it into
+  // `categories` so it gets the same isValidAppId validation and `no_logs`
+  // handling as `--category` on every lane. In file mode it stays a declared
+  // label that buildSearchArgs forwards as `--app-id`, not a category.
+  const categories = normalizeCategories(
+    opts.file
+      ? opts.categories
+      : [...(opts.categories || []), ...(opts.appLabels || [])],
+  );
+  for (const c of categories) {
+    if (!isValidAppId(c)) return { error: invalidAppIdError(command, c) };
+  }
+  const tags = normalizeTags(opts.tags);
+  const badTag = tags.find((t) => !VALID_TAG_RE.test(t));
+  if (badTag !== undefined) {
+    return invalid(
+      `Invalid dlog tag ${JSON.stringify(badTag)}: a tag has no whitespace or control characters.`,
+    );
+  }
+  let priority = opts.priority;
+  if (priority !== undefined && priority !== null && priority !== "") {
+    priority = String(priority).toUpperCase();
+    if (!DLOG_PRIORITIES.includes(priority)) {
+      return invalid(
+        `Invalid priority '${opts.priority}'. Must be one of ${DLOG_PRIORITIES.join(", ")}.`,
+      );
+    }
+  }
+  const limitsError = validateSearchLimits(opts, invalid);
+  if (limitsError) return limitsError;
+  return { categories, tags, priority };
+}
 
-  // --- Collection mode (existing behavior) ---
-  const logBase = resolveLogBaseDir();
-  if (logBase.error) return logBaseDirError(command, logBase.error);
-  const appDir = path.join(logBase.baseDir, "app");
-  // Same `no_logs` contract as error-analyze / app-log: say which directories
-  // are missing — every one of them, not just the first — and how to fill
-  // them, instead of forwarding the binary's exit 1.
+/**
+ * Add the match summary and a next-step message to a successful search
+ * envelope (a failure envelope is returned untouched).
+ * @param {object} messages - { none, match } — the no-match message and the
+ *   lead of the match message
+ */
+function finishSearchEnvelope(envelope, opts, messages) {
+  if (envelope.status === "success") {
+    const summary = summarizeSearchOutput(envelope.result.output, opts);
+    const none =
+      summary.total_matches === 0 ||
+      (summary.matched === false && summary.total_matches === undefined);
+    envelope.result = {
+      ...envelope.result,
+      ...summary,
+      message: none
+        ? messages.none
+        : `${messages.match} (match lines are "<category>:", context lines "<category>-").${summary.truncated ? " --max-matches cut the result; narrow the pattern or raise --max-matches." : ""}`,
+    };
+  }
+  return envelope;
+}
+
+/** File mode: read one saved local dlog file, no collection dir needed. */
+function searchLogFile(command, list, opts, checked) {
+  const { categories, tags, priority } = checked;
+  if (!fs.existsSync(opts.file))
+    return fileNotFoundError(command, opts.file, "dlog");
+  const binaryPath = resolveBinary();
+  if (!binaryPath) return binaryNotFoundError(command);
+
+  const args = buildSearchArgs(list, {
+    ...opts,
+    categories,
+    tags,
+    priority,
+    appLabels: opts.appLabels,
+  });
+  const envelope = runBinary(command, binaryPath, args, {
+    result: {
+      patterns: list,
+      file: opts.file,
+      categories: categories.length ? categories : "all (reconstructed)",
+      regex: opts.regex === true,
+    },
+    errorCategory: "search_failed",
+    errorPrefix: `Search failed for ${JSON.stringify(list)}`,
+  });
+  return finishSearchEnvelope(envelope, opts, {
+    none: `No entry matches ${JSON.stringify(list)} in ${opts.file}. Widen the pattern, drop --priority/--since, or try a different file.`,
+    match: `Matching entries for ${JSON.stringify(list)} in ${opts.file}`,
+  });
+}
+
+/**
+ * Same `no_logs` contract as error-analyze / app-log: say which directories
+ * are missing — every one of them, not just the first — and how to fill
+ * them, instead of forwarding the binary's exit 1. Returns null when present.
+ */
+function searchNoLogsError(command, categories, appDir) {
   const missing = categories.filter(
     (c) => !fs.existsSync(path.join(appDir, c)),
   );
-  if (missing.length || (!categories.length && !fs.existsSync(appDir))) {
-    const what = missing.length
-      ? `No collected logs found for ${missing.length === 1 ? "category" : "categories"} ${missing.map((c) => JSON.stringify(c)).join(", ")} (expected ${missing.map((c) => path.join(appDir, c)).join(", ")}).`
-      : `No collected logs found (expected ${appDir}).`;
-    return {
-      command,
-      status: "failure",
-      errors: [
-        {
-          category: "no_logs",
-          message: `${what} Collect first: dlog-collect <app-id> or start start-monitoring, then stop-collect / stop.`,
-          ...(missing.length ? { missing_categories: missing } : {}),
-        },
-      ],
-    };
+  if (!missing.length && (categories.length || fs.existsSync(appDir))) {
+    return null;
   }
+  const what = missing.length
+    ? `No collected logs found for ${missing.length === 1 ? "category" : "categories"} ${missing.map((c) => JSON.stringify(c)).join(", ")} (expected ${missing.map((c) => path.join(appDir, c)).join(", ")}).`
+    : `No collected logs found (expected ${appDir}).`;
+  return {
+    command,
+    status: "failure",
+    errors: [
+      {
+        category: "no_logs",
+        message: `${what} Collect first: dlog-collect <app-id> or start start-monitoring, then stop-collect / stop.`,
+        ...(missing.length ? { missing_categories: missing } : {}),
+      },
+    ],
+  };
+}
+
+/** Collection mode: search the collected per-category logs. */
+function searchCollectedLogs(command, list, opts, checked) {
+  const { categories, tags, priority } = checked;
+  const logBase = resolveLogBaseDir();
+  if (logBase.error) return logBaseDirError(command, logBase.error);
+  const appDir = path.join(logBase.baseDir, "app");
+  const noLogs = searchNoLogsError(command, categories, appDir);
+  if (noLogs) return noLogs;
 
   const binaryPath = resolveBinary();
   if (!binaryPath) return binaryNotFoundError(command);
@@ -2610,20 +2597,46 @@ async function searchLogs(patterns, opts = {}, commandLabel) {
     errorCategory: "search_failed",
     errorPrefix: `Search failed for ${JSON.stringify(list)}`,
   });
-  if (envelope.status === "success") {
-    const summary = summarizeSearchOutput(envelope.result.output, opts);
-    const none =
-      summary.total_matches === 0 ||
-      (summary.matched === false && summary.total_matches === undefined);
-    envelope.result = {
-      ...envelope.result,
-      ...summary,
-      message: none
-        ? `No entry matches ${JSON.stringify(list)} in the collected logs (kernel excluded). Widen the pattern, drop --priority/--since, or collect again.`
-        : `Matching entries for ${JSON.stringify(list)} (match lines are "<category>:", context lines "<category>-").${summary.truncated ? " --max-matches cut the result; narrow the pattern or raise --max-matches." : ""}`,
+  return finishSearchEnvelope(envelope, opts, {
+    none: `No entry matches ${JSON.stringify(list)} in the collected logs (kernel excluded). Widen the pattern, drop --priority/--since, or collect again.`,
+    match: `Matching entries for ${JSON.stringify(list)}`,
+  });
+}
+
+/**
+ * Search every collected dlog category (each app, _general, _unparsed —
+ * kernel excluded) for plain text or a regular expression — the binary's
+ * `search` subcommand (TizenDLogAnalyzer v0.2.6+). Finds a string without
+ * knowing which app wrote it; a match returns the whole entry including its
+ * stack-trace continuation lines. Reads the collected files only — no device
+ * is needed, but something must have been collected first.
+ *
+ * @param {string|string[]} patterns - one or more search patterns (any one
+ *   matches unless opts.all)
+ * @param {object} [opts] - see buildSearchArgs
+ * @param {string} [commandLabel]
+ */
+async function searchLogs(patterns, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer search";
+  const list = normalizePatterns(patterns);
+  if (list.length === 0) {
+    return {
+      command,
+      status: "failure",
+      errors: [
+        {
+          category: "invalid_parameters",
+          message:
+            'At least one search pattern is required. Usage: search <pattern> [pattern ...] [--pattern <p>]... [--category <app-id|_general|_unparsed>]... [--regex] [--context <n>] [--priority <p>] [--since <t>] [--count] [--format json]. Use --pattern "<text>" for a pattern that starts with "--".',
+        },
+      ],
     };
   }
-  return envelope;
+  const checked = validateSearchOptions(command, list, opts);
+  if (checked.error) return checked.error;
+
+  if (opts.file) return searchLogFile(command, list, opts, checked);
+  return searchCollectedLogs(command, list, opts, checked);
 }
 
 /**

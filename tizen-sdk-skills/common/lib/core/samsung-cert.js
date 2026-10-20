@@ -298,6 +298,232 @@ function packagePkcs12(
 }
 
 /**
+ * Read and require the profile name shared by the author and distributor flows.
+ *
+ * @private
+ * @returns {{profileName: string}|{error: object}}
+ */
+function requireProfileName(COMMAND, startTime, input) {
+  const profileName =
+    typeof input.profileName === "string" ? input.profileName.trim() : "";
+  if (!profileName) {
+    return {
+      error: formatError(
+        COMMAND,
+        "invalid_parameters",
+        "Profile name is required (--profile-name).",
+        null,
+        startTime,
+      ),
+    };
+  }
+  return { profileName };
+}
+
+/**
+ * Require a certificate password that meets the strength rule.
+ *
+ * @private
+ * @returns {object|null} failure envelope, or null when the password is valid
+ */
+function validateCertPassword(COMMAND, startTime, password) {
+  if (!password || typeof password !== "string") {
+    return formatError(
+      COMMAND,
+      "invalid_parameters",
+      "Password is required (--password).",
+      null,
+      startTime,
+    );
+  }
+  if (!isValidPassword(password)) {
+    return formatError(
+      COMMAND,
+      "cert_password_invalid",
+      "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a digit.",
+      null,
+      startTime,
+    );
+  }
+  return null;
+}
+
+/**
+ * Resolve the SDK data path, the OpenSSL binary and the profile's output
+ * paths for one certificate kind, refusing to overwrite an existing one.
+ *
+ * @private
+ * @param {string} kind - "author" or "distributor"
+ * @returns {{resolved: object, openssl: string, outputDir: string,
+ *   p12Path: string, pwdPath: string}|{error: object}}
+ */
+function resolveSamsungCertTarget(COMMAND, startTime, profileName, kind) {
+  const resolved = resolveSdkDataPath();
+  if (resolved.error) {
+    return {
+      error: formatError(
+        COMMAND,
+        "sdk_path_not_set",
+        resolved.error,
+        null,
+        startTime,
+      ),
+    };
+  }
+
+  const openssl = resolveOpenSslBinary(resolved.sdkRoot);
+  const outputDir = path.join(
+    resolved.dataPath,
+    "keystore",
+    "samsung",
+    profileName,
+  );
+  const p12Path = path.join(outputDir, `${kind}.p12`);
+  const pwdPath = path.join(outputDir, `${kind}.pwd`);
+
+  // Check if certificate already exists
+  if (fs.existsSync(p12Path)) {
+    return {
+      error: formatError(
+        COMMAND,
+        "cert_already_exists",
+        `Samsung ${kind} certificate already exists at "${p12Path}". Certificates are never overwritten. Remove the profile and try again, or use a unique --profile-name.`,
+        null,
+        startTime,
+      ),
+    };
+  }
+  return { resolved, openssl, outputDir, p12Path, pwdPath };
+}
+
+/**
+ * Map a Samsung Account login error to its envelope error code.
+ *
+ * @private
+ */
+function samsungAuthErrorEnvelope(COMMAND, startTime, authError) {
+  let errorCode = "samsung_auth_failed";
+  if (authError.message.includes("samsung_auth_timeout")) {
+    errorCode = "samsung_auth_timeout";
+  } else if (authError.message.includes("samsung_auth_port_unavailable")) {
+    errorCode = "samsung_auth_port_unavailable";
+  } else if (authError.message.includes("samsung_auth_invalid_response")) {
+    errorCode = "samsung_auth_invalid_response";
+  }
+  return formatError(COMMAND, errorCode, authError.message, null, startTime);
+}
+
+/**
+ * Map a Samsung online-CA API error to its envelope error code.
+ *
+ * @private
+ * @param {string} failedPrefix - message prefix for samsung_cert_generation_failed
+ * @param {string} [apiPrefix] - message prefix for samsung_api_failed
+ */
+function samsungApiErrorEnvelope(
+  COMMAND,
+  startTime,
+  apiError,
+  failedPrefix,
+  apiPrefix,
+) {
+  const errorMsg = apiError.message || String(apiError);
+  if (errorMsg.includes("samsung_api_error")) {
+    return formatError(
+      COMMAND,
+      "samsung_api_failed",
+      `${apiPrefix || ""}${errorMsg}`,
+      null,
+      startTime,
+    );
+  }
+  return formatError(
+    COMMAND,
+    "samsung_cert_generation_failed",
+    `${failedPrefix}${errorMsg}`,
+    null,
+    startTime,
+  );
+}
+
+/**
+ * Map a password-storage error to the samsung_pwd_store_failed envelope.
+ *
+ * @private
+ */
+function pwdStoreErrorEnvelope(COMMAND, startTime, pwdError) {
+  const errorMsg = pwdError.message || String(pwdError);
+  if (errorMsg.includes("samsung_pwd_store_failed")) {
+    return formatError(
+      COMMAND,
+      "samsung_pwd_store_failed",
+      errorMsg,
+      null,
+      startTime,
+    );
+  }
+  return formatError(
+    COMMAND,
+    "samsung_pwd_store_failed",
+    `Failed to encrypt password: ${errorMsg}`,
+    null,
+    startTime,
+  );
+}
+
+/**
+ * Verify the generated keystore and password files exist.
+ *
+ * @private
+ * @returns {object|null} failure envelope, or null when both files exist
+ */
+function missingCertFilesError(
+  COMMAND,
+  startTime,
+  p12Path,
+  pwdPath,
+  outputDir,
+) {
+  if (!fs.existsSync(p12Path) || !fs.existsSync(pwdPath)) {
+    return formatError(
+      COMMAND,
+      "samsung_cert_generation_failed",
+      `Certificate generation reported success but files are missing at "${outputDir}".`,
+      null,
+      startTime,
+    );
+  }
+  return null;
+}
+
+/**
+ * Remove this run's keystore and password files (best effort).
+ *
+ * @private
+ */
+function removeCertFiles(p12Path, pwdPath) {
+  try {
+    fs.rmSync(p12Path, { force: true });
+    fs.rmSync(pwdPath, { force: true });
+  } catch (_) {}
+}
+
+/**
+ * Remove the temporary directory holding the unencrypted private key.
+ *
+ * @private
+ */
+function removeTempDir(tempDir) {
+  if (tempDir) {
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (_) {
+      // best-effort cleanup
+    }
+  }
+}
+
+/**
  * Generate a Samsung author certificate.
  *
  * @param {object} input
@@ -318,61 +544,32 @@ async function generateSamsungAuthorCertificate(input = {}) {
 
   try {
     const { identity, password } = input;
-    const profileName =
-      typeof input.profileName === "string" ? input.profileName.trim() : "";
+    const named = requireProfileName(COMMAND, startTime, input);
+    if (named.error) return named.error;
+    const { profileName } = named;
 
-    if (!profileName) {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "Profile name is required (--profile-name).",
-      );
-    }
     if (!identity || typeof identity !== "string" || !identity.trim()) {
       return formatError(
         COMMAND,
         "invalid_parameters",
         "Author identity is required (--identity).",
+        null,
+        startTime,
       );
     }
-    if (!password || typeof password !== "string") {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "Password is required (--password).",
-      );
-    }
-    if (!isValidPassword(password)) {
-      return formatError(
-        COMMAND,
-        "cert_password_invalid",
-        "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a digit.",
-      );
-    }
+    const passwordError = validateCertPassword(COMMAND, startTime, password);
+    if (passwordError) return passwordError;
 
-    const resolved = resolveSdkDataPath();
-    if (resolved.error) {
-      return formatError(COMMAND, "sdk_path_not_set", resolved.error);
-    }
-
-    const openssl = resolveOpenSslBinary(resolved.sdkRoot);
-    const outputDir = path.join(
-      resolved.dataPath,
-      "keystore",
-      "samsung",
+    const target = resolveSamsungCertTarget(
+      COMMAND,
+      startTime,
       profileName,
+      "author",
     );
-    const authorP12Path = path.join(outputDir, "author.p12");
-    const authorPwdPath = path.join(outputDir, "author.pwd");
-
-    // Check if certificate already exists
-    if (fs.existsSync(authorP12Path)) {
-      return formatError(
-        COMMAND,
-        "cert_already_exists",
-        `Samsung author certificate already exists at "${authorP12Path}". Certificates are never overwritten. Remove the profile and try again, or use a unique --profile-name.`,
-      );
-    }
+    if (target.error) return target.error;
+    const { resolved, openssl, outputDir } = target;
+    const authorP12Path = target.p12Path;
+    const authorPwdPath = target.pwdPath;
 
     // Create output directory
     fs.mkdirSync(outputDir, { recursive: true });
@@ -404,19 +601,7 @@ async function generateSamsungAuthorCertificate(input = {}) {
         authInfo = await samsungAuth.getSamsungAccessToken(profileName);
       } catch (authError) {
         // Map auth errors to envelope error codes
-        let errorCode = "samsung_auth_failed";
-        if (authError.message.includes("samsung_auth_timeout")) {
-          errorCode = "samsung_auth_timeout";
-        } else if (
-          authError.message.includes("samsung_auth_port_unavailable")
-        ) {
-          errorCode = "samsung_auth_port_unavailable";
-        } else if (
-          authError.message.includes("samsung_auth_invalid_response")
-        ) {
-          errorCode = "samsung_auth_invalid_response";
-        }
-        return formatError(COMMAND, errorCode, authError.message);
+        return samsungAuthErrorEnvelope(COMMAND, startTime, authError);
       }
 
       // Step 4: Submit CSR to Samsung online-CA for signing
@@ -429,14 +614,11 @@ async function generateSamsungAuthorCertificate(input = {}) {
         );
       } catch (apiError) {
         // Map Samsung API errors to envelope error codes
-        const errorMsg = apiError.message || String(apiError);
-        if (errorMsg.includes("samsung_api_error")) {
-          return formatError(COMMAND, "samsung_api_failed", errorMsg);
-        }
-        return formatError(
+        return samsungApiErrorEnvelope(
           COMMAND,
-          "samsung_cert_generation_failed",
-          `Failed to get signed certificate from Samsung: ${errorMsg}`,
+          startTime,
+          apiError,
+          "Failed to get signed certificate from Samsung: ",
         );
       }
 
@@ -449,6 +631,8 @@ async function generateSamsungAuthorCertificate(input = {}) {
           COMMAND,
           "samsung_cert_generation_failed",
           `Failed to save signed certificate: ${writeError.message}`,
+          null,
+          startTime,
         );
       }
 
@@ -457,7 +641,13 @@ async function generateSamsungAuthorCertificate(input = {}) {
       try {
         caCertPath = resolveSamsungCaPath("author");
       } catch (error) {
-        return formatError(COMMAND, "samsung_ca_not_found", error.message);
+        return formatError(
+          COMMAND,
+          "samsung_ca_not_found",
+          error.message,
+          null,
+          startTime,
+        );
       }
 
       // Step 7: Package the key, the signed certificate and the CA into author.p12
@@ -475,25 +665,18 @@ async function generateSamsungAuthorCertificate(input = {}) {
         await samsungPwdStore.encryptPassword(password, authorPwdPath);
       } catch (pwdError) {
         // Map password storage error to envelope error code
-        const errorMsg = pwdError.message || String(pwdError);
-        if (errorMsg.includes("samsung_pwd_store_failed")) {
-          return formatError(COMMAND, "samsung_pwd_store_failed", errorMsg);
-        }
-        return formatError(
-          COMMAND,
-          "samsung_pwd_store_failed",
-          `Failed to encrypt password: ${errorMsg}`,
-        );
+        return pwdStoreErrorEnvelope(COMMAND, startTime, pwdError);
       }
 
       // Verify files exist
-      if (!fs.existsSync(authorP12Path) || !fs.existsSync(authorPwdPath)) {
-        return formatError(
-          COMMAND,
-          "samsung_cert_generation_failed",
-          `Certificate generation reported success but files are missing at "${outputDir}".`,
-        );
-      }
+      const missing = missingCertFilesError(
+        COMMAND,
+        startTime,
+        authorP12Path,
+        authorPwdPath,
+        outputDir,
+      );
+      if (missing) return missing;
 
       const envelope = new Envelope(COMMAND);
       envelope.startTime = startTime;
@@ -510,10 +693,7 @@ async function generateSamsungAuthorCertificate(input = {}) {
     } catch (error) {
       // Clean up only this run's author artifacts — outputDir is shared with
       // distributor files, which must survive an author-generation failure
-      try {
-        fs.rmSync(authorP12Path, { force: true });
-        fs.rmSync(authorPwdPath, { force: true });
-      } catch (_) {}
+      removeCertFiles(authorP12Path, authorPwdPath);
       throw error;
     }
   } catch (error) {
@@ -526,13 +706,7 @@ async function generateSamsungAuthorCertificate(input = {}) {
     );
   } finally {
     // Remove the temporary directory holding the unencrypted private key
-    if (tempDir) {
-      try {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      } catch (_) {
-        // best-effort cleanup
-      }
-    }
+    removeTempDir(tempDir);
   }
 }
 
@@ -663,6 +837,164 @@ function packageDistributorPkcs12(
 }
 
 /**
+ * Validate the distributor inputs: profile name, password, DUID list and
+ * privilege.
+ *
+ * @private
+ * @returns {{profileName: string, password: string, duidList: string[],
+ *   normalizedPrivilege: string}|{error: object}}
+ */
+function validateDistributorInput(COMMAND, startTime, input) {
+  const { password } = input;
+  const named = requireProfileName(COMMAND, startTime, input);
+  const privilege = input.privilege || "Public";
+  if (named.error) return named;
+  const passwordError = validateCertPassword(COMMAND, startTime, password);
+  if (passwordError) return { error: passwordError };
+
+  // Parse and validate DUID list
+  let duidList = input.duidList;
+  if (!duidList) {
+    return {
+      error: formatError(
+        COMMAND,
+        "invalid_parameters",
+        "DUID list is required (--duid-list or --duid-file).",
+        null,
+        startTime,
+      ),
+    };
+  }
+
+  // If duidList is a string, parse it
+  if (typeof duidList === "string") {
+    const parsed = samsungDuid.parseDuidList(duidList);
+    duidList = parsed.duids;
+  }
+
+  if (!Array.isArray(duidList) || duidList.length === 0) {
+    return {
+      error: formatError(
+        COMMAND,
+        "invalid_parameters",
+        "At least one DUID is required.",
+        null,
+        startTime,
+      ),
+    };
+  }
+
+  // Validate privilege
+  const normalizedPrivilege =
+    privilege.charAt(0).toUpperCase() + privilege.slice(1).toLowerCase();
+  if (normalizedPrivilege !== "Public" && normalizedPrivilege !== "Partner") {
+    return {
+      error: formatError(
+        COMMAND,
+        "invalid_parameters",
+        `Invalid privilege "${privilege}". Must be "Public" or "Partner".`,
+        null,
+        startTime,
+      ),
+    };
+  }
+  return {
+    profileName: named.profileName,
+    password,
+    duidList,
+    normalizedPrivilege,
+  };
+}
+
+/**
+ * Submit the distributor CSR to the Samsung v1 endpoint and, in VD mode, to
+ * the v3 endpoint, writing each response into the profile directory.
+ *
+ * @private
+ * @returns {Promise<{v3CertPem: string|null}|{error: object}>}
+ */
+async function requestDistributorCertificates(COMMAND, startTime, request) {
+  const { csr, authInfo, normalizedPrivilege, bVDMode, isV0, outputDir } =
+    request;
+
+  // Step 4: Submit CSR to Samsung v1 distributor endpoint
+  let v1Response;
+  try {
+    v1Response = await samsungApi.signDistributorCsrWithSamsung({
+      csrContent: csr,
+      accessToken: authInfo.accessToken,
+      userId: authInfo.userId,
+      privilege: normalizedPrivilege,
+      bVDMode,
+      isV0,
+      apiVersion: "v1",
+      csrFileName: "distributor.csr",
+    });
+  } catch (apiError) {
+    return {
+      error: samsungApiErrorEnvelope(
+        COMMAND,
+        startTime,
+        apiError,
+        "Failed to get distributor certificate from Samsung: ",
+      ),
+    };
+  }
+
+  // The v1 response may be a device-profile XML or a PEM certificate
+  const v1CertPath = path.join(outputDir, "device-profile.xml");
+  fs.writeFileSync(v1CertPath, v1Response, "utf-8");
+
+  // For VD mode, fetch an additional certificate from the v3 endpoint
+  let v3CertPem = null;
+  if (bVDMode) {
+    try {
+      v3CertPem = await samsungApi.signDistributorCsrWithSamsung({
+        csrContent: csr,
+        accessToken: authInfo.accessToken,
+        userId: authInfo.userId,
+        privilege: normalizedPrivilege,
+        bVDMode: false, // don't add VD platform again for v3
+        isV0: false,
+        apiVersion: "v3",
+        csrFileName: "distributor.csr",
+      });
+    } catch (apiError) {
+      return {
+        error: samsungApiErrorEnvelope(
+          COMMAND,
+          startTime,
+          apiError,
+          "VD mode v3 fetch failed: ",
+          "VD mode v3 fetch failed: ",
+        ),
+      };
+    }
+
+    // Write the v3 certificate
+    const v3CertPath = path.join(outputDir, "distributor.crt");
+    fs.writeFileSync(v3CertPath, v3CertPem, "utf-8");
+  }
+  return { v3CertPem };
+}
+
+/**
+ * Delete auth data after successful distributor cert generation (per reference).
+ *
+ * @private
+ */
+function removeSamsungAuthData(outputDir) {
+  const authDataFile = path.join(outputDir, "samsung-auth-data.json");
+  try {
+    if (fs.existsSync(authDataFile)) {
+      fs.unlinkSync(authDataFile);
+    }
+  } catch (_) {
+    // best-effort cleanup
+  }
+}
+
+/**
  * Generate a Samsung distributor certificate.
  *
  * The distributor certificate flow differs from the author flow:
@@ -686,91 +1018,20 @@ async function generateSamsungDistributorCertificate(input = {}) {
   let tempDir = null;
 
   try {
-    const { password } = input;
-    const profileName =
-      typeof input.profileName === "string" ? input.profileName.trim() : "";
-    const privilege = input.privilege || "Public";
+    const checked = validateDistributorInput(COMMAND, startTime, input);
+    if (checked.error) return checked.error;
+    const { profileName, password, duidList, normalizedPrivilege } = checked;
 
-    if (!profileName) {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "Profile name is required (--profile-name).",
-      );
-    }
-    if (!password || typeof password !== "string") {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "Password is required (--password).",
-      );
-    }
-    if (!isValidPassword(password)) {
-      return formatError(
-        COMMAND,
-        "cert_password_invalid",
-        "Password must be at least 8 characters and include an uppercase letter, a lowercase letter, and a digit.",
-      );
-    }
-
-    // Parse and validate DUID list
-    let duidList = input.duidList;
-    if (!duidList) {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "DUID list is required (--duid-list or --duid-file).",
-      );
-    }
-
-    // If duidList is a string, parse it
-    if (typeof duidList === "string") {
-      const parsed = samsungDuid.parseDuidList(duidList);
-      duidList = parsed.duids;
-    }
-
-    if (!Array.isArray(duidList) || duidList.length === 0) {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        "At least one DUID is required.",
-      );
-    }
-
-    // Validate privilege
-    const normalizedPrivilege =
-      privilege.charAt(0).toUpperCase() + privilege.slice(1).toLowerCase();
-    if (normalizedPrivilege !== "Public" && normalizedPrivilege !== "Partner") {
-      return formatError(
-        COMMAND,
-        "invalid_parameters",
-        `Invalid privilege "${privilege}". Must be "Public" or "Partner".`,
-      );
-    }
-
-    const resolved = resolveSdkDataPath();
-    if (resolved.error) {
-      return formatError(COMMAND, "sdk_path_not_set", resolved.error);
-    }
-
-    const openssl = resolveOpenSslBinary(resolved.sdkRoot);
-    const outputDir = path.join(
-      resolved.dataPath,
-      "keystore",
-      "samsung",
+    const target = resolveSamsungCertTarget(
+      COMMAND,
+      startTime,
       profileName,
+      "distributor",
     );
-    const distributorP12Path = path.join(outputDir, "distributor.p12");
-    const distributorPwdPath = path.join(outputDir, "distributor.pwd");
-
-    // Check if certificate already exists
-    if (fs.existsSync(distributorP12Path)) {
-      return formatError(
-        COMMAND,
-        "cert_already_exists",
-        `Samsung distributor certificate already exists at "${distributorP12Path}". Certificates are never overwritten. Remove the profile and try again, or use a unique --profile-name.`,
-      );
-    }
+    if (target.error) return target.error;
+    const { resolved, openssl, outputDir } = target;
+    const distributorP12Path = target.p12Path;
+    const distributorPwdPath = target.pwdPath;
 
     // Create output directory
     fs.mkdirSync(outputDir, { recursive: true });
@@ -788,19 +1049,7 @@ async function generateSamsungDistributorCertificate(input = {}) {
       try {
         authInfo = await samsungAuth.getSamsungAccessToken(profileName);
       } catch (authError) {
-        let errorCode = "samsung_auth_failed";
-        if (authError.message.includes("samsung_auth_timeout")) {
-          errorCode = "samsung_auth_timeout";
-        } else if (
-          authError.message.includes("samsung_auth_port_unavailable")
-        ) {
-          errorCode = "samsung_auth_port_unavailable";
-        } else if (
-          authError.message.includes("samsung_auth_invalid_response")
-        ) {
-          errorCode = "samsung_auth_invalid_response";
-        }
-        return formatError(COMMAND, errorCode, authError.message);
+        return samsungAuthErrorEnvelope(COMMAND, startTime, authError);
       }
 
       // Determine device version and VD mode
@@ -808,69 +1057,16 @@ async function generateSamsungDistributorCertificate(input = {}) {
       const bVDMode = true; // VD mode is always selected (matching reference)
       const isV0 = minVersion === samsungDuid.DeviceVersion.V0;
 
-      // Step 4: Submit CSR to Samsung v1 distributor endpoint
-      let v1Response;
-      try {
-        v1Response = await samsungApi.signDistributorCsrWithSamsung({
-          csrContent: csr,
-          accessToken: authInfo.accessToken,
-          userId: authInfo.userId,
-          privilege: normalizedPrivilege,
-          bVDMode,
-          isV0,
-          apiVersion: "v1",
-          csrFileName: "distributor.csr",
-        });
-      } catch (apiError) {
-        const errorMsg = apiError.message || String(apiError);
-        if (errorMsg.includes("samsung_api_error")) {
-          return formatError(COMMAND, "samsung_api_failed", errorMsg);
-        }
-        return formatError(
-          COMMAND,
-          "samsung_cert_generation_failed",
-          `Failed to get distributor certificate from Samsung: ${errorMsg}`,
-        );
-      }
-
-      // The v1 response may be a device-profile XML or a PEM certificate
-      const v1CertPath = path.join(outputDir, "device-profile.xml");
-      fs.writeFileSync(v1CertPath, v1Response, "utf-8");
-
-      // For VD mode, fetch an additional certificate from the v3 endpoint
-      let v3CertPem = null;
-      if (bVDMode) {
-        try {
-          v3CertPem = await samsungApi.signDistributorCsrWithSamsung({
-            csrContent: csr,
-            accessToken: authInfo.accessToken,
-            userId: authInfo.userId,
-            privilege: normalizedPrivilege,
-            bVDMode: false, // don't add VD platform again for v3
-            isV0: false,
-            apiVersion: "v3",
-            csrFileName: "distributor.csr",
-          });
-        } catch (apiError) {
-          const errorMsg = apiError.message || String(apiError);
-          if (errorMsg.includes("samsung_api_error")) {
-            return formatError(
-              COMMAND,
-              "samsung_api_failed",
-              `VD mode v3 fetch failed: ${errorMsg}`,
-            );
-          }
-          return formatError(
-            COMMAND,
-            "samsung_cert_generation_failed",
-            `VD mode v3 fetch failed: ${errorMsg}`,
-          );
-        }
-
-        // Write the v3 certificate
-        const v3CertPath = path.join(outputDir, "distributor.crt");
-        fs.writeFileSync(v3CertPath, v3CertPem, "utf-8");
-      }
+      // Step 4: Submit the CSR (v1, plus v3 in VD mode)
+      const signed = await requestDistributorCertificates(COMMAND, startTime, {
+        csr,
+        authInfo,
+        normalizedPrivilege,
+        bVDMode,
+        isV0,
+        outputDir,
+      });
+      if (signed.error) return signed.error;
 
       // Step 5: Resolve Samsung CA certificate based on privilege
       let caCertPath;
@@ -879,12 +1075,18 @@ async function generateSamsungDistributorCertificate(input = {}) {
           normalizedPrivilege === "Partner" ? "partner2" : "public2",
         );
       } catch (error) {
-        return formatError(COMMAND, "samsung_ca_not_found", error.message);
+        return formatError(
+          COMMAND,
+          "samsung_ca_not_found",
+          error.message,
+          null,
+          startTime,
+        );
       }
 
       // Step 6: Package into distributor.p12
       // Use the v3 certificate if available (VD mode), otherwise use v1 response
-      const signedCertPath = v3CertPem
+      const signedCertPath = signed.v3CertPem
         ? path.join(outputDir, "distributor.crt")
         : path.join(outputDir, "device-profile.xml");
 
@@ -902,38 +1104,20 @@ async function generateSamsungDistributorCertificate(input = {}) {
       try {
         await samsungPwdStore.encryptPassword(password, distributorPwdPath);
       } catch (pwdError) {
-        const errorMsg = pwdError.message || String(pwdError);
-        if (errorMsg.includes("samsung_pwd_store_failed")) {
-          return formatError(COMMAND, "samsung_pwd_store_failed", errorMsg);
-        }
-        return formatError(
-          COMMAND,
-          "samsung_pwd_store_failed",
-          `Failed to encrypt password: ${errorMsg}`,
-        );
+        return pwdStoreErrorEnvelope(COMMAND, startTime, pwdError);
       }
 
       // Verify files exist
-      if (
-        !fs.existsSync(distributorP12Path) ||
-        !fs.existsSync(distributorPwdPath)
-      ) {
-        return formatError(
-          COMMAND,
-          "samsung_cert_generation_failed",
-          `Certificate generation reported success but files are missing at "${outputDir}".`,
-        );
-      }
+      const missing = missingCertFilesError(
+        COMMAND,
+        startTime,
+        distributorP12Path,
+        distributorPwdPath,
+        outputDir,
+      );
+      if (missing) return missing;
 
-      // Delete auth data after successful distributor cert generation (per reference)
-      const authDataFile = path.join(outputDir, "samsung-auth-data.json");
-      try {
-        if (fs.existsSync(authDataFile)) {
-          fs.unlinkSync(authDataFile);
-        }
-      } catch (_) {
-        // best-effort cleanup
-      }
+      removeSamsungAuthData(outputDir);
 
       const envelope = new Envelope(COMMAND);
       envelope.startTime = startTime;
@@ -953,10 +1137,7 @@ async function generateSamsungDistributorCertificate(input = {}) {
     } catch (error) {
       // Clean up only this run's distributor artifacts — outputDir also holds
       // the author certificate, which must survive a distributor failure
-      try {
-        fs.rmSync(distributorP12Path, { force: true });
-        fs.rmSync(distributorPwdPath, { force: true });
-      } catch (_) {}
+      removeCertFiles(distributorP12Path, distributorPwdPath);
       throw error;
     }
   } catch (error) {
@@ -968,13 +1149,7 @@ async function generateSamsungDistributorCertificate(input = {}) {
       startTime,
     );
   } finally {
-    if (tempDir) {
-      try {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-      } catch (_) {
-        // best-effort cleanup
-      }
-    }
+    removeTempDir(tempDir);
   }
 }
 
@@ -1007,6 +1182,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "invalid_parameters",
         "Source path is required (--source).",
+        null,
+        startTime,
       );
     }
     if (!password || typeof password !== "string") {
@@ -1014,6 +1191,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "invalid_parameters",
         "Password is required (--password).",
+        null,
+        startTime,
       );
     }
     if (!profileName) {
@@ -1021,6 +1200,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "invalid_parameters",
         "Profile name is required (--profile-name).",
+        null,
+        startTime,
       );
     }
 
@@ -1029,6 +1210,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "invalid_parameters",
         `Invalid certificate type "${certType}". Must be "author" or "distributor".`,
+        null,
+        startTime,
       );
     }
 
@@ -1037,12 +1220,20 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "invalid_parameters",
         `Source file not found: ${sourcePath}`,
+        null,
+        startTime,
       );
     }
 
     const resolved = resolveSdkDataPath();
     if (resolved.error) {
-      return formatError(COMMAND, "sdk_path_not_set", resolved.error);
+      return formatError(
+        COMMAND,
+        "sdk_path_not_set",
+        resolved.error,
+        null,
+        startTime,
+      );
     }
 
     const outputDir = path.join(
@@ -1065,6 +1256,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "cert_already_exists",
         `Certificate already exists at "${destPath}". Use --overwrite to replace it.`,
+        null,
+        startTime,
       );
     }
 
@@ -1099,6 +1292,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "cert_import_failed",
         `Failed to validate .p12 file: ${detail || err.message}. Check the password and file format.`,
+        null,
+        startTime,
       );
     }
 
@@ -1110,6 +1305,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "cert_import_failed",
         `Failed to copy certificate: ${err.message}`,
+        null,
+        startTime,
       );
     }
 
@@ -1123,12 +1320,20 @@ async function importSamsungCertificate(input = {}) {
       } catch (_) {}
       const errorMsg = pwdError.message || String(pwdError);
       if (errorMsg.includes("samsung_pwd_store_failed")) {
-        return formatError(COMMAND, "samsung_pwd_store_failed", errorMsg);
+        return formatError(
+          COMMAND,
+          "samsung_pwd_store_failed",
+          errorMsg,
+          null,
+          startTime,
+        );
       }
       return formatError(
         COMMAND,
         "samsung_pwd_store_failed",
         `Failed to encrypt password: ${errorMsg}`,
+        null,
+        startTime,
       );
     }
 
@@ -1138,6 +1343,8 @@ async function importSamsungCertificate(input = {}) {
         COMMAND,
         "cert_import_failed",
         `Import reported success but files are missing at "${outputDir}".`,
+        null,
+        startTime,
       );
     }
 
@@ -1198,6 +1405,8 @@ async function createSamsungProfile(input = {}) {
         COMMAND,
         "invalid_parameters",
         "Profile name is required (--profile-name).",
+        null,
+        startTime,
       );
     }
 
@@ -1208,12 +1417,20 @@ async function createSamsungProfile(input = {}) {
         COMMAND,
         "invalid_parameters",
         `Invalid privilege "${privilege}". Must be "Public" or "Partner".`,
+        null,
+        startTime,
       );
     }
 
     const resolved = resolveSdkDataPath();
     if (resolved.error) {
-      return formatError(COMMAND, "sdk_path_not_set", resolved.error);
+      return formatError(
+        COMMAND,
+        "sdk_path_not_set",
+        resolved.error,
+        null,
+        startTime,
+      );
     }
 
     const samsungDir = path.join(
@@ -1233,6 +1450,8 @@ async function createSamsungProfile(input = {}) {
         COMMAND,
         "profile_not_found",
         `Samsung author certificate not found at "${authorP12Path}". Run generate-samsung-author first.`,
+        null,
+        startTime,
       );
     }
 
@@ -1242,6 +1461,8 @@ async function createSamsungProfile(input = {}) {
         COMMAND,
         "profile_not_found",
         `Samsung distributor certificate not found at "${distributorP12Path}". Run generate-samsung-distributor first.`,
+        null,
+        startTime,
       );
     }
 
@@ -1253,6 +1474,8 @@ async function createSamsungProfile(input = {}) {
           COMMAND,
           "profile_not_found",
           `Author password file not found at "${authorPwdPath}". Provide --author-password.`,
+          null,
+          startTime,
         );
       }
       try {
@@ -1262,6 +1485,8 @@ async function createSamsungProfile(input = {}) {
           COMMAND,
           "samsung_pwd_store_failed",
           `Failed to decrypt author password: ${err.message}`,
+          null,
+          startTime,
         );
       }
     }
@@ -1277,6 +1502,8 @@ async function createSamsungProfile(input = {}) {
           COMMAND,
           "samsung_pwd_store_failed",
           `Failed to decrypt distributor password: ${err.message}`,
+          null,
+          startTime,
         );
       }
     }
@@ -1288,14 +1515,26 @@ async function createSamsungProfile(input = {}) {
         normalizedPrivilege === "Partner" ? "partner2" : "public2",
       );
     } catch (error) {
-      return formatError(COMMAND, "samsung_ca_not_found", error.message);
+      return formatError(
+        COMMAND,
+        "samsung_ca_not_found",
+        error.message,
+        null,
+        startTime,
+      );
     }
 
     // Resolve tz binary
     const { resolveTzBinary } = require("./certificate");
     const resolvedTz = resolveTzBinary();
     if (resolvedTz.error) {
-      return formatError(COMMAND, "sdk_path_not_set", resolvedTz.error);
+      return formatError(
+        COMMAND,
+        "sdk_path_not_set",
+        resolvedTz.error,
+        null,
+        startTime,
+      );
     }
 
     // Build profiles.xml path
@@ -1342,6 +1581,8 @@ async function createSamsungProfile(input = {}) {
         COMMAND,
         "profile_creation_failed",
         `Failed to create Samsung signing profile: ${tzError || err.message}`,
+        null,
+        startTime,
       );
     }
 
