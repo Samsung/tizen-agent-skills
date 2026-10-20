@@ -7,18 +7,25 @@
 # Fallback chain (stops at first success):
 #
 # For emulator targets (serial starts with "emulator-"):
-#   1. Device-side: enlightenment_info dump (native resolution; needs root)
+#   1. Device-side: enlightenment_info / winfo dump (native resolution; needs root;
+#                   re-dumps with HWC off when the first dump is a flat color)
 #   2. Host-side:   Win32 API window capture (CopyFromScreen)
 #   3. Device-side: screencapture
 #   4. Device-side: capture_screen
 #   5. Device-side: /dev/fb0 framebuffer read
+#   6. Host-side:   VNC capture (Wayland/HWC targets; needs a VNC server)
 #
 # For physical device targets:
-#   1. Device-side: enlightenment_info dump (native resolution; needs root)
+#   1. Device-side: enlightenment_info / winfo dump (native resolution; needs root;
+#                   re-dumps with HWC off when the first dump is a flat color)
 #   2. Device-side: /dev/fb0 framebuffer read
 #   3. Device-side: screencapture
 #   4. Device-side: capture_screen
-#   5. Host-side:   Win32 API window capture (rarely applicable)
+#   5. Host-side:   VNC capture (DA / Wayland+HWC targets whose dumps are black)
+#   6. Host-side:   Win32 API window capture (rarely applicable)
+#
+# VNC environment (see Try-Vnc): TIZEN_VNC_SERVER, TIZEN_VNC_PORT (5900),
+# TIZEN_VNC_LOCAL_PORT (15900), TIZEN_VNC_PASSWORD, TIZEN_VNC_TIMEOUT (15 s).
 #
 # Usage:
 #   .\tizen-screenshot.ps1 [-Serial <serial>] [-OutputPath <path>]
@@ -556,12 +563,21 @@ function Try-DeviceCapture {
 #        is required and the previous mode is restored afterwards.
 #     2. The tool exits 0 even for an unknown option, so success must be judged
 #        by the produced file, never by the exit code.
+#
+#   DA (appliance) and other Wayland/HWC targets add two more:
+#     3. The binary may ship as `winfo` (same e_info client, same options). It
+#        is resolved after elevation - as `owner` neither is executable.
+#     4. With HWC active the UI sits on TDM overlay planes the compositor never
+#        draws into its own buffer, so -dump_screen is solid black. When forms
+#        1-2 come back uniform, form 3 runs `-hwc 0`, dumps again, and always
+#        restores `-hwc 1`.
+#   Mirrors try_enlightenment_info in tizen-screenshot.sh.
 # ============================================================================
 
 function Try-EnlightenmentInfo {
     param([string]$SdbPath, [string]$DeviceSerial, [string]$OutPath)
 
-    Write-Info "Trying: device-side enlightenment_info..."
+    Write-Info "Trying: device-side enlightenment_info / winfo..."
 
     $tempPng = New-TempPath ".png"
     $wasRoot = $false
@@ -585,16 +601,27 @@ function Try-EnlightenmentInfo {
     $devName = "tizen_sshot_$PID.png"
     $pullDir = Join-Path ([System.IO.Path]::GetTempPath()) "tizen_screenshot_e_$PID"
 
+    # Which e_info client does this image ship? Unknown -> the old behavior.
+    $eTool = ((Invoke-Sdb $SdbPath $DeviceSerial shell "command -v enlightenment_info || command -v winfo" | Out-String).Trim() -split "`r?`n")[0]
+    $eTool = ($eTool -split '/')[-1]
+    if ($eTool -ne "enlightenment_info" -and $eTool -ne "winfo") { $eTool = "enlightenment_info" }
+    Write-Info "e_info client: $eTool"
+
+    # -dump_screen into $Dest (a host path); the caller judges the file.
+    function Invoke-DumpScreen([string]$Dest) {
+        Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
+        Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump_screen -p /tmp/ -n $devName" | Out-Null
+        Invoke-Sdb $SdbPath $DeviceSerial pull "/tmp/$devName" $Dest | Out-Null
+        Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
+    }
+
     try {
         # --- form 1: -dump_screen - one file, full screen, exact path ---
         # The tool exits 0 even for an unknown option, so judge by the file.
-        Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
-        Invoke-Sdb $SdbPath $DeviceSerial shell "enlightenment_info -dump_screen -p /tmp/ -n $devName" | Out-Null
-        Invoke-Sdb $SdbPath $DeviceSerial pull "/tmp/$devName" $tempPng | Out-Null
-        Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
+        Invoke-DumpScreen $tempPng
 
         if (Test-ValidOutput $tempPng) {
-            if (Accept-Capture -TempPath $tempPng -OutPath $OutPath -Method "enlightenment_info -dump_screen") {
+            if (Accept-Capture -TempPath $tempPng -OutPath $OutPath -Method "$eTool -dump_screen") {
                 return $true
             }
             # Uniform capture stashed - fall through to form 2 with root still on.
@@ -604,7 +631,7 @@ function Try-EnlightenmentInfo {
         # Note the space: `-dump topvwins`, not `-dump_topvwins`. The tool creates
         # its own timestamped subdirectory inside <DIR>, so the search recurses.
         Invoke-Sdb $SdbPath $DeviceSerial shell "rm -rf $dumpDir && mkdir -p $dumpDir" | Out-Null
-        Invoke-Sdb $SdbPath $DeviceSerial shell "enlightenment_info -dump topvwins $dumpDir" | Out-Null
+        Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump topvwins $dumpDir" | Out-Null
 
         New-Item -ItemType Directory -Path $pullDir -Force | Out-Null
         Invoke-Sdb $SdbPath $DeviceSerial pull $dumpDir $pullDir | Out-Null
@@ -613,8 +640,29 @@ function Try-EnlightenmentInfo {
                    Sort-Object Length -Descending | Select-Object -First 1
 
         if ($biggest -and (Test-ValidOutput $biggest.FullName)) {
-            if (Accept-Capture -TempPath $biggest.FullName -OutPath $OutPath -Method "enlightenment_info -dump topvwins") {
+            if (Accept-Capture -TempPath $biggest.FullName -OutPath $OutPath -Method "$eTool -dump topvwins") {
                 return $true
+            }
+        }
+
+        # --- form 3: HWC off, dump again, HWC back on ---
+        # Only after a flat capture: that is the HWC symptom, and toggling
+        # composition on a device that captured fine is not our call.
+        if ($script:UniformFallback) {
+            Write-Info "Capture was a single solid color - retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
+            Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
+            try {
+                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 0" | Out-Null
+                Start-Sleep -Seconds 1  # let the compositor redraw every plane through GL
+                Invoke-DumpScreen $tempPng
+            } finally {
+                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 1" | Out-Null
+                Write-Info "HWC re-enabled"
+            }
+            if (Test-ValidOutput $tempPng) {
+                if (Accept-Capture -TempPath $tempPng -OutPath $OutPath -Method "$eTool -dump_screen (hwc off)") {
+                    return $true
+                }
             }
         }
     } catch {
@@ -732,6 +780,114 @@ print(f"  Converted: {width}x{height} {bpp}bpp -> {png_path}")
 }
 
 # ============================================================================
+# Method: Host-side VNC capture
+#   Last resort for Wayland/HWC targets (DA appliances) where every on-device
+#   dump is black: a VNC server on the device (or one the user names) is fed by
+#   the display pipeline itself, overlay planes included.
+#
+#   Server: $env:TIZEN_VNC_SERVER (vncdotool syntax, host::port or
+#   host:display) when set; otherwise device TCP $env:TIZEN_VNC_PORT (default
+#   5900) is forwarded to localhost:$env:TIZEN_VNC_LOCAL_PORT (default 15900)
+#   over sdb and removed afterwards. Password: $env:TIZEN_VNC_PASSWORD (read
+#   by Python from the environment, never passed on the command line).
+#   Client: Python vncdotool (`pip install vncdotool`).
+#   Mirrors try_vnc in tizen-screenshot.sh (which also accepts vncsnapshot).
+# ============================================================================
+
+function Try-Vnc {
+    param([string]$SdbPath, [string]$DeviceSerial, [string]$OutPath)
+
+    Write-Info "Trying: host-side VNC capture..."
+
+    $pythonExe = Find-PythonWithPil
+    if ($pythonExe) {
+        $null = Invoke-Native -Exe $pythonExe -Arguments @('-c', 'import vncdotool') -MergeStderr
+        if ($LASTEXITCODE -ne 0) { $pythonExe = $null }
+    }
+    if (-not $pythonExe) {
+        Write-Warn "No VNC client on host (pip install vncdotool) - skipping"
+        return $false
+    }
+
+    $timeout = if ($env:TIZEN_VNC_TIMEOUT) { $env:TIZEN_VNC_TIMEOUT } else { "15" }
+    $server = $env:TIZEN_VNC_SERVER
+    $fwdPort = $null
+    if (-not $server) {
+        $fwdPort = if ($env:TIZEN_VNC_LOCAL_PORT) { $env:TIZEN_VNC_LOCAL_PORT } else { "15900" }
+        $devPort = if ($env:TIZEN_VNC_PORT) { $env:TIZEN_VNC_PORT } else { "5900" }
+        Invoke-Sdb $SdbPath $DeviceSerial forward "tcp:$fwdPort" "tcp:$devPort" | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warn "sdb forward tcp:$fwdPort -> device tcp:$devPort failed - skipping"
+            return $false
+        }
+        $server = "127.0.0.1::$fwdPort"
+    }
+    Write-Info "VNC server: $server (client: vncdotool)"
+
+    # Single-quoted here-string: Python's text reaches the file untouched.
+    $pyScript = @'
+# --- VNC capture (vncdotool) ---
+# This block is byte-identical in tizen-screenshot.sh and tizen-screenshot.ps1;
+# common/lib/tests/screenshot-fallbacks.test.js fails when the two drift.
+import os, sys, threading
+from vncdotool import api
+
+server, out_path, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
+password = os.environ.get("TIZEN_VNC_PASSWORD") or None
+result = {}
+
+def capture():
+    try:
+        client = api.connect(server, password=password)
+        client.captureScreen(out_path)
+        client.disconnect()
+        result["ok"] = True
+    except Exception as exc:
+        result["error"] = str(exc) or type(exc).__name__
+
+# vncdotool runs a Twisted reactor in a thread and a dead server can hang the
+# connect forever, so bound it here and hard-exit past the reactor.
+worker = threading.Thread(target=capture, daemon=True)
+worker.start()
+worker.join(timeout)
+try:
+    api.shutdown()
+except Exception:
+    pass
+if not result.get("ok"):
+    print("  VNC capture failed: " + result.get("error", "timed out after %ds" % timeout), file=sys.stderr)
+    os._exit(1)
+print("  Captured via vncdotool -> " + out_path)
+os._exit(0)
+'@
+
+    $pyFile = New-TempPath ".py"
+    $pyScript | Out-File -FilePath $pyFile -Encoding utf8
+    $tempPng = New-TempPath ".png"
+    Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
+
+    try {
+        Invoke-Native -Exe $pythonExe -Arguments @($pyFile, $server, $tempPng, "$timeout") -MergeStderr | Out-Host
+        $success = $LASTEXITCODE -eq 0
+    } catch {
+        $success = $false
+    } finally {
+        Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
+        # '--remove' quoted: a bare --name token would bind as a parameter of Invoke-Sdb.
+        if ($fwdPort) { Invoke-Sdb $SdbPath $DeviceSerial forward '--remove' "tcp:$fwdPort" | Out-Null }
+    }
+
+    $result = $false
+    if ($success -and (Test-ValidOutput $tempPng)) {
+        $result = Accept-Capture -TempPath $tempPng -OutPath $OutPath -Method "host-side VNC (vncdotool)"
+    }
+    if (-not $result) { Write-Warn "VNC capture produced no usable image - skipping" }
+
+    Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
+    return $result
+}
+
+# ============================================================================
 # Main
 # ============================================================================
 
@@ -754,11 +910,13 @@ if ($isEmulator) {
     if (Try-DeviceCapture -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath -Tool "screencapture") { exit 0 }
     if (Try-DeviceCapture -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath -Tool "capture_screen") { exit 0 }
     if (Try-Framebuffer -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
+    if (Try-Vnc -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
 } else {
     if (Try-EnlightenmentInfo -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
     if (Try-Framebuffer -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
     if (Try-DeviceCapture -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath -Tool "screencapture") { exit 0 }
     if (Try-DeviceCapture -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath -Tool "capture_screen") { exit 0 }
+    if (Try-Vnc -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
     if (Try-HostWindowCapture -SdbPath $SdbPath -DeviceSerial $DeviceSerial -OutPath $OutputPath) { exit 0 }
 }
 

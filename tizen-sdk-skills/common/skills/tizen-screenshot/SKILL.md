@@ -106,6 +106,7 @@ Try in order; stop at the first success:
 | 3     | Screenshot (capture_screen)     | `sdb -s "$S" shell capture_screen /tmp/sshot.png` → `pull` → `shell rm /tmp/sshot.png`                                                                    | When `screencapture` is missing. Some IoT images have neither — continue to fallback 4.                                                                                                                                                                                                                                                                        |
 | 0     | Screenshot (enlightenment_info) | `sdb -s "$S" root on` → `shell enlightenment_info -dump_screen -p /tmp/ -n sshot.png` → `pull /tmp/sshot.png` → `shell rm -f /tmp/sshot.png` → `root off` | **Tried first.** Native resolution, no window chrome. Binary is `-r-xr-x--- root:root`, so root is required. It exits 0 even for an unknown option — verify the FILE, not `$?`. Older images instead take `-dump topvwins <DIR>` (note the space), which creates its own timestamped subdirectory of per-window PNGs: pull the directory and keep the largest. |
 | 4     | Screenshot (framebuffer)        | `sdb -s "$S" shell dd if=/dev/fb0 of=/tmp/fb0.raw bs=<stride> count=<height>` → `pull` → host-side raw → png conversion                                   | Direct framebuffer read. Read resolution/bpp/stride from `/sys/class/graphics/fb0/`. Convert on host with Python PIL. **Warning:** On emulators this often only captures the kernel boot console, not the actual GUI.                                                                                                                                          |
+| 5     | Screenshot (host VNC)           | See "Wayland/HWC targets" below                                                                                                                           | Last resort; skips when the host has no VNC client.                                                                                                                                                                                                                                                                                                            |
 
 #### Physical device targets
 
@@ -117,7 +118,21 @@ Try in order; stop at the first success:
 | 2     | Screenshot (screencapture)      | `sdb -s "$S" shell screencapture /tmp/sshot.png` → `pull` → `shell rm /tmp/sshot.png`                                                                     | Mobile/wearable profiles.                                                                                                                                         |
 | 3     | Screenshot (capture_screen)     | `sdb -s "$S" shell capture_screen /tmp/sshot.png` → `pull` → `shell rm /tmp/sshot.png`                                                                    | When `screencapture` is missing.                                                                                                                                  |
 | 0     | Screenshot (enlightenment_info) | `sdb -s "$S" root on` → `shell enlightenment_info -dump_screen -p /tmp/ -n sshot.png` → `pull /tmp/sshot.png` → `shell rm -f /tmp/sshot.png` → `root off` | **Tried first.** Returns the composited UI at native resolution. Requires root; skips cleanly when `sdb root on` is refused, which is the norm on retail devices. |
-| 4     | Screenshot (host xwd)           | Host-side: `xwininfo -root -tree` → find emulator window ID → `xwd -id <win_id> -out sshot.xwd` → Python PIL convert to PNG                               | Rarely applicable to physical devices (no X11 window on host).                                                                                                    |
+| 4     | Screenshot (host VNC)           | See "Wayland/HWC targets" below                                                                                                                           | For DA appliances and other Wayland/HWC devices whose on-device dumps are black.                                                                                  |
+| 5     | Screenshot (host xwd)           | Host-side: `xwininfo -root -tree` → find emulator window ID → `xwd -id <win_id> -out sshot.xwd` → Python PIL convert to PNG                               | Rarely applicable to physical devices (no X11 window on host).                                                                                                    |
+
+#### Wayland/HWC targets (DA appliances)
+
+With HWC (hardware composer) on, the UI sits on TDM overlay planes that the compositor never draws into its own buffer, so `-dump_screen`, `/dev/fb0` and the capture tools all return **solid black**. Any capture that is one flat color is set aside and the chain moves on. Two steps handle this case:
+
+1. **`winfo` and HWC off** (part of the `enlightenment_info` step). Some images ship the e_info client as `winfo`. The script looks for it on the device after `sdb root on`. If the dump is one flat color, the script runs `<tool> -hwc 0` so that every plane is GL-composited. It then runs `-dump_screen` again and always runs `<tool> -hwc 1` afterwards. `capture_method` is then `enlightenment_info -dump_screen (hwc off)` or `winfo -dump_screen (hwc off)`.
+2. **Host-side VNC.** This step runs after every on-device method, and only when the host has a VNC client:
+   - Client: Python `vncdotool` (`pip install vncdotool`; Windows, macOS, Linux), or `vncsnapshot` (`sudo apt install vncsnapshot` on Ubuntu). `vncsnapshot` is Linux-only here and does not support passwords.
+   - Server: by default `sdb forward tcp:15900 tcp:5900` to the device's own VNC server, then `forward --remove` afterwards. Set `TIZEN_VNC_SERVER` (`host::port` or `host:display`) to use a different server.
+   - Other settings, all environment variables: `TIZEN_VNC_PORT` (device port, default 5900), `TIZEN_VNC_LOCAL_PORT` (default 15900), `TIZEN_VNC_PASSWORD` (vncdotool only; read from the environment, never from the command line), `TIZEN_VNC_TIMEOUT` (default 15 s).
+   - `capture_method` is `host-side VNC (vncdotool)` or `host-side VNC (vncsnapshot)`.
+
+If every method still returns a flat color and the host has no VNC client, the `uniform_image` warning has a second line that says what to install. Relay that line to the user; do not install packages yourself.
 
 **Host-side xwd method (detailed steps):**
 
@@ -235,6 +250,7 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 3. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 — `capture_method`, 해상도, 저장 경로.
    `capture_method`가 `framebuffer`면 커널 콘솔만 찍혔을 수 있다고, `warnings`에
    `uniform_image`가 있으면 단색 화면(꺼짐/렌더링 실패 가능)이라고 한 줄 경고한다.
+   `capture_method`에 `(hwc off)`가 붙어 있으면 HWC를 잠시 끄고 캡처한 뒤 다시 켰다고 알린다.
 4. 필요하면 다음 단계 제안을 1줄 추가한다.
 
 ### `base64` 필드만 예외 — 플레이스홀더로 치환

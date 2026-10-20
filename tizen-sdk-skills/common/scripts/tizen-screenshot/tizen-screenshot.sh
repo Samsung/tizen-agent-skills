@@ -8,18 +8,22 @@
 # Fallback chain (stops at first success):
 #
 # For emulator targets (serial starts with "emulator-"):
-#   1. Device-side: enlightenment_info dump     (native resolution, no chrome; needs root)
+#   1. Device-side: enlightenment_info / winfo dump (native resolution, no chrome; needs root;
+#                   re-dumps with HWC off when the first dump is a flat color)
 #   2. Host-side:   xwd on emulator X11 window  (downscaled, includes window chrome)
 #   3. Device-side: screencapture               (mobile/wearable profiles)
 #   4. Device-side: capture_screen               (some IoT images)
 #   5. Device-side: /dev/fb0 framebuffer read   (may only capture kernel console)
+#   6. Host-side:   VNC capture                 (Wayland/HWC targets; needs a VNC server)
 #
 # For physical device targets:
-#   1. Device-side: enlightenment_info dump     (native resolution; needs root)
+#   1. Device-side: enlightenment_info / winfo dump (native resolution; needs root;
+#                   re-dumps with HWC off when the first dump is a flat color)
 #   2. Device-side: /dev/fb0 framebuffer read  (most reliable on devices)
 #   3. Device-side: screencapture               (mobile/wearable profiles)
 #   4. Device-side: capture_screen               (some IoT images)
-#   5. Host-side:   xwd on emulator X11 window  (rarely applicable)
+#   5. Host-side:   VNC capture                 (DA / Wayland+HWC targets whose dumps are black)
+#   6. Host-side:   xwd on emulator X11 window  (rarely applicable)
 #
 # Usage:
 #   tizen-screenshot.sh [serial] [output_path]
@@ -32,6 +36,16 @@
 #   - sdb (from Tizen Studio)
 #   - For framebuffer method: python3 with PIL/Pillow
 #   - For host-side xwd method: xwd, xwininfo (X11 utilities), python3 with PIL/Pillow
+#   - For host-side VNC method: python3 with PIL/Pillow and vncdotool, or vncsnapshot
+#     (Ubuntu: apt install vncsnapshot); a VNC server on the device or $TIZEN_VNC_SERVER
+#
+# Environment (VNC method only):
+#   TIZEN_VNC_SERVER      VNC server to use instead of the sdb-forwarded device port
+#                         (vncdotool syntax: host::port or host:display)
+#   TIZEN_VNC_PORT        device-side VNC port to forward (default 5900)
+#   TIZEN_VNC_LOCAL_PORT  host-side forward port (default 15900)
+#   TIZEN_VNC_PASSWORD    VNC password (vncdotool only)
+#   TIZEN_VNC_TIMEOUT     seconds to wait for the VNC capture (default 15)
 #
 # Exit codes:
 #   0 - Success
@@ -304,10 +318,21 @@ try_device_capture() {
 #      with `sdb root on` and restore the previous mode afterwards.
 #   2. The tool exits 0 even for an unknown option ("unknown option: -x" then
 #      exit=0), so success MUST be judged by the produced file, never $?.
-#      Option spelling also varies by image, hence the two forms below.
+#      Option spelling also varies by image, hence the forms below.
+#
+#   DA (appliance) and other Wayland/HWC targets add two more:
+#
+#   3. The binary may ship as `winfo` instead of `enlightenment_info` (same
+#      e_info client, same options). The name is resolved on the device after
+#      elevation — as `owner` neither is executable, so `command -v` misses it.
+#   4. With HWC (hardware composer) active, the UI sits on TDM overlay planes
+#      that the compositor never draws into its own buffer, so -dump_screen
+#      returns solid black. When forms 1-2 come back uniform, form 3 switches
+#      HWC off (`-hwc 0`, everything is GL-composited), dumps again, and turns
+#      HWC back on (`-hwc 1`) whatever the outcome.
 # ============================================================
 try_enlightenment_info() {
-  echo "Trying: device-side enlightenment_info..."
+  echo "Trying: device-side enlightenment_info / winfo..."
 
   local OUT_TMP
   OUT_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.png)
@@ -329,15 +354,30 @@ try_enlightenment_info() {
     [ "$WAS_ROOT" -eq 1 ] || "$SDB" -s "$SERIAL" root off >/dev/null 2>&1
   }
 
-  # --- form 1: -dump_screen — one file, full screen, exact path (preferred) ---
+  # --- which e_info client does this image ship? ---
+  local E_TOOL
+  E_TOOL=$("$SDB" -s "$SERIAL" shell "command -v enlightenment_info || command -v winfo" 2>/dev/null | tr -d '\r' | head -n1)
+  E_TOOL="${E_TOOL##*/}"
+  case "$E_TOOL" in
+    enlightenment_info|winfo) ;;
+    *) E_TOOL="enlightenment_info" ;;  # not found — keep the old behavior
+  esac
+  echo "  e_info client: ${E_TOOL}"
+
+  # -dump_screen into $1 (a host path); the caller judges the file.
   local DEV_NAME="tizen_sshot_$$.png"
-  "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
-  "$SDB" -s "$SERIAL" shell "enlightenment_info -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1
-  sdb_pull "${TMPDIR_DEVICE}/${DEV_NAME}" "$OUT_TMP" >/dev/null 2>&1
-  "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
+  _e_dump_screen() {
+    "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
+    "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1
+    sdb_pull "${TMPDIR_DEVICE}/${DEV_NAME}" "$1" >/dev/null 2>&1
+    "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
+  }
+
+  # --- form 1: -dump_screen — one file, full screen, exact path (preferred) ---
+  _e_dump_screen "$OUT_TMP"
 
   if verify_output "$OUT_TMP"; then
-    if accept_capture "$OUT_TMP" "enlightenment_info -dump_screen"; then
+    if accept_capture "$OUT_TMP" "${E_TOOL} -dump_screen"; then
       _e_restore_root
       return 0
     fi
@@ -353,10 +393,9 @@ try_enlightenment_info() {
   PULL_DIR=$(mktemp -d /tmp/tizen_screenshot_e_XXXXXX)
 
   "$SDB" -s "$SERIAL" shell "rm -rf ${DUMP_DIR} && mkdir -p ${DUMP_DIR}" >/dev/null 2>&1
-  "$SDB" -s "$SERIAL" shell "enlightenment_info -dump topvwins ${DUMP_DIR}" >/dev/null 2>&1
+  "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump topvwins ${DUMP_DIR}" >/dev/null 2>&1
   sdb_pull "${DUMP_DIR}" "$PULL_DIR" >/dev/null 2>&1
   "$SDB" -s "$SERIAL" shell "rm -rf ${DUMP_DIR}" >/dev/null 2>&1
-  _e_restore_root
 
   # Largest PNG = the full-screen window (the others are small UI surfaces)
   local BIGGEST
@@ -364,13 +403,139 @@ try_enlightenment_info() {
 
   if [ -n "$BIGGEST" ] && verify_output "$BIGGEST"; then
     cp "$BIGGEST" "$OUT_TMP"
-    if accept_capture "$OUT_TMP" "enlightenment_info -dump topvwins"; then
+    if accept_capture "$OUT_TMP" "${E_TOOL} -dump topvwins"; then
       rm -rf "$PULL_DIR"
+      _e_restore_root
+      return 0
+    fi
+  fi
+  rm -rf "$PULL_DIR"
+
+  # --- form 3: HWC off, dump again, HWC back on ---
+  # Only when an earlier form produced a flat image: that is the HWC symptom,
+  # and toggling composition on a device that captured fine is not our call.
+  if [ -n "$UNIFORM_FALLBACK" ]; then
+    echo "  Capture was a single solid color — retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
+    rm -f "$OUT_TMP"
+    "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 0" >/dev/null 2>&1
+    sleep 1  # let the compositor redraw every plane through GL
+    _e_dump_screen "$OUT_TMP"
+    "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 1" >/dev/null 2>&1
+    echo "  HWC re-enabled"
+
+    if verify_output "$OUT_TMP" && accept_capture "$OUT_TMP" "${E_TOOL} -dump_screen (hwc off)"; then
+      _e_restore_root
       return 0
     fi
   fi
 
-  rm -rf "$PULL_DIR"
+  _e_restore_root
+  rm -f "$OUT_TMP"
+  return 1
+}
+
+# ============================================================
+# Method: Host-side VNC capture
+#   Last resort for Wayland/HWC targets (DA appliances) where every on-device
+#   dump is black: a VNC server on the device (or one the user names) is fed by
+#   the display pipeline itself, overlay planes included.
+#
+#   Server: $TIZEN_VNC_SERVER (vncdotool syntax, host::port or host:display)
+#   when set; otherwise the device's TCP ${TIZEN_VNC_PORT:-5900} is forwarded
+#   to localhost:${TIZEN_VNC_LOCAL_PORT:-15900} over sdb and removed afterwards.
+#   Password: $TIZEN_VNC_PASSWORD (read from the environment, never argv).
+#
+#   Client: python3 vncdotool (`pip install vncdotool`, any host) first, then
+#   vncsnapshot (`apt install vncsnapshot` on Ubuntu; no password support,
+#   JPEG output converted to PNG with PIL).
+# ============================================================
+VNC_TIMEOUT="${TIZEN_VNC_TIMEOUT:-15}"
+
+try_vnc() {
+  echo "Trying: host-side VNC capture..."
+
+  local CLIENT=""
+  if has_pil && python3 -c "import vncdotool" 2>/dev/null; then
+    CLIENT="vncdotool"
+  elif command -v vncsnapshot &>/dev/null && has_pil; then
+    CLIENT="vncsnapshot"
+  else
+    echo "  No VNC client on host (pip install vncdotool, or apt install vncsnapshot) — skipping"
+    return 1
+  fi
+
+  local SERVER="${TIZEN_VNC_SERVER:-}" FWD_PORT=""
+  if [ -z "$SERVER" ]; then
+    FWD_PORT="${TIZEN_VNC_LOCAL_PORT:-15900}"
+    if ! "$SDB" -s "$SERIAL" forward "tcp:${FWD_PORT}" "tcp:${TIZEN_VNC_PORT:-5900}" >/dev/null 2>&1; then
+      echo "  sdb forward tcp:${FWD_PORT} -> device tcp:${TIZEN_VNC_PORT:-5900} failed — skipping"
+      return 1
+    fi
+    SERVER="127.0.0.1::${FWD_PORT}"
+  fi
+  echo "  VNC server: ${SERVER} (client: ${CLIENT})"
+
+  local OUT_TMP STATUS=1
+  OUT_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.png)
+
+  if [ "$CLIENT" = "vncdotool" ]; then
+    python3 - "$SERVER" "$OUT_TMP" "$VNC_TIMEOUT" <<'PYEOF' && STATUS=0
+# --- VNC capture (vncdotool) ---
+# This block is byte-identical in tizen-screenshot.sh and tizen-screenshot.ps1;
+# common/lib/tests/screenshot-fallbacks.test.js fails when the two drift.
+import os, sys, threading
+from vncdotool import api
+
+server, out_path, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
+password = os.environ.get("TIZEN_VNC_PASSWORD") or None
+result = {}
+
+def capture():
+    try:
+        client = api.connect(server, password=password)
+        client.captureScreen(out_path)
+        client.disconnect()
+        result["ok"] = True
+    except Exception as exc:
+        result["error"] = str(exc) or type(exc).__name__
+
+# vncdotool runs a Twisted reactor in a thread and a dead server can hang the
+# connect forever, so bound it here and hard-exit past the reactor.
+worker = threading.Thread(target=capture, daemon=True)
+worker.start()
+worker.join(timeout)
+try:
+    api.shutdown()
+except Exception:
+    pass
+if not result.get("ok"):
+    print("  VNC capture failed: " + result.get("error", "timed out after %ds" % timeout), file=sys.stderr)
+    os._exit(1)
+print("  Captured via vncdotool -> " + out_path)
+os._exit(0)
+PYEOF
+  else
+    local JPG_TMP
+    JPG_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.jpg)
+    # Bound the connect like the vncdotool path ("${RUN[@]+...}": empty arrays
+    # trip `set -u` on bash < 4.4, e.g. macOS /bin/bash).
+    local RUN=()
+    if command -v timeout &>/dev/null; then RUN=(timeout "$VNC_TIMEOUT"); fi
+    if ${RUN[@]+"${RUN[@]}"} vncsnapshot -quiet -allowblank "$SERVER" "$JPG_TMP" >/dev/null 2>&1 && verify_output "$JPG_TMP"; then
+      python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2], "PNG")' "$JPG_TMP" "$OUT_TMP" && STATUS=0
+    fi
+    rm -f "$JPG_TMP"
+  fi
+
+  if [ -n "$FWD_PORT" ]; then
+    "$SDB" -s "$SERIAL" forward --remove "tcp:${FWD_PORT}" >/dev/null 2>&1 || true
+  fi
+
+  if [ $STATUS -eq 0 ] && verify_output "$OUT_TMP" && accept_capture "$OUT_TMP" "host-side VNC (${CLIENT})"; then
+    return 0
+  fi
+
+  echo "  VNC capture produced no usable image — skipping"
   rm -f "$OUT_TMP"
   return 1
 }
@@ -581,17 +746,23 @@ fi
 # It needs root, and `sdb root on` is refused on production images — that case
 # returns 1 immediately, so the previous ordering still applies wherever this
 # method cannot run.
+#
+# VNC is the Wayland/HWC (DA appliance) escape hatch: it only runs once every
+# on-device method has failed or come back a flat color, and skips at once when
+# the host has no VNC client.
 if [ "$IS_EMULATOR" = true ]; then
   try_enlightenment_info              && exit 0
   try_host_xwd                        && exit 0
   try_device_capture screencapture    && exit 0
   try_device_capture capture_screen   && exit 0
   try_framebuffer                     && exit 0
+  try_vnc                             && exit 0
 else
   try_enlightenment_info              && exit 0
   try_framebuffer                     && exit 0
   try_device_capture screencapture    && exit 0
   try_device_capture capture_screen   && exit 0
+  try_vnc                             && exit 0
   try_host_xwd                        && exit 0
 fi
 
