@@ -9,7 +9,8 @@
  *   - a near miss ("arm", "arm64", "armv7") is rejected with
  *     invalid_parameters before the script runs, and the message names the
  *     accepted values
- *   - --arch on a non-Platform project is ignored with a warning
+ *   - a non-default --arch on a non-Platform project is ignored with a
+ *     warning; the x86_64 default (which tizen-cli always passes) is silent
  *
  * plugin-cache and the signing preflight are stubbed, so no SDK, GBS or
  * device is touched; the stub script "produces" one package per run.
@@ -135,6 +136,19 @@ const archOf = (call) => (/--arch="([^"]*)"/.exec(call.unixArgs) || [])[1];
     r = await buildProject(native, "Debug");
     check(
       "native, no --arch: no arch warning",
+      (r.warnings || []).some((w) => w.includes("--arch")),
+      false,
+    );
+    // tizen-cli always passes its --arch default, so x86_64 must stay silent.
+    calls.length = 0;
+    r = await buildProject(native, "Debug", undefined, "x86_64");
+    check(
+      "native --arch x86_64 (tizen-cli default): success",
+      r.status,
+      "success",
+    );
+    check(
+      "native --arch x86_64 (tizen-cli default): no arch warning",
       (r.warnings || []).some((w) => w.includes("--arch")),
       false,
     );

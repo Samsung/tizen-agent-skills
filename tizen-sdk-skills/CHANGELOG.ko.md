@@ -84,11 +84,12 @@
   러너는 이미 `--arch`를 받았지만 스킬에 안내가 없어서, 에이전트가 ARM 디바이스용으로도
   에뮬레이터 전용 기본값 `x86_64`로 빌드했습니다. 이제 스킬과 에이전트가 요청을
   `--arch x86_64`(에뮬레이터), `armv7l`(32비트 ARM), `aarch64`(64비트 ARM)로 매핑하고,
-  디바이스용 빌드인데 아키텍처가 없으면 사용자에게 묻고, 디바이스의 `cpu_arch`를 확인하도록
-  안내합니다. `buildProject()`와 빌드 스크립트는 tizen-cli `--arch` 선택지와 같은
-  `armv7l`, `aarch64`, `i586`, `x86_64`만 받으므로 `arm` / `arm64`는 GBS 실행 전에
-  `invalid_parameters`로 실패합니다. Platform이 아닌 프로젝트에 `--arch`를 주면 무시됐다는
-  경고를 붙입니다. `build-project-arch.test.js`가 두 동작을 고정합니다.
+  디바이스용 빌드인데 아키텍처가 없으면 사용자에게 묻고, 디바이스의 `uname -m`으로 확인하도록
+  안내합니다. tizen-cli 빌드 스킬에도 같은 안내를 넣었습니다. `buildProject()`와 빌드
+  스크립트는 tizen-cli `--arch` 선택지와 같은 `armv7l`, `aarch64`, `i586`, `x86_64`만 받으므로
+  `arm` / `arm64`는 GBS 실행 전에 `invalid_parameters`로 실패합니다. Platform이 아닌
+  프로젝트에 기본값이 아닌 `--arch`를 주면 무시됐다는 경고를 붙입니다(tizen-cli가 항상 넘기는
+  기본값 `x86_64`에는 경고하지 않습니다). `build-project-arch.test.js`가 두 동작을 고정합니다.
 
 ## [1.4.5] — 2026-10-19
 
