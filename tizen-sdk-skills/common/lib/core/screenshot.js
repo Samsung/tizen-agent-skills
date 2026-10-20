@@ -96,6 +96,16 @@ function extractCaptureWarnings(stdout) {
       "The capture is a single solid color — the screen may be off, showing a blank display, " +
         "or rendering may be broken on the host. Every capture method returned the same flat image.",
     );
+    // On a Wayland/HWC target (DA appliances) the UI lives on overlay planes no
+    // on-device dump sees; VNC is the one method that can, but only with a
+    // server and a host client in place — say what was missing.
+    if (/No VNC client on host/.test(stdout || "")) {
+      warnings.push(
+        "On a Wayland/HWC target (e.g. a DA appliance) the UI may sit on hardware overlay planes that " +
+          "on-device dumps cannot see. Install a VNC client on the host (pip install vncdotool, or " +
+          "apt install vncsnapshot on Ubuntu) and run a VNC server on the device, or set TIZEN_VNC_SERVER.",
+      );
+    }
   }
   return warnings;
 }
@@ -308,8 +318,10 @@ async function captureScreenshot(
     const unixArgs = `"${resolvedSerial}" "${resolvedOutput}"`;
 
     try {
+      // 90 s: the HWC-off re-dump and the VNC fallback (bounded at
+      // TIZEN_VNC_TIMEOUT, 15 s by default) sit on top of the original chain.
       stdout = execPluginScript(scriptResult.scriptPath, winArgs, unixArgs, {
-        timeout: 60000,
+        timeout: 90000,
       });
     } catch (error) {
       exitCode = error.status || 1;

@@ -21,6 +21,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
   rule ID. CI runs it on every pull request with `--format github`, so each finding also
   appears as an annotation on the pull request's changed files.
+- **Screenshot fallbacks for Wayland/HWC targets such as DA appliances**
+  (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
+  `common/lib/core/screenshot.js`). Where HWC puts the UI on overlay planes, every on-device
+  dump came back solid black. The `enlightenment_info` step now also finds the e_info client
+  when it ships as `winfo`, and retries a solid-color dump once with HWC off (`-hwc 0`),
+  turning HWC back on (`-hwc 1`) afterwards. A new host-side VNC fallback runs after every
+  on-device method: by default it forwards the device's port 5900 over sdb, or it uses
+  `TIZEN_VNC_SERVER`. The client is vncdotool on any host, or `vncsnapshot` on Ubuntu/Linux.
+  The script timeout goes from 60 s to 90 s. When a solid-color result is returned and no VNC
+  client was found, the envelope warning says what to install.
+  `screenshot-fallbacks.test.js` checks that the `.sh` and `.ps1` stay in step.
 
 ### Changed
 

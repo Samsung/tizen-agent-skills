@@ -20,6 +20,17 @@
   규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
   항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서
   `--format github`으로 실행하므로, 각 항목이 PR의 변경된 파일에 주석으로도 표시됩니다.
+- **DA 가전 등 Wayland/HWC 타겟용 스크린샷 폴백**
+  (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
+  `common/lib/core/screenshot.js`). HWC가 UI를 오버레이 플레인에 올리는 타겟에서는
+  디바이스 측 덤프가 모두 검은 화면이었습니다. 이제 `enlightenment_info` 단계가 e_info
+  클라이언트를 `winfo` 이름으로도 찾고, 단색 덤프가 나오면 HWC를 끈 상태(`-hwc 0`)에서
+  한 번 더 덤프한 뒤 HWC를 다시 켭니다(`-hwc 1`). 새 호스트 측 VNC 폴백은 디바이스 측
+  방법이 모두 끝난 뒤에 실행됩니다. 기본으로 디바이스의 5900 포트를 sdb로 포워딩하고,
+  `TIZEN_VNC_SERVER`가 있으면 그 서버를 씁니다. 클라이언트는 어느 호스트에서나 vncdotool,
+  Ubuntu/Linux에서는 `vncsnapshot`도 씁니다. 스크립트 타임아웃은 60초에서 90초로 늘었습니다.
+  단색 결과를 돌려주면서 VNC 클라이언트가 없었다면 envelope 경고에 설치할 것을 안내합니다.
+  `screenshot-fallbacks.test.js`가 `.sh`와 `.ps1`이 함께 바뀌었는지 확인합니다.
 
 ### Changed
 
