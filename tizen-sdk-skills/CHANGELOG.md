@@ -38,6 +38,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   lowering cyclomatic complexity (57 → 13, 53 → 12). No behaviour change: the exported API,
   envelopes, messages and script arguments are unchanged; `install-app-args.test.js` pins
   the install-script arguments.
+- **`searchLogs`, `analyzeErrors`, `runSdbCommand` and the Samsung certificate flows split
+  into helpers** (`common/lib/core/dlog-analyzer.js`, `common/lib/core/sdb-helper.js`,
+  `common/lib/core/samsung-cert.js`). Validation, argv building, the per-intent sdb runners
+  and the steps shared by the author and distributor flows move into module-private
+  helpers, lowering cyclomatic complexity (47 → 6, 41 → 8, 42 → 16, distributor 42 → 13,
+  author 36 → 21). error-analyze now runs through the existing `runBinary()`. No behaviour
+  change: the exported API, envelopes, messages, argv and the confirmation gates are
+  unchanged; a new `dlog-analyzer.test.js` case pins the crash-recovered
+  `error-analyze --file` envelope.
 
 ### Fixed
 
@@ -69,6 +78,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 - **`playwright-test` could return a missing `setupWebappDebug()` result as-is** (issue #69).
   An `undefined`/`null` setup result is now reported as an `io_error` envelope
   ("webapp debug setup returned no result").
+- **Samsung certificate early errors omitted the start time** (`common/lib/core/samsung-cert.js`).
+  The validation, SDK-path, Samsung Account, online-CA and password-store errors of the
+  author, distributor, import and profile flows now pass the call's `startTime`, like the
+  later failures, so `duration_ms` is measured from the call (same gap as issue #68).
+  `samsung-cert.test.js` pins it.
 
 ## [1.4.5] — 2026-10-19
 

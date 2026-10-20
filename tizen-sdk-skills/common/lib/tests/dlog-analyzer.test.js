@@ -2136,6 +2136,82 @@ console.log("\nTest 21: UnicodeEncodeError recovery");
     [1, 2],
   );
 }
+
+// Test 22: Test 21 drives runBinary() directly; this one goes through
+// analyzeErrors({ file }) so the envelope runErrorAnalyze() rebuilds must
+// still carry the recovered report, output_truncated and the warning.
+// execFileSync is stubbed to fail like the crashing collector, and the
+// cache roots point at a placeholder binary so resolveBinary() finds one
+// even where no real binary is installed.
+console.log("\nTest 22: error-analyze --file keeps a crash-recovered report");
+const analyzeCrashTest = (async () => {
+  const childProcess = require("child_process");
+  const pluginCache = require("../core/plugin-cache");
+  const domainPath = require.resolve("../core/dlog-analyzer");
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-ea-crash-"));
+  const placeholder = path.join(tmp, ...BINARY_SUBPATH);
+  fs.mkdirSync(path.dirname(placeholder), { recursive: true });
+  fs.writeFileSync(placeholder, "");
+  const logFile = path.join(tmp, "saved.log");
+  fs.writeFileSync(logFile, "E/TAG(1): boom\n");
+
+  const calls = [];
+  const realExec = childProcess.execFileSync;
+  const realRoots = pluginCache.orderedCacheRoots;
+  const savedDomain = require.cache[domainPath];
+  childProcess.execFileSync = (_binary, args) => {
+    calls.push(args);
+    const error = new Error("Command failed");
+    error.status = 1;
+    error.stdout = "=== Error Analysis ===\n  Notes:\n";
+    error.stderr =
+      "UnicodeEncodeError: 'cp949' codec can't encode character '\\u2014' in position 26: illegal multibyte sequence\n" +
+      "[PYI-19088:ERROR] Failed to execute script 'main' due to unhandled exception!";
+    throw error;
+  };
+  pluginCache.orderedCacheRoots = () => [tmp];
+  delete require.cache[domainPath];
+  try {
+    const stubbed = require("../core/dlog-analyzer");
+    const r = await stubbed.analyzeErrors(undefined, "summary", {
+      file: logFile,
+    });
+    check(
+      "error-analyze --file: binary called with --file",
+      calls.length === 1 && calls[0].includes(logFile),
+      true,
+    );
+    check(
+      "error-analyze --file: crash after output → success",
+      r.status,
+      "success",
+    );
+    check(
+      "… with the printed report",
+      r.result && r.result.output,
+      "=== Error Analysis ===\n  Notes:",
+    );
+    check(
+      "… flagged as truncated",
+      r.result && r.result.output_truncated,
+      true,
+    );
+    check("… for the analyzed file", r.result && r.result.file, logFile);
+    check(
+      "… and the code-page warning",
+      Array.isArray(r.warnings) &&
+        r.warnings.length === 1 &&
+        /'cp949' code page/.test(r.warnings[0]),
+      true,
+    );
+  } finally {
+    childProcess.execFileSync = realExec;
+    pluginCache.orderedCacheRoots = realRoots;
+    require.cache[domainPath] = savedDomain;
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+})();
+
 // The version-directory rule is the one findLatestVersionDir() applies, not a
 // second copy that could drift.
 check(
@@ -2154,8 +2230,9 @@ check(
 );
 
 // The other async checks (Tests 11 and 15) settle within the current
-// macrotask queue; Test 19 polls real timers, so the summary waits for it.
-lockTests.then(() =>
+// macrotask queue; Test 19 polls real timers and Test 22 restores its stubs
+// asynchronously, so the summary waits for both.
+Promise.all([lockTests, analyzeCrashTest]).then(() =>
   setImmediate(() => {
     console.log(`\n${failures === 0 ? "ALL PASS" : `${failures} FAILURE(S)`}`);
     process.exit(failures === 0 ? 0 : 1);

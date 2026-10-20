@@ -34,6 +34,14 @@
   테스트 결과 분류를 단계별 헬퍼로 나눠 순환 복잡도를 낮췄습니다(57 → 13, 53 → 12). 동작
   변화는 없습니다. export API, 응답 envelope, 메시지, 스크립트 인자는 그대로이며,
   `install-app-args.test.js`가 설치 스크립트 인자를 고정합니다.
+- **`searchLogs`, `analyzeErrors`, `runSdbCommand`와 Samsung 인증서 흐름을 헬퍼로 분리**
+  (`common/lib/core/dlog-analyzer.js`, `common/lib/core/sdb-helper.js`,
+  `common/lib/core/samsung-cert.js`). 검증, argv 구성, 인텐트별 sdb 실행, author와
+  distributor 흐름이 공유하는 단계를 모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(47 → 6,
+  41 → 8, 42 → 16, distributor 42 → 13, author 36 → 21). error-analyze는 이제 기존
+  `runBinary()`로 실행됩니다. 동작 변화는 없습니다. export API, 응답 envelope, 메시지, argv,
+  확인 절차는 그대로이며, 새 `dlog-analyzer.test.js` 케이스가 크래시에서 복구된
+  `error-analyze --file` envelope를 고정합니다.
 
 ### Fixed
 
@@ -64,6 +72,10 @@
 - **`playwright-test`가 비어 있는 `setupWebappDebug()` 결과를 그대로 반환할 수 있던 문제**
   (issue #69). `undefined`/`null` 결과는 이제 `io_error` envelope("webapp debug setup
   returned no result")로 보고합니다.
+- **Samsung 인증서의 초기 오류에 시작 시각이 빠지던 문제** (`common/lib/core/samsung-cert.js`).
+  author, distributor, import, profile 흐름의 검증, SDK 경로, Samsung Account, online-CA,
+  비밀번호 저장 오류가 이제 이후 실패들처럼 호출의 `startTime`을 넘기므로 `duration_ms`가
+  호출 시점부터 측정됩니다(issue #68과 같은 유형). `samsung-cert.test.js`가 이를 고정합니다.
 
 ## [1.4.5] — 2026-10-19
 
