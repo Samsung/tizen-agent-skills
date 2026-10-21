@@ -82,36 +82,6 @@ function Invoke-Sdb {
     Invoke-Native -Exe $SdbPath -Arguments (@('-s', $DeviceSerial) + $SdbArgs)
 }
 
-# Run `sdb -s <serial> shell <cmd>` with a deadline (seconds). Used only for
-# the HWC toggle/restore and the bounded dump on Wayland/HWC targets, where a
-# hung sdb call could otherwise stall the chain past the 90 s script timeout.
-# Start-Process quotes each -ArgumentList element, so the shell line reaches
-# sdb as one argument. Returns $true if the call finished within $Timeout,
-# $false if it had to be killed.
-function Invoke-SdbShellTimed {
-    param(
-        [string]$SdbPath,
-        [string]$DeviceSerial,
-        [string]$ShellCmd,
-        [int]$Timeout
-    )
-    $outFile = [System.IO.Path]::GetTempFileName()
-    $errFile = [System.IO.Path]::GetTempFileName()
-    try {
-        $p = Start-Process -FilePath $SdbPath `
-            -ArgumentList @('-s', $DeviceSerial, 'shell', $ShellCmd) `
-            -PassThru -NoNewWindow `
-            -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-        if (-not $p.WaitForExit(($Timeout * 1000))) {
-            try { $p.Kill() } catch { }
-            return $false
-        }
-        return $true
-    } finally {
-        Remove-Item $outFile, $errFile -Force -ErrorAction SilentlyContinue
-    }
-}
-
 # ============================================================================
 # Resolve sdb path
 # ============================================================================
@@ -609,12 +579,6 @@ function Try-EnlightenmentInfo {
 
     Write-Info "Trying: device-side enlightenment_info / winfo..."
 
-    # Bounds (seconds) for the HWC-off retry on Wayland/HWC targets: the dump
-    # and the HWC toggle/restore each get their own deadline so a hung sdb
-    # call cannot stall the chain past the 90 s script timeout.
-    $HwcDumpTimeout = if ($env:HWC_DUMP_TIMEOUT) { [int]$env:HWC_DUMP_TIMEOUT } else { 30 }
-    $HwcToggleTimeout = if ($env:HWC_RESTORE_TIMEOUT) { [int]$env:HWC_RESTORE_TIMEOUT } else { 15 }
-
     $tempPng = New-TempPath ".png"
     $wasRoot = $false
 
@@ -643,17 +607,10 @@ function Try-EnlightenmentInfo {
     if ($eTool -ne "enlightenment_info" -and $eTool -ne "winfo") { $eTool = "enlightenment_info" }
     Write-Info "e_info client: $eTool"
 
-    # -dump_screen into $Dest (a host path); the caller judges the file. The
-    # optional $Timeout (seconds) bounds the device-side dump_screen render
-    # for the HWC-off retry, where a hung dump must not stall the chain before
-    # HWC is restored. Forms 1-2 pass no timeout.
-    function Invoke-DumpScreen([string]$Dest, [int]$Timeout = 0) {
+    # -dump_screen into $Dest (a host path); the caller judges the file.
+    function Invoke-DumpScreen([string]$Dest) {
         Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
-        if ($Timeout -gt 0) {
-            Invoke-SdbShellTimed $SdbPath $DeviceSerial "$eTool -dump_screen -p /tmp/ -n $devName" $Timeout | Out-Null
-        } else {
-            Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump_screen -p /tmp/ -n $devName" | Out-Null
-        }
+        Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump_screen -p /tmp/ -n $devName" | Out-Null
         Invoke-Sdb $SdbPath $DeviceSerial pull "/tmp/$devName" $Dest | Out-Null
         Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
     }
@@ -695,38 +652,26 @@ function Try-EnlightenmentInfo {
             Write-Info "Capture was a single solid color - retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
             Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
 
-            # Query the current HWC state so we restore THAT, not a hard-coded
-            # 1. Best-effort: when `-hwc` reports no clean 0/1, we restore 1
-            # and flag the recovery as unverified (the option syntax is not
-            # verified on every DA image).
-            # `-hwc 2` is the e_info "info" query (the tool's own usage lists
-            # [0: off, 1: on, 2: info]; `-hwc` with no value is an error). Some
-            # DA images print nothing here, in which case $queryOk stays $false
-            # and the restore falls back to the compositor default (unverified).
-            $raw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
-            if ($raw -eq "0" -or $raw -eq "1") { $prevHwc = $raw; $queryOk = $true }
-            else { $prevHwc = ""; $queryOk = $false }
-            $restoreTo = if ($queryOk) { $prevHwc } else { "1" }
-            $hwcRecovery = "pending"
+            # Remember the current HWC state so we restore THAT, not a hard-coded 1.
+            # `-hwc 2` is the e_info info query; images that report nothing fall back to 1.
+            $prevHwc = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
+            if ($prevHwc -ne "0" -and $prevHwc -ne "1") { $prevHwc = "1" }
 
             try {
-                Invoke-SdbShellTimed $SdbPath $DeviceSerial "$eTool -hwc 0" $HwcToggleTimeout | Out-Null
+                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 0" | Out-Null
                 Start-Sleep -Seconds 1  # let the compositor redraw every plane through GL
-                Invoke-DumpScreen $tempPng $HwcDumpTimeout
+                Invoke-DumpScreen $tempPng
             } finally {
-                # finally: a throwing dump still restores HWC. Verify the
-                # result when the state is queryable; otherwise flag it as
-                # unverified so the caller knows HWC was not confirmed back on.
-                Invoke-SdbShellTimed $SdbPath $DeviceSerial "$eTool -hwc $restoreTo" $HwcToggleTimeout | Out-Null
-                if ($queryOk) {
-                    $nowRaw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
-                    if ($nowRaw -eq $restoreTo) { $hwcRecovery = "verified" } else { $hwcRecovery = "failed" }
+                # finally: a throwing dump still restores HWC to the previous state.
+                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc $prevHwc" | Out-Null
+                $nowHwc = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
+                if ($nowHwc -eq $prevHwc) {
+                    Write-Info "HWC restored to $prevHwc"
                 } else {
-                    $hwcRecovery = "unverified"
+                    $got = if ($nowHwc) { $nowHwc } else { "no response" }
+                    Write-Warn "HWC restore could not be verified (expected $prevHwc, got $got)"
+                    Write-Host "CAPTURE_WARNING=hwc_recovery_unverified"
                 }
-                Write-Info "HWC restored: $hwcRecovery (previous=$restoreTo)"
-                if ($hwcRecovery -eq "failed") { Write-Host "CAPTURE_WARNING=hwc_recovery_failed" }
-                if ($hwcRecovery -eq "unverified") { Write-Host "CAPTURE_WARNING=hwc_recovery_unverified" }
             }
             if (Test-ValidOutput $tempPng) {
                 if (Accept-Capture -TempPath $tempPng -OutPath $OutPath -Method "$eTool -dump_screen (hwc off)") {
@@ -881,7 +826,6 @@ function Try-Vnc {
     $timeout = if ($env:TIZEN_VNC_TIMEOUT) { $env:TIZEN_VNC_TIMEOUT } else { "15" }
     $server = $env:TIZEN_VNC_SERVER
     $fwdPort = $null
-    $vncConfig = "sdb-forward"
     if (-not $server) {
         $fwdPort = if ($env:TIZEN_VNC_LOCAL_PORT) { $env:TIZEN_VNC_LOCAL_PORT } else { "15900" }
         $devPort = if ($env:TIZEN_VNC_PORT) { $env:TIZEN_VNC_PORT } else { "5900" }
@@ -891,13 +835,8 @@ function Try-Vnc {
             return $false
         }
         $server = "127.0.0.1::$fwdPort"
-    } else {
-        $vncConfig = "env:TIZEN_VNC_SERVER"
     }
     Write-Info "VNC server: $server (client: vncdotool)"
-    # Machine line for lib/core/screenshot.js: the server that was tried and
-    # how it was configured, so a connection failure can name both in the warning.
-    Write-Host "VNC_ATTEMPT=$server`t$vncConfig"
 
     # Single-quoted here-string: Python's text reaches the file untouched.
     $pyScript = @'
@@ -934,15 +873,12 @@ if not result.get("ok"):
     low = (err or "").lower()
     if "timed out" in low:
         cat = "timeout"
-    elif "refused" in low or "reset" in low or "unreachable" in low or "no route" in low:
-        cat = "connection_refused"
-    elif "auth" in low or "password" in low or "credential" in low or "security" in low:
+    elif "auth" in low or "password" in low or "credential" in low:
         cat = "auth_failed"
     else:
-        cat = "connection_failed"
-    # Machine line for the host script to surface in the envelope; the
-    # human-readable line still goes to stderr.
-    print("VNC_RESULT=failed\t%s\t%s" % (cat, " ".join(str(err).split())))
+        cat = "connection_refused"
+    # Machine line for lib/core/screenshot.js: category + the server tried.
+    print("VNC_RESULT=failed\t%s\t%s\t%s" % (cat, server, " ".join(str(err).split())))
     print("  VNC capture failed: " + err, file=sys.stderr)
     os._exit(1)
 print("  Captured via vncdotool -> " + out_path)

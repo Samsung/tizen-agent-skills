@@ -89,65 +89,9 @@ function extractCaptureMethod(stdout) {
  * @param {string} stdout - script output
  * @returns {string[]} warnings, empty when nothing was flagged
  */
-/**
- * Describe a VNC connection failure category in plain terms.
- *
- * @param {string} category - timeout | connection_refused | auth_failed | connection_failed
- * @returns {string}
- */
-function describeVncFailure(category) {
-  switch (category) {
-    case "timeout":
-      return "the VNC client connected to nothing within the timeout (the VNC server may not be running on the device, or the forwarded port did not reach it)";
-    case "connection_refused":
-      return "the connection was refused or reset (no VNC server is listening, or sdb forwarding could not reach the device port)";
-    case "auth_failed":
-      return "the VNC server rejected the password (set TIZEN_VNC_PASSWORD to the server's password)";
-    default:
-      return "the VNC client could not complete the capture (see the script log for the underlying error)";
-  }
-}
-
-/**
- * Describe how the VNC server was configured, so the warning can tell the
- * caller what to change.
- *
- * @param {string} config - sdb-forward | env:TIZEN_VNC_SERVER
- * @returns {string}
- */
-function describeVncConfig(config) {
-  if (config.startsWith("env:")) {
-    return `the server was taken from ${config.slice(4)} (override it or unset it to fall back to sdb forwarding)`;
-  }
-  return "the device VNC port was forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT to change it, or set TIZEN_VNC_SERVER to name an external server)";
-}
-
-/**
- * Turn the script's CAPTURE_WARNING=<key> and VNC machine lines into envelope
- * warnings.
- *
- * uniform_image: every capture method either failed or produced a single flat
- * color, and the script kept the flat capture as a last resort (see
- * accept_capture in tizen-screenshot.sh). The file is a real capture — the
- * screen just looks off/black — so the success envelope must say why the
- * image the caller is about to look at is blank.
- *
- * hwc_recovery_failed / hwc_recovery_unverified: the Wayland/HWC retry toggled
- * HWC off to capture, then restored it. When the restore could not be
- * confirmed (or failed) the device may not be back in the state the caller
- * expects, so the warning is emitted even on a successful capture.
- *
- * VNC_RESULT=failed: a VNC attempt ran (a host client was present) but the
- * server connection failed. The category and the attempted server/config are
- * surfaced so the caller can fix the server side, not just see a blank image.
- *
- * @param {string} stdout - script output
- * @returns {string[]} warnings, empty when nothing was flagged
- */
 function extractCaptureWarnings(stdout) {
-  const text = stdout || "";
   const warnings = [];
-  if (/^CAPTURE_WARNING=uniform_image$/m.test(text)) {
+  if (/^CAPTURE_WARNING=uniform_image$/m.test(stdout || "")) {
     warnings.push(
       "The capture is a single solid color — the screen may be off, showing a blank display, " +
         "or rendering may be broken on the host. Every capture method returned the same flat image.",
@@ -155,7 +99,7 @@ function extractCaptureWarnings(stdout) {
     // On a Wayland/HWC target (DA appliances) the UI lives on overlay planes no
     // on-device dump sees; VNC is the one method that can, but only with a
     // server and a host client in place — say what was missing.
-    if (/No VNC client on host/.test(text)) {
+    if (/No VNC client on host/.test(stdout || "")) {
       warnings.push(
         "On a Wayland/HWC target (e.g. a DA appliance) the UI may sit on hardware overlay planes that " +
           "on-device dumps cannot see. Install a VNC client on the host (pip install vncdotool, or " +
@@ -163,27 +107,27 @@ function extractCaptureWarnings(stdout) {
       );
     }
   }
-  if (/^CAPTURE_WARNING=hwc_recovery_failed$/m.test(text)) {
+  // HWC was toggled off to capture then restored; when the restore could not
+  // be verified the device may not be back in the state the caller expects.
+  if (/^CAPTURE_WARNING=hwc_recovery_unverified$/m.test(stdout || "")) {
     warnings.push(
-      "HWC could not be re-enabled after the capture (the `-hwc` restore call failed or the state did " +
-        "not change back). The device compositor may still be in software mode; re-enable HWC manually " +
-        "if needed.",
+      "HWC was restored after the capture, but the state could not be verified " +
+        "on this image. If the display looks wrong, re-enable HWC on the device manually.",
     );
   }
-  if (/^CAPTURE_WARNING=hwc_recovery_unverified$/m.test(text)) {
-    warnings.push(
-      "HWC was restored after the capture, but this image cannot report HWC state so the restore could " +
-        "not be verified. If the display looks wrong, re-enable HWC on the device manually.",
-    );
-  }
-  const vncFail = text.match(/^VNC_RESULT=failed\t(\S+)\t(.*)$/m);
+  // A VNC attempt ran (a host client was present) but the server connection
+  // failed: classify it and name the server tried, instead of only guiding
+  // the no-VNC-client case.
+  const vncFail = (stdout || "").match(
+    /^VNC_RESULT=failed\t(\S+)\t([^\t]*)\t(.*)$/m,
+  );
   if (vncFail) {
-    const attempt = text.match(/^VNC_ATTEMPT=([^\t]*)\t([^\t]*)$/m);
-    const server = attempt ? attempt[1] : "(unknown)";
-    const config = attempt ? attempt[2] : "sdb-forward";
+    const where = vncFail[2].startsWith("127.0.0.1")
+      ? "the device VNC port forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT, or set TIZEN_VNC_SERVER to name an external server)"
+      : "the server named by TIZEN_VNC_SERVER";
     warnings.push(
-      `VNC capture failed (${vncFail[1]}): ${vncFail[2]}. ${describeVncFailure(vncFail[1])} ` +
-        `Attempted server: ${server}. ${describeVncConfig(config)}`,
+      `VNC capture failed (${vncFail[1]}): ${vncFail[3]}. Attempted server: ${vncFail[2]}. ` +
+        `This came from ${where}.`,
     );
   }
   return warnings;
