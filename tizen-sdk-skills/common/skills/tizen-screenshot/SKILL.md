@@ -125,7 +125,7 @@ Try in order; stop at the first success:
 
 With HWC (hardware composer) on, the UI sits on TDM overlay planes that the compositor never draws into its own buffer, so `-dump_screen`, `/dev/fb0` and the capture tools all return **solid black**. Any capture that is one flat color is set aside and the chain moves on. Two steps handle this case:
 
-1. **`winfo` and HWC off** (part of the `enlightenment_info` step). Some images ship the e_info client as `winfo`. The script looks for it on the device after `sdb root on`. If the dump is one flat color, the script runs `<tool> -hwc 0` so that every plane is GL-composited. It then runs `-dump_screen` again and always runs `<tool> -hwc 1` afterwards. `capture_method` is then `enlightenment_info -dump_screen (hwc off)` or `winfo -dump_screen (hwc off)`.
+1. **`winfo` and HWC off** (part of the `enlightenment_info` step). Some images ship the e_info client as `winfo`. The script looks for it on the device after `sdb root on`. If the dump is one flat color, the script runs `<tool> -hwc 0` so that every plane is GL-composited, then runs `-dump_screen` again. Before toggling HWC it queries the current state and restores THAT (not a hard-coded 1) on images that can report it; in `.sh` a trap restores HWC if the script is signalled between `-hwc 0` and the restore, and the dump and the restore are each bounded by a timeout (`HWC_DUMP_TIMEOUT`, `HWC_RESTORE_TIMEOUT`). When the restore cannot be verified (or fails) the envelope adds a `hwc_recovery_failed` / `hwc_recovery_unverified` warning. `capture_method` is then `enlightenment_info -dump_screen (hwc off)` or `winfo -dump_screen (hwc off)`.
 2. **Host-side VNC.** This step runs after every on-device method, and only when the host has a VNC client:
    - Client: Python `vncdotool` (`pip install vncdotool`; Windows, macOS, Linux), or `vncsnapshot` (`sudo apt install vncsnapshot` on Ubuntu). `vncsnapshot` is Linux-only here and does not support passwords.
    - Server: by default `sdb forward tcp:15900 tcp:5900` to the device's own VNC server, then `forward --remove` afterwards. Set `TIZEN_VNC_SERVER` (`host::port` or `host:display`) to use a different server.
@@ -133,6 +133,8 @@ With HWC (hardware composer) on, the UI sits on TDM overlay planes that the comp
    - `capture_method` is `host-side VNC (vncdotool)` or `host-side VNC (vncsnapshot)`.
 
 If every method still returns a flat color and the host has no VNC client, the `uniform_image` warning has a second line that says what to install. Relay that line to the user; do not install packages yourself.
+
+When a VNC client is present but the server connection fails, the `uniform_image` warning is followed by a VNC failure line that classifies the cause (timeout, connection refused, or authentication failed), names the server that was tried, and says how it was configured (sdb forwarding or `TIZEN_VNC_SERVER`). Relay it so the caller can fix the server side.
 
 **Host-side xwd method (detailed steps):**
 
@@ -250,7 +252,7 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 3. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 — `capture_method`, 해상도, 저장 경로.
    `capture_method`가 `framebuffer`면 커널 콘솔만 찍혔을 수 있다고, `warnings`에
    `uniform_image`가 있으면 단색 화면(꺼짐/렌더링 실패 가능)이라고 한 줄 경고한다.
-   `capture_method`에 `(hwc off)`가 붙어 있으면 HWC를 잠시 끄고 캡처한 뒤 다시 켰다고 알린다.
+   `capture_method`에 `(hwc off)`가 붙어 있으면 HWC를 잠시 끄고 캡처한 뒤 복구했다고 알린다. `warnings`에 `hwc_recovery_failed` / `hwc_recovery_unverified`가 있으면 HWC 복구가 실패했거나 검증하지 못한 상태이므로 기기에서 HWC를 수동으로 확인하라고 안내한다. VNC 시도가 실패한 경고(시간 초과 / 연결 거부 / 인증 실패)가 있으면 시도한 서버 주소와 설정 방법을 함께 전달한다.
 4. 필요하면 다음 단계 제안을 1줄 추가한다.
 
 ### `base64` 필드만 예외 — 플레이스홀더로 치환

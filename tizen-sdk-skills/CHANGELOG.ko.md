@@ -34,6 +34,21 @@
 
 ### Changed
 
+- **스크린샷 폴백의 HWC 복구와 VNC 실패 안내**
+  (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
+  `common/lib/core/screenshot.js`, `common/lib/tests/screenshot-fallbacks.test.js`).
+  HWC를 끄고 덤프하는 재시도가 먼저 현재 HWC 상태를 조회하고, 조회 가능한
+  이미지에서는 (1로 하드코딩하지 않고) 그 상태로 복구합니다. 복구 결과는
+  가능할 때 검증하며, 검증 실패·미확인은 `hwc_recovery_failed` /
+  `hwc_recovery_unverified` 경고로 envelope에 포함합니다. `.sh`에서는 덤프와
+  복구 호출에 각각 시간 제한(`HWC_DUMP_TIMEOUT`, `HWC_RESTORE_TIMEOUT`)을
+  적용하고, `-hwc 0`과 복구 사이에 시그널이 와도 trap이 HWC를 복구합니다.
+  `.ps1`은 `Invoke-SdbShellTimed`로 같은 호출에 시간 제한을 겁니다. VNC 연결
+  실패를 시간 초과 / 연결 거부 / 인증 실패로 구분하고, 시도한 서버 주소와
+  설정 방법(`VNC_ATTEMPT` / `VNC_RESULT`)을 envelope 경고에 포함합니다.
+
+### Changed
+
 - **`createEmulator`, `launchEmulator`, `manageEmulator`를 헬퍼로 분리**
   (`common/lib/core/emulator.js`). 옵션 파싱, 검증, 크기/템플릿 결정, 실패·결과 빌더를
   모듈 내부 헬퍼로 옮겨 순환 복잡도를 낮췄습니다(114 → 16, 46 → 11, 53 → 7). 동작 변화는
