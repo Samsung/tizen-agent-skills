@@ -392,7 +392,11 @@ try_enlightenment_info() {
   # missing or unparseable reply is "unknown", not an error.
   _e_hwc_query() {
     local raw
-    raw=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc" 2>/dev/null | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') || true
+    # `-hwc 2` is the e_info "info" query (the tool's own usage lists
+    # [0: off, 1: on, 2: info]; `-hwc` with no value is an error). Some DA
+    # images print nothing here, in which case the caller falls back to the
+    # compositor default and flags the restore as unverified.
+    raw=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') || true
     case "$raw" in
       0|1) echo "$raw" ;;
       *) echo "" ;;

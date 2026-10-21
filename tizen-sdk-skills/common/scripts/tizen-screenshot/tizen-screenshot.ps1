@@ -699,7 +699,11 @@ function Try-EnlightenmentInfo {
             # 1. Best-effort: when `-hwc` reports no clean 0/1, we restore 1
             # and flag the recovery as unverified (the option syntax is not
             # verified on every DA image).
-            $raw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc" | Out-String).Trim()
+            # `-hwc 2` is the e_info "info" query (the tool's own usage lists
+            # [0: off, 1: on, 2: info]; `-hwc` with no value is an error). Some
+            # DA images print nothing here, in which case $queryOk stays $false
+            # and the restore falls back to the compositor default (unverified).
+            $raw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
             if ($raw -eq "0" -or $raw -eq "1") { $prevHwc = $raw; $queryOk = $true }
             else { $prevHwc = ""; $queryOk = $false }
             $restoreTo = if ($queryOk) { $prevHwc } else { "1" }
@@ -715,7 +719,7 @@ function Try-EnlightenmentInfo {
                 # unverified so the caller knows HWC was not confirmed back on.
                 Invoke-SdbShellTimed $SdbPath $DeviceSerial "$eTool -hwc $restoreTo" $HwcToggleTimeout | Out-Null
                 if ($queryOk) {
-                    $nowRaw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc" | Out-String).Trim()
+                    $nowRaw = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
                     if ($nowRaw -eq $restoreTo) { $hwcRecovery = "verified" } else { $hwcRecovery = "failed" }
                 } else {
                     $hwcRecovery = "unverified"
