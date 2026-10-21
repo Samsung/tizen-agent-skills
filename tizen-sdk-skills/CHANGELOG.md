@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.4.5] — 2026-10-21
+
 ### Added
 
 - **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
@@ -101,15 +103,6 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   non-default `--arch` on a non-Platform project adds a warning that it was ignored (the
   `x86_64` default that tizen-cli always passes stays silent). `build-project-arch.test.js`
   pins both.
-
-## [1.4.5] — 2026-10-19
-
-The command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules apply
-only once an SDK is configured through the plugin, it no longer forbids the `tizen` CLI or
-looking up where sdb is, and a hand-typed sdb must be the configured SDK's `tools/sdb`.
-
-### Fixed
-
 - **Command guard hook blocked ordinary `sdb` / `tizen` commands outside SDK skill
   workflows** (issue #47; `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
   `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,

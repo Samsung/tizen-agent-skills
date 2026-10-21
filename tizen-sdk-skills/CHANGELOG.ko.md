@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [1.4.5] — 2026-10-21
+
 ### Added
 
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
@@ -91,15 +93,6 @@
   `arm` / `arm64`는 GBS 실행 전에 `invalid_parameters`로 실패합니다. Platform이 아닌
   프로젝트에 기본값이 아닌 `--arch`를 주면 무시됐다는 경고를 붙입니다(tizen-cli가 항상 넘기는
   기본값 `x86_64`에는 경고하지 않습니다). `build-project-arch.test.js`가 두 동작을 고정합니다.
-
-## [1.4.5] — 2026-10-19
-
-명령 가드 훅의 적용 범위를 Tizen 작업으로 한정했습니다 (fixes #47): Tizen 도구 규칙은
-플러그인으로 SDK를 설정한 뒤에만 적용되고, `tizen` CLI나 sdb 위치 확인을 더 이상 금지하지
-않으며, 직접 입력한 sdb는 설정된 SDK의 `tools/sdb`여야 합니다.
-
-### Fixed
-
 - **명령 가드 훅이 SDK 스킬 워크플로 밖의 일반 `sdb` / `tizen` 명령을 차단** (issue #47;
   `common/hooks/check-tizen-commands.sh`, `common/hooks/hooks.test.sh`,
   `common/hooks/tizen-sdk-skills-guard.md`, `cline/hooks/tizen-sdk-skills-guard.md`,
