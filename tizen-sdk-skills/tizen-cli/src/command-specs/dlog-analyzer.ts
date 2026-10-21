@@ -59,7 +59,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--app-id <id>",
         description:
-          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search (collection mode): same as --category (restrict the search to this app's logs). For --action error-analyze / search --file: declared app label (not a verified identity), used with --pid. For --action kernel analyze --file --with-dlog: app ID for dlog correlation. For --action probe --subcommand run: the app whose PID/app id the probe substitutes (app-process, io, ...) when --probe-id names the probe; without --probe-id it is read as the probe id itself (legacy form). For --action rules: the rule id (show), fixture path (test) or rule file/dir (validate). For --action crash-report: same as --process.",
+          "Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze and app-log. For --action search (collection mode): same as --category (restrict the search to this app's logs). For --action error-analyze / search --file: declared app label (not a verified identity), used with --pid. For --action kernel analyze --file --with-dlog: app ID for dlog correlation. For --action probe --subcommand run: the app whose PID/app id the probe substitutes (app-process, io, ...) when --probe-id names the probe; without --probe-id it is read as the probe id itself (legacy form). For --action rules: the rule id (show), fixture path (test) or rule file/dir (validate). For --action crash-report: same as --process (give one of the two; different values are rejected).",
       },
       {
         flags: "--process <name>",
@@ -161,7 +161,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--output <file>",
         description:
-          "For --action log-dump: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log). For --action app-log / search: file that receives the complete output (--max-lines/--max-chars apply to stdout only). For --action timeline export: the JSON file. For --action crash-report: host directory for the extracted reports (default: <tmp>/tizen-dlog-analyzer/crash-reports/<serial>/).",
+          "For --action log-dump: host file that receives the complete dump (default: <tmp>/tizen-dlog-analyzer/dlog-dump.log). For --action app-log / search: file that receives the complete output (--max-lines/--max-chars apply to stdout only). For --action timeline export: the JSON file. For --action crash-report: a host DIRECTORY (not a file) for the extracted reports (default: <tmp>/tizen-dlog-analyzer/crash-reports/<serial>/).",
       },
       {
         flags: "--confirm",
@@ -534,7 +534,8 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           return sdkCommands.collectCrashReports(
             o.serial,
             {
-              process: [o.appId, o.process],
+              process: o.process,
+              appId: o.appId,
               dumpDir: o.dumpDir,
               limit: o.limit,
               lines: o.lines,

@@ -1,0 +1,24 @@
+id: tizen-sdk.dlog-analyzer.crash-report-invalid-dump-dir
+plugin: tizen-sdk
+command: dlog-analyzer
+tier: safe
+status: draft
+since_cli: 1.0.0
+description: "dlog-analyzer --action crash-report rejects a --dump-dir with shell metacharacters (invalid_parameters) before touching any device"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "dlog-analyzer",
+        "--action",
+        "crash-report",
+        "--dump-dir",
+        "/tmp/x;rm",
+      ]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_category: "invalid_parameters" }

@@ -63,6 +63,7 @@
  *   node dlog-analyzer-cli.js log-dump [serial] [--filter "<spec> ..."] [--lines <n>] [--output <file>]
  *   node dlog-analyzer-cli.js log-clear [serial] [--confirm]
  *   node dlog-analyzer-cli.js crash-report [serial] [--process <name>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]
+ *                     (--output is a DIRECTORY here; for log-dump it is a file)
  *
  * Examples:
  *   node .../dlog-analyzer-cli.js start start-monitoring emulator-26101
@@ -475,9 +476,11 @@ runCli(COMMAND, async () => {
       return clearDeviceLogs(param1, options.confirm === true);
     case "crash-report":
       // crash-report [serial] — --app-id is an alias of --process (an app id
-      // is just the name crash-worker files an app's dump under).
+      // is just the name crash-worker files an app's dump under); passing both
+      // with different values is rejected in collectCrashReports().
       return collectCrashReports(param1, {
-        process: [options.appId, options.process].flat(),
+        process: options.process,
+        appId: options.appId,
         dumpDir: options.dumpDir,
         limit: options.limit,
         lines: options.lines,

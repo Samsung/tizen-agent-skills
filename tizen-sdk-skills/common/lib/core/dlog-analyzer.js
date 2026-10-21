@@ -2305,7 +2305,7 @@ function buildCrashExtractScript(entry, member) {
       const z = entry.kind === "tar.gz" ? "z" : "";
       return (
         `m=$(tar -t${z}f ${p} 2>/dev/null | grep '${re}' | head -n 1); ` +
-        `if [ -n "$m" ]; then tar -x${z}Of ${p} $m; fi`
+        `if [ -n "$m" ]; then tar -x${z}Of ${p} "$m"; fi`
       );
     }
     default:
@@ -2482,7 +2482,7 @@ function presentValues(value) {
   );
 }
 
-/** --process / --app-id may each be repeated; the last value wins. */
+/** A repeated --process (or --app-id) keeps its last value. */
 function lastValue(value) {
   const list = presentValues(value);
   return list.length ? String(list[list.length - 1]).trim() : "";
@@ -2501,6 +2501,7 @@ function lastValue(value) {
  * @param {string} [serial] - Optional device serial
  * @param {object} [opts]
  * @param {string|string[]} [opts.process] - App id or process name (last wins); omitted = every process
+ * @param {string|string[]} [opts.appId] - Alias of opts.process; giving both with different values is rejected
  * @param {string|string[]} [opts.dumpDir] - Extra device directories to search
  * @param {number|string} [opts.limit] - Reports to open (default 3, 0 = all matches)
  * @param {number|string} [opts.lines] - Report lines returned inline (default 80, 0 = all)
@@ -2511,7 +2512,17 @@ async function collectCrashReports(serial, opts = {}, commandLabel) {
   const command = commandLabel || "tizen-sdk dlog-analyzer crash-report";
   const options = opts || {};
 
-  const processName = lastValue(options.process);
+  const fromProcess = lastValue(options.process);
+  const fromAppId = lastValue(options.appId);
+  // --app-id is an alias, not a second filter: two different names would make
+  // one of them silently win, so ask for one.
+  if (fromProcess && fromAppId && fromProcess !== fromAppId) {
+    return crashReportParamError(
+      command,
+      `Use either --process or --app-id, not both (got --process ${fromProcess} and --app-id ${fromAppId}).`,
+    );
+  }
+  const processName = fromProcess || fromAppId;
   if (processName && !isValidAppId(processName)) {
     return crashReportParamError(
       command,

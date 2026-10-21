@@ -302,7 +302,7 @@ Kernel evidence matters for high CPU, freezes, memory pressure, graphics/video f
 ```bash
 node "$CLI" crash-report [serial]                                   # newest 3 dumps of every process
 node "$CLI" crash-report --process <name>                           # one app id or process name (system daemons: e.g. deviced)
-node "$CLI" crash-report --app-id <app-id> --limit 1                # --app-id is an alias of --process
+node "$CLI" crash-report --app-id <app-id> --limit 1                # --app-id is an alias of --process — give one, not both
 node "$CLI" crash-report --dump-dir /opt/usr/share/crash/temp       # search one more device directory (repeatable)
 ```
 
