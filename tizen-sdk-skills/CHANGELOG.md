@@ -11,8 +11,6 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
-## [1.4.5] — 2026-10-21
-
 ### Added
 
 - **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
@@ -52,6 +50,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   with the dump, and gives the `error-analyze --file … --app-id <process> --pid <pid>` call for
   that dlog. If the sdb shell user cannot read a directory, the result has a warning. If it can
   read none of them, the action fails with `permission_denied` and suggests `root on`.
+
+## [1.4.5] — 2026-10-21
+
+### Added
+
+- **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
+  `ci.yml`). Checks the files a pull request changes against the mechanical rules in
+  `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
+  documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
+  rule ID. CI runs it on every pull request with `--format github`, so each finding also
+  appears as an annotation on the pull request's changed files.
 
 ### Changed
 

@@ -11,8 +11,6 @@
 
 ## [Unreleased]
 
-## [1.4.5] — 2026-10-21
-
 ### Added
 
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
@@ -49,6 +47,16 @@
   분석하는 `error-analyze --file … --app-id <process> --pid <pid>` 호출을 알려 줍니다.
   sdb shell 사용자가 읽을 수 없는 디렉터리가 있으면 결과에 경고가 붙고, 하나도 읽을 수
   없으면 `permission_denied`로 실패하며 `root on`을 제안합니다.
+
+## [1.4.5] — 2026-10-21
+
+### Added
+
+- **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
+  `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
+  규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
+  항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서
+  `--format github`으로 실행하므로, 각 항목이 PR의 변경된 파일에 주석으로도 표시됩니다.
 
 ### Changed
 
