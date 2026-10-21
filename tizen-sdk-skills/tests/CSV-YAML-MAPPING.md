@@ -12,11 +12,11 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **295** |
+| YAML 테스트 케이스 총 개수 | **296** |
 | CSV TC ID 가 매핑된 케이스 | **256** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
 | └─ Prompt 레인 (`TC-P-*`) | 120 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **39** |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **40** |
 
 ### 도메인별 분포
 
@@ -29,7 +29,7 @@
 | `certificate` | 25 |
 | `meta` | 17 |
 | `test` | 15 |
-| `dlog-analyzer` | 8 |
+| `dlog-analyzer` | 9 |
 
 ### 티어별 분포
 
@@ -37,7 +37,7 @@
 | --- | ---: |
 | `device` | 143 |
 | `mutating` | 79 |
-| `safe` | 73 |
+| `safe` | 74 |
 
 ---
 
@@ -335,6 +335,7 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/device/install-app.missing-required.yaml](tc/device/install-app.missing-required.yaml) | `tizen-sdk.install-app.missing-required` | `install-app` | device | CLI | install-app fails with invalid_argument when --package is missing |
 | [tc/device/remote-device.scan-happy.yaml](tc/device/remote-device.scan-happy.yaml) | `tizen-sdk.remote-device.scan-happy` | `remote-device` | device | CLI | remote-device scan returns success with scan results |
 | [tc/device/sdb-helper.missing-required.yaml](tc/device/sdb-helper.missing-required.yaml) | `tizen-sdk.sdb-helper.missing-required` | `sdb-helper` | device | CLI | sdb-helper fails with invalid_argument when --request is missing |
+| [tc/dlog-analyzer/dlog-analyzer.crash-report-invalid-dump-dir.yaml](tc/dlog-analyzer/dlog-analyzer.crash-report-invalid-dump-dir.yaml) | `tizen-sdk.dlog-analyzer.crash-report-invalid-dump-dir` | `dlog-analyzer` | safe | CLI | dlog-analyzer --action crash-report rejects a --dump-dir with shell metacharacters (invalid_parameters) before touching any device |
 | [tc/dlog-analyzer/dlog-analyzer.file-app-log-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-app-log-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-app-log-nonexistent` | `dlog-analyzer` | safe | CLI | app-log fails with invalid_parameters when the input file does not exist |
 | [tc/dlog-analyzer/dlog-analyzer.file-error-analyze-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-error-analyze-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-error-analyze-nonexistent` | `dlog-analyzer` | safe | CLI | error-analyze fails with invalid_parameters when the input file does not exist |
 | [tc/dlog-analyzer/dlog-analyzer.file-kernel-analyze-nonexistent.yaml](tc/dlog-analyzer/dlog-analyzer.file-kernel-analyze-nonexistent.yaml) | `tizen-sdk.dlog-analyzer.file-kernel-analyze-nonexistent` | `dlog-analyzer` | safe | CLI | kernel analyze fails with invalid_parameters when the input file does not exist |

@@ -2377,6 +2377,14 @@ check(
   buildCrashExtractScript({ path: "/x/a.info", kind: "info" }, "info"),
   "cat /x/a.info",
 );
+check(
+  "tar member name is quoted (it comes from the archive, not the listing)",
+  buildCrashExtractScript(
+    { path: "/run/crash/dump/a.tar.gz", kind: "tar.gz" },
+    "info",
+  ).endsWith('tar -xzOf /run/crash/dump/a.tar.gz "$m"; fi'),
+  true,
+);
 const INFO = [
   "Executable File Path: /usr/bin/deviced",
   "Signal: 11",
@@ -2411,6 +2419,34 @@ const crashReportTest = (async () => {
     "invalid --limit rejected",
     (await collectCrashReports(undefined, { limit: "-1" })).errors[0].category,
     "invalid_parameters",
+  );
+  const both = await collectCrashReports(undefined, {
+    process: "deviced",
+    appId: "org.example.app",
+  });
+  check(
+    "different --process and --app-id are rejected",
+    both.errors[0].category === "invalid_parameters" &&
+      /either --process or --app-id, not both/.test(both.errors[0].message),
+    true,
+  );
+  check(
+    "the same name through both flags is accepted (fails later on --limit)",
+    /--limit/.test(
+      (
+        await collectCrashReports(undefined, {
+          process: "deviced",
+          appId: "deviced",
+          limit: "x",
+        })
+      ).errors[0].message,
+    ),
+    true,
+  );
+  check(
+    "--app-id alone is validated like --process",
+    (await collectCrashReports(undefined, { appId: "a;b" })).errors[0].message,
+    "Invalid process name: a;b. Allowed characters: letters, digits, '.', '_', '-'.",
   );
 
   const childProcess = require("child_process");

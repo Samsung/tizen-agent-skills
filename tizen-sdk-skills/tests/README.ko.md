@@ -4,14 +4,14 @@
 
 `tizen-sdk` 플러그인의 독립 테스트 스위트입니다. 35개 플러그인 명령 각각이 올바른 JSON 봉투(envelope)를 출력하는지, 그리고 LLM 에이전트(Cline, Claude, tizen-cli)가 자연어 프롬프트를 올바른 명령으로 해석하는지 검증합니다.
 
-8개 도메인에 걸쳐 **295개 테스트 케이스**가 있으며, 35개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`은 `policy/tiers.yaml`에 mutating으로 분류되어 있지만 아직 TC가 없습니다.
+8개 도메인에 걸쳐 **296개 테스트 케이스**가 있으며, 35개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`은 `policy/tiers.yaml`에 mutating으로 분류되어 있지만 아직 TC가 없습니다.
 
 ## 아키텍처 다이어그램
 
 ```mermaid
 graph TB
     subgraph "테스트 스위트 구성 요소"
-        TC["tc/*.yaml<br/>295 Test Cases (288 YAML files)"]
+        TC["tc/*.yaml<br/>296 Test Cases (289 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
         POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
@@ -38,7 +38,7 @@ graph TB
     end
 
     subgraph "티어 시스템"
-        SAFE["safe (6 cmds / 73 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
+        SAFE["safe (6 cmds / 74 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>설치/수정/삭제<br/>⚠️ 셋업 필요"]
         DEVICE["device (14 cmds / 143 TCs)<br/>에뮬레이터/디바이스 필요<br/>❌ 수동: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
@@ -152,10 +152,10 @@ node runner.mjs              # 모든 TC 실행 — mutating·device 티어까�
 
 | 레이어          | TCs | 대상                                   | 방법                                                                                         |
 | --------------- | --- | -------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **cli 레인**    | 174 | 명령이 올바른 봉투를 출력              | `runner.mjs`가 `tizen-sdk <command>`를 실행하고 status, jsonpath, errors를 확인               |
+| **cli 레인**    | 175 | 명령이 올바른 봉투를 출력              | `runner.mjs`가 `tizen-sdk <command>`를 실행하고 status, jsonpath, errors를 확인               |
 | **prompt 레인** | 121 | LLM이 프롬프트를 올바른 명령으로 해석  | Cline/Claude가 TC를 읽고 프롬프트를 보내 도구 호출을 검증 (`skills/run-test-suite.md` 참고)  |
 
-모든 TC는 레인을 하나만 정의하므로 두 수를 더하면 전체 295개가 됩니다.
+모든 TC는 레인을 하나만 정의하므로 두 수를 더하면 전체 296개가 됩니다.
 
 ### 기존 단위 테스트(`common/lib/tests/`)와의 비교
 
@@ -194,7 +194,7 @@ tests/
     run-device-tier.mjs          ← 순서가 정해진 자체 정리형 device 티어 실행 ("Device 티어" 참고)
     run-mutating-tier.mjs        ← 순서가 정해진 자체 정리형 mutating 티어 실행 ("Mutating 티어" 참고)
     lib/driver-common.mjs        ← 위 세 스크립트의 공용 helper (FIXTURE_NEEDS 포함)
-  tc/                     ← 288개 YAML 파일에 295개 테스트 케이스
+  tc/                     ← 289개 YAML 파일에 296개 테스트 케이스
     device/               ← 104 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
@@ -210,7 +210,7 @@ tests/
     meta/                 ←  17 TCs (--capabilities, --doctor, --schema, list-commands,
                                      no-args, guard-rules)
     test/                 ←  15 TCs (playwright-test)
-    dlog-analyzer/        ←   8 TCs (dlog-analyzer)
+    dlog-analyzer/        ←   9 TCs (dlog-analyzer)
   skills/
     run-test-suite.md     ← Cline/Claude 프롬프트 레인 실행 가이드
 ```
@@ -467,14 +467,14 @@ requires:
 
 | Status        | 개수  | 의미                                                                  |
 | ------------- | ----- | --------------------------------------------------------------------- |
-| `draft`       | 9     | 작성됨, 실행된 적 없음 — 단언 미검증                                  |
+| `draft`       | 10    | 작성됨, 실행된 적 없음 — 단언 미검증                                  |
 | `candidate`   | 0     | 실행되어 통과했지만 모든 레인이 검증되지는 않음                       |
 | `approved`    | 286   | 모든 레인이 실행되어 통과; 회귀는 릴리스 블로커                       |
 | `quarantined` | 0     | 불안정하거나 환경 문제로 깨진 것으로 알려짐; 기본 제외                |
 
 스키마 검증(`--dry-run`)은 승격의 근거가 될 수 없습니다 — YAML 형태만 확인합니다.
 
-남은 9개 draft 중 7개는 CI나 개발자 호스트가 제공하지 않는 것을 필요로 합니다: 온라인 CA용 Samsung 계정
+남은 10개 draft 중 7개는 CI나 개발자 호스트가 제공하지 않는 것을 필요로 합니다: 온라인 CA용 Samsung 계정
 (`certificate-manager.samsung-login`, `.generate-samsung-author`, `.generate-samsung-distributor`), Linux GBS
 툴체인(`build-project.arch`, `.gbs`) 또는 LAN의 Tizen 디바이스(`remote-device.connect`,
 `.connect-custom-port`). 수동 실행 방법은 "Mutating 티어"와 "Device 티어"를 참고하세요. 나머지 2개는 prompt
@@ -486,14 +486,17 @@ requires:
 `emulator-manager.prompt-list-available`(TC-P-120, 이슈 #268)은 "Provide the list of emulators available"
 라는 평범한 요청이 SDK 디렉터리 수동 검색이 아니라 `emulator-manager`(`list-vm`)로 해석되는지 확인합니다.
 
+열 번째인 `dlog-analyzer.crash-report-invalid-dump-dir`(PR #76)는 safe 티어 CLI TC로, CI 게이트에서 실행된 뒤
+승격합니다.
+
 ## 티어 분류
 
 | 티어      | 명령 수  | TCs     | 설명                        | CI 안전?      |
 | --------- | -------- | ------- | --------------------------- | ------------- |
-| safe      | 6        | 73      | 부작용 없음                 | ✅ 예         |
+| safe      | 6        | 74      | 부작용 없음                 | ✅ 예         |
 | mutating  | 15       | 79      | 설치/수정/삭제              | ⚠️ 셋업 필요  |
 | device    | 14       | 143     | 에뮬레이터/디바이스 필요    | ❌ 수동       |
-| **합계**  | **35**   | **295** |                             |               |
+| **합계**  | **35**   | **296** |                             |               |
 
 전체 분류는 `policy/tiers.yaml`을 참고하세요. CI는 모든 PR에서 `approved` safe TC를 실행하고("러너 옵션"의
 "CI 게이트" 참고), device 티어는 `scripts/run-device-tier.mjs`로 수동 실행하며("러너 옵션"의 "Device 티어"
