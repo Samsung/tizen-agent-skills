@@ -33,6 +33,22 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Changed
 
+- **HWC restore and VNC failure detail for the screenshot fallbacks**
+  (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
+  `common/lib/core/screenshot.js`, `common/lib/tests/screenshot-fallbacks.test.js`).
+  The HWC-off retry now queries the current HWC state first and restores THAT
+  (not a hard-coded 1) on images that can report it; the restore is verified
+  when possible and the envelope warns on `hwc_recovery_failed` /
+  `hwc_recovery_unverified`. In the `.sh` the dump and the restore are each
+  bounded by a timeout (`HWC_DUMP_TIMEOUT`, `HWC_RESTORE_TIMEOUT`) and a trap
+  restores HWC if the script is signalled between `-hwc 0` and the restore; the
+  `.ps1` bounds the same calls through `Invoke-SdbShellTimed`. A VNC
+  connection failure is now classified (timeout / connection refused / auth
+  failed) and the envelope warning names the attempted server and how it was
+  configured (`VNC_ATTEMPT` / `VNC_RESULT`).
+
+### Changed
+
 - **`createEmulator`, `launchEmulator` and `manageEmulator` split into helpers**
   (`common/lib/core/emulator.js`). Option parsing, validation, size/template resolution and
   the failure and result builders move into module-private helpers, lowering cyclomatic
