@@ -38,10 +38,12 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 - **HWC restore and VNC failure detail for the screenshot fallbacks**
   (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
   `common/lib/core/screenshot.js`, `common/lib/tests/screenshot-fallbacks.test.js`).
-  The HWC-off retry now queries the current HWC state first and restores THAT
-  (not a hard-coded 1) on images that can report it; the restore is verified
-  when possible and the envelope warns on `hwc_recovery_failed` /
-  `hwc_recovery_unverified`. In the `.sh` the dump and the restore are each
+  The HWC-off retry now queries the current HWC state first (the e_info
+  `-hwc 2` info option) and restores THAT (not a hard-coded 1) on images that
+  can report it; the restore is verified when possible and the envelope warns
+  on `hwc_recovery_failed` / `hwc_recovery_unverified`. Verified against a DA
+  appliance where `-hwc 2` returns no state, so the restore falls back to the
+  compositor default flagged unverified. In the `.sh` the dump and the restore are each
   bounded by a timeout (`HWC_DUMP_TIMEOUT`, `HWC_RESTORE_TIMEOUT`) and a trap
   restores HWC if the script is signalled between `-hwc 0` and the restore; the
   `.ps1` bounds the same calls through `Invoke-SdbShellTimed`. A VNC

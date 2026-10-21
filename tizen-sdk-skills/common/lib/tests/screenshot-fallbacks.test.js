@@ -90,6 +90,12 @@ check(
   /_e_hwc_restore "\$PREV_HWC" "\$QUERY_OK"/.test(sh),
 );
 check(
+  "sh: HWC query uses the e_info info option (-hwc 2), not a bare -hwc",
+  /_e_hwc_query\(\)/.test(sh) &&
+    sh.indexOf('"${E_TOOL} -hwc 2"') !== -1 &&
+    sh.indexOf('"${E_TOOL} -hwc"') === -1,
+);
+check(
   "sh: HWC restore is registered as a trap before -hwc 0 (SIGTERM safety)",
   /trap '_e_hwc_cleanup' INT TERM/.test(sh) &&
     sh.indexOf("trap '_e_hwc_cleanup' INT TERM") <
@@ -106,11 +112,15 @@ check(
 );
 check(
   "ps1: HWC state is queried before the retry",
-  /\$raw = \(Invoke-Sdb[^\n]*"\$eTool -hwc"/.test(ps1),
+  /\$raw = \(Invoke-Sdb[^\n]*"\$eTool -hwc 2"/.test(ps1),
 );
 check(
   "ps1: HWC restore targets the previously queried state",
   /\$restoreTo = if \(\$queryOk\) \{ \$prevHwc \} else \{ "1" \}/.test(ps1),
+);
+check(
+  "ps1: HWC query uses the e_info info option (-hwc 2), not a bare -hwc",
+  ps1.indexOf('"$eTool -hwc 2"') !== -1 && ps1.indexOf('"$eTool -hwc"') === -1,
 );
 check(
   "ps1: HWC restore runs in a finally block so a throwing dump cannot leave it off",
