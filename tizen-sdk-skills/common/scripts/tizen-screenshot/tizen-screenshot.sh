@@ -364,64 +364,18 @@ try_enlightenment_info() {
   esac
   echo "  e_info client: ${E_TOOL}"
 
-  # -dump_screen into $1 (a host path); the caller judges the file. $2, when
-  # non-zero, bounds the device-side dump_screen render with `timeout` and
-  # tolerates a missed pull (the HWC-off retry uses this so a hung dump cannot
-  # abort the chain before HWC is restored). Forms 1-2 pass no timeout.
+  # -dump_screen into $1 (a host path); the caller judges the file.
   local DEV_NAME="tizen_sshot_$$.png"
   _e_dump_screen() {
-    local dest="$1" ttl="${2:-0}"
+    local ttl="${2:-0}"
     local RUN=()
     if [ "$ttl" -gt 0 ] && command -v timeout &>/dev/null 2>&1; then
       RUN=(timeout "$ttl")
     fi
     "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
-    if [ "$ttl" -gt 0 ]; then
-      "${RUN[@]+"${RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1 || true
-      sdb_pull "${TMPDIR_DEVICE}/${DEV_NAME}" "$dest" >/dev/null 2>&1 || true
-    else
-      "${RUN[@]+"${RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1
-      sdb_pull "${TMPDIR_DEVICE}/${DEV_NAME}" "$dest" >/dev/null 2>&1
-    fi
+    "${RUN[@]+"${RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1 || true
+    sdb_pull "${TMPDIR_DEVICE}/${DEV_NAME}" "$1" >/dev/null 2>&1
     "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
-  }
-
-  # Query the current HWC state. Prints "0" or "1" when the e_info client
-  # reports a clean value, empty when `-hwc` without a value is not supported.
-  # Best-effort: the option syntax is not verified on every DA image, so a
-  # missing or unparseable reply is "unknown", not an error.
-  _e_hwc_query() {
-    local raw
-    # `-hwc 2` is the e_info "info" query (the tool's own usage lists
-    # [0: off, 1: on, 2: info]; `-hwc` with no value is an error). Some DA
-    # images print nothing here, in which case the caller falls back to the
-    # compositor default and flags the restore as unverified.
-    raw=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') || true
-    case "$raw" in
-      0|1) echo "$raw" ;;
-      *) echo "" ;;
-    esac
-  }
-
-  # Restore HWC to $1 and verify when the state is queryable. Sets HWC_RECOVERY
-  # to verified | failed | unverified so the caller can include it in the final
-  # JSON warning. The restore call is bounded by HWC_RESTORE_TIMEOUT.
-  _e_hwc_restore() {
-    local target="$1" query_ok="$2"
-    local RUN=()
-    if command -v timeout &>/dev/null 2>&1; then RUN=(timeout "$HWC_RESTORE_TIMEOUT"); fi
-    if "${RUN[@]+"${RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc ${target}" >/dev/null 2>&1; then :; fi
-    if [ "$query_ok" -eq 1 ]; then
-      local now
-      now=$(_e_hwc_query)
-      if [ "$now" = "$target" ]; then
-        HWC_RECOVERY="verified"
-      else
-        HWC_RECOVERY="failed"
-      fi
-    else
-      HWC_RECOVERY="unverified"
-    fi
   }
 
   # --- form 1: -dump_screen — one file, full screen, exact path (preferred) ---
@@ -462,43 +416,38 @@ try_enlightenment_info() {
   fi
   rm -rf "$PULL_DIR"
 
-  # --- form 3: HWC off, dump again, restore HWC ---
+  # --- form 3: HWC off, dump again, HWC back on ---
   # Only when an earlier form produced a flat image: that is the HWC symptom,
   # and toggling composition on a device that captured fine is not our call.
-  # The previous HWC state is queried first so we restore THAT (not a hard-
-  # coded 1) on images that can report it; the dump and the restore are each
-  # bounded, and a trap restores HWC if the script is signalled between
-  # `-hwc 0` and the restore (a SIGTERM there used to leave HWC disabled).
   if [ -n "$UNIFORM_FALLBACK" ]; then
     echo "  Capture was a single solid color — retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
     rm -f "$OUT_TMP"
 
-    local PREV_HWC QUERY_OK=0 HWC_RECOVERY="pending"
-    PREV_HWC=$(_e_hwc_query)
-    if [ "$PREV_HWC" = "0" ] || [ "$PREV_HWC" = "1" ]; then
-      QUERY_OK=1
-    else
-      PREV_HWC=1   # unknown — restore the compositor default and flag unverified
-    fi
+    # Remember the current HWC state so we restore THAT, not a hard-coded 1.
+    # `-hwc 2` is the e_info info query; images that report nothing fall back to 1.
+    local PREV_HWC NOW_HWC HWC_RUN=()
+    PREV_HWC=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n') || PREV_HWC=""
+    case "$PREV_HWC" in 0|1) ;; *) PREV_HWC=1 ;; esac
 
-    _e_hwc_cleanup() {
-      # Runs only if the normal restore has not (HWC_RECOVERY still pending);
-      # a duplicate restore is idempotent in any case.
-      [ "$HWC_RECOVERY" = "verified" ] || _e_hwc_restore "$PREV_HWC" "$QUERY_OK"
-    }
-    trap '_e_hwc_cleanup' INT TERM
+    # Restore HWC if the script is signalled (e.g. SIGTERM) between the
+    # toggle and the restore, so it cannot be left disabled.
+    trap '"$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc ${PREV_HWC}" >/dev/null 2>&1' INT TERM
 
-    "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 0" >/dev/null 2>&1 || true
+    if command -v timeout &>/dev/null; then HWC_RUN=(timeout 15); fi
+    "${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 0" >/dev/null 2>&1 || true
     sleep 1  # let the compositor redraw every plane through GL
-    _e_dump_screen "$OUT_TMP" "$HWC_DUMP_TIMEOUT"
-    _e_hwc_restore "$PREV_HWC" "$QUERY_OK"
+    _e_dump_screen "$OUT_TMP" 15
+    "${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc ${PREV_HWC}" >/dev/null 2>&1 || true
     trap - INT TERM
 
-    echo "  HWC restored: ${HWC_RECOVERY} (previous=${PREV_HWC})"
-    case "$HWC_RECOVERY" in
-      failed) echo "CAPTURE_WARNING=hwc_recovery_failed" ;;
-      unverified) echo "CAPTURE_WARNING=hwc_recovery_unverified" ;;
-    esac
+    # Verify the restore when the state is queryable.
+    NOW_HWC=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n') || NOW_HWC=""
+    if [ "$NOW_HWC" = "$PREV_HWC" ]; then
+      echo "  HWC restored to ${PREV_HWC}"
+    else
+      echo "  WARNING: HWC restore could not be verified (expected ${PREV_HWC}, got ${NOW_HWC:-no response})"
+      echo "CAPTURE_WARNING=hwc_recovery_unverified"
+    fi
 
     if verify_output "$OUT_TMP" && accept_capture "$OUT_TMP" "${E_TOOL} -dump_screen (hwc off)"; then
       _e_restore_root
@@ -528,13 +477,6 @@ try_enlightenment_info() {
 # ============================================================
 VNC_TIMEOUT="${TIZEN_VNC_TIMEOUT:-15}"
 
-# Bounds (seconds) for the HWC-off retry on Wayland/HWC targets. The dump and
-# the HWC restore each get their own deadline so a hung sdb call cannot stall
-# the chain past the 90 s script timeout; a SIGTERM between `-hwc 0` and the
-# restore is still cleaned up by the trap in try_enlightenment_info form 3.
-HWC_DUMP_TIMEOUT="${HWC_DUMP_TIMEOUT:-30}"
-HWC_RESTORE_TIMEOUT="${HWC_RESTORE_TIMEOUT:-15}"
-
 try_vnc() {
   echo "Trying: host-side VNC capture..."
 
@@ -548,7 +490,7 @@ try_vnc() {
     return 1
   fi
 
-  local SERVER="${TIZEN_VNC_SERVER:-}" FWD_PORT="" VNC_CONFIG="sdb-forward"
+  local SERVER="${TIZEN_VNC_SERVER:-}" FWD_PORT=""
   if [ -z "$SERVER" ]; then
     FWD_PORT="${TIZEN_VNC_LOCAL_PORT:-15900}"
     if ! "$SDB" -s "$SERIAL" forward "tcp:${FWD_PORT}" "tcp:${TIZEN_VNC_PORT:-5900}" >/dev/null 2>&1; then
@@ -556,13 +498,8 @@ try_vnc() {
       return 1
     fi
     SERVER="127.0.0.1::${FWD_PORT}"
-  else
-    VNC_CONFIG="env:TIZEN_VNC_SERVER"
   fi
   echo "  VNC server: ${SERVER} (client: ${CLIENT})"
-  # Machine line for lib/core/screenshot.js: the server that was tried and
-  # how it was configured, so a connection failure can name both in the warning.
-  echo "VNC_ATTEMPT=${SERVER}"$'\t'"${VNC_CONFIG}"
 
   local OUT_TMP STATUS=1
   OUT_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.png)
@@ -602,34 +539,27 @@ if not result.get("ok"):
     low = (err or "").lower()
     if "timed out" in low:
         cat = "timeout"
-    elif "refused" in low or "reset" in low or "unreachable" in low or "no route" in low:
-        cat = "connection_refused"
-    elif "auth" in low or "password" in low or "credential" in low or "security" in low:
+    elif "auth" in low or "password" in low or "credential" in low:
         cat = "auth_failed"
     else:
-        cat = "connection_failed"
-    # Machine line for the host script to surface in the envelope; the
-    # human-readable line still goes to stderr.
-    print("VNC_RESULT=failed\t%s\t%s" % (cat, " ".join(str(err).split())))
+        cat = "connection_refused"
+    # Machine line for lib/core/screenshot.js: category + the server tried.
+    print("VNC_RESULT=failed\t%s\t%s\t%s" % (cat, server, " ".join(str(err).split())))
     print("  VNC capture failed: " + err, file=sys.stderr)
     os._exit(1)
 print("  Captured via vncdotool -> " + out_path)
 os._exit(0)
 PYEOF
   else
-    local JPG_TMP RC=0
+    local JPG_TMP
     JPG_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.jpg)
     # Bound the connect like the vncdotool path ("${RUN[@]+...}": empty arrays
     # trip `set -u` on bash < 4.4, e.g. macOS /bin/bash).
     local RUN=()
     if command -v timeout &>/dev/null; then RUN=(timeout "$VNC_TIMEOUT"); fi
-    ${RUN[@]+"${RUN[@]}"} vncsnapshot -quiet -allowblank "$SERVER" "$JPG_TMP" >/dev/null 2>&1 || RC=$?
-    if [ "$RC" -eq 124 ]; then
-      echo "VNC_RESULT=failed"$'\t'"timeout"$'\t'"vncsnapshot timed out after ${VNC_TIMEOUT}s"
-    elif [ "$RC" -ne 0 ]; then
-      echo "VNC_RESULT=failed"$'\t'"connection_failed"$'\t'"vncsnapshot exited ${RC}"
-    fi
-    if [ "$RC" -eq 0 ] && verify_output "$JPG_TMP"; then
+    local VSNAP_RC=0
+    ${RUN[@]+"${RUN[@]}"} vncsnapshot -quiet -allowblank "$SERVER" "$JPG_TMP" >/dev/null 2>&1 || VSNAP_RC=$?
+    if [ "$VSNAP_RC" -eq 0 ] && verify_output "$JPG_TMP"; then
       python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2], "PNG")' "$JPG_TMP" "$OUT_TMP" && STATUS=0
     fi
     rm -f "$JPG_TMP"

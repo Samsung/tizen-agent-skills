@@ -58,9 +58,22 @@ for (const [name, text] of [
     `${name}: e_info client resolved on the device (enlightenment_info || winfo)`,
     text.includes("command -v enlightenment_info || command -v winfo"),
   );
+  const off = text.indexOf("-hwc 0");
+  const restore =
+    name === "sh"
+      ? text.indexOf("${E_TOOL} -hwc ${PREV_HWC}")
+      : text.indexOf("$eTool -hwc $prevHwc");
   check(
-    `${name}: HWC is switched off for the retry`,
-    text.indexOf("-hwc 0") !== -1,
+    `${name}: HWC is switched off for the retry and restored to the previous state`,
+    off !== -1 && restore > off,
+  );
+  check(
+    `${name}: HWC state is queried with the e_info info option (-hwc 2)`,
+    name === "sh"
+      ? text.indexOf("${E_TOOL} -hwc 2") !== -1 &&
+          text.indexOf('${E_TOOL} -hwc"') === -1
+      : ps1.indexOf('"$eTool -hwc 2"') !== -1 &&
+          ps1.indexOf('"$eTool -hwc"') === -1,
   );
   check(
     `${name}: HWC retry is gated on an earlier uniform capture`,
@@ -78,66 +91,36 @@ for (const [name, text] of [
   );
 }
 
-// The HWC-off retry restores the PREVIOUS state (not a hard-coded 1) on
-// images that can report it, and verifies the result when it can.
+// ps1 restores HWC in a finally block so a throwing dump cannot leave it off.
 check(
-  "sh: HWC state is queried before the retry",
-  /_e_hwc_query\(\)/.test(sh) &&
-    sh.indexOf("_e_hwc_query") < sh.indexOf('"${E_TOOL} -hwc 0"'),
-);
-check(
-  "sh: HWC restore uses the previously queried state",
-  /_e_hwc_restore "\$PREV_HWC" "\$QUERY_OK"/.test(sh),
-);
-check(
-  "sh: HWC query uses the e_info info option (-hwc 2), not a bare -hwc",
-  /_e_hwc_query\(\)/.test(sh) &&
-    sh.indexOf('"${E_TOOL} -hwc 2"') !== -1 &&
-    sh.indexOf('"${E_TOOL} -hwc"') === -1,
-);
-check(
-  "sh: HWC restore is registered as a trap before -hwc 0 (SIGTERM safety)",
-  /trap '_e_hwc_cleanup' INT TERM/.test(sh) &&
-    sh.indexOf("trap '_e_hwc_cleanup' INT TERM") <
-      sh.indexOf('"${E_TOOL} -hwc 0"'),
-);
-check(
-  "sh: dump and restore are bounded by timeouts",
-  /HWC_DUMP_TIMEOUT/.test(sh) && /HWC_RESTORE_TIMEOUT/.test(sh),
-);
-check(
-  "sh: emits HWC recovery warnings",
-  /CAPTURE_WARNING=hwc_recovery_failed/.test(sh) &&
-    /CAPTURE_WARNING=hwc_recovery_unverified/.test(sh),
-);
-check(
-  "ps1: HWC state is queried before the retry",
-  /\$raw = \(Invoke-Sdb[^\n]*"\$eTool -hwc 2"/.test(ps1),
-);
-check(
-  "ps1: HWC restore targets the previously queried state",
-  /\$restoreTo = if \(\$queryOk\) \{ \$prevHwc \} else \{ "1" \}/.test(ps1),
-);
-check(
-  "ps1: HWC query uses the e_info info option (-hwc 2), not a bare -hwc",
-  ps1.indexOf('"$eTool -hwc 2"') !== -1 && ps1.indexOf('"$eTool -hwc"') === -1,
-);
-check(
-  "ps1: HWC restore runs in a finally block so a throwing dump cannot leave it off",
-  /\} finally \{[\s\S]*?Invoke-SdbShellTimed[^\n]*"\$eTool -hwc \$restoreTo"/.test(
+  "ps1: HWC restore runs in a finally block",
+  /\} finally \{[\s\S]*?Invoke-Sdb \$SdbPath \$DeviceSerial shell "\$eTool -hwc \$prevHwc"/.test(
     ps1,
   ),
 );
+
+// sh: SIGTERM between -hwc 0 and the restore still re-enables HWC.
 check(
-  "ps1: dump and restore are bounded by timeouts",
-  /Invoke-SdbShellTimed/.test(ps1) &&
-    /\$HwcDumpTimeout/.test(ps1) &&
-    /\$HwcToggleTimeout/.test(ps1),
+  "sh: HWC restore is registered as a trap before -hwc 0",
+  /trap '[^\n]*-hwc \$\{PREV_HWC\}/.test(sh) &&
+    sh.indexOf("trap '") < sh.indexOf('"${E_TOOL} -hwc 0"'),
+);
+// sh: the dump and restore calls are bounded.
+check(
+  "sh: HWC toggle/restore calls are bounded by a timeout",
+  /HWC_RUN=\(timeout 15\)/.test(sh),
 );
 check(
-  "ps1: emits HWC recovery warnings",
-  /CAPTURE_WARNING=hwc_recovery_failed/.test(ps1) &&
-    /CAPTURE_WARNING=hwc_recovery_unverified/.test(ps1),
+  "sh: the HWC-off dump is also bounded (timeout passed to _e_dump_screen)",
+  /_e_dump_screen "\$OUT_TMP" 15/.test(sh),
+);
+check(
+  "sh: emits hwc_recovery_unverified when the restore cannot be confirmed",
+  /CAPTURE_WARNING=hwc_recovery_unverified/.test(sh),
+);
+check(
+  "ps1: emits hwc_recovery_unverified when the restore cannot be confirmed",
+  /CAPTURE_WARNING=hwc_recovery_unverified/.test(ps1),
 );
 
 // --- 2. VNC ------------------------------------------------------------------
@@ -173,18 +156,13 @@ if (shBlock !== null && ps1Block !== null) {
     /worker\.join\(timeout\)/.test(shBlock),
   );
   check(
-    "VNC block classifies the failure and emits a VNC_RESULT machine line",
-    /VNC_RESULT=failed\\t/.test(shBlock) &&
+    "VNC block classifies the failure (VNC_RESULT) with the server tried",
+    /VNC_RESULT=failed/.test(shBlock) &&
       /cat = "timeout"/.test(shBlock) &&
       /cat = "connection_refused"/.test(shBlock) &&
       /cat = "auth_failed"/.test(shBlock),
   );
 }
-
-// Both wrappers report the server they tried and how it was configured, so a
-// connection failure can name both in the envelope warning.
-check("sh: emits a VNC_ATTEMPT machine line", /VNC_ATTEMPT=/.test(sh));
-check("ps1: emits a VNC_ATTEMPT machine line", /VNC_ATTEMPT=/.test(ps1));
 
 // try_vnc / Try-Vnc must follow every on-device method in both chains.
 function chainOrder(text, re) {

@@ -33,21 +33,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Changed
 
-- **HWC restore and VNC failure detail for the screenshot fallbacks**
+- **Screenshot HWC restore and VNC failure detail**
   (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
   `common/lib/core/screenshot.js`, `common/lib/tests/screenshot-fallbacks.test.js`).
-  The HWC-off retry now queries the current HWC state first (the e_info
-  `-hwc 2` info option) and restores THAT (not a hard-coded 1) on images that
-  can report it; the restore is verified when possible and the envelope warns
-  on `hwc_recovery_failed` / `hwc_recovery_unverified`. Verified against a DA
-  appliance where `-hwc 2` returns no state, so the restore falls back to the
-  compositor default flagged unverified. In the `.sh` the dump and the restore are each
-  bounded by a timeout (`HWC_DUMP_TIMEOUT`, `HWC_RESTORE_TIMEOUT`) and a trap
-  restores HWC if the script is signalled between `-hwc 0` and the restore; the
-  `.ps1` bounds the same calls through `Invoke-SdbShellTimed`. A VNC
+  The HWC-off retry now queries the current state (`-hwc 2`) and restores THAT
+  on images that can report it (falling back to 1 when the query returns nothing);
+  the restore is verified and warned on when it cannot be confirmed. In `.sh` a trap restores HWC on SIGTERM between the toggle and
+  the restore, and the toggle/restore calls are bounded by a timeout. A VNC
   connection failure is now classified (timeout / connection refused / auth
-  failed) and the envelope warning names the attempted server and how it was
-  configured (`VNC_ATTEMPT` / `VNC_RESULT`).
+  failed) and the envelope warning names the server that was tried.
 
 ### Changed
 
