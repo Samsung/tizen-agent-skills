@@ -12,6 +12,10 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-10-21
+
+Repository-wide release that ships `tizen-sdk-skills` 1.4.5 and `tizen-action-skills` 1.0.0.
+
 ### Added
 
 - **Pull request review skill** (`.claude/skills/tizen-sdk-skills-review/SKILL.md`). A
@@ -19,6 +23,18 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
   runs `check-pr.js` and the matching safe-tier checks, rechecks earlier findings, and
   posts one English review comment after the reviewer confirms. `.gitignore` now tracks
   `.claude/skills/` while still ignoring the rest of `.claude/`.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.4.4 to 1.4.5 (#47). Highlights: the command
+  guard hook is scoped to Tizen work — its Tizen tooling rules apply only once an SDK is
+  configured through the plugin (`~/.tizen.sdk.path.config`), it no longer forbids the
+  `tizen` CLI or looking up where sdb is, and a hand-typed sdb must be the configured
+  SDK's `tools/sdb`. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
+  for the full list. The release assets stamped with the plugin version are therefore
+  `tizen-sdk-v1.4.5.zip` and `tizen-ai-extension-v1.4.5.vsix`.
+- Root `.claude-plugin/marketplace.json` catalog version follows the `tizen-sdk-skills`
+  plugin (1.4.5).
 
 ## [1.1.1] — 2026-10-16
 
