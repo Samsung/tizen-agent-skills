@@ -10,17 +10,19 @@
  *
  *   1. enlightenment_info / winfo: the e_info client is resolved on the device
  *      (`winfo` on some images), and a flat dump is retried with `-hwc 0`,
- *      always followed by `-hwc 1`.
+ *      always followed by `-hwc 1` (the client cannot report the old state).
  *   2. Host-side VNC: the vncdotool Python block (between the
  *      `# --- VNC capture (vncdotool) ---` marker and `os._exit(0)`) is
  *      byte-identical in both scripts, never takes the password from argv, and
  *      runs after every on-device method in both chains.
  *
- * Static checks only — no device, Python or VNC server needed.
+ * Plus the envelope warnings screenshot.js builds from the script output.
+ * No device, Python or VNC server needed.
  */
 
 const fs = require("fs");
 const path = require("path");
+const { extractCaptureWarnings } = require("../core/screenshot");
 
 const SCRIPTS = path.join(__dirname, "..", "..", "scripts", "tizen-screenshot");
 const SH = path.join(SCRIPTS, "tizen-screenshot.sh");
@@ -58,22 +60,20 @@ for (const [name, text] of [
     `${name}: e_info client resolved on the device (enlightenment_info || winfo)`,
     text.includes("command -v enlightenment_info || command -v winfo"),
   );
-  const off = text.indexOf("-hwc 0");
+  const tool = name === "sh" ? "${E_TOOL}" : "$eTool";
+  const off = text.indexOf(`"${tool} -hwc 0"`);
+  const restoreCmd = text.includes(`"${tool} -hwc 1 2>&1; echo HWC_RC=`);
   const restore =
     name === "sh"
-      ? text.indexOf("${E_TOOL} -hwc ${PREV_HWC}")
-      : text.indexOf("$eTool -hwc $prevHwc");
+      ? text.indexOf("if _e_hwc_on; then")
+      : text.indexOf(`"${tool} -hwc 1 2>&1; echo HWC_RC=`);
   check(
-    `${name}: HWC is switched off for the retry and restored to the previous state`,
-    off !== -1 && restore > off,
+    `${name}: HWC is switched off for the retry and switched back on, judged by the remote exit status`,
+    off !== -1 && restoreCmd && restore > off,
   );
   check(
-    `${name}: HWC state is queried with the e_info info option (-hwc 2)`,
-    name === "sh"
-      ? text.indexOf("${E_TOOL} -hwc 2") !== -1 &&
-          text.indexOf('${E_TOOL} -hwc"') === -1
-      : ps1.indexOf('"$eTool -hwc 2"') !== -1 &&
-          ps1.indexOf('"$eTool -hwc"') === -1,
+    `${name}: no -hwc 2 state query (it only logs to dlog)`,
+    !text.includes(`${tool} -hwc 2"`),
   );
   check(
     `${name}: HWC retry is gated on an earlier uniform capture`,
@@ -91,20 +91,38 @@ for (const [name, text] of [
   );
 }
 
-// ps1 restores HWC in a finally block so a throwing dump cannot leave it off.
+// ps1 restores HWC in a finally block so a throwing dump cannot leave it off,
+// and bounds every HWC-path call: a timeout kill skips `finally` on Windows.
 check(
   "ps1: HWC restore runs in a finally block",
-  /\} finally \{[\s\S]*?Invoke-Sdb \$SdbPath \$DeviceSerial shell "\$eTool -hwc \$prevHwc"/.test(
+  /\} finally \{[\s\S]*?Invoke-SdbShellBounded \$SdbPath \$DeviceSerial "\$eTool -hwc 1/.test(
     ps1,
   ),
 );
-
-// sh: SIGTERM between -hwc 0 and the restore still re-enables HWC.
 check(
-  "sh: HWC restore is registered as a trap before -hwc 0",
-  /trap '[^\n]*-hwc \$\{PREV_HWC\}/.test(sh) &&
-    sh.indexOf("trap '") < sh.indexOf('"${E_TOOL} -hwc 0"'),
+  "ps1: HWC toggle and the HWC-off dump are bounded",
+  ps1.includes(
+    'Invoke-SdbShellBounded $SdbPath $DeviceSerial "$eTool -hwc 0"',
+  ) &&
+    ps1.includes("Invoke-DumpScreen $tempPng -Bounded") &&
+    /\$proc\.WaitForExit\(\$TimeoutMs\)/.test(ps1),
 );
+
+// sh: SIGINT/SIGTERM between -hwc 0 and the restore re-enables HWC, drops
+// root and ends the script instead of resuming the capture chain.
+const hwcOff = sh.indexOf('"${E_TOOL} -hwc 0"');
+for (const [sig, code] of [
+  ["INT", 130],
+  ["TERM", 143],
+]) {
+  const trap = sh.indexOf(
+    `trap '_e_hwc_on || true; _e_restore_root; exit ${code}' ${sig}`,
+  );
+  check(
+    `sh: ${sig} trap restores HWC and exits ${code}, registered before -hwc 0`,
+    trap !== -1 && trap < hwcOff,
+  );
+}
 // sh: the dump and restore calls are bounded.
 check(
   "sh: HWC toggle/restore calls are bounded by a timeout",
@@ -160,7 +178,14 @@ if (shBlock !== null && ps1Block !== null) {
     /VNC_RESULT=failed/.test(shBlock) &&
       /cat = "timeout"/.test(shBlock) &&
       /cat = "connection_refused"/.test(shBlock) &&
+      /cat = "connection_failed"/.test(shBlock) &&
       /cat = "auth_failed"/.test(shBlock),
+  );
+  // os._exit skips the flush, and stdout is a pipe under execSync.
+  check(
+    "VNC block flushes stdout before every os._exit",
+    (shBlock.match(/sys\.stdout\.flush\(\)\n\s*os\._exit/g) || []).length ===
+      (shBlock.match(/os\._exit\(/g) || []).length,
   );
 }
 
@@ -206,6 +231,60 @@ check(
 check(
   "ps1: forwarded VNC port is removed afterwards",
   /forward '--remove' "tcp:\$fwdPort"/.test(ps1),
+);
+
+check(
+  "sh: a signal during the VNC attempt still removes the forward",
+  /trap '"\$SDB" -s "\$SERIAL" forward --remove "tcp:\$\{FWD_PORT\}" >\/dev\/null 2>&1; exit 143' TERM/.test(
+    sh,
+  ),
+);
+
+// --- 3. Envelope warnings (screenshot.js) -------------------------------------
+
+const UNIFORM = "CAPTURE_WARNING=uniform_image";
+let w = extractCaptureWarnings(
+  `  No VNC client on host (pip install vncdotool) - skipping\n${UNIFORM}\n`,
+);
+check(
+  "warnings: uniform + no VNC client adds the install hint",
+  w.length === 2 && /pip install vncdotool/.test(w[1]),
+  JSON.stringify(w),
+);
+w = extractCaptureWarnings(`${UNIFORM}\n`);
+check("warnings: uniform alone gives one warning", w.length === 1);
+w = extractCaptureWarnings(
+  `VNC_RESULT=failed\tconnection_refused\tforward\t127.0.0.1::15900\t[Errno 111] Connection refused\r\n${UNIFORM}\r\n`,
+);
+check(
+  "warnings: forwarded VNC failure names the server and the sdb forward (CRLF output)",
+  w.length === 2 &&
+    w[1].includes("(connection_refused): [Errno 111] Connection refused.") &&
+    w[1].includes("Attempted server: 127.0.0.1::15900.") &&
+    w[1].includes("forwarded over sdb"),
+  JSON.stringify(w),
+);
+w = extractCaptureWarnings(
+  `VNC_RESULT=failed\ttimeout\tenv\t127.0.0.1::5901\ttimed out after 15s\n${UNIFORM}\n`,
+);
+check(
+  "warnings: a TIZEN_VNC_SERVER failure is attributed by source, not by address",
+  w.length === 2 && w[1].includes("the server named by TIZEN_VNC_SERVER"),
+  JSON.stringify(w),
+);
+w = extractCaptureWarnings(
+  "VNC_RESULT=failed\ttimeout\tforward\t127.0.0.1::15900\ttimed out after 15s\nSUCCESS: host-side xwd\n",
+);
+check(
+  "warnings: no VNC warning when a later method captured a real image",
+  w.length === 0,
+  JSON.stringify(w),
+);
+w = extractCaptureWarnings("CAPTURE_WARNING=hwc_recovery_unverified\r\n");
+check(
+  "warnings: hwc_recovery_unverified is reported",
+  w.length === 1 && /re-enable HWC/.test(w[0]),
+  JSON.stringify(w),
 );
 
 console.log(

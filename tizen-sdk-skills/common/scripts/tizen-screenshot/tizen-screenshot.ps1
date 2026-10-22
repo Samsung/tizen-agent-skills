@@ -82,6 +82,31 @@ function Invoke-Sdb {
     Invoke-Native -Exe $SdbPath -Arguments (@('-s', $DeviceSerial) + $SdbArgs)
 }
 
+# Run one `sdb shell <command>` and kill it after $TimeoutMs, like `timeout 15`
+# in the .sh. Used where a hang would leave the device changed (HWC off):
+# when the Node caller kills this script on its own timeout, `finally` blocks
+# do not run on Windows. $Command must not contain double quotes.
+# Returns the stdout text, or $null when the call timed out.
+function Invoke-SdbShellBounded {
+    param([string]$SdbPath, [string]$DeviceSerial, [string]$Command, [int]$TimeoutMs = 15000)
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $SdbPath
+    $psi.Arguments = "-s `"$DeviceSerial`" shell `"$Command`""
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.CreateNoWindow = $true
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdoutTask = $proc.StandardOutput.ReadToEndAsync()
+    $null = $proc.StandardError.ReadToEndAsync()
+    if (-not $proc.WaitForExit($TimeoutMs)) {
+        try { $proc.Kill() } catch { }
+        $proc.WaitForExit(5000) | Out-Null
+        return $null
+    }
+    return $stdoutTask.Result
+}
+
 # ============================================================================
 # Resolve sdb path
 # ============================================================================
@@ -570,7 +595,7 @@ function Try-DeviceCapture {
 #     4. With HWC active the UI sits on TDM overlay planes the compositor never
 #        draws into its own buffer, so -dump_screen is solid black. When forms
 #        1-2 come back uniform, form 3 runs `-hwc 0`, dumps again, and always
-#        restores `-hwc 1`.
+#        turns HWC back on with `-hwc 1`.
 #   Mirrors try_enlightenment_info in tizen-screenshot.sh.
 # ============================================================================
 
@@ -608,9 +633,13 @@ function Try-EnlightenmentInfo {
     Write-Info "e_info client: $eTool"
 
     # -dump_screen into $Dest (a host path); the caller judges the file.
-    function Invoke-DumpScreen([string]$Dest) {
+    function Invoke-DumpScreen([string]$Dest, [switch]$Bounded) {
         Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
-        Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump_screen -p /tmp/ -n $devName" | Out-Null
+        if ($Bounded) {
+            $null = Invoke-SdbShellBounded $SdbPath $DeviceSerial "$eTool -dump_screen -p /tmp/ -n $devName"
+        } else {
+            Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -dump_screen -p /tmp/ -n $devName" | Out-Null
+        }
         Invoke-Sdb $SdbPath $DeviceSerial pull "/tmp/$devName" $Dest | Out-Null
         Invoke-Sdb $SdbPath $DeviceSerial shell "rm -f /tmp/$devName" | Out-Null
     }
@@ -652,24 +681,22 @@ function Try-EnlightenmentInfo {
             Write-Info "Capture was a single solid color - retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
             Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
 
-            # Remember the current HWC state so we restore THAT, not a hard-coded 1.
-            # `-hwc 2` is the e_info info query; images that report nothing fall back to 1.
-            $prevHwc = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
-            if ($prevHwc -ne "0" -and $prevHwc -ne "1") { $prevHwc = "1" }
-
+            # The e_info client cannot report the HWC state (`-hwc 2` only logs it
+            # to dlog), so HWC is turned back on with `-hwc 1`. Success is exit 0
+            # with no output: a failed D-Bus call prints an error yet still exits
+            # 0. The status is echoed because sdb shell does not forward it.
+            # Every call is bounded so the script cannot be killed with HWC off.
             try {
-                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 0" | Out-Null
+                $null = Invoke-SdbShellBounded $SdbPath $DeviceSerial "$eTool -hwc 0"
                 Start-Sleep -Seconds 1  # let the compositor redraw every plane through GL
-                Invoke-DumpScreen $tempPng
+                Invoke-DumpScreen $tempPng -Bounded
             } finally {
-                # finally: a throwing dump still restores HWC to the previous state.
-                Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc $prevHwc" | Out-Null
-                $nowHwc = (Invoke-Sdb $SdbPath $DeviceSerial shell "$eTool -hwc 2" | Out-String).Trim()
-                if ($nowHwc -eq $prevHwc) {
-                    Write-Info "HWC restored to $prevHwc"
+                # finally: a throwing dump still re-enables HWC.
+                $hwcOut = Invoke-SdbShellBounded $SdbPath $DeviceSerial "$eTool -hwc 1 2>&1; echo HWC_RC=`$?"
+                if ($hwcOut -and $hwcOut.Trim() -eq "HWC_RC=0") {
+                    Write-Info "HWC re-enabled"
                 } else {
-                    $got = if ($nowHwc) { $nowHwc } else { "no response" }
-                    Write-Warn "HWC restore could not be verified (expected $prevHwc, got $got)"
+                    Write-Warn "re-enabling HWC ($eTool -hwc 1) failed or timed out"
                     Write-Host "CAPTURE_WARNING=hwc_recovery_unverified"
                 }
             }
@@ -823,10 +850,16 @@ function Try-Vnc {
         return $false
     }
 
-    $timeout = if ($env:TIZEN_VNC_TIMEOUT) { $env:TIZEN_VNC_TIMEOUT } else { "15" }
+    # Whole seconds, 1-60: the Node caller gives the entire chain 90 s.
+    $timeout = 15
+    if ($env:TIZEN_VNC_TIMEOUT -match '^\d{1,2}$' -and [int]$env:TIZEN_VNC_TIMEOUT -ge 1 -and [int]$env:TIZEN_VNC_TIMEOUT -le 60) {
+        $timeout = [int]$env:TIZEN_VNC_TIMEOUT
+    }
     $server = $env:TIZEN_VNC_SERVER
+    $source = "env"
     $fwdPort = $null
     if (-not $server) {
+        $source = "forward"
         $fwdPort = if ($env:TIZEN_VNC_LOCAL_PORT) { $env:TIZEN_VNC_LOCAL_PORT } else { "15900" }
         $devPort = if ($env:TIZEN_VNC_PORT) { $env:TIZEN_VNC_PORT } else { "5900" }
         Invoke-Sdb $SdbPath $DeviceSerial forward "tcp:$fwdPort" "tcp:$devPort" | Out-Null
@@ -846,7 +879,7 @@ function Try-Vnc {
 import os, sys, threading
 from vncdotool import api
 
-server, out_path, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
+server, out_path, timeout, source = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 password = os.environ.get("TIZEN_VNC_PASSWORD") or None
 result = {}
 
@@ -875,13 +908,19 @@ if not result.get("ok"):
         cat = "timeout"
     elif "auth" in low or "password" in low or "credential" in low:
         cat = "auth_failed"
-    else:
+    elif "refused" in low:
         cat = "connection_refused"
-    # Machine line for lib/core/screenshot.js: category + the server tried.
-    print("VNC_RESULT=failed\t%s\t%s\t%s" % (cat, server, " ".join(str(err).split())))
+    else:
+        cat = "connection_failed"
+    # Machine line for lib/core/screenshot.js: category, where the server came
+    # from (forward / env) and the server tried.
+    print("VNC_RESULT=failed\t%s\t%s\t%s\t%s" % (cat, source, server, " ".join(str(err).split())))
     print("  VNC capture failed: " + err, file=sys.stderr)
+    # os._exit skips the interpreter's flush, and a piped stdout is buffered.
+    sys.stdout.flush()
     os._exit(1)
 print("  Captured via vncdotool -> " + out_path)
+sys.stdout.flush()
 os._exit(0)
 '@
 
@@ -891,14 +930,19 @@ os._exit(0)
     Remove-Item $tempPng -Force -ErrorAction SilentlyContinue
 
     try {
-        Invoke-Native -Exe $pythonExe -Arguments @($pyFile, $server, $tempPng, "$timeout") -MergeStderr | Out-Host
+        Invoke-Native -Exe $pythonExe -Arguments @($pyFile, $server, $tempPng, "$timeout", $source) -MergeStderr | Out-Host
         $success = $LASTEXITCODE -eq 0
     } catch {
         $success = $false
     } finally {
         Remove-Item $pyFile -Force -ErrorAction SilentlyContinue
         # '--remove' quoted: a bare --name token would bind as a parameter of Invoke-Sdb.
-        if ($fwdPort) { Invoke-Sdb $SdbPath $DeviceSerial forward '--remove' "tcp:$fwdPort" | Out-Null }
+        if ($fwdPort) {
+            Invoke-Sdb $SdbPath $DeviceSerial forward '--remove' "tcp:$fwdPort" | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "could not remove sdb forward tcp:$fwdPort - remove it with: sdb -s $DeviceSerial forward --remove tcp:$fwdPort"
+            }
+        }
     }
 
     $result = $false
