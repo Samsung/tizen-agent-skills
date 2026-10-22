@@ -2383,6 +2383,24 @@ check(
   "cat /x/a.info 2>/dev/null; echo @@CRASH rc=$?",
 );
 check(
+  "dir extract checks directory readability before listing members",
+  buildCrashExtractScript(
+    { path: "/run/crash/dump/a_dir", kind: "dir" },
+    "info",
+  ).includes(
+    "[ ! -r /run/crash/dump/a_dir ] || [ ! -x /run/crash/dump/a_dir ]",
+  ),
+  true,
+);
+check(
+  "dir extract emits a denied-dir marker (not a bare rc) when unreadable",
+  buildCrashExtractScript(
+    { path: "/run/crash/dump/a_dir", kind: "dir" },
+    "info",
+  ).includes("@@CRASH denied-dir"),
+  true,
+);
+check(
   "tar member name is quoted and after '--' (it comes from the archive, so it must not be read as a tar option)",
   buildCrashExtractScript(
     { path: "/run/crash/dump/a.tar.gz", kind: "tar.gz" },
@@ -2658,6 +2676,26 @@ const crashReportTest = (async () => {
       ],
       [true, undefined, undefined],
     );
+    listOutput = [
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000", // a directory entry (no extension)
+    ].join("\n");
+    override = (s) =>
+      s.includes("@@CRASH denied-dir") ? "@@CRASH denied-dir\n" : undefined;
+    const deniedDir = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: path.join(tmp, "denied-dir"),
+    });
+    const deniedRep = deniedDir.result && deniedDir.result.reports[0];
+    check(
+      "an unreadable dir entry gives a clear 'not readable' error",
+      deniedRep && /not readable by the sdb shell user/.test(deniedRep.error),
+      true,
+    );
+    listOutput = [
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000.info",
+    ].join("\n");
     override = (s) =>
       s.startsWith("cat ")
         ? "cat: /run/crash/dump/deviced_21_20261020100000.info: Permission denied\n"
