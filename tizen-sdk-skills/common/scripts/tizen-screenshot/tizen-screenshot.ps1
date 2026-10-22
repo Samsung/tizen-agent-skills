@@ -850,9 +850,10 @@ function Try-Vnc {
         return $false
     }
 
-    # Whole seconds, 1-60: the Node caller gives the entire chain 90 s.
+    # Whole seconds, 1-30: the Node caller gives the entire chain 90 s, and
+    # the HWC path alone can take ~46 s, so a long VNC timeout must not push past it.
     $timeout = 15
-    if ($env:TIZEN_VNC_TIMEOUT -match '^\d{1,2}$' -and [int]$env:TIZEN_VNC_TIMEOUT -ge 1 -and [int]$env:TIZEN_VNC_TIMEOUT -le 60) {
+    if ($env:TIZEN_VNC_TIMEOUT -match '^\d{1,2}$' -and [int]$env:TIZEN_VNC_TIMEOUT -ge 1 -and [int]$env:TIZEN_VNC_TIMEOUT -le 30) {
         $timeout = [int]$env:TIZEN_VNC_TIMEOUT
     }
     $server = $env:TIZEN_VNC_SERVER

@@ -33,7 +33,10 @@
   Ubuntu/Linux에서는 `vncsnapshot`도 씁니다. 스크립트 타임아웃은 60초에서 90초로 늘었습니다.
   단색 결과를 돌려주면서 VNC 클라이언트가 없었다면 envelope 경고에 설치할 것을 안내하고,
   클라이언트는 있었지만 연결에 실패했다면 원인(시간 초과 / 연결 거부 / 연결 실패 / 인증
-  실패)과 시도한 서버를 알려 줍니다. `screenshot-fallbacks.test.js`가 `.sh`와 `.ps1`이
+  실패)과 시도한 서버를 알려 줍니다. 아무 캡처도 얻지 못한 error 경로에서도 같은 VNC
+  상세 내용을 표시합니다. VNC 타임아웃(`TIZEN_VNC_TIMEOUT`) 상한을 30초로 제한해 긴 VNC 대기가
+  90초 Node 타임아웃을 넘기지 않도록 하고, `timeout` 명령이 없으면 `gtimeout`(macOS Homebrew
+  coreutils)으로 폴백합니다. `screenshot-fallbacks.test.js`가 `.sh`와 `.ps1`이
   함께 바뀌었는지 확인하고 envelope 경고를 테스트합니다.
 
 ### Changed

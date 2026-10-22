@@ -78,6 +78,29 @@ function extractCaptureMethod(stdout) {
 }
 
 /**
+ * Build the VNC failure warning (category + server + source) from a
+ * VNC_RESULT=failed machine line, or null when the line is absent.
+ *
+ * @param {string} stdout - script output
+ * @returns {string|null}
+ */
+function extractVncFailureWarning(stdout) {
+  const vncFail = (stdout || "").match(
+    /^VNC_RESULT=failed\t(\S+)\t(\S+)\t([^\t]*)\t(.*?)\r?$/m,
+  );
+  if (!vncFail) return null;
+  const [, category, source, server, detail] = vncFail;
+  const where =
+    source === "forward"
+      ? "the device VNC port forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT, or set TIZEN_VNC_SERVER to name an external server)"
+      : "the server named by TIZEN_VNC_SERVER";
+  return (
+    `VNC capture failed (${category}): ${detail}. Attempted server: ${server}. ` +
+    `This came from ${where}.`
+  );
+}
+
+/**
  * Turn the script's CAPTURE_WARNING=<key> machine lines into envelope warnings.
  *
  * uniform_image: every capture method either failed or produced a single flat
@@ -109,20 +132,8 @@ function extractCaptureWarnings(stdout) {
     // A VNC attempt ran (a host client was present) but the server connection
     // failed: classify it and name the server tried. Only relevant when the
     // result is still flat — a later method may have captured the screen.
-    const vncFail = (stdout || "").match(
-      /^VNC_RESULT=failed\t(\S+)\t(\S+)\t([^\t]*)\t(.*?)\r?$/m,
-    );
-    if (vncFail) {
-      const [, category, source, server, detail] = vncFail;
-      const where =
-        source === "forward"
-          ? "the device VNC port forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT, or set TIZEN_VNC_SERVER to name an external server)"
-          : "the server named by TIZEN_VNC_SERVER";
-      warnings.push(
-        `VNC capture failed (${category}): ${detail}. Attempted server: ${server}. ` +
-          `This came from ${where}.`,
-      );
-    }
+    const vncWarning = extractVncFailureWarning(stdout);
+    if (vncWarning) warnings.push(vncWarning);
   }
   // HWC was toggled off to capture; when turning it back on failed or timed
   // out the device may be left without hardware composition.
@@ -380,10 +391,15 @@ async function captureScreenshot(
         { warnings },
       );
     } else {
+      // When every method failed outright (no stashed image), the VNC detail
+      // is lost unless we surface it here — the caller cannot tell which
+      // server was tried.
+      const vncWarning = extractVncFailureWarning(stdout);
       return formatError(
         command,
         "capture_failed",
-        `Screenshot capture failed (exit ${exitCode}).${stderr ? ` — ${stderr.trim()}` : ""}`,
+        `Screenshot capture failed (exit ${exitCode}).${stderr ? ` — ${stderr.trim()}` : ""}` +
+          (vncWarning ? ` — ${vncWarning}` : ""),
         null,
         startTime,
       );
@@ -402,6 +418,7 @@ async function captureScreenshot(
 module.exports = {
   captureScreenshot,
   extractCaptureWarnings,
+  extractVncFailureWarning,
   // Re-exported from ./sdb for backward compatibility with existing callers/tests
   resolveSdb,
 };

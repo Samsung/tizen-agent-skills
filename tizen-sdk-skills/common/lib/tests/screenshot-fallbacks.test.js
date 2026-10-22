@@ -287,6 +287,85 @@ check(
   JSON.stringify(w),
 );
 
+// --- 4. VNC timeout cap and gtimeout fallback (.sh) --------------------------
+
+check(
+  "sh: VNC timeout capped at 30 (not 60)",
+  /\$VNC_TIMEOUT" -gt 30/.test(sh) && !/\$VNC_TIMEOUT" -gt 60/.test(sh),
+);
+check(
+  "ps1: VNC timeout capped at 30 (not 60)",
+  /TIZEN_VNC_TIMEOUT -le 30/.test(ps1) && !/TIZEN_VNC_TIMEOUT -le 60/.test(ps1),
+);
+check(
+  "sh: gtimeout fallback for _e_dump_screen",
+  /elif \[ "\$ttl" -gt 0 \] && command -v gtimeout &>\/dev\/null; then\n {6}RUN=\(gtimeout "\$ttl"\)/.test(
+    sh,
+  ),
+);
+check(
+  "sh: gtimeout fallback for HWC_RUN",
+  /elif command -v gtimeout &>\/dev\/null; then HWC_RUN=\(gtimeout 15\)/.test(
+    sh,
+  ),
+);
+check(
+  "sh: gtimeout fallback for VNC vncsnapshot timeout",
+  /elif command -v gtimeout &>\/dev\/null; then RUN=\(gtimeout "\$VNC_TIMEOUT"\)/.test(
+    sh,
+  ),
+);
+check(
+  "sh: no duplicate redirect in _e_dump_screen timeout check",
+  !/command -v timeout &>\/dev\/null 2>&1/.test(sh),
+);
+
+// --- 5. VNC failure detail in error path (screenshot.js) ----------------------
+
+const { extractVncFailureWarning } = require("../core/screenshot");
+const vncWarn = extractVncFailureWarning(
+  "VNC_RESULT=failed\tconnection_refused\tforward\t127.0.0.1::15900\t[Errno 111] Connection refused\n",
+);
+check(
+  "extractVncFailureWarning returns the category, server and source",
+  vncWarn !== null &&
+    vncWarn.includes("(connection_refused)") &&
+    vncWarn.includes("Attempted server: 127.0.0.1::15900.") &&
+    vncWarn.includes("forwarded over sdb"),
+  JSON.stringify(vncWarn),
+);
+const vncWarnNone = extractVncFailureWarning("no VNC here\n");
+check(
+  "extractVncFailureWarning returns null when VNC_RESULT is absent",
+  vncWarnNone === null,
+);
+
+// --- 6. Error path surfaces VNC detail (screenshot.js static check) -----------
+const screenshotSrc = fs.readFileSync(
+  path.join(__dirname, "..", "core", "screenshot.js"),
+  "utf8",
+);
+// The error (else) branch must call extractVncFailureWarning and append it
+// to the capture_failed message — not just in the uniform_image success path.
+const elseBranch = screenshotSrc.match(
+  /\} else \{[\s\S]*?formatError\([\s\S]*?"capture_failed"[\s\S]*?\}/,
+);
+check(
+  "screenshot.js error path calls extractVncFailureWarning",
+  elseBranch !== null &&
+    /extractVncFailureWarning\(stdout\)/.test(elseBranch[0]),
+);
+check(
+  "screenshot.js error path appends vncWarning to the capture_failed message",
+  elseBranch !== null && /vncWarning/.test(elseBranch[0]),
+);
+check(
+  "screenshot.js: each JSDoc is directly above its function (no orphaned block)",
+  // No JSDoc should be immediately followed by another JSDoc — that means
+  // the first one is orphaned (separated from its function by the second).
+  !/\/\*\*[\s\S]*?\*\/\n\/\*\*/.test(screenshotSrc),
+);
+
 console.log(
   failures === 0 ? "\nAll checks passed" : `\n${failures} check(s) failed`,
 );

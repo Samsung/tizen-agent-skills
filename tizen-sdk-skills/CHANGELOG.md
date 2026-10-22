@@ -34,7 +34,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   The script timeout goes from 60 s to 90 s. When a solid-color result is returned and no VNC
   client was found, the envelope warning says what to install; when a VNC client was found
   but the connection failed, it gives the cause (timeout / connection refused / connection
-  failed / authentication failed) and the server that was tried.
+  failed / authentication failed) and the server that was tried; the same VNC detail is
+  surfaced in the error path when no capture was produced at all.
+  The VNC timeout (`TIZEN_VNC_TIMEOUT`) is capped at 30 s so a long VNC wait cannot push the
+  chain past the 90 s Node timeout, and `timeout` detection falls back to `gtimeout`
+  (macOS Homebrew coreutils) when `timeout` is not on `PATH`.
   `screenshot-fallbacks.test.js` checks that the `.sh` and `.ps1` stay in step, and tests
   the envelope warnings.
 

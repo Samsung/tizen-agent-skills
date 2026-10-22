@@ -129,7 +129,7 @@ With HWC (hardware composer) on, the UI sits on TDM overlay planes that the comp
 2. **Host-side VNC.** This step runs after every on-device method, and only when the host has a VNC client:
    - Client: Python `vncdotool` (`pip install vncdotool`; Windows, macOS, Linux), or `vncsnapshot` (`sudo apt install vncsnapshot` on Ubuntu). `vncsnapshot` is Linux-only here and does not support passwords.
    - Server: by default `sdb forward tcp:15900 tcp:5900` to the device's own VNC server, then `forward --remove` afterwards. Set `TIZEN_VNC_SERVER` (`host::port` or `host:display`) to use a different server.
-   - Other settings, all environment variables: `TIZEN_VNC_PORT` (device port, default 5900), `TIZEN_VNC_LOCAL_PORT` (default 15900), `TIZEN_VNC_PASSWORD` (vncdotool only; read from the environment, never from the command line), `TIZEN_VNC_TIMEOUT` (default 15 s).
+   - Other settings, all environment variables: `TIZEN_VNC_PORT` (device port, default 5900), `TIZEN_VNC_LOCAL_PORT` (default 15900), `TIZEN_VNC_PASSWORD` (vncdotool only; read from the environment, never from the command line), `TIZEN_VNC_TIMEOUT` (default 15 s, capped at 30 s so a long VNC wait cannot push the chain past the 90 s Node timeout).
    - `capture_method` is `host-side VNC (vncdotool)` or `host-side VNC (vncsnapshot)`.
 
 If every method still returns a flat color and the host has no VNC client, the `uniform_image` warning has a second line that says what to install. Relay that line to the user; do not install packages yourself.
