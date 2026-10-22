@@ -2140,15 +2140,17 @@ const CRASH_REPORT_DIR = path.join(STATE_DIR, "crash-reports");
 function parseCrashDumpDirs(extra) {
   const dirs = [...CRASH_DUMP_DIRS];
   for (const raw of presentValues(extra)) {
-    const dir = String(raw).trim().replace(/\/+$/, "");
+    const trimmed = String(raw).trim().replace(/\/+$/, "");
     if (
-      !CRASH_DIR_RE.test(dir) ||
-      dir.split("/").some((part) => part === "..")
+      !CRASH_DIR_RE.test(trimmed) ||
+      trimmed.split("/").some((part) => part === "..")
     ) {
       return {
         error: `Invalid --dump-dir: ${JSON.stringify(raw)}. Use an absolute device path made of letters, digits, '.', '_', '-' and '/' (no '..').`,
       };
     }
+    // `/run//crash/dump` and `/run/./crash/dump` are /run/crash/dump.
+    const dir = path.posix.normalize(trimmed);
     if (!dirs.includes(dir)) dirs.push(dir);
   }
   return { dirs };
@@ -2284,28 +2286,38 @@ function selectCrashEntries(entries, name) {
  * Device shell command that prints one member of an entry: the crash report
  * (`info`, the .info text with signal, registers and call stack) or the
  * dlog/system-state dump packed next to it (`log`). null = nothing to print.
+ * sdb shell drops the remote exit status and merges stderr into stdout, so
+ * stderr is discarded and a read ends with `@@CRASH rc=<status>`; a member
+ * that is simply absent prints nothing.
  */
 function buildCrashExtractScript(entry, member) {
   const p = entry.path;
   const glob = member === "info" ? "*.info" : "*.log";
   const re = member === "info" ? "[.]info$" : "[.]log$";
+  const rc = `echo ${CRASH_MARK} rc=$?`;
   switch (entry.kind) {
     case "info":
     case "log":
-      return entry.kind === member ? `cat ${p}` : null;
+      return entry.kind === member ? `cat ${p} 2>/dev/null; ${rc}` : null;
     case "dir":
-      return `cat ${p}/${glob} 2>/dev/null`;
+      return `if ls ${p}/${glob} >/dev/null 2>&1; then cat ${p}/${glob} 2>/dev/null; ${rc}; fi`;
     case "zip":
+      // unzip exits 11 when no member matches.
       return (
         `if command -v unzip >/dev/null 2>&1; then unzip -p ${p} '${glob}' 2>/dev/null; ` +
+        `r=$?; [ $r -eq 11 ] || echo ${CRASH_MARK} rc=$r; ` +
         `else echo ${CRASH_MARK} no-unzip; fi`
       );
     case "tar":
     case "tar.gz": {
       const z = entry.kind === "tar.gz" ? "z" : "";
+      // The member name comes from the archive, so `--` keeps a name such
+      // as `--use-compress-program=…` from being read as a tar option.
       return (
-        `m=$(tar -t${z}f ${p} 2>/dev/null | grep '${re}' | head -n 1); ` +
-        `if [ -n "$m" ]; then tar -x${z}Of ${p} "$m"; fi`
+        `if l=$(tar -t${z}f ${p} 2>/dev/null); then ` +
+        `m=$(printf '%s\\n' "$l" | grep '${re}' | head -n 1); ` +
+        `if [ -n "$m" ]; then tar -x${z}Of ${p} -- "$m" 2>/dev/null; ${rc}; fi; ` +
+        `else ${rc}; fi`
       );
     }
     default:
@@ -2392,8 +2404,11 @@ function runCrashShell(device, script, timeout) {
   );
 }
 
-/** Pull one member of an entry and save it under `outDir`. */
-function extractCrashMember(device, entry, member, outDir) {
+/**
+ * Pull one member of an entry and save it as `<filePrefix>.<suffix>`.
+ * A failed save keeps the text, so the report is still returned inline.
+ */
+function extractCrashMember(device, entry, member, filePrefix) {
   const script = buildCrashExtractScript(entry, member);
   if (!script) return { text: "" };
   let text;
@@ -2406,14 +2421,27 @@ function extractCrashMember(device, entry, member, outDir) {
   if (text.includes(`${CRASH_MARK} no-unzip`))
     return { noUnzip: true, text: "" };
   if (!text.trim()) return { text: "" };
+  const status = new RegExp(`${CRASH_MARK} rc=(\\d+)\\s*$`).exec(text);
+  if (!status)
+    return {
+      error: `the device command printed no exit status: ${text.trim().split("\n")[0]}`,
+    };
+  if (status[1] !== "0")
+    return { error: `the device command exited with status ${status[1]}` };
+  text = text.slice(0, status.index);
+  if (!text.trim()) return { text: "" };
   const suffix = member === "info" ? "info.txt" : "dlog.log";
-  const file = path.join(outDir, `${entry.name}.${suffix}`);
-  fs.writeFileSync(file, text);
+  const file = `${filePrefix}.${suffix}`;
+  try {
+    fs.writeFileSync(file, text);
+  } catch (error) {
+    return { text, saveError: `Could not save ${file}: ${error.message}` };
+  }
   return { text, file };
 }
 
 /** Report object for one selected entry. */
-function buildCrashReport(device, entry, outDir, reportLines, warnings) {
+function buildCrashReport(device, entry, filePrefix, reportLines, warnings) {
   const report = {
     path: entry.path,
     process: entry.process,
@@ -2421,21 +2449,25 @@ function buildCrashReport(device, entry, outDir, reportLines, warnings) {
     timestamp: entry.timestamp,
     kind: entry.kind,
   };
-  const info = extractCrashMember(device, entry, "info", outDir);
+  const info = extractCrashMember(device, entry, "info", filePrefix);
   if (info.error) report.error = `Could not read the report: ${info.error}`;
+  if (info.saveError) report.error = info.saveError;
   if (info.noUnzip) {
     warnings.push(
       `unzip is not available on device ${device.serial}, so ${entry.path} could not be opened there. Pull it with tizen-file-transfer and open it on the host.`,
     );
   }
-  if (info.file) {
-    report.report_file = info.file;
+  if (info.text) {
+    if (info.file) report.report_file = info.file;
     report.summary = summarizeCrashInfo(info.text);
     const head = headLines(info.text, reportLines);
     report.report = head.text;
     report.report_truncated = head.truncated;
   }
-  const log = extractCrashMember(device, entry, "log", outDir);
+  // Kept apart from `error`, so a failure of both members keeps both causes.
+  const log = extractCrashMember(device, entry, "log", filePrefix);
+  if (log.error) report.dlog_error = `Could not read the dlog: ${log.error}`;
+  if (log.saveError) report.dlog_error = log.saveError;
   if (log.file) {
     report.dlog_file = log.file;
     // A daemon has no app id and was never collected under app/<app-id>/;
@@ -2444,9 +2476,15 @@ function buildCrashReport(device, entry, outDir, reportLines, warnings) {
       entry.process && entry.pid
         ? ` --app-id ${entry.process} --pid ${entry.pid}`
         : "";
-    report.next_step = `error-analyze --file "${log.file}"${label} --format summary`;
+    report.next_step = `tizen-sdk dlog-analyzer --action error-analyze --file "${log.file}"${label} --format summary`;
   }
-  if (!info.file && !log.file && !report.error && !info.noUnzip) {
+  if (
+    !info.text &&
+    !log.file &&
+    !report.error &&
+    !report.dlog_error &&
+    !info.noUnzip
+  ) {
     report.note =
       entry.kind === "core" || entry.kind === "other"
         ? "This entry holds no text report (e.g. a bare core dump). Pull it with tizen-file-transfer to inspect it."
@@ -2610,9 +2648,21 @@ async function collectCrashReports(serial, opts = {}, commandLabel) {
       };
     }
   }
-  const reports = selected.map((entry) =>
-    buildCrashReport(device, entry, outDir, lines.value, warnings),
-  );
+  // Same-named entries in two directories must not share one output file.
+  const usedNames = new Set();
+  const reports = selected.map((entry) => {
+    const base = usedNames.has(entry.name)
+      ? `${entry.dir.slice(1).replace(/\//g, "_")}_${entry.name}`
+      : entry.name;
+    usedNames.add(entry.name);
+    return buildCrashReport(
+      device,
+      entry,
+      path.join(outDir, base),
+      lines.value,
+      warnings,
+    );
+  });
 
   if (denied.length) {
     warnings.push(

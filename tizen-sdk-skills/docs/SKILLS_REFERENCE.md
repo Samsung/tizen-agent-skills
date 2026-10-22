@@ -1317,11 +1317,14 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | 파라미터      | 타입   | 기본값   | 설명                                                                     |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` 중 하나 |
+| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear`, `crash-report` 중 하나 |
 | `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect`(백그라운드)/`stop`/`analyze`. timeline: `show`/`report`/`analyze`/`export`     |
 | `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze, app-log에 필수; investigate는 선택(앱 범위 조사) |
 | `symptoms`    | string | `null`   | investigate 전용: 사용자의 증상 표현 그대로 (예: "300% cpu, video not playing") — 실행할 프로브 번들을 선택 |
 | `pattern`     | string | _(search 필수)_ | search 전용: 찾을 텍스트(여러 개 가능, 기본은 하나라도 일치; `--regex`면 Python 정규식). `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json`으로 범위·출력 조정 |
+| `process`     | string | `null`   | crash-report 전용: 이 앱 ID 또는 프로세스 이름의 덤프만 (예: `deviced` — 시스템 데몬은 앱 ID가 필요 없음). `app-id`는 별칭. 기본값: 모든 프로세스 |
+| `dump-dir`    | string | `null`   | crash-report 전용: `/opt/usr/share/crash/dump`, `/run/crash/dump` 외에 추가로 검색할 디바이스 디렉터리 (반복 가능) |
+| `limit`       | number | `3`      | crash-report 전용: 열어 볼 최신 덤프 개수 (`0` = 전부) |
 | `format`      | string | `null`   | error-analyze 전용: `summary` (요약 라인만), `details` (상세 항목만), 생략 시 둘 다  |
 | `serial`      | string | `null`   | sdb 디바이스 시리얼 (생략 시 자동 선택)                                  |
 
@@ -1345,6 +1348,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js snapshot create|list|compare|delete [id1] [id2]
 node <plugin>/lib/cli/dlog-analyzer-cli.js timeline show|report|analyze|export
 node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
+node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --app-id <id>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]
 ```
 
 **워크플로우 (백그라운드 모니터링):**

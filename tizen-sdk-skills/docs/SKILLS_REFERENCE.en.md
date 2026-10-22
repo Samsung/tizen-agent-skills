@@ -1341,11 +1341,14 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 | Parameter    | Type   | Default      | Description                                                              |
 | ------------ | ------ | ------------ | ------------------------------------------------------------------------ |
-| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear` |
+| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear`, `crash-report` |
 | `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect` (background) / `stop` / `analyze`. timeline: `show`/`report`/`analyze`/`export` |
 | `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, app-log; optional for investigate (app-scoped) |
 | `symptoms`   | string | `null`       | For investigate: the user's own symptom words (e.g. "300% cpu, video not playing") — selects the probe bundles |
 | `pattern`    | string | _(search)_   | For search (required there): text to look for (several allowed, any one matches; `--regex` for a Python regular expression). Narrow / shape with `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json` |
+| `process`    | string | `null`       | For crash-report: only dumps of this app id or process name (e.g. `deviced` — a system daemon needs no app id); `app-id` is an alias. Default: every process |
+| `dump-dir`   | string | `null`       | For crash-report: one more device directory to search besides `/opt/usr/share/crash/dump` and `/run/crash/dump` (repeatable) |
+| `limit`      | number | `3`          | For crash-report: how many of the newest matching dumps to open (`0` = all) |
 | `format`     | string | `null`       | For error-analyze only: `summary` (summary lines only), `details` (detail entries only), or omit for both |
 | `serial`     | string | `null`       | Optional sdb device serial (auto-select if omitted)                      |
 
@@ -1366,6 +1369,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
 node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--priority <p>] [--max-lines <n>]   # escalation only
 node <plugin>/lib/cli/dlog-analyzer-cli.js search <pattern> [--regex] [--category <app-id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]   # find a string across every collected log
+node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --app-id <id>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]   # crash-worker dumps, system daemons included
 ```
 
 **Workflow (background monitoring):**
