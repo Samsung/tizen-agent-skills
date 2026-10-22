@@ -369,8 +369,10 @@ try_enlightenment_info() {
   _e_dump_screen() {
     local ttl="${2:-0}"
     local RUN=()
-    if [ "$ttl" -gt 0 ] && command -v timeout &>/dev/null 2>&1; then
+    if [ "$ttl" -gt 0 ] && command -v timeout &>/dev/null; then
       RUN=(timeout "$ttl")
+    elif [ "$ttl" -gt 0 ] && command -v gtimeout &>/dev/null; then
+      RUN=(gtimeout "$ttl")
     fi
     "$SDB" -s "$SERIAL" shell "rm -f ${TMPDIR_DEVICE}/${DEV_NAME}" >/dev/null 2>&1
     "${RUN[@]+"${RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -dump_screen -p ${TMPDIR_DEVICE}/ -n ${DEV_NAME}" >/dev/null 2>&1 || true
@@ -428,7 +430,8 @@ try_enlightenment_info() {
     # no output: a failed D-Bus call prints an error yet still exits 0. The
     # status is echoed because sdb shell does not forward it.
     local HWC_RUN=()
-    if command -v timeout &>/dev/null; then HWC_RUN=(timeout 15); fi
+    if command -v timeout &>/dev/null; then HWC_RUN=(timeout 15)
+    elif command -v gtimeout &>/dev/null; then HWC_RUN=(gtimeout 15); fi
     _e_hwc_on() {
       local out
       out=$("${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 1 2>&1; echo HWC_RC=\$?" 2>/dev/null | tr -d '\r') || true
@@ -477,11 +480,12 @@ try_enlightenment_info() {
 #   vncsnapshot (`apt install vncsnapshot` on Ubuntu; no password support,
 #   JPEG output converted to PNG with PIL).
 # ============================================================
-# Whole seconds, 1-60: the Node caller gives the entire chain 90 s.
+# Whole seconds, 1-30: the Node caller gives the entire chain 90 s, and
+# the HWC path alone can take ~46 s, so a long VNC timeout must not push past it.
 VNC_TIMEOUT="${TIZEN_VNC_TIMEOUT:-15}"
 case "$VNC_TIMEOUT" in
   ''|*[!0-9]*) VNC_TIMEOUT=15 ;;
-  *) if [ "$VNC_TIMEOUT" -lt 1 ] || [ "$VNC_TIMEOUT" -gt 60 ]; then VNC_TIMEOUT=15; fi ;;
+  *) if [ "$VNC_TIMEOUT" -lt 1 ] || [ "$VNC_TIMEOUT" -gt 30 ]; then VNC_TIMEOUT=15; fi ;;
 esac
 
 try_vnc() {
@@ -572,7 +576,8 @@ PYEOF
     # Bound the connect like the vncdotool path ("${RUN[@]+...}": empty arrays
     # trip `set -u` on bash < 4.4, e.g. macOS /bin/bash).
     local RUN=()
-    if command -v timeout &>/dev/null; then RUN=(timeout "$VNC_TIMEOUT"); fi
+    if command -v timeout &>/dev/null; then RUN=(timeout "$VNC_TIMEOUT")
+    elif command -v gtimeout &>/dev/null; then RUN=(gtimeout "$VNC_TIMEOUT"); fi
     local VSNAP_RC=0
     ${RUN[@]+"${RUN[@]}"} vncsnapshot -quiet -allowblank "$SERVER" "$JPG_TMP" >/dev/null 2>&1 || VSNAP_RC=$?
     if [ "$VSNAP_RC" -eq 0 ] && verify_output "$JPG_TMP"; then
