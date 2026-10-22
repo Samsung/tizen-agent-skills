@@ -91,7 +91,7 @@ function extractCaptureMethod(stdout) {
  */
 function extractCaptureWarnings(stdout) {
   const warnings = [];
-  if (/^CAPTURE_WARNING=uniform_image$/m.test(stdout || "")) {
+  if (/^CAPTURE_WARNING=uniform_image\r?$/m.test(stdout || "")) {
     warnings.push(
       "The capture is a single solid color — the screen may be off, showing a blank display, " +
         "or rendering may be broken on the host. Every capture method returned the same flat image.",
@@ -106,28 +106,30 @@ function extractCaptureWarnings(stdout) {
           "apt install vncsnapshot on Ubuntu) and run a VNC server on the device, or set TIZEN_VNC_SERVER.",
       );
     }
-  }
-  // HWC was toggled off to capture then restored; when the restore could not
-  // be verified the device may not be back in the state the caller expects.
-  if (/^CAPTURE_WARNING=hwc_recovery_unverified$/m.test(stdout || "")) {
-    warnings.push(
-      "HWC was restored after the capture, but the state could not be verified " +
-        "on this image. If the display looks wrong, re-enable HWC on the device manually.",
+    // A VNC attempt ran (a host client was present) but the server connection
+    // failed: classify it and name the server tried. Only relevant when the
+    // result is still flat — a later method may have captured the screen.
+    const vncFail = (stdout || "").match(
+      /^VNC_RESULT=failed\t(\S+)\t(\S+)\t([^\t]*)\t(.*?)\r?$/m,
     );
+    if (vncFail) {
+      const [, category, source, server, detail] = vncFail;
+      const where =
+        source === "forward"
+          ? "the device VNC port forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT, or set TIZEN_VNC_SERVER to name an external server)"
+          : "the server named by TIZEN_VNC_SERVER";
+      warnings.push(
+        `VNC capture failed (${category}): ${detail}. Attempted server: ${server}. ` +
+          `This came from ${where}.`,
+      );
+    }
   }
-  // A VNC attempt ran (a host client was present) but the server connection
-  // failed: classify it and name the server tried, instead of only guiding
-  // the no-VNC-client case.
-  const vncFail = (stdout || "").match(
-    /^VNC_RESULT=failed\t(\S+)\t([^\t]*)\t(.*)$/m,
-  );
-  if (vncFail) {
-    const where = vncFail[2].startsWith("127.0.0.1")
-      ? "the device VNC port forwarded over sdb (set TIZEN_VNC_PORT / TIZEN_VNC_LOCAL_PORT, or set TIZEN_VNC_SERVER to name an external server)"
-      : "the server named by TIZEN_VNC_SERVER";
+  // HWC was toggled off to capture; when turning it back on failed or timed
+  // out the device may be left without hardware composition.
+  if (/^CAPTURE_WARNING=hwc_recovery_unverified\r?$/m.test(stdout || "")) {
     warnings.push(
-      `VNC capture failed (${vncFail[1]}): ${vncFail[3]}. Attempted server: ${vncFail[2]}. ` +
-        `This came from ${where}.`,
+      "HWC was switched off for the capture and switching it back on failed or timed out. " +
+        "If the display looks wrong, re-enable HWC on the device manually.",
     );
   }
   return warnings;
@@ -399,6 +401,7 @@ async function captureScreenshot(
 
 module.exports = {
   captureScreenshot,
+  extractCaptureWarnings,
   // Re-exported from ./sdb for backward compatibility with existing callers/tests
   resolveSdb,
 };

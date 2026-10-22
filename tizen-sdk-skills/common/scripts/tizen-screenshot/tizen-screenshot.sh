@@ -423,31 +423,33 @@ try_enlightenment_info() {
     echo "  Capture was a single solid color — retrying with HWC disabled (Wayland/HWC overlay planes are not in the composited dump)"
     rm -f "$OUT_TMP"
 
-    # Remember the current HWC state so we restore THAT, not a hard-coded 1.
-    # `-hwc 2` is the e_info info query; images that report nothing fall back to 1.
-    local PREV_HWC NOW_HWC HWC_RUN=()
-    PREV_HWC=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n') || PREV_HWC=""
-    case "$PREV_HWC" in 0|1) ;; *) PREV_HWC=1 ;; esac
-
-    # Restore HWC if the script is signalled (e.g. SIGTERM) between the
-    # toggle and the restore, so it cannot be left disabled.
-    trap '"$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc ${PREV_HWC}" >/dev/null 2>&1' INT TERM
-
+    # The e_info client cannot report the HWC state (`-hwc 2` only logs it to
+    # dlog), so HWC is turned back on with `-hwc 1`. Success is exit 0 with
+    # no output: a failed D-Bus call prints an error yet still exits 0. The
+    # status is echoed because sdb shell does not forward it.
+    local HWC_RUN=()
     if command -v timeout &>/dev/null; then HWC_RUN=(timeout 15); fi
+    _e_hwc_on() {
+      local out
+      out=$("${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 1 2>&1; echo HWC_RC=\$?" 2>/dev/null | tr -d '\r') || true
+      [ "$out" = "HWC_RC=0" ]
+    }
+
+    # A signal between the toggle and the restore must not leave HWC off, and
+    # must still end the script rather than resume the capture chain.
+    trap '_e_hwc_on || true; _e_restore_root; exit 130' INT
+    trap '_e_hwc_on || true; _e_restore_root; exit 143' TERM
+
     "${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 0" >/dev/null 2>&1 || true
     sleep 1  # let the compositor redraw every plane through GL
     _e_dump_screen "$OUT_TMP" 15
-    "${HWC_RUN[@]+"${HWC_RUN[@]}"}" "$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc ${PREV_HWC}" >/dev/null 2>&1 || true
-    trap - INT TERM
-
-    # Verify the restore when the state is queryable.
-    NOW_HWC=$("$SDB" -s "$SERIAL" shell "${E_TOOL} -hwc 2" 2>/dev/null | tr -d '\r\n') || NOW_HWC=""
-    if [ "$NOW_HWC" = "$PREV_HWC" ]; then
-      echo "  HWC restored to ${PREV_HWC}"
+    if _e_hwc_on; then
+      echo "  HWC re-enabled"
     else
-      echo "  WARNING: HWC restore could not be verified (expected ${PREV_HWC}, got ${NOW_HWC:-no response})"
+      echo "  WARNING: re-enabling HWC (${E_TOOL} -hwc 1) failed or timed out"
       echo "CAPTURE_WARNING=hwc_recovery_unverified"
     fi
+    trap - INT TERM
 
     if verify_output "$OUT_TMP" && accept_capture "$OUT_TMP" "${E_TOOL} -dump_screen (hwc off)"; then
       _e_restore_root
@@ -475,7 +477,12 @@ try_enlightenment_info() {
 #   vncsnapshot (`apt install vncsnapshot` on Ubuntu; no password support,
 #   JPEG output converted to PNG with PIL).
 # ============================================================
+# Whole seconds, 1-60: the Node caller gives the entire chain 90 s.
 VNC_TIMEOUT="${TIZEN_VNC_TIMEOUT:-15}"
+case "$VNC_TIMEOUT" in
+  ''|*[!0-9]*) VNC_TIMEOUT=15 ;;
+  *) if [ "$VNC_TIMEOUT" -lt 1 ] || [ "$VNC_TIMEOUT" -gt 60 ]; then VNC_TIMEOUT=15; fi ;;
+esac
 
 try_vnc() {
   echo "Trying: host-side VNC capture..."
@@ -490,14 +497,17 @@ try_vnc() {
     return 1
   fi
 
-  local SERVER="${TIZEN_VNC_SERVER:-}" FWD_PORT=""
+  local SERVER="${TIZEN_VNC_SERVER:-}" SOURCE="env" FWD_PORT=""
   if [ -z "$SERVER" ]; then
+    SOURCE="forward"
     FWD_PORT="${TIZEN_VNC_LOCAL_PORT:-15900}"
     if ! "$SDB" -s "$SERIAL" forward "tcp:${FWD_PORT}" "tcp:${TIZEN_VNC_PORT:-5900}" >/dev/null 2>&1; then
       echo "  sdb forward tcp:${FWD_PORT} -> device tcp:${TIZEN_VNC_PORT:-5900} failed — skipping"
       return 1
     fi
     SERVER="127.0.0.1::${FWD_PORT}"
+    trap '"$SDB" -s "$SERIAL" forward --remove "tcp:${FWD_PORT}" >/dev/null 2>&1; exit 130' INT
+    trap '"$SDB" -s "$SERIAL" forward --remove "tcp:${FWD_PORT}" >/dev/null 2>&1; exit 143' TERM
   fi
   echo "  VNC server: ${SERVER} (client: ${CLIENT})"
 
@@ -505,14 +515,14 @@ try_vnc() {
   OUT_TMP=$(mktemp /tmp/tizen_screenshot_XXXXXX.png)
 
   if [ "$CLIENT" = "vncdotool" ]; then
-    python3 - "$SERVER" "$OUT_TMP" "$VNC_TIMEOUT" <<'PYEOF' && STATUS=0
+    python3 - "$SERVER" "$OUT_TMP" "$VNC_TIMEOUT" "$SOURCE" <<'PYEOF' && STATUS=0
 # --- VNC capture (vncdotool) ---
 # This block is byte-identical in tizen-screenshot.sh and tizen-screenshot.ps1;
 # common/lib/tests/screenshot-fallbacks.test.js fails when the two drift.
 import os, sys, threading
 from vncdotool import api
 
-server, out_path, timeout = sys.argv[1], sys.argv[2], float(sys.argv[3])
+server, out_path, timeout, source = sys.argv[1], sys.argv[2], float(sys.argv[3]), sys.argv[4]
 password = os.environ.get("TIZEN_VNC_PASSWORD") or None
 result = {}
 
@@ -541,13 +551,19 @@ if not result.get("ok"):
         cat = "timeout"
     elif "auth" in low or "password" in low or "credential" in low:
         cat = "auth_failed"
-    else:
+    elif "refused" in low:
         cat = "connection_refused"
-    # Machine line for lib/core/screenshot.js: category + the server tried.
-    print("VNC_RESULT=failed\t%s\t%s\t%s" % (cat, server, " ".join(str(err).split())))
+    else:
+        cat = "connection_failed"
+    # Machine line for lib/core/screenshot.js: category, where the server came
+    # from (forward / env) and the server tried.
+    print("VNC_RESULT=failed\t%s\t%s\t%s\t%s" % (cat, source, server, " ".join(str(err).split())))
     print("  VNC capture failed: " + err, file=sys.stderr)
+    # os._exit skips the interpreter's flush, and a piped stdout is buffered.
+    sys.stdout.flush()
     os._exit(1)
 print("  Captured via vncdotool -> " + out_path)
+sys.stdout.flush()
 os._exit(0)
 PYEOF
   else
@@ -561,12 +577,23 @@ PYEOF
     ${RUN[@]+"${RUN[@]}"} vncsnapshot -quiet -allowblank "$SERVER" "$JPG_TMP" >/dev/null 2>&1 || VSNAP_RC=$?
     if [ "$VSNAP_RC" -eq 0 ] && verify_output "$JPG_TMP"; then
       python3 -c 'import sys; from PIL import Image; Image.open(sys.argv[1]).save(sys.argv[2], "PNG")' "$JPG_TMP" "$OUT_TMP" && STATUS=0
+    else
+      local CAT="connection_failed" DETAIL="vncsnapshot exited with ${VSNAP_RC}"
+      if [ "$VSNAP_RC" -eq 124 ]; then
+        CAT="timeout" DETAIL="timed out after ${VNC_TIMEOUT}s"
+      elif [ "$VSNAP_RC" -eq 0 ]; then
+        DETAIL="vncsnapshot produced no image"
+      fi
+      printf 'VNC_RESULT=failed\t%s\t%s\t%s\t%s\n' "$CAT" "$SOURCE" "$SERVER" "$DETAIL"
     fi
     rm -f "$JPG_TMP"
   fi
 
   if [ -n "$FWD_PORT" ]; then
-    "$SDB" -s "$SERIAL" forward --remove "tcp:${FWD_PORT}" >/dev/null 2>&1 || true
+    if ! "$SDB" -s "$SERIAL" forward --remove "tcp:${FWD_PORT}" >/dev/null 2>&1; then
+      echo "  WARNING: could not remove sdb forward tcp:${FWD_PORT} — remove it with: sdb -s ${SERIAL} forward --remove tcp:${FWD_PORT}"
+    fi
+    trap - INT TERM
   fi
 
   if [ $STATUS -eq 0 ] && verify_output "$OUT_TMP" && accept_capture "$OUT_TMP" "host-side VNC (${CLIENT})"; then

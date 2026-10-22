@@ -24,24 +24,17 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   `common/lib/core/screenshot.js`). Where HWC puts the UI on overlay planes, every on-device
   dump came back solid black. The `enlightenment_info` step now also finds the e_info client
   when it ships as `winfo`, and retries a solid-color dump once with HWC off (`-hwc 0`),
-  turning HWC back on (`-hwc 1`) afterwards. A new host-side VNC fallback runs after every
+  turning HWC back on (`-hwc 1`) afterwards; the HWC calls are bounded by a timeout, a
+  signal in between still turns HWC back on, and a failed restore adds a
+  `hwc_recovery_unverified` warning. A new host-side VNC fallback runs after every
   on-device method: by default it forwards the device's port 5900 over sdb, or it uses
   `TIZEN_VNC_SERVER`. The client is vncdotool on any host, or `vncsnapshot` on Ubuntu/Linux.
   The script timeout goes from 60 s to 90 s. When a solid-color result is returned and no VNC
-  client was found, the envelope warning says what to install.
-  `screenshot-fallbacks.test.js` checks that the `.sh` and `.ps1` stay in step.
-
-### Changed
-
-- **Screenshot HWC restore and VNC failure detail**
-  (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
-  `common/lib/core/screenshot.js`, `common/lib/tests/screenshot-fallbacks.test.js`).
-  The HWC-off retry now queries the current state (`-hwc 2`) and restores THAT
-  on images that can report it (falling back to 1 when the query returns nothing);
-  the restore is verified and warned on when it cannot be confirmed. In `.sh` a trap restores HWC on SIGTERM between the toggle and
-  the restore, and the toggle/restore calls are bounded by a timeout. A VNC
-  connection failure is now classified (timeout / connection refused / auth
-  failed) and the envelope warning names the server that was tried.
+  client was found, the envelope warning says what to install; when a VNC client was found
+  but the connection failed, it gives the cause (timeout / connection refused / connection
+  failed / authentication failed) and the server that was tried.
+  `screenshot-fallbacks.test.js` checks that the `.sh` and `.ps1` stay in step, and tests
+  the envelope warnings.
 
 ### Changed
 
