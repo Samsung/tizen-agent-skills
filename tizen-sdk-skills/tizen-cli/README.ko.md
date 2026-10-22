@@ -45,7 +45,7 @@ tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js
 | `gdb-debug` | Native 앱 원격 GDB 디버깅 설정 (setup-only, WebApp 제외) |
 | `dotnet-debug` | .NET 앱 원격 netcoredbg 디버깅 설정 (setup-only, WebApp 제외) |
 | `webapp-debug` | 웹 앱 원격 디버깅 설정 (RWI/CDP, setup-only) |
-| `dlog-analyzer` | 디바이스 로그 단일 창구: 원샷 덤프/지우기 (log-dump, log-clear), dlog 수집, 크래시/예외 감지 및 근본 원인 분석 (start/stop/status, app-launch, error-analyze) |
+| `dlog-analyzer` | 디바이스 로그 단일 창구: 원샷 덤프/지우기 (log-dump, log-clear), dlog 수집, 크래시/예외 감지 및 근본 원인 분석 (start/stop/status, app-launch, error-analyze), 앱·데몬의 crash-worker 덤프 리포트 (crash-report) |
 | `playwright-test` | Tizen 웹 앱에 대한 Playwright 테스트 실행 (또는 스캐폴드) |
 | `certificate-manager` | Tizen 인증서 및 서명 프로필 관리 (생성, 가져오기, 검사, 프로필 생성/삭제, Samsung online-CA) |
 
@@ -91,7 +91,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `gdb-debug` | `--app-id`, `--binary` | `--mode` (기본: `attach`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `5039`), `--timeout` (기본: `30`) |
 | `dotnet-debug` | `--app-id` | `--mode` (기본: `launch`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `4711`), `--serial`, `--force-install`, `--timeout` (기본: `30`), `--project <dir>` (launch 모드: `<dir>/.vscode/launch.json` 자동 생성) |
 | `webapp-debug` | `--app-id` | `--port` (기본: `9222`), `--serial`, `--timeout` (기본: `30`) |
-| `dlog-analyzer` | `--action` | `--subcommand` (기본: `start-monitoring`), `--app-id`, `--format`, `--output-dir`, `--filter` / `--lines` / `--output` (log-dump), `--confirm` (log-clear) |
+| `dlog-analyzer` | `--action` | `--subcommand` (기본: `start-monitoring`), `--app-id`, `--format`, `--output-dir`, `--filter` / `--lines` / `--output` (log-dump), `--confirm` (log-clear), `--process` / `--dump-dir` / `--limit` / `--lines` / `--output` (crash-report) |
 | `playwright-test` | — | `--app-id`, `--test-file`, `--project-dir`, `--port` (기본: `9222`), `--serial`, `--setup-timeout` (기본: `30`), `--timeout` (기본: `120`), `--no-setup`, `--scaffold`, `--force` |
 | `certificate-manager` | — | `--action` (기본: `generate-author`, 21개 선택지), `--name`, `--password`, `--prompt-password`, `--password-file`, `--file`, `--email`, `--department`, `--organization`, `--city`, `--state`, `--country`, `--identity`, `--type`, `--version`, `--profile-name`, `--author-cert`, `--author-password`, `--prompt-author-password`, `--author-password-file`, `--distributor-type`, `--distributor-version`, `--distributor-password`, `--prompt-distributor-password`, `--distributor-password-file`, `--distributor2-cert`, `--distributor2-password`, `--prompt-distributor2-password`, `--distributor2-password-file`, `--distributor2-ca`, `--distributor2-type`, `--distributor2-version`, `--profiles-xml`, `--active`, `--source`, `--certificate-type`, `--target-file`, `--overwrite`, `--certificate`, `--duid-list`, `--duid-file`, `--privilege`, `--serial` |
 

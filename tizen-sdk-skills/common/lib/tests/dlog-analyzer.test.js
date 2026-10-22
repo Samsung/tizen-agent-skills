@@ -2262,6 +2262,11 @@ check(
   { dirs: [...CRASH_DUMP_DIRS, "/var/crash"] },
 );
 check(
+  "--dump-dir spelled with '//' or '/./' is the same directory",
+  parseCrashDumpDirs(["/run//crash/dump", "/run/./crash/dump/", "/var//crash"]),
+  { dirs: [...CRASH_DUMP_DIRS, "/var/crash"] },
+);
+check(
   "--dump-dir relative path rejected",
   "error" in parseCrashDumpDirs("crash"),
   true,
@@ -2375,14 +2380,16 @@ check(
 check(
   "info file is its own report",
   buildCrashExtractScript({ path: "/x/a.info", kind: "info" }, "info"),
-  "cat /x/a.info",
+  "cat /x/a.info 2>/dev/null; echo @@CRASH rc=$?",
 );
 check(
-  "tar member name is quoted (it comes from the archive, not the listing)",
+  "tar member name is quoted and after '--' (it comes from the archive, so it must not be read as a tar option)",
   buildCrashExtractScript(
     { path: "/run/crash/dump/a.tar.gz", kind: "tar.gz" },
     "info",
-  ).endsWith('tar -xzOf /run/crash/dump/a.tar.gz "$m"; fi'),
+  ).includes(
+    'tar -xzOf /run/crash/dump/a.tar.gz -- "$m" 2>/dev/null; echo @@CRASH rc=$?',
+  ),
   true,
 );
 const INFO = [
@@ -2459,13 +2466,17 @@ const crashReportTest = (async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "dlog-crash-"));
   const scripts = [];
   let listOutput = "";
+  // Returns a script's output, or undefined to fall through to the defaults.
+  let override = null;
   childProcess.execFileSync = (_sdb, args) => {
     const script = args[args.length - 1];
     scripts.push(args);
+    const out = override ? override(script) : undefined;
+    if (out !== undefined) return out;
     if (script.includes("ls -1t")) return listOutput;
-    if (script.includes("'*.info'")) return INFO;
+    if (script.includes("'*.info'")) return `${INFO}\n@@CRASH rc=0\n`;
     if (script.includes("'*.log'"))
-      return "10-20 10:00:00.000 E/DEVICED( 21): boom\n";
+      return "10-20 10:00:00.000 E/DEVICED( 21): boom\n@@CRASH rc=0\n";
     return "";
   };
   sdbModule.resolveSdbBinary = () => ({ sdbPath: "/fake/sdb" });
@@ -2488,10 +2499,23 @@ const crashReportTest = (async () => {
     const rep = r.result && r.result.reports[0];
     check("… summary parsed", rep && rep.summary.signal, "11 (SIGSEGV)");
     check("… report saved", rep && fs.existsSync(rep.report_file), true);
+    check(
+      "… the exit-status marker is not saved with the report",
+      rep && fs.readFileSync(rep.report_file, "utf-8").includes("@@CRASH"),
+      false,
+    );
     check("… dlog saved", rep && fs.existsSync(rep.dlog_file), true);
     check(
       "… next step is error-analyze --file with the daemon label",
       rep && rep.next_step.includes("--app-id deviced --pid 21"),
+      true,
+    );
+    check(
+      "… next step uses the tizen-sdk --action form like the module's other hints",
+      rep &&
+        rep.next_step.startsWith(
+          "tizen-sdk dlog-analyzer --action error-analyze --file ",
+        ),
       true,
     );
     check(
@@ -2538,6 +2562,146 @@ const crashReportTest = (async () => {
       "no dumps → success with zero matches",
       [none.status, none.result.total_matches],
       ["success", 0],
+    );
+
+    const zipListing = [
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000.zip",
+    ].join("\n");
+    const enobufs = () => {
+      throw new Error("spawnSync /fake/sdb ENOBUFS");
+    };
+    listOutput = zipListing;
+    override = (s) => (s.includes("'*.log'") ? enobufs() : undefined);
+    const logFail = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: path.join(tmp, "log-fail"),
+    });
+    const logRep = logFail.result && logFail.result.reports[0];
+    check(
+      "dlog extraction failure → dlog_error, the report is kept",
+      logRep && [
+        logFail.status,
+        logRep.error,
+        /^Could not read the dlog: .*ENOBUFS/.test(logRep.dlog_error),
+        logRep.summary.signal,
+        logRep.next_step,
+      ],
+      ["success", undefined, true, "11 (SIGSEGV)", undefined],
+    );
+
+    override = (s) => {
+      if (s.includes("'*.info'")) return "@@CRASH rc=1\n";
+      return s.includes("'*.log'") ? enobufs() : undefined;
+    };
+    const bothFail = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: path.join(tmp, "both-fail"),
+    });
+    const bothRep = bothFail.result && bothFail.result.reports[0];
+    check(
+      "report and dlog both failing keep both causes",
+      bothRep && [
+        /^Could not read the report: .*status 1$/.test(bothRep.error),
+        /ENOBUFS/.test(bothRep.dlog_error),
+      ],
+      [true, true],
+    );
+
+    // A directory where the report file should go makes the write fail.
+    const blocked = path.join(tmp, "blocked");
+    fs.mkdirSync(path.join(blocked, "deviced_21_20261020100000.zip.info.txt"), {
+      recursive: true,
+    });
+    override = null;
+    const writeFail = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: blocked,
+    });
+    const writeRep = writeFail.result && writeFail.result.reports[0];
+    check(
+      "host write failure → that report's error, the summary and the dlog are kept",
+      writeRep && [
+        writeFail.status,
+        /^Could not save .*info\.txt: /.test(writeRep.error),
+        writeRep.report_file,
+        writeRep.summary.signal,
+        fs.existsSync(writeRep.dlog_file),
+      ],
+      ["success", true, undefined, "11 (SIGSEGV)", true],
+    );
+
+    override = (s) => (s.includes("ls -1t") ? enobufs() : undefined);
+    const listFail = await stubbed.collectCrashReports(undefined, {});
+    check(
+      "listing failure → crash_report_failed",
+      listFail.errors && listFail.errors[0].category,
+      "crash_report_failed",
+    );
+
+    listOutput = [
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000.info",
+    ].join("\n");
+    override = (s) => (s.startsWith("cat ") ? "@@CRASH rc=1\n" : undefined);
+    const rcFail = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: path.join(tmp, "rc-fail"),
+    });
+    const rcRep = rcFail.result && rcFail.result.reports[0];
+    check(
+      "a device command that exits non-zero is an error, not a saved report",
+      rcRep && [
+        /exited with status 1$/.test(rcRep.error),
+        rcRep.report_file,
+        rcRep.report,
+      ],
+      [true, undefined, undefined],
+    );
+    override = (s) =>
+      s.startsWith("cat ")
+        ? "cat: /run/crash/dump/deviced_21_20261020100000.info: Permission denied\n"
+        : undefined;
+    const noStatus = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      output: path.join(tmp, "rc-fail"),
+    });
+    const noStatusRep = noStatus.result && noStatus.result.reports[0];
+    check(
+      "… and so is output without the exit-status line (an error text is not a report)",
+      noStatusRep && [
+        /printed no exit status: cat: .*Permission denied$/.test(
+          noStatusRep.error,
+        ),
+        noStatusRep.report_file,
+      ],
+      [true, undefined],
+    );
+
+    override = null;
+    scripts.length = 0;
+    listOutput = [
+      "@@CRASH dir /opt/usr/share/crash/dump",
+      "deviced_21_20261020100000.zip",
+      "@@CRASH dir /run/crash/dump",
+      "deviced_21_20261020100000.zip",
+    ].join("\n");
+    const sameName = await stubbed.collectCrashReports(undefined, {
+      process: "deviced",
+      dumpDir: "/run//crash/dump",
+      output: path.join(tmp, "same-name"),
+    });
+    const listScript = scripts[0][3];
+    check(
+      "a re-spelled default --dump-dir is listed once",
+      listScript.split("ls -1t /run/crash/dump;").length - 1,
+      1,
+    );
+    const files = sameName.result.reports.map((x) => x.report_file);
+    check(
+      "same entry name in two directories → two output files",
+      [new Set(files).size, path.basename(files[1])],
+      [2, "run_crash_dump_deviced_21_20261020100000.zip.info.txt"],
     );
   } finally {
     childProcess.execFileSync = realExec;

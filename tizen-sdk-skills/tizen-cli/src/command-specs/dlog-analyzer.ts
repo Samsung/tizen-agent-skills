@@ -75,7 +75,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
       {
         flags: "--limit <n>",
         description:
-          "For --action crash-report: how many of the newest matching dumps to open (default 3; 0 = all).",
+          "For --action crash-report: how many of the newest matching dumps to open (default 3; 0 = all — each opened dump costs two sdb shell calls, so 0 can take minutes on a full directory).",
       },
       {
         flags: "--format <format>",
