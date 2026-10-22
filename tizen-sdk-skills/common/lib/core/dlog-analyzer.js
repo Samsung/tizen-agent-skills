@@ -2300,7 +2300,10 @@ function buildCrashExtractScript(entry, member) {
     case "log":
       return entry.kind === member ? `cat ${p} 2>/dev/null; ${rc}` : null;
     case "dir":
-      return `if ls ${p}/${glob} >/dev/null 2>&1; then cat ${p}/${glob} 2>/dev/null; ${rc}; fi`;
+      return (
+        `if [ ! -r ${p} ] || [ ! -x ${p} ]; then echo ${CRASH_MARK} denied-dir; ` +
+        `elif ls ${p}/${glob} >/dev/null 2>&1; then cat ${p}/${glob} 2>/dev/null; ${rc}; fi`
+      );
     case "zip":
       // unzip exits 11 when no member matches.
       return (
@@ -2420,6 +2423,10 @@ function extractCrashMember(device, entry, member, filePrefix) {
   }
   if (text.includes(`${CRASH_MARK} no-unzip`))
     return { noUnzip: true, text: "" };
+  if (text.includes(`${CRASH_MARK} denied-dir`))
+    return {
+      error: `the dump directory ${entry.path} is not readable by the sdb shell user`,
+    };
   if (!text.trim()) return { text: "" };
   const status = new RegExp(`${CRASH_MARK} rc=(\\d+)\\s*$`).exec(text);
   if (!status)
