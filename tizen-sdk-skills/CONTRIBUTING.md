@@ -128,8 +128,11 @@ TCs start with `status: draft`.
   across `README*.md`, `docs/SKILLS_REFERENCE*.md`, `tests/README.md` and the
   "Project at a Glance" table in `README*.md`.
 - New Markdown follows the repository Prettier settings (80 columns, LF line
-  endings; `.gitattributes` enforces LF for `*.md`). CI does not lint
-  Markdown, so run `npx prettier --check <file>` yourself.
+  endings; `.gitattributes` enforces LF for `*.md`). CI checks only
+  `CHANGELOG.md` and `CHANGELOG.ko.md` (`pnpm run format:check`), so run
+  `npx prettier --check <file>` yourself on other Markdown. Keep an inline
+  code span on one line: Prettier strips the list indentation from a line
+  that continues a span broken across lines.
 
 ### Internal-only content
 
