@@ -343,7 +343,7 @@ Windows의 CLI 러너 조회 블록에 대한 수정 두 건, 독립 실행형 `
   있도록 두 언어 블록을 모두 유지합니다(Test 5는 두 블록이 있는지, Test 18은 힌트가 두 제목을 모두 언급하는지
   계속 확인 — 힌트는 이제 "once … OR" 형태). 후속 PR은 1차에서 남은 것을 정리합니다: 템플릿의 "block B의
   한국어 라벨" 문구와 "영어 블록의 내용을 그대로 옮긴다" 지시(한국어 블록만 렌더링할 때는 옮길 영어 블록이
-  없으므로, 이제 같은 구조로 바로 작성), 세 레인의 ```` ```markdown ```` 펜스 *안*에 들어 있던 스켈레톤
+  없으므로, 이제 같은 구조로 바로 작성), 세 레인의 ` ```markdown ` 펜스 *안*에 들어 있던 스켈레톤
   주석(`## Analysis Report (English)            ← render this block when …`과 `---  (Korean block below — …)`
   — 그대로 베끼면 보고서에 출력될 수 있어 산문으로 소개하는 펜스 두 개로 분리), 그리고 리뷰어 두 명이
   이중 언어 보고서의 조건절로 읽은 anti-pattern 문구 "a bilingual report when the user wrote in one
@@ -361,7 +361,7 @@ Windows의 CLI 러너 조회 블록에 대한 수정 두 건, 독립 실행형 `
   그 블록 하나만 그대로 실행하라는 한 줄로 시작하며, 블록은 지원하는 호스트가 많은 순서로 이어집니다:
   Bash(Linux, macOS, Windows에서 Claude Code의 Git Bash, Linux/macOS의 Codex), PowerShell(Windows의
   Codex, Cline PowerShell 터미널), 그다음 cmd.exe와 그에 딸린 `node "<found-path>"` 단계 및 "Runner not
-  found?" 안내. cmd.exe 제목은 이제 *위의* 블록을 가리킵니다. 재배치는 생성기가 수행하고(제목, 펜스 3종,
+  found?" 안내. cmd.exe 제목은 이제 _위의_ 블록을 가리킵니다. 재배치는 생성기가 수행하고(제목, 펜스 3종,
   선택 줄, 안내문을 섹션 단위로 파싱 — 그 외 문단이 나오면 섹션 종료; 손으로 쓴 Bash / cmd.exe 제목은
   정규화; PowerShell 블록이나 `node "<found-path>"` 단계가 없는 섹션은 생성해 채움) 고정점을 유지합니다
   (`--check` 통과). 섹션 경계 규칙을 명시했습니다(#247 리뷰): 제목은 바로 뒤 펜스와 함께 움직이고, 선택
@@ -441,8 +441,9 @@ Windows cp949 코드 페이지 크래시로 중단된 보고서를 traceback만 
   붙여넣었거나 새 세션인 경우) Windows PowerShell 5.1이 빈 `"$CLI"` 인수를 버리므로,
   `node "$CLI" list-templates --type native`가 `node list-templates --type native`가 되어 node가 실제 원인과
   무관한 `Cannot find module '<cwd>\list-templates'`로 종료되었습니다. 이제 생성되는 줄은 `node`와
-  같은 줄에서 `if (-not $CLI) { throw '… $CLI is empty. Run the two lookup lines above in THIS PowerShell
-  session first …' }; `로 시작하므로 그 줄만 붙여넣어도 guard가 작동합니다. 블록 제목은 세 줄을 같은 세션에서
+  같은 줄에서
+  `if (-not $CLI) { throw '… $CLI is empty. Run the two lookup lines above in THIS PowerShell session first …' }; `로
+  시작하므로 그 줄만 붙여넣어도 guard가 작동합니다. 블록 제목은 세 줄을 같은 세션에서
   순서대로 실행하라고 안내하고, 생성기는 기존 블록에 guard를 추가하고 기존 블록을 재생성하며(`--check`는
   계속 통과), drift-guard TC는 조회 뒤에 맨 `node "$CLI"`가 오면 실패하고, guard 규칙(한국어 규칙 7, 영어
   규칙 8)은 증상을 설명합니다. 리뷰 후속 조치: 세 개의 fenced cmd.exe 조회(`tizen-webapp-debug`,
@@ -570,8 +571,8 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   `list installed packages` / `applications` / "which packages are installed"는 모두 `list-packages`에
   매칭됩니다. "Reboot/restart the emulator"는 새로운 `emulator-restart` 의도로, `tizen-device-manager`(VM
   중지) + `tizen-launch-emulator`(콜드 스타트)로 넘깁니다. Windows 에뮬레이터에서 게스트
-  `sdb shell reboot`를 하면 WHPX vCPU가 리셋되면서 QEMU 프로세스가 종료되어(`WHPX: Unexpected VP exit
-  code 4`) 창이 닫히고 sdb가 더 이상 디바이스를 인식하지 못하기 때문입니다. 확인 절차가 걸린 `reboot` /
+  `sdb shell reboot`를 하면 WHPX vCPU가 리셋되면서 QEMU 프로세스가
+  종료되어(`WHPX: Unexpected VP exit code 4`) 창이 닫히고 sdb가 더 이상 디바이스를 인식하지 못하기 때문입니다. 확인 절차가 걸린 `reboot` /
   `shutdown`의 대상 시리얼이 `emulator-<port>`이면 `result.note`에 같은 경고가 포함되며, 하드웨어 시리얼에는
   경고가 붙지 않습니다. skill과 에이전트의 의도 표를 업데이트했습니다(`common/lib/tests/sdb-helper.test.js`
   Tests 7b, 7b-2, 7c).
@@ -899,12 +900,12 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   `$env:TIZEN_SDK_PATH`가 포함되어 있었습니다 — 두 결과가 다를 수 있어서, 사전 검사가 검증한 SDK와 다른
   SDK에 rootstrap이 설치될 수 있었습니다.
 - **`sdb-helper`가 디바이스 지정 구문을 셸 명령 인자에서 제외합니다** (`common/lib/core/sdb-helper.js`의
-  `extractShellCommand()`). "run shell command ls -la on emulator-26101"은 디바이스에서 `ls -la on
-  emulator-26101`을 실행했고(`ls: cannot access 'on'`), 앞에 오는 구문("on emulator-26101 run shell command
+  `extractShellCommand()`). "run shell command ls -la on emulator-26101"은 디바이스에서
+  `ls -la on emulator-26101`을 실행했고(`ls: cannot access 'on'`), 앞에 오는 구문("on emulator-26101 run shell command
   ls")은 키워드 제거를 무력화해 문장 전체를 전송했습니다. 이제 앞이나 뒤에 오는 "on (the|my|this)
   (device|emulator|target|tv|board) [serial]" 또는 "on <serial>"을 제거합니다. 이때 단독 `<serial>`은
-  `emulator-<port>`, IPv4[:port], 또는 문자와 숫자가 섞인 하드웨어 serial이어야 하므로 `grep -i on
-  file1.txt`, `echo on`, `tail -n 20 on log2024.txt`, `ls /opt/on/the/device`는 그대로 유지됩니다. 앞뒤의
+  `emulator-<port>`, IPv4[:port], 또는 문자와 숫자가 섞인 하드웨어 serial이어야 하므로
+  `grep -i on file1.txt`, `echo on`, `tail -n 20 on log2024.txt`, `ls /opt/on/the/device`는 그대로 유지됩니다. 앞뒤의
   공손한 표현(please, kindly, for me, thanks)도 마찬가지로 제거합니다. 디바이스 지정 구문만 있는 요청은
   명령을 생성하지 않습니다(`sdb-helper.test.js` Test 5b).
 - **Windows의 `sdk-install`이 User `Path`에 `C:/Users/me/tizen-sdk\bin`을 기록하던 문제를 수정했습니다**
@@ -948,8 +949,8 @@ macOS용 0.2.1a0 바이너리를 갖추었으며, 증상 보고("CPU at 300 %, v
   어두운 테마에서 흰색 텍스트로 렌더링되었기 때문입니다.
 - **테스트 스위트 문서**: `tests/RUN-ORDER.md`는 safe → mutating → device 순서(드라이버, 사전 요구 사항,
   단계, 옵션, 흔한 실패)를 한곳에 모았으며, 한국어 `tests/README.ko.md` / `tests/RUN-ORDER.ko.md`는 영어
-  문서에서 링크됩니다. `tests/README.md`는 모든 러너 워크플로 앞에 tizen-cli 빌드(`cd tizen-cli && pnpm
-  install && pnpm build`)를 둡니다 — `dist/`가 gitignore되어 있어 새로 체크아웃하면 그렇지 않을 경우 모든
+  문서에서 링크됩니다. `tests/README.md`는 모든 러너 워크플로 앞에 tizen-cli
+  빌드(`cd tizen-cli && pnpm install && pnpm build`)를 둡니다 — `dist/`가 gitignore되어 있어 새로 체크아웃하면 그렇지 않을 경우 모든
   cli-lane TC가 실패하기 때문입니다. 또한 단독 `node runner.mjs`가 mutating 및 device 티어를 실행한다고
   경고하고, 러너의 실행기 확인 순서(Windows: `TC_LAUNCHER_JS`, 그다음 `../tizen-cli/bin/tizen-sdk.js`; 그 외:
   `PATH`의 `tizen-cli` / `tizen-sdk`)와 번들이 오래되었는지 검사하는 드라이버를 설명합니다.
@@ -1130,8 +1131,8 @@ fixture 앱; approved TC 286개 중 199 → 264), safe 티어가 CI 게이트가
   표시되는 동안 이미 실행 중 검사가 대기하며(≤15초), em-cli가 실행을 거부했지만 sdb에서 VM이 온라인으로
   보이면 해당 serial을 성공으로 보고합니다. 두 수정의 소스 가드는
   `common/lib/tests/emulator-stop-launch-guards.test.js`에 있습니다.
-- **최신 pnpm에서 `pnpm link --global`이 실패하던 문제를 수정했습니다** (`ERR_PNPM_LINK_BAD_PARAMS: You must
-  provide a parameter`). pnpm 10은 `--global` 플래그를 제거했고 pnpm 11은 인자 없는 `pnpm link`도
+- **최신 pnpm에서 `pnpm link --global`이 실패하던 문제를 수정했습니다**
+  (`ERR_PNPM_LINK_BAD_PARAMS: You must provide a parameter`). pnpm 10은 `--global` 플래그를 제거했고 pnpm 11은 인자 없는 `pnpm link`도
   제거했습니다. 독립 실행형 `tizen-sdk` launcher를 PATH에 넣는 문서화된 방법은 이제 `tizen-cli/`에서
   `pnpm add -g .`입니다(되돌리려면 `pnpm remove -g tizen-cli-plugin-tizen-sdk`).
   `tizen-cli/README*.md`, `docs/tizen-cli/build-and-install*.md`(`ERR_PNPM_LINK_BAD_PARAMS`,

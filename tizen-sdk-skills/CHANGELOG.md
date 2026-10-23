@@ -378,7 +378,7 @@ with the cmd.exe block last, and `tizen-screenshot`'s "do not wrap" note is fold
   headings — the hint now says "once … OR"). The follow-up removes what the first pass left behind: the
   template's "Korean labels in block B" and its "copy the English block's content" instruction (there is no
   English block to copy when only the Korean one is rendered — the Korean block is now written directly, in
-  the same structure), the skeleton annotations that sat *inside* the ```` ```markdown ```` fence in all
+  the same structure), the skeleton annotations that sat _inside_ the ` ```markdown ` fence in all
   three lanes (`## Analysis Report (English)            ← render this block when …` and
   `---  (Korean block below — …)`, which a literal copy would have emitted into the report; the skeleton is
   now two fences introduced by prose), and the anti-pattern wording "a bilingual report when the user wrote
@@ -398,7 +398,7 @@ with the cmd.exe block last, and `tizen-screenshot`'s "do not wrap" note is fold
   as-is, and the blocks follow in order of how many hosts they serve: Bash (Linux, macOS, Claude Code's Git
   Bash on Windows, Codex on Linux/macOS), PowerShell (Codex on Windows, Cline PowerShell terminal), then
   cmd.exe with its `node "<found-path>"` step and the "Runner not found?" note; the cmd.exe heading now
-  points at the blocks *above*. The generator performs the reorder (a section parser over the headings, the
+  points at the blocks _above_. The generator performs the reorder (a section parser over the headings, the
   three fences, the pick line and the note — anything else ends the section; hand-written Bash / cmd.exe
   headings are canonicalised; a section without a PowerShell block or a `node "<found-path>"` step gains
   one) and stays a fixed point (`--check` green). Section boundaries are explicit (review of #247): a
@@ -481,9 +481,9 @@ the traceback.
   `common/lib/tests/plugin-cache.test.js`). With `$CLI` unset — the third line pasted without the two
   lookup lines, or in a fresh session — Windows PowerShell 5.1 drops the empty `"$CLI"` argument, so
   `node "$CLI" list-templates --type native` became `node list-templates --type native` and node died with
-  `Cannot find module '<cwd>\list-templates'`, which points at nothing. The generated line now starts
-  with `if (-not $CLI) { throw '… $CLI is empty. Run the two lookup lines above in THIS PowerShell
-  session first …' }; ` on the same line as `node`, so it fires even when only that line is pasted; the
+  `Cannot find module '<cwd>\list-templates'`, which points at nothing. The generated line now starts with
+  `if (-not $CLI) { throw '… $CLI is empty. Run the two lookup lines above in THIS PowerShell session first …' }; `
+  on the same line as `node`, so it fires even when only that line is pasted; the
   block heading says to run all three lines in order in the same session; the generator adds the guard
   to existing blocks and regenerates an existing one (`--check` stays green); the drift-guard TC fails
   when a lookup is followed by a bare `node "$CLI"`; the guard rules (Korean rule 7, English rule 8)
@@ -615,8 +615,8 @@ mutating tier run against a throwaway home.
   `list installed packages` / `applications` / "which packages are installed" all match `list-packages`.
   "Reboot/restart the emulator" is a new `emulator-restart` intent that hands off to
   `tizen-device-manager` (stop the VM) + `tizen-launch-emulator` (cold start): a guest `sdb shell reboot`
-  of the Windows emulator resets the WHPX vCPU and kills the QEMU process (`WHPX: Unexpected VP exit
-  code 4`), so the window dies and sdb never sees the device again. A gated `reboot` / `shutdown` whose
+  of the Windows emulator resets the WHPX vCPU and kills the QEMU process
+  (`WHPX: Unexpected VP exit code 4`), so the window dies and sdb never sees the device again. A gated `reboot` / `shutdown` whose
   resolved serial is `emulator-<port>` carries the same warning in `result.note`; hardware serials get
   none. Skill and agent intent tables updated (`common/lib/tests/sdb-helper.test.js` Tests 7b, 7b-2, 7c).
 - **`file-transfer` restores remote paths that Git Bash's MSYS layer rewrote**
@@ -966,8 +966,8 @@ mutating tier run against a throwaway home.
   `$env:TIZEN_SDK_PATH` — the two could disagree and the rootstrap land in a different SDK than the
   one the pre-check validated.
 - **`sdb-helper` keeps the device clause out of shell-command arguments** (`extractShellCommand()` in
-  `common/lib/core/sdb-helper.js`). "run shell command ls -la on emulator-26101" ran `ls -la on
-  emulator-26101` on the device (`ls: cannot access 'on'`), and a leading clause ("on emulator-26101
+  `common/lib/core/sdb-helper.js`). "run shell command ls -la on emulator-26101" ran
+  `ls -la on emulator-26101` on the device (`ls: cannot access 'on'`), and a leading clause ("on emulator-26101
   run shell command ls") defeated the keyword stripping and sent the whole sentence. A leading or
   trailing "on (the|my|this) (device|emulator|target|tv|board) [serial]" or "on <serial>" is now stripped,
   where a bare `<serial>` must be `emulator-<port>`, an IPv4[:port] or a hardware serial that interleaves

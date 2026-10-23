@@ -122,8 +122,10 @@ TC 추가: [tests/README.md → Adding a New TC](tests/README.md#adding-a-new-tc
   `docs/SKILLS_REFERENCE*.md`, `tests/README.md`, 그리고 `README*.md`의
   "프로젝트 현황" 표 전체에서 일치시킵니다.
 - 새 Markdown은 저장소 Prettier 설정(80열, LF 줄바꿈. `.gitattributes`가
-  `*.md`에 LF를 강제)을 따릅니다. CI는 Markdown을 검사하지 않으므로
-  `npx prettier --check <file>`을 직접 실행하세요.
+  `*.md`에 LF를 강제)을 따릅니다. CI는 Markdown 중 `CHANGELOG.md`와
+  `CHANGELOG.ko.md`만 검사하므로(`pnpm run format:check`) 그 밖의 Markdown은
+  `npx prettier --check <file>`을 직접 실행하세요. 인라인 코드는 한 줄에
+  두세요. 줄을 넘어간 코드의 다음 줄은 Prettier가 목록 들여쓰기를 지웁니다.
 
 ## 9. 버전 관리와 릴리즈 (Maintainer)
 
