@@ -9,6 +9,7 @@
  *   - only netcoredbg-specific "not found" output means netcoredbg is missing (#64)
  *   - port_forwarded keys on the "Port <N> forwarded" marker, and GDB
  *     recognises "No devices found" like DotNET does (#65)
+ *   - both runners classify both no-device messages as device_not_found (#79)
  */
 
 const fs = require("fs");
@@ -97,14 +98,21 @@ const GDB_LINE = '"/usr/bin/gdb" -x "/tmp/app.gdb"';
     JSON.stringify(r.result || firstError(r)),
   );
 
-  // --- #65: GDB no-device message ----------------------------------------
-  scriptResult = { error: failWith("No devices found.") };
-  r = await setupGdbDebug("org.example.app", "/tmp/app");
-  check(
-    "GDB recognises 'No devices found'",
-    firstError(r).error_category === "device_not_found",
-    JSON.stringify(firstError(r)),
-  );
+  // --- #65 / #79: no-device message, both runners -------------------------
+  for (const [runner, setup] of [
+    ["GDB", () => setupGdbDebug("org.example.app", "/tmp/app")],
+    ["DotNET", () => setupDotnetDebug("org.example.app", { launch: true })],
+  ]) {
+    for (const text of ["No devices found.", "No connected device"]) {
+      scriptResult = { error: failWith(text) };
+      r = await setup();
+      check(
+        `${runner} recognises '${text}'`,
+        firstError(r).error_category === "device_not_found",
+        JSON.stringify(firstError(r)),
+      );
+    }
+  }
 
   // --- #64: netcoredbg not found -----------------------------------------
   scriptResult = {

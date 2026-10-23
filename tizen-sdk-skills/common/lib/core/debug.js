@@ -40,6 +40,8 @@ const SAFE_APP_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 /** Characters allowed in a breakpoint list spliced into the setup script arguments. */
 const SAFE_BREAKPOINTS_PATTERN = /^[A-Za-z0-9_:,. ]+$/;
 
+/** Shared `device_not_found` pattern of both setup runners' failure tables. */
+const NO_DEVICE_PATTERN = /No devices found|No connected device/i;
 /** Shared `device_not_found` message of both setup runners. */
 const NO_DEVICE_MESSAGE =
   "No connected device or emulator. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it, then retry.";
@@ -296,7 +298,7 @@ function debugSetupSuccess(command, startTime, result, warnings) {
 /** Known GDB setup-script failures, checked in order. */
 const GDB_SETUP_FAILURES = [
   {
-    pattern: /No devices found|No connected device/i,
+    pattern: NO_DEVICE_PATTERN,
     category: "device_not_found",
     message: () => NO_DEVICE_MESSAGE,
   },
@@ -853,7 +855,7 @@ function writeDotnetLaunchJson(projectPath, port, opts = {}) {
 /** Known DotNET setup-script failures, checked in order. */
 const DOTNET_SETUP_FAILURES = [
   {
-    pattern: /No devices found|No connected device/i,
+    pattern: NO_DEVICE_PATTERN,
     category: "device_not_found",
     message: () => NO_DEVICE_MESSAGE,
   },
