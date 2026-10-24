@@ -631,6 +631,26 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
           ),
         true,
       );
+      // The directory is there but tz does not even list tv-samsung-9.0:
+      // still an incomplete extension, not "not installed".
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\n'\n",
+      );
+      const unlistedEnv = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "9.0",
+      );
+      check(
+        "TV directory that tz does not list → may be incomplete, not missing",
+        unlistedEnv.status === "failure" &&
+          unlistedEnv.errors[0].message.includes(
+            "is installed for TIZEN-9.0, but tz lists no TV templates",
+          ) &&
+          !unlistedEnv.errors[0].message.includes("not installed for"),
+        true,
+      );
       fs.rmSync(path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung"), {
         recursive: true,
       });

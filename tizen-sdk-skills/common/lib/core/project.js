@@ -1715,10 +1715,13 @@ async function listTemplates(
         if (key === "tv" && versionArgs.version) {
           const sdkPath = readSdkPath();
           const installed = installedTvVersions(sdkPath, profiles);
-          if (installed.includes(versionArgs.version)) {
-            // Installed, yet tz lists no TV template under it. Omitting the
-            // version helps only when a newer one exists: the newest-first
-            // scan would otherwise pick this version again.
+          if (
+            installed.includes(versionArgs.version) ||
+            hasTvExtensionDir(sdkPath, versionArgs.version)
+          ) {
+            // On disk, yet tz lists no TV template (or not even the profile)
+            // for it. Omitting the version helps only when a newer one exists:
+            // the newest-first scan would otherwise pick this version again.
             const version = versionArgs.version;
             const others = installed.filter((v) => v !== version);
             const newer = others.some(
