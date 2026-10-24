@@ -119,7 +119,11 @@ fi
 
 # --detach: re-launch in background
 if [[ "$DETACH" == "true" ]]; then
-    nohup bash "$0" --sdk-path="$SDK_PATH" --zip-path="$ZIP_PATH" ${FORCE:+--force} > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 &
+    # --force only when it was given. (The old ":+" parameter expansion fired for
+    # FORCE=false too, since "false" is non-empty, so every detached run was forced.)
+    detach_args=(--sdk-path="$SDK_PATH" --zip-path="$ZIP_PATH")
+    [[ "$FORCE" == "true" ]] && detach_args+=(--force)
+    nohup bash "$0" "${detach_args[@]}" > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 &
     jobs -p
     exit 0
 fi

@@ -53,6 +53,23 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **TV SDK installs now work under Cline and keep `--force`**
+  (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
+  `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`,
+  `common/skills/tizen-tv-sdk-install/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`,
+  `common/lib/tests/tv-sdk-install-cline.test.js`, `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  The `tizen-tv-sdk-install` skill told Cline to launch the installer with `--detach` /
+  `-Detach` and poll it with `--status` / `-Status`, but the installer had neither option.
+  The bash poll failed with `Unknown option: --status`, and `-Detach` / `-Status` were
+  PowerShell parameter errors. The installer now has both. `--detach` forwards
+  `--sdk-path`, `--download-jobs` and, only when given, `--force`. `--status` prints
+  `STATUS=running` or `STATUS=done EXIT=<code>`. The Cline launch commands of both TV skills
+  now run `suggested_fix.command` with all of its arguments. Before, they dropped `--force`,
+  and on Windows the ZIP skill also dropped `-ZipPath`.
+  `tizen-tv-sdk-install-from-zip.sh --detach` used to add `--force` even for `FORCE=false`,
+  because `${FORCE:+--force}` expands for any non-empty value; it now adds it only when
+  `--force` was given.
 - **`--force` / `-Force` now reinstalls an installed SDK**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,

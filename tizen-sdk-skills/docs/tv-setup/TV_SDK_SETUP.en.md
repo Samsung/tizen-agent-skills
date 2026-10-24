@@ -90,8 +90,9 @@ Once the base Tizen SDK is installed, the TV SDK extension can be installed.
 **Installation method (Cline on Linux):**
 
 ```bash
-# Phase 2: Launch TV SDK installer in background
-nohup bash "<tv-sdk-install.sh path>" --sdk-path="/home/user/tizen-sdk" > /tmp/tizen-tv-sdk-install.log 2>&1 & \
+# Phase 2: Launch the Phase 1 envelope's suggested_fix.command in the background with nohup,
+# keeping all of its arguments (--sdk-path, --force)
+nohup <suggested_fix.command> > /tmp/tizen-tv-sdk-install.log 2>&1 & \
 jobs -p
 ```
 

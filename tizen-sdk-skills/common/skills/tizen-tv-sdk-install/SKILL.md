@@ -133,10 +133,12 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
 
 #### Linux / macOS (Bash)
 
-1. `nohup` 으로 설치 프로세스를 분리 (즉시 반환, PID 출력):
+1. `nohup` 으로 Phase 1 envelope의 `suggested_fix.command`(`bash "<installer-script>" --sdk-path=… [--force]`)를
+   **인자까지 그대로** 분리 실행 (즉시 반환, PID 출력). 인자를 빼면 `--force`·`--sdk-path` 요청이
+   적용되지 않습니다:
 
    ```bash
-   nohup bash "<installer-script>" --sdk-path="<sdk-path>" > /tmp/tizen-tv-sdk-install.log 2>&1 & \
+   nohup <suggested_fix.command> > /tmp/tizen-tv-sdk-install.log 2>&1 & \
    jobs -p
    ```
 
@@ -164,10 +166,12 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
 
 #### Windows (PowerShell)
 
-1. `-Detach` 로 설치 프로세스를 분리:
+1. Phase 1 envelope의 `suggested_fix.command`(`powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -SdkPath … [-Force]`)를
+   **인자까지 그대로** 쓰고 끝에 `-Detach`만 붙여 분리 실행 (PID와 로그 경로 출력). 인자를 빼면
+   `-Force`·`-SdkPath` 요청이 적용되지 않습니다:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Detach
+   <suggested_fix.command> -Detach
    ```
 
 2. 시도 번호를 붙여 `Start-Sleep 25; -Status` 로 폴링 (25초 대기 후 상태 출력; `#N`은 호출마다 1씩 증가):

@@ -50,6 +50,22 @@
 
 ### Fixed
 
+- **TV SDK 설치가 Cline에서 동작하고 `--force`도 유지**
+  (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
+  `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`,
+  `common/skills/tizen-tv-sdk-install/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`,
+  `common/lib/tests/tv-sdk-install-cline.test.js`, `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  `tizen-tv-sdk-install` 스킬은 Cline에게 `--detach` / `-Detach`로 설치를 시작하고
+  `--status` / `-Status`로 상태를 확인하라고 안내했지만, 설치 스크립트에는 두 옵션이 없었습니다.
+  그래서 bash 폴링은 `Unknown option: --status`로 실패했고, `-Detach` / `-Status`는 PowerShell
+  파라미터 오류가 났습니다. 이제 설치 스크립트에 두 옵션이 있습니다. `--detach`는 `--sdk-path`,
+  `--download-jobs`와, 요청했을 때만 `--force`를 넘깁니다. `--status`는 `STATUS=running` 또는
+  `STATUS=done EXIT=<code>`를 출력합니다. 두 TV 스킬의 Cline 실행 명령은 이제
+  `suggested_fix.command`를 인자까지 그대로 실행합니다. 예전에는 `--force`가 빠졌고, Windows의
+  ZIP 스킬은 `-ZipPath`까지 빠졌습니다. `tizen-tv-sdk-install-from-zip.sh --detach`는
+  `${FORCE:+--force}`가 비어 있지 않은 모든 값에서 펼쳐지기 때문에 `FORCE=false`여도 `--force`를
+  붙였는데, 이제 `--force`를 줬을 때만 붙입니다.
 - **`--force` / `-Force`가 설치된 SDK를 다시 설치**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,
