@@ -235,10 +235,12 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
 
 #### Linux / macOS (Bash)
 
-1. `nohup` 으로 설치 프로세스를 분리 (`--repo-url`을 반드시 포함):
+1. `nohup` 으로 Phase 1 envelope의 `suggested_fix.command`
+   (`bash "<tizen-sdk-install-custom-repo.sh path>" --repo-url=… --path … [--force] …`)를 **인자까지 그대로**
+   분리 실행. 인자를 빼면 `--repo-url`(기본 CDN으로 설치됨)·`--force`·`--path` 요청이 적용되지 않습니다:
 
    ```bash
-   nohup bash "<tizen-sdk-install-custom-repo.sh path>" --repo-url "<url>" > /tmp/tizen-sdk-install.log 2>&1 & \
+   nohup <suggested_fix.command> > /tmp/tizen-sdk-install.log 2>&1 & \
    jobs -p
    ```
 
@@ -259,10 +261,13 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
 
 #### Windows (PowerShell)
 
-1. `-Detach` 로 분리 (`-RepoUrl`을 반드시 포함 — 누락하면 기본 CDN에서 설치됩니다):
+1. Phase 1 envelope의 `suggested_fix.command`
+   (`powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -RepoUrl "…" -Path … [-Force] …`)를
+   **인자까지 그대로** 쓰고 끝에 `-Detach`만 붙여 분리 실행. 인자를 빼면 `-RepoUrl`(기본 CDN으로
+   설치됨)·`-Force`·`-Path` 요청이 적용되지 않습니다:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -RepoUrl "<url>" -Detach
+   <suggested_fix.command> -Detach
    ```
 
 2. 시도 번호를 붙여 `Start-Sleep 25; -Status` 로 폴링 (`#N`은 호출마다 1씩 증가):

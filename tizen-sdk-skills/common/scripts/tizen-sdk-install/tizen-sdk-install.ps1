@@ -102,9 +102,11 @@ if ($Detach) {
     $logFile = Join-Path $env:TEMP "tizen-sdk-install.log"
     $procArgs = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass',
-        '-File', $PSCommandPath,
-        '-Force'
+        '-File', $PSCommandPath
     )
+    # -Force only when the caller asked for it: forcing every detached run
+    # would make a resumed install re-download all packages.
+    if ($Force) { $procArgs += '-Force' }
     if ($Platform) { $procArgs += @('-Platform', $Platform) }
     if ($Path) { $procArgs += @('-Path', $Path) }
     if ($RepoUrl) { $procArgs += @('-RepoUrl', $RepoUrl) }
@@ -702,8 +704,15 @@ function Install-PlatformPackages {
         # Resume support: if this package's manifest already exists it was
         # installed on a previous run, so skip it. This lets an
         # interrupted/timed-out install continue where it left off instead of
-        # starting over - just re-run the script.
-        if (Test-Path (Join-Path $pkgInfoDir "$pkg.manifest")) {
+        # starting over - just re-run the script. -Force reinstalls every
+        # package, so it never resume-skips. It drops this package's old
+        # manifest up front, so a failed forced run leaves none for a later
+        # resume to skip. Only the resolved base-SDK packages are touched: the
+        # TV SDK, emulator and platform installers keep their manifests in the
+        # same .package\ directory.
+        if ($Force) {
+            Remove-Item (Join-Path $pkgInfoDir "$pkg.manifest") -Force -ErrorAction SilentlyContinue
+        } elseif (Test-Path (Join-Path $pkgInfoDir "$pkg.manifest")) {
             Write-Info "[$idx/$total] $pkg already installed, skip"
             $skip++
             $skipped += "$pkg - already installed (previous run)"
@@ -803,6 +812,10 @@ function Stop-InstallLog {
 if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
     Remove-Item $ResultMarker -Force -ErrorAction SilentlyContinue
+    # A forced reinstall overwrites a complete install: drop its sdk.info first so
+    # a run that fails partway is not later taken for a completed install. (Its
+    # package manifests are dropped per package in Install-PlatformPackages.)
+    if ($Force) { Remove-Item $sdkInfoPath -Force -ErrorAction SilentlyContinue }
     Set-Content -Path $RunningMarker -Value "running" -ErrorAction SilentlyContinue
     try {
         Start-Transcript -Path $InstallLog -Force -ErrorAction Stop | Out-Null

@@ -53,6 +53,27 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **`--force` / `-Force` now reinstalls an installed SDK**
+  (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
+  `common/skills/tizen-sdk-install/SKILL.md`,
+  `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,
+  `common/lib/tests/sdk-install-force.test.js`, `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  On an installed SDK, `--force` got past
+  the "already installed" check but then skipped every package whose
+  `.package/<pkg>.manifest` existed, so nothing was downloaded again. Newer packages never
+  arrived, and a `--repo-url` switch only rewrote `repository.info` while the packages still
+  came from the old repository. The per-package resume skip now applies only without
+  `--force`. The detached re-launch (`--detach` / `-Detach`) used to add `--force`
+  every time; it now adds it only when the caller asked for it, so a resumed install still
+  skips the packages it already installed. A forced run now deletes the old `sdk.info`
+  before it starts, and the old manifest of each base-SDK package it is about to install. A
+  run that fails partway is no longer reported as installed, and resuming it reinstalls the
+  packages it did not reach instead of keeping their old versions. Manifests of the TV SDK,
+  emulator and platform packages, which share `.package/`, and `repository.info` are kept.
+  The Cline launch commands in both SKILL.md files and in the TV SDK setup guide now run
+  `suggested_fix.command` with all of its arguments (`nohup <suggested_fix.command>`,
+  `<suggested_fix.command> -Detach`). Before, they dropped `--force`, `--path` and
+  `--platform`.
 - **SDK install skills now report the envelope on every completion path**
   (`common/skills/tizen-sdk-install/SKILL.md`,
   `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,

@@ -505,7 +505,13 @@ install_platform_packages() {
 
     # Resume support: if manifest already exists for this package, it was installed in previous run,
     # so skip it without re-downloading (continue interrupted/timed-out install from where it left off).
-    if [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
+    # --force reinstalls every package, so it never resume-skips. It drops this package's old
+    # manifest up front, so a failed forced run leaves none for a later resume to skip. Only the
+    # resolved base-SDK packages are touched: the TV SDK, emulator and platform installers keep
+    # their manifests in the same .package/ directory.
+    if [ "$FORCE" = true ]; then
+      rm -f "$INSTALL_PATH/.package/$pkg.manifest"
+    elif [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
       log_info "[$idx/$total] $pkg already installed, skipping"
       skip=$((skip+1))
       skipped="$skipped
@@ -998,7 +1004,10 @@ SCRIPT_START=$SECONDS
 # repository the user asked for, and dropping --path would install elsewhere
 # than the path whose --status the caller then polls.
 if [ "$DETACH" = true ]; then
-  detach_args=(--force --path "$INSTALL_PATH")
+  # --force only when the caller asked for it: forcing every detached run
+  # would make a resumed install re-download all packages.
+  detach_args=(--path "$INSTALL_PATH")
+  [ "$FORCE" = true ] && detach_args+=(--force)
   [ -n "$PLATFORM_VERSION" ] && detach_args+=(--platform "$PLATFORM_VERSION")
   [ -n "$REPO_URL" ] && detach_args+=(--repo-url "$REPO_URL")
   detach_args+=(--download-jobs "$DOWNLOAD_JOBS")
@@ -1087,6 +1096,10 @@ fi
 if [ "$DRY_RUN" != true ]; then
   mkdir -p "$INSTALL_PATH"
   rm -f "$INSTALL_PATH/.install-result" 2>/dev/null || true
+  # A forced reinstall overwrites a complete install: drop its sdk.info first so
+  # a run that fails partway is not later taken for a completed install. (Its
+  # package manifests are dropped per package in install_platform_packages.)
+  [ "$FORCE" = true ] && rm -f "$INSTALL_PATH/sdk.info"
   : > "$INSTALL_PATH/.install-running"
   trap _on_exit_marker EXIT
 
