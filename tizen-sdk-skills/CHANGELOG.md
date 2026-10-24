@@ -55,10 +55,12 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 - **TV SDK installs now work under Cline and keep `--force`**
   (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
-  `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`,
+  `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`, `.ps1`,
+  `common/scripts/tizen-sdk-install/tizen-sdk-install.ps1`, `common/scripts/lib/common.sh`,
   `common/skills/tizen-tv-sdk-install/SKILL.md`,
   `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`,
-  `common/lib/tests/tv-sdk-install-cline.test.js`, `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  `common/lib/tests/tv-sdk-install-cline.test.js`, `common/lib/tests/sdk-install-force.test.js`,
+  `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
   The `tizen-tv-sdk-install` skill told Cline to launch the installer with `--detach` /
   `-Detach` and poll it with `--status` / `-Status`, but the installer had neither option.
   The bash poll failed with `Unknown option: --status`, and `-Detach` / `-Status` were
@@ -74,8 +76,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   not exclude its ancestors, so it matched the poller's own command-substitution subshell. A
   failed install was therefore never reported as failed. They now share an
   `installer_running` helper (`common/scripts/lib/common.sh`) that skips every
-  `--status` / `--wait` process. The `.ps1` `-Detach` quotes the script path it re-launches,
-  so a path with a space no longer splits into two arguments.
+  `--status` / `--wait` process. The `-Detach` of `tizen-tv-sdk-install.ps1`,
+  `tizen-tv-sdk-install-from-zip.ps1` and `tizen-sdk-install.ps1` now quotes the script path
+  it re-launches (and `tizen-sdk-install.ps1` its `-Path`). `Start-Process` does not quote
+  `-ArgumentList` elements, so a path with a space split into two arguments and the detached
+  install never started.
 - **`--force` / `-Force` now reinstalls an installed SDK**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,

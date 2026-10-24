@@ -57,6 +57,13 @@ const zipSh = read(
     "tizen-tv-sdk-install-from-zip.sh",
   ),
 );
+const zipPs1 = read(
+  path.join(
+    scriptsDir,
+    "tizen-tv-sdk-install-from-zip",
+    "tizen-tv-sdk-install-from-zip.ps1",
+  ),
+);
 
 console.log("--- tizen-tv-sdk-install.sh ---");
 check(
@@ -134,6 +141,12 @@ for (const [name, src] of [
 check(
   "ps1: -Detach quotes the script path for Start-Process",
   procArgs !== null && /'-File', "`"\$PSCommandPath`""/.test(procArgs[1]),
+);
+check(
+  "from-zip ps1: -Detach quotes the script path and passes a flat argument list",
+  /-ArgumentList \(@\("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", "`"\$PSCommandPath`""\) \+ \$argList\)/.test(
+    zipPs1,
+  ),
 );
 
 console.log("--- bash --status ---");

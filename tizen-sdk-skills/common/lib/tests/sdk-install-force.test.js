@@ -102,6 +102,14 @@ check(
   "ps1: -Detach forwards -Force only when $Force is set",
   /if \(\$Force\) \{ \$procArgs \+= '-Force' \}/.test(ps1),
 );
+// Start-Process does not quote -ArgumentList elements, so a path with a space
+// split into two arguments and the detached install never started.
+check(
+  "ps1: -Detach quotes the script path and -Path for Start-Process",
+  procArgs !== null &&
+    /'-File', "`"\$PSCommandPath`""/.test(procArgs[1]) &&
+    /if \(\$Path\) \{ \$procArgs \+= @\('-Path', "`"\$Path`""\) \}/.test(ps1),
+);
 
 console.log("--- stale sdk.info and manifests ---");
 const shInstall = sh.indexOf("if ! install_platform_packages; then");

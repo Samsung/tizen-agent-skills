@@ -115,8 +115,10 @@ if ($Wait) {
 if ($Detach) {
     $argList = @("-SdkPath", "`"$SdkPath`"", "-ZipPath", "`"$ZipPath`"")
     if ($Force) { $argList += "-Force" }
+    # Start-Process joins -ArgumentList with spaces and does not quote the
+    # elements, so the script path must carry its own quotes like the others.
     $proc = Start-Process -FilePath "powershell" `
-        -ArgumentList @("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", $PSCommandPath, $argList) `
+        -ArgumentList (@("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", "`"$PSCommandPath`"") + $argList) `
         -WindowStyle Hidden -PassThru
     Write-Host "PID=$($proc.Id)"
     exit 0
