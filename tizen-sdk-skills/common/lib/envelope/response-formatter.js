@@ -445,6 +445,37 @@ function formatPlatformInstall(
 }
 
 /**
+ * Installed platform list response formatting
+ *
+ * @param {string} sdkPath - installed SDK root
+ * @param {Array} platforms - [{version, status, profiles, emulator_images}]
+ * @param {number} [startTime] - Task start time (Date.now() value)
+ * @param {Array} [warnings] - Array of warning messages
+ * @param {string} [command]
+ */
+function formatPlatformList(
+  sdkPath,
+  platforms,
+  startTime,
+  warnings = [],
+  command = "tizen-sdk platform-list",
+) {
+  const envelope = new Envelope(command);
+  if (typeof startTime === "number") {
+    envelope.startTime = startTime;
+  }
+  const installed = (platforms || []).filter((p) => p.status === "installed");
+  return envelope.success(
+    {
+      sdk_path: sdkPath,
+      platforms: platforms || [],
+      newest: installed.length ? installed[installed.length - 1].version : null,
+    },
+    { warnings },
+  );
+}
+
+/**
  * Mobile platform package download response formatting
  *
  * @param {Array} packages - List of installed packages [{name, status, version}]
@@ -663,6 +694,7 @@ module.exports = {
 
   // Platform package installation
   formatPlatformInstall,
+  formatPlatformList,
 
   // Mobile platform package download
   formatMobilePlatformDownload,

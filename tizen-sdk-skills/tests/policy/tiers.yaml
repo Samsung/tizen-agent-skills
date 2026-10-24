@@ -4,7 +4,7 @@
 # safe default: nothing runs until a human classifies it.
 #
 # Source: tizen-cli/src/command-specs/*.ts
-# 35 commands total across 8 domain modules (safe 6 / mutating 15 / device 14).
+# 36 commands total across 8 domain modules (safe 7 / mutating 15 / device 14).
 # scripts/verify-doc-stats.mjs fails when this list and tizen-cli/plugin.json
 # (minus the internal-only command group) disagree.
 
@@ -19,6 +19,7 @@ commands:
   tizen-sdk.sdk-repo-info: { tier: safe }
   tizen-sdk.validate-repo-url: { tier: safe }
   tizen-sdk.list-templates: { tier: safe }
+  tizen-sdk.platform-list: { tier: safe }
 
   # ── mutating — 설치/변경/삭제 부작용 ──────────────────────────────────
   tizen-sdk.sdk-install: { tier: mutating }

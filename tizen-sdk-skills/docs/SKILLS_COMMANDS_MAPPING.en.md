@@ -1,4 +1,4 @@
-# Skill ↔ Command Mapping — Why 29 Skills but 35 Commands
+# Skill ↔ Command Mapping — Why 29 Skills but 36 Commands
 
 English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 
@@ -11,16 +11,16 @@ English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 | Unit | Count | Source of truth |
 |---|---|---|
 | **Skills** (natural-language trigger unit for Cline/Claude Code) | **29** | `common/skills/*/SKILL.md` |
-| **Commands** (`tizen-cli tizen-sdk <command>`) | **35** | `tizen-cli/src/command-specs/*.ts` |
+| **Commands** (`tizen-cli tizen-sdk <command>`) | **36** | `tizen-cli/src/command-specs/*.ts` |
 | SKILL.md files for tizen-cli (for reference) | 31 | `tizen-cli/skills/*/SKILL.md` — see [Why there are two skill sets](#why-there-are-two-skill-sets) |
 
 The counts differ **by design**. A skill is a user-intent unit while a command is an execution unit, so **one skill can own multiple commands**. For example, the "create project" skill (`tizen-create-project`) owns four commands: `create-project`, `project-delete`, `list-templates`, and `import-wgt`.
 
 ---
 
-## The 6 extra commands
+## The 7 extra commands
 
-The difference 35 − 29 = 6 comes from auxiliary commands attached to existing skills:
+The difference 36 − 29 = 7 comes from auxiliary commands attached to existing skills:
 
 | Extra command | Owning skill | Notes |
 |---|---|---|
@@ -30,16 +30,17 @@ The difference 35 − 29 = 6 comes from auxiliary commands attached to existing 
 | `list-templates` | `tizen-create-project` | List-templates action of the create skill (tizen-cli has a dedicated SKILL.md — see below) |
 | `import-wgt` | `tizen-create-project` | Import-wgt action of the create skill (`tz import-wgt` on an existing `.wgt`) |
 | `emulator-manager` | `tizen-create-emulator` + `tizen-launch-emulator` | Full em-cli surface (modify/reset/image capture) shared by two skills |
+| `platform-list` | `tizen-platform-install` | Read-only list of the installed platform versions (`platform-install-cli.js --list`) |
 
 The remaining 29 commands map 1:1 to skills.
 
 ---
 
-## Full mapping table (35 commands → 29 skills)
+## Full mapping table (36 commands → 29 skills)
 
 Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cli/skills/tizen-sdk/SKILL.md).
 
-### SDK / platform / packages (12 commands → 10 skills)
+### SDK / platform / packages (13 commands → 10 skills)
 
 | Command | Skill | Relation |
 |---|---|---|
@@ -52,6 +53,7 @@ Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cl
 | `tv-sdk-install-from-zip` | `tizen-tv-sdk-install-from-zip` | 1:1 |
 | `update-package` | `tizen-update-package` | 1:1 |
 | `platform-install` | `tizen-platform-install` | 1:1 |
+| `platform-list` | `tizen-platform-install` | List action of the same skill |
 | `download-emulator-package` | `tizen-download-emulator-package` | 1:1 |
 | `download-mobile-platform` | `tizen-download-mobile-platform` | 1:1 |
 | `install-rootstrap` | `tizen-install-rootstrap` | 1:1 |
@@ -106,7 +108,7 @@ Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cl
 | `certificate-manager` | `tizen-certificate-manager` | 1:1 (profile/distributor/Samsung online CA actions built in) |
 | `dlog-analyzer` | `tizen-dlog-analyzer` | 1:1 (start/stop/check/status/app-launch/app-terminate/dlog-collect/stop-collect/error-analyze actions built in) |
 
-**Check**: commands 12+3+5+7+6+2 = 35; skills 10+3+2+6+6+2 = 29.
+**Check**: commands 13+3+5+7+6+2 = 36; skills 10+3+2+6+6+2 = 29.
 
 ---
 
@@ -121,10 +123,10 @@ Skill directories exist per harness, with different counts:
 
 The 2 extras that exist only in `tizen-cli/skills/`:
 
-1. **`tizen-sdk`** (umbrella router) — the entry-point skill containing the routing table for all 35 commands. It has no counterpart in common (Cline/Claude Code route via each skill's own description).
+1. **`tizen-sdk`** (umbrella router) — the entry-point skill containing the routing table for all 36 commands. It has no counterpart in common (Cline/Claude Code route via each skill's own description).
 2. **`tizen-list-templates`** — in tizen-cli, `list-templates` is a standalone command and therefore gets a dedicated skill. In common it is handled as the list-templates action of the `tizen-create-project` skill.
 
-In other words, "29 skills" in the docs is counted against **common/skills**, while "35 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
+In other words, "29 skills" in the docs is counted against **common/skills**, while "36 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
 
 ---
 

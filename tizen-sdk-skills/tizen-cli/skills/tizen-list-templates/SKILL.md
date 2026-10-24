@@ -28,6 +28,7 @@ tizen-cli tizen-sdk list-templates [--type <type>]
 | Option          | Required | Default | Description                                            |
 | --------------- | -------- | ------- | ------------------------------------------------------ |
 | `--type <type>` | no       | all     | `native` \| `dotnet` \| `webapp` \| `rpk` \| `tv` \| `platform` |
+| `--platform-version <X.Y>` | no | newest installed | List the templates of that installed platform (e.g. `9.0`) instead of the newest one. Not installed → `platform_version_not_found`. See installed versions with `platform-list`. |
 
 ## Output
 

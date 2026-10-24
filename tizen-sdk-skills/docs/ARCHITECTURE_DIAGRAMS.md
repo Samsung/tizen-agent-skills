@@ -4,7 +4,7 @@
 
 `tizen-sdk-skills` 저장소 전체를 한눈에 보여주는 다이어그램 모음입니다. AI 코딩 어시스턴트(Claude Code, Cline, Codex CLI, Gemini CLI, VS Code 확장)와 독립 실행형 `tizen-sdk` CLI가 **하나의 `common/`** 을 어떻게 공유하고, 자연어 요청이 어떤 계층을 거쳐 실제 Tizen SDK 도구(`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`)까지 도달하는지, 그 결과가 어떻게 Standard JSON Envelope로 돌아오는지를 그림으로 설명합니다.
 
-> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 35, 에러 코드 61, TC 290)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.4.5) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
+> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 36, 에러 코드 61, TC 290)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.4.5) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
 
 ---
 
@@ -22,7 +22,7 @@ graph TB
         CODEX["Codex CLI<br/>skills + agents(.toml) + hooks.json"]
         GEMINI["Gemini CLI<br/>skills + agents + BeforeTool adapter"]
         VSCODE["VS Code 확장<br/>Claude/Cline/Codex에 플러그인 설치·동기화"]
-        CLI["tizen-sdk 독립 CLI<br/>AI 호스트 없이 35개 커맨드 직접 실행"]
+        CLI["tizen-sdk 독립 CLI<br/>AI 호스트 없이 36개 커맨드 직접 실행"]
     end
 
     subgraph COMMON["common/ — 단일 진실 공급원"]
@@ -334,7 +334,7 @@ graph LR
         I1["--schema<br/>커맨드 카탈로그 (commander에서 생성)"]
         I2["--doctor<br/>SDK 경로 · 캐시 · 러너 상태 점검"]
         I3["--capabilities<br/>지금 사용 가능한 커맨드"]
-        I4["&lt;command&gt; [options]<br/>35개 플랫 커맨드 실행"]
+        I4["&lt;command&gt; [options]<br/>36개 플랫 커맨드 실행"]
     end
 
     ADAPT["envelope-adapter.ts<br/>내부 Envelope → tizen-cli Envelope<br/>user_command 기록 · process.exit 금지"]
@@ -357,15 +357,15 @@ graph LR
 
 ---
 
-## 8. 커맨드 도메인 (35개)
+## 8. 커맨드 도메인 (36개)
 
 스킬 이름은 `tizen-<command>`, CLI에서는 `tizen-sdk <command>`입니다. 정확한 대응은 [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md)를 참고하세요.
 
 ```mermaid
 graph LR
-    ROOT["tizen-sdk<br/>35 commands"]
+    ROOT["tizen-sdk<br/>36 commands"]
 
-    ROOT --> SDK["SDK (13)"]
+    ROOT --> SDK["SDK (14)"]
     ROOT --> CHECK["Check (2)"]
     ROOT --> PROJECT["Project (5)"]
     ROOT --> DEVICE["Device (9)"]
@@ -373,7 +373,7 @@ graph LR
     ROOT --> TEST["Test (1)"]
     ROOT --> CERT["Certificate (1)"]
 
-    SDK --> SDK_CMDS["sdk-init<br/>sdk-install<br/>sdk-install-custom-repo<br/>validate-repo-url<br/>sdk-repo-info<br/>tv-sdk-install<br/>tv-sdk-install-from-zip<br/>update-package<br/>platform-install<br/>download-emulator-package<br/>download-mobile-platform<br/>install-rootstrap<br/>dotnet-setup"]
+    SDK --> SDK_CMDS["sdk-init<br/>sdk-install<br/>sdk-install-custom-repo<br/>validate-repo-url<br/>sdk-repo-info<br/>tv-sdk-install<br/>tv-sdk-install-from-zip<br/>update-package<br/>platform-install<br/>platform-list<br/>download-emulator-package<br/>download-mobile-platform<br/>install-rootstrap<br/>dotnet-setup"]
     CHECK --> CHECK_CMDS["check-node<br/>check-disk-space"]
     PROJECT --> PROJECT_CMDS["create-project<br/>list-templates<br/>import-wgt<br/>build-project<br/>project-delete"]
     DEVICE --> DEVICE_CMDS["create-emulator<br/>launch-emulator<br/>emulator-manager<br/>device-manager<br/>install-app<br/>sdb-helper<br/>screenshot<br/>file-transfer<br/>remote-device"]
@@ -498,7 +498,7 @@ TC 스위트의 실행 방법과 계층별 주의사항은 [tests/README.md](../
 
 ## 관련 문서
 
-- [README.md](../README.md) — 프로젝트 개요, 빠른 시작, 35개 커맨드 표, "Project at a Glance"
+- [README.md](../README.md) — 프로젝트 개요, 빠른 시작, 36개 커맨드 표, "Project at a Glance"
 - [SDK_LAYERS_OVERVIEW.md](SDK_LAYERS_OVERVIEW.md) — 중간 계층(CLI 러너 → sdk-commands → plugin-cache → 스크립트)이 존재하는 이유
 - [SDK_COMMANDS_ARCHITECTURE.md](SDK_COMMANDS_ARCHITECTURE.md) — 전체 호출 흐름과 러너-함수 매핑
 - [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 스킬별 트리거 문구·파라미터·응답 형식

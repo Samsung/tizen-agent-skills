@@ -13,6 +13,20 @@
 
 ### Added
 
+- **여러 Tizen 플랫폼 버전을 나란히 관리** (`common/lib/core/sdk.js`,
+  `common/lib/core/project.js`, `common/lib/cli/platform-install-cli.js`,
+  `common/lib/cli/project-manager-cli.js`, `common/scripts/tizen-create-project/create-project-app.sh`,
+  `.ps1`, `tizen-cli/src/command-specs/sdk.ts`, `project.ts`,
+  `common/lib/tests/multi-platform.test.js`). 10.0 옆에 9.0을 추가하면 어떤 버전이 설치됐는지
+  볼 방법이 없었고, 프로젝트는 항상 가장 높은 버전으로 만들어졌습니다.
+  - `platform-install-cli.js --list`(tizen-cli의 새 읽기 전용 명령 `platform-list`)는
+    `platforms/tizen-X.Y`마다 상태를 보여 줍니다: `installed`, `incomplete`(끝나지 않은
+    `platform-install`), `common_only`(기본 SDK가 예전 버전용으로 넣는 공용 API 데이터만 있음).
+    프로필(`tizen`, `tv-samsung` 등), 에뮬레이터 이미지, `result.newest`도 함께 나옵니다.
+  - `create`와 `list-templates`가 `--platform-version <X.Y>`를 받아 스크립트에
+    `--tz-profile=tizen-X.Y` / `-TzProfile`로 넘깁니다. 설치되지 않은 버전은
+    `platform_version_not_found`로 실패하며 `platform-install` 명령을 안내합니다. 지정하지 않으면
+    지금처럼 가장 높은 설치 버전을 씁니다.
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
   `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
   규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
@@ -50,6 +64,27 @@
 
 ### Fixed
 
+- **실제로 설치된 플랫폼 버전만 설치됨으로 판단**
+  (`common/lib/core/sdk.js`, `common/scripts/lib/common.sh`, `.ps1`,
+  `common/scripts/tizen-platform-install/tizen-platform-install.sh`, `.ps1`,
+  `common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`).
+  - `tizen-platform-install`은 `.platform-installed`로 "이미 설치됨"을 판단했는데, 이 파일은
+    버전을 하나만 담고 다음 설치가 덮어썼습니다. 그래서 이미 있는 버전(기본 SDK의 10.0 등)을
+    다시 받았고, `--force`는 다른 버전의 기록까지 지웠습니다.
+  - 새 규칙은 pre-check와 두 스크립트가 함께 씁니다(`isPlatformInstalled`, `platform_installed`,
+    `Test-PlatformInstalled`): `platforms/tizen-X.Y`에 `common` 외 프로필이 있고, 그 안에
+    `samples` 말고 다른 내용(rootstraps, 에뮬레이터 이미지 등)이 있으며,
+    `.platform-installing-X.Y`가 남아 있지 않아야 합니다. `samples`를 빼는 이유는
+    `tizen-create-project`가 템플릿을 `platforms/<profile>/tizen/samples`로 복사하면서, 플랫폼을
+    설치한 적 없는 버전에도 그 프로필 폴더를 만들었기 때문입니다.
+  - `common`을 빼는 이유: 기본 SDK가 예전 API 버전용 `platforms/tizen-X.Y/common`을 함께 넣기
+    때문입니다. `tizen-sdk-install --platform 9.0`과 그 pre-check는 이런 9.0을 이미 설치됨으로
+    보고했습니다.
+  - 설치 스크립트는 설치 전에 `.platform-installing-X.Y`를 만들고 성공하면 지웁니다. 그래서 실패한
+    설치가 완료로 오인되지 않고, 다시 실행하면 이어서 설치합니다. `.platform-installed`는 버전마다
+    한 번씩 추가되는 이력이 되었고, `--force`로 지워지지 않습니다.
+  - 알려진 한계: 이 변경 전에 실패한 설치는 진행 중 표시가 없습니다. 설치되지 않았는데 설치된
+    것처럼 보이면 `--force`로 다시 설치하세요.
 - **TV SDK 설치가 Cline에서 동작하고 `--force`도 유지**
   (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
   `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`, `.ps1`,

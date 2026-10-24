@@ -263,6 +263,14 @@ export const SDK_SPECS: CommandSpec[] = [
       ),
   },
   {
+    name: "platform-list",
+    description:
+      "List the Tizen platform versions in the installed SDK (platforms/tizen-X.Y): installed, incomplete (an unfinished platform-install) or common_only (only the shared API data the base SDK ships for older versions), with their profiles and emulator images",
+    requiresSdk: false,
+    options: [],
+    handler: () => sdkCommands.listPlatforms("tizen-sdk platform-list"),
+  },
+  {
     name: "download-mobile-platform",
     description:
       "Download and install the Tizen Mobile platform package (MOBILE-{version}) from the Tizen package repository. Optionally downloads IOT-Headed extension by first downloading extension_info.xml to get the IoT repository URL, then downloading IOT-Headed-{version} package.",

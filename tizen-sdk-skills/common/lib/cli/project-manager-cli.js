@@ -47,6 +47,8 @@
  *                             (only when empty or a Tizen project — never an arbitrary dir)
  *     --open                  (optional) Open the generated .code-workspace in VS Code
  *                             (default: create only, no window switch)
+ *     --platform-version <v>  (optional) Installed platform to create for, e.g. 9.0
+ *                             (default: the newest installed platform)
  *
  *   delete:
  *     --project <path>        (required) Project root directory to delete on the SDK host
@@ -64,6 +66,8 @@
  *
  *   list-templates:
  *     --type <type>           (optional) Filter by project type (omit for all)
+ *     --platform-version <v>  (optional) Installed platform to list, e.g. 9.0
+ *                             (default: the newest installed platform)
  *
  *   install:
  *     --package <path>        (required) Absolute path to .tpk/.wgt/.rpk/.rpm
@@ -90,10 +94,10 @@ const USAGE =
   "Usage: node project-manager-cli.js <action> [options]. Actions: build, " +
   "create, import-wgt, delete, list-templates, install. " +
   "build --project <path> [--build-type Debug|Release|Test] [--sign-profile <name>] [--arch <arch>] [--clean] | " +
-  "create --type <type> --template <name> --parent-path <dir> --name <appName> [--force] [--open] | " +
+  "create --type <type> --template <name> --parent-path <dir> --name <appName> [--force] [--open] [--platform-version <X.Y>] | " +
   "import-wgt --wgt-path <path> --profile tizen|tv-samsung --platform-version <version> --working-dir <dir> | " +
   "delete --project <path> [--expect-name <appName>] [--dry-run] | " +
-  "list-templates [--type <type>] | " +
+  "list-templates [--type <type>] [--platform-version <X.Y>] | " +
   "install --package <path> [--device-serial <serial>] [--run] [--reset-rds]";
 
 const usageError = (message) => exitWithUsageError(COMMAND, USAGE, message);
@@ -168,6 +172,7 @@ switch (action) {
         !!options.force,
         "tizen-sdk create-project",
         !!options.open,
+        options.platformVersion,
       ),
     );
     break;
@@ -201,7 +206,11 @@ switch (action) {
   }
   case "list-templates": {
     runCli("tizen-sdk list-templates", () =>
-      listTemplates(options.type, "tizen-sdk list-templates"),
+      listTemplates(
+        options.type,
+        "tizen-sdk list-templates",
+        options.platformVersion,
+      ),
     );
     break;
   }

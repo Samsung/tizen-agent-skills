@@ -684,3 +684,27 @@ installer_running() {
     NAME="$1" awk -v self="$$" \
       '$1 != self && index($0, ENVIRON["NAME"]) && $0 !~ /--(status|wait)([^a-z-]|$)/ { found = 1 } END { exit !found }'
 }
+
+# ----------------------------------------------------------------------------
+# Is platform TIZEN-$2 installed in the SDK at $1? Mirror of isPlatformInstalled
+# (lib/core/sdk.js): platforms/tizen-X.Y must hold a platform profile — a
+# sub-directory besides "common" (which the base SDK ships for older API
+# versions too) with content besides "samples" (which tizen-create-project
+# syncs templates into) — and no tizen-platform-install run of that version may
+# still be marked in progress (.platform-installing-X.Y).
+# ----------------------------------------------------------------------------
+platform_installed() {
+  local sdk="$1" version="$2" d e
+  [[ -n "$sdk" && -n "$version" ]] || return 1
+  [[ -e "$sdk/.platform-installing-$version" ]] && return 1
+  for d in "$sdk/platforms/tizen-$version"/*/; do
+    [[ -d "$d" ]] || continue
+    [[ "$(basename "$d")" == "common" ]] && continue
+    for e in "$d"* "$d".[!.]*; do
+      [[ -e "$e" ]] || continue
+      [[ "$(basename "$e")" == "samples" ]] && continue
+      return 0
+    done
+  done
+  return 1
+}

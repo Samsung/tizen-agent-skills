@@ -75,9 +75,12 @@ try {
   );
   {
     const sdkPath = path.join(sandboxHome, "tizen-sdk");
-    fs.mkdirSync(path.join(sdkPath, "platforms", "tizen-10.0"), {
-      recursive: true,
-    });
+    fs.mkdirSync(
+      path.join(sdkPath, "platforms", "tizen-10.0", "tizen", "rootstraps"),
+      {
+        recursive: true,
+      },
+    );
     fs.writeFileSync(
       path.join(sdkPath, "sdk.info"),
       "TIZEN_SDK_INSTALLED_PATH=x\n",
@@ -146,11 +149,15 @@ try {
     const sh = read("common/scripts/tizen-sdk-install/tizen-sdk-install.sh");
     check(
       "installer.ps1: already-installed short-circuit rejects a -Platform that is not installed",
-      /platforms\\tizen-\$Platform[\s\S]{0,400}exit 1/.test(ps1),
+      /Test-PlatformInstalled -SdkPath \$Path -Version \$Platform[\s\S]{0,400}exit 1/.test(
+        ps1,
+      ),
     );
     check(
       "installer.sh: already-installed short-circuit rejects a --platform that is not installed",
-      /platforms\/tizen-\$PLATFORM_VERSION[\s\S]{0,400}exit 1/.test(sh),
+      /platform_installed "\$INSTALL_PATH" "\$PLATFORM_VERSION"[\s\S]{0,400}exit 1/.test(
+        sh,
+      ),
     );
   }
 

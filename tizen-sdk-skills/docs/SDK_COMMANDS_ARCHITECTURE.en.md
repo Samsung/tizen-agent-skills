@@ -332,4 +332,4 @@ Functions that invoke scripts leaving (or potentially leaving) background proces
 ## Related Documents
 
 - [Intermediate Layer Introductions](SDK_LAYERS_OVERVIEW.en.md) — Why each layer is needed and why .ps1 is not called directly
-- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 29 skills map onto the 35 commands (and why the counts differ)
+- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 29 skills map onto the 36 commands (and why the counts differ)

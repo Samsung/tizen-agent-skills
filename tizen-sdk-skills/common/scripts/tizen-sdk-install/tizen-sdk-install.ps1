@@ -409,7 +409,9 @@ if ((Test-Path $sdkInfoPath) -and -not $Force) {
         # An explicit -Platform that this SDK does not have is NOT "already
         # installed": exiting 0 here made `-Platform 99.99` look like a
         # completed install to the caller (it only checks sdk.info afterwards).
-        if ($Platform -ne "" -and -not (Test-Path (Join-Path $Path "platforms\tizen-$Platform"))) {
+        # platforms\tizen-X.Y with only "common" does not count either: the base
+        # SDK ships that for older API versions (Test-PlatformInstalled, lib\common.ps1).
+        if ($Platform -ne "" -and -not (Test-PlatformInstalled -SdkPath $Path -Version $Platform)) {
             Write-Err "Tizen SDK is already installed at $Path, but platform TIZEN-$Platform is not part of it."
             Write-Err "Add it with: tizen-cli tizen-sdk platform-install --platform-version $Platform"
             Write-Err "or re-run with -Force to reinstall the whole SDK with that platform (the repository must offer TIZEN-$Platform)."

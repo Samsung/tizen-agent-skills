@@ -1067,7 +1067,9 @@ if [ -f "$INSTALL_PATH/sdk.info" ] && [ "$FORCE" != true ]; then
     # An explicit --platform that this SDK does not have is NOT "already
     # installed": exiting 0 here made `--platform 99.99` look like a completed
     # install to the caller (it only checks sdk.info afterwards).
-    if [ -n "$PLATFORM_VERSION" ] && [ ! -d "$INSTALL_PATH/platforms/tizen-$PLATFORM_VERSION" ]; then
+    # platforms/tizen-X.Y with only "common" does not count either: the base
+    # SDK ships that for older API versions (platform_installed, lib/common.sh).
+    if [ -n "$PLATFORM_VERSION" ] && ! platform_installed "$INSTALL_PATH" "$PLATFORM_VERSION"; then
       log_error "Tizen SDK is already installed at $INSTALL_PATH, but platform TIZEN-$PLATFORM_VERSION is not part of it."
       log_error "Add it with: tizen-cli tizen-sdk platform-install --platform-version $PLATFORM_VERSION"
       log_error "or re-run with --force to reinstall the whole SDK with that platform (the repository must offer TIZEN-$PLATFORM_VERSION)."

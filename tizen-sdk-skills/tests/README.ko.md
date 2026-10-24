@@ -2,9 +2,9 @@
 
 [English](README.md) | 한국어
 
-`tizen-sdk` 플러그인의 독립 테스트 스위트입니다. 35개 플러그인 명령 각각이 올바른 JSON 봉투(envelope)를 출력하는지, 그리고 LLM 에이전트(Cline, Claude, tizen-cli)가 자연어 프롬프트를 올바른 명령으로 해석하는지 검증합니다.
+`tizen-sdk` 플러그인의 독립 테스트 스위트입니다. 36개 플러그인 명령 각각이 올바른 JSON 봉투(envelope)를 출력하는지, 그리고 LLM 에이전트(Cline, Claude, tizen-cli)가 자연어 프롬프트를 올바른 명령으로 해석하는지 검증합니다.
 
-8개 도메인에 걸쳐 **296개 테스트 케이스**가 있으며, 35개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`은 `policy/tiers.yaml`에 mutating으로 분류되어 있지만 아직 TC가 없습니다.
+8개 도메인에 걸쳐 **296개 테스트 케이스**가 있으며, 36개 명령 중 34개와 CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`)를 다룹니다. `tv-sdk-install-from-zip`(mutating)과 `platform-list`(safe)는 `policy/tiers.yaml`에 분류되어 있지만 아직 TC가 없습니다. `platform-list`는 설치된 SDK가 있어야 하므로 SDK 없이 도는 safe 티어에서 실행할 수 없습니다.
 
 ## 아키텍처 다이어그램
 
@@ -13,7 +13,7 @@ graph TB
     subgraph "테스트 스위트 구성 요소"
         TC["tc/*.yaml<br/>296 Test Cases (289 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
-        POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
+        POLICY["policy/tiers.yaml<br/>36 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
         SKILLS["skills/run-test-suite.md<br/>Prompt-lane execution guide"]
     end
@@ -38,7 +38,7 @@ graph TB
     end
 
     subgraph "티어 시스템"
-        SAFE["safe (6 cmds / 74 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
+        SAFE["safe (7 cmds / 74 TCs)<br/>부작용 없음<br/>CI 게이트 ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>설치/수정/삭제<br/>⚠️ 셋업 필요"]
         DEVICE["device (14 cmds / 143 TCs)<br/>에뮬레이터/디바이스 필요<br/>❌ 수동: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
@@ -179,7 +179,7 @@ tests/
   schema/
     tc-schema.json        ← TC YAML JSON Schema
   policy/
-    tiers.yaml            ← 35개 명령의 티어 분류
+    tiers.yaml            ← 36개 명령의 티어 분류
     device-run-order.yaml    ← device 티어의 단계별 실행 순서 ("Device 티어" 참고)
     mutating-run-order.yaml  ← mutating 티어의 단계별 실행 순서 ("Mutating 티어" 참고)
   fixtures/               ← mutating TC용 커밋된 상태 파일 (테스트 인증서, profiles.xml)
@@ -493,10 +493,10 @@ requires:
 
 | 티어      | 명령 수  | TCs     | 설명                        | CI 안전?      |
 | --------- | -------- | ------- | --------------------------- | ------------- |
-| safe      | 6        | 74      | 부작용 없음                 | ✅ 예         |
+| safe      | 7        | 74      | 부작용 없음                 | ✅ 예         |
 | mutating  | 15       | 79      | 설치/수정/삭제              | ⚠️ 셋업 필요  |
 | device    | 14       | 143     | 에뮬레이터/디바이스 필요    | ❌ 수동       |
-| **합계**  | **35**   | **296** |                             |               |
+| **합계**  | **36**   | **296** |                             |               |
 
 전체 분류는 `policy/tiers.yaml`을 참고하세요. CI는 모든 PR에서 `approved` safe TC를 실행하고("러너 옵션"의
 "CI 게이트" 참고), device 티어는 `scripts/run-device-tier.mjs`로 수동 실행하며("러너 옵션"의 "Device 티어"

@@ -62,7 +62,7 @@ This agent returns a Standard JSON Envelope with download/install results:
     ],
     "installation_status": "completed"
   },
-  "warnings": ["Platform package installation verified at /home/user/tizen-sdk (.platform-installed found). To force a reinstall, run with --force."],
+  "warnings": ["Platform package installation verified at /home/user/tizen-sdk/platforms/tizen-10.0. To force a reinstall, run with --force."],
   "errors": []
 }
 ```
@@ -99,7 +99,8 @@ This agent handles platform package download by running the installer script in 
 - If `--platform-version` is specified, targets `TIZEN-{version}`; otherwise auto-detects the latest TIZEN-X.Y platform
 - Recursively resolves all Install-dependency packages
 - Downloads and merges each package into the SDK root
-- Creates `.platform-installed` marker on success
+- Marks the run with `.platform-installing-X.Y`; on success removes it and appends the version to the `.platform-installed` history (a failed run keeps the marker, and a re-run resumes)
+- Several versions live side by side: a version counts as installed when `platforms/tizen-X.Y` holds a profile besides `common` with content besides the synced `samples` (rootstraps, emulator images, …) and no `.platform-installing-X.Y` is left. `platform-install-cli.js --list` reports every version (read-only)
 
 **Do NOT run scripts directly.** Always use this agent for consistent Standard JSON Envelope responses.
 
@@ -268,7 +269,7 @@ If already installed:
     ],
     "installation_status": "completed"
   },
-  "warnings": ["Platform package installation verified at /home/user/tizen-sdk (.platform-installed found). To force a reinstall, run with --force."],
+  "warnings": ["Platform package installation verified at /home/user/tizen-sdk/platforms/tizen-10.0. To force a reinstall, run with --force."],
   "errors": []
 }
 ```

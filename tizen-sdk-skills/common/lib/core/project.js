@@ -29,6 +29,9 @@ const {
   repairSdkInfo,
   describeSdkInfoRepair,
   describeChildExit,
+  validateTizenVersion,
+  isPlatformInstalled,
+  listFullyInstalledPlatformVersions,
 } = require("./sdk");
 const {
   resolveSdbBinary,
@@ -348,6 +351,56 @@ function patchRpkManifestResType(projectPath) {
  *   (only when it is empty or looks like a Tizen project — never an arbitrary dir)
  * @returns {object} Standard JSON Envelope
  */
+/**
+ * Script arguments that pin create-project / list-templates to TIZEN-X.Y.
+ *
+ * Without a version the script keeps picking the newest installed profile.
+ * With one, the version must be X.Y and installed (isPlatformInstalled: a
+ * platforms/tizen-X.Y/common directory alone is not a platform), otherwise
+ * `tz new -p tizen-X.Y` would fail later with a less helpful message.
+ *
+ * @param {string} platformVersion - "X.Y", or "" for the newest installed one
+ * @param {string} command - envelope command name
+ * @param {number} startTime
+ * @returns {{win: string, unix: string, error?: object}} argument suffixes
+ *   (leading space included) or an error envelope
+ */
+function platformVersionArgs(platformVersion, command, startTime) {
+  if (!platformVersion) return { win: "", unix: "" };
+  const check = validateTizenVersion(platformVersion, { required: true });
+  if (check.error) {
+    return {
+      error: formatError(
+        command,
+        "invalid_argument",
+        check.error,
+        null,
+        startTime,
+      ),
+    };
+  }
+  const version = check.version;
+  const sdkPath = readSdkPath();
+  if (!isPlatformInstalled(sdkPath, version)) {
+    const installed = listFullyInstalledPlatformVersions(sdkPath);
+    const install = `tizen-sdk platform-install --platform-version ${version}`;
+    return {
+      error: formatError(
+        command,
+        "platform_version_not_found",
+        `Platform TIZEN-${version} is not installed in ${sdkPath} (installed platforms: ${installed.join(", ") || "none"}). ` +
+          `Install it with "${install}", or omit --platform-version to use the newest installed platform.`,
+        install,
+        startTime,
+      ),
+    };
+  }
+  return {
+    win: ` -TzProfile "tizen-${version}"`,
+    unix: ` --tz-profile=tizen-${version}`,
+  };
+}
+
 async function createProject(
   type,
   template,
@@ -356,6 +409,7 @@ async function createProject(
   force = false,
   command = "tizen-sdk create-project",
   open = false,
+  platformVersion = "",
 ) {
   // Start time: pass to success/failure responses so duration_ms reflects actual work time
   const startTime = Date.now();
@@ -516,6 +570,13 @@ async function createProject(
       return formatError(command, "io_error", resolved.error, null, startTime);
     }
 
+    const versionArgs = platformVersionArgs(
+      platformVersion,
+      command,
+      startTime,
+    );
+    if (versionArgs.error) return versionArgs.error;
+
     // All validation passed — now (and only now) clear the existing target.
     if (replaceExisting) {
       console.error(
@@ -545,8 +606,8 @@ async function createProject(
       // The scripts only launch `code` (workspace open) when explicitly asked.
       output = execPluginScript(
         resolved.scriptPath,
-        `-Type "${type}" -Template "${template}" -Path "${winPath}" -Name "${appName}"${open ? " -Open" : ""}`,
-        `--type="${type}" --template="${template}" --path="${normalizedParentPath}" --name="${appName}"${open ? " --open" : ""}`,
+        `-Type "${type}" -Template "${template}" -Path "${winPath}" -Name "${appName}"${open ? " -Open" : ""}${versionArgs.win}`,
+        `--type="${type}" --template="${template}" --path="${normalizedParentPath}" --name="${appName}"${open ? " --open" : ""}${versionArgs.unix}`,
       );
     } catch (error) {
       return formatError(
@@ -1402,7 +1463,11 @@ async function buildProject(
  *   result.profile = tz profile listed under, and result.tv = { profile, web, dotnet }
  *   when the TV SDK is installed (absent otherwise) — present for typed lists too.
  */
-async function listTemplates(type, command = "tizen-sdk list-templates") {
+async function listTemplates(
+  type,
+  command = "tizen-sdk list-templates",
+  platformVersion = "",
+) {
   const envelope = new Envelope(command);
   try {
     if (type && !VALID_PROJECT_TYPES.includes(type.toLowerCase())) {
@@ -1426,8 +1491,15 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
       );
     }
 
-    const winArgs = `-ListTemplates${type ? ` -Type ${type.toLowerCase()}` : ""}`;
-    const unixArgs = `--list-templates${type ? ` --type=${type.toLowerCase()}` : ""}`;
+    const versionArgs = platformVersionArgs(
+      platformVersion,
+      command,
+      envelope.startTime,
+    );
+    if (versionArgs.error) return versionArgs.error;
+
+    const winArgs = `-ListTemplates${type ? ` -Type ${type.toLowerCase()}` : ""}${versionArgs.win}`;
+    const unixArgs = `--list-templates${type ? ` --type=${type.toLowerCase()}` : ""}${versionArgs.unix}`;
     const output = execPluginScript(resolved.scriptPath, winArgs, unixArgs);
 
     // Debug: log raw script output to stderr for troubleshooting parse failures
@@ -1516,7 +1588,7 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
         const hint =
           hints[key] ||
           `The platform package for${where || " that profile"} may be missing or incomplete — run tizen-platform-install (or tizen-update-package), then retry. ` +
-            "Set TIZEN_TZ_PROFILE=<profile> to list under a different installed profile.";
+            "Pass --platform-version <X.Y> to list the templates of another installed platform.";
         return formatError(
           command,
           "template_not_found",

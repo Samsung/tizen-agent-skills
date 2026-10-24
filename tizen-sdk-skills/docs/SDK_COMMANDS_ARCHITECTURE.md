@@ -332,4 +332,4 @@ module.exports = {
 ## 관련 문서
 
 - [중간 계층 소개](SDK_LAYERS_OVERVIEW.md) — 각 계층이 왜 필요한지, 왜 .ps1을 직접 호출하지 않는지 설명
-- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 29개 스킬이 35개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)
+- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 29개 스킬이 36개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)

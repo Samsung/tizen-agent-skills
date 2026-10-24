@@ -214,6 +214,16 @@ console.error = () => {};
       "common",
     ]) {
       fs.mkdirSync(path.join(sdkPath, "platforms", d), { recursive: true });
+      // An installed platform holds a profile directory besides "common"
+      // (isPlatformInstalled); "common" alone is the base SDK's shared API data.
+      if (d !== "common") {
+        fs.mkdirSync(
+          path.join(sdkPath, "platforms", d, "tizen", "rootstraps"),
+          {
+            recursive: true,
+          },
+        );
+      }
     }
     // A stray file must not be mistaken for a platform.
     fs.writeFileSync(path.join(sdkPath, "platforms", "tizen-12.0"), "");
@@ -313,7 +323,12 @@ console.error = () => {};
     {
       // Directory-name matching is case-insensitive (tizen-X.Y is the
       // installer's spelling, but a hand-copied "Tizen-13.0" still counts).
-      fs.mkdirSync(path.join(sdkPath, "platforms", "Tizen-13.0"));
+      fs.mkdirSync(
+        path.join(sdkPath, "platforms", "Tizen-13.0", "tizen", "rootstraps"),
+        {
+          recursive: true,
+        },
+      );
       const env = await installSdk("13.0");
       check(
         "Tizen-13.0 directory satisfies --tizen-version 13.0",
@@ -345,7 +360,7 @@ console.error = () => {};
       check(
         "no platforms/ dir → message explains the empty list",
         env.errors[0].message.includes(
-          "no platforms/tizen-X.Y directory found",
+          "no installed platforms/tizen-X.Y found",
         ),
         true,
       );

@@ -1,6 +1,6 @@
 ---
 name: tizen-sdk
-description: Tizen CLI agent workflows umbrella — 타이젠, Tizen 개발, 타이젠 개발 환경, Tizen SDK, 타이젠 앱, tizen-cli 사용법. Use this skill as the router for any Tizen development request that doesn't match a more specific tizen-* skill. It documents the tizen-sdk plugin for tizen-cli — 35 commands covering SDK/platform install and package update, project create/delete/import/build, emulator and device management, app install, certificates, remote debugging, Playwright web app testing, and dlog analysis — all returning a Standard JSON Envelope.
+description: Tizen CLI agent workflows umbrella — 타이젠, Tizen 개발, 타이젠 개발 환경, Tizen SDK, 타이젠 앱, tizen-cli 사용법. Use this skill as the router for any Tizen development request that doesn't match a more specific tizen-* skill. It documents the tizen-sdk plugin for tizen-cli — 36 commands covering SDK/platform install and package update, project create/delete/import/build, emulator and device management, app install, certificates, remote debugging, Playwright web app testing, and dlog analysis — all returning a Standard JSON Envelope.
 
 metadata:
   author: Samsung Electronics
@@ -31,9 +31,9 @@ Exit code is 0 on success, 1 on failure. Diagnostics go to stderr only — parse
 
 ## Command routing table
 
-All 35 commands. Several commands share one skill — a skill can own more than one
+All 36 commands. Several commands share one skill — a skill can own more than one
 command (e.g. `create-project` / `project-delete`), so the counts differ by design:
-35 commands map onto 29 core skills (the `common/skills/` set). This directory adds
+36 commands map onto 29 core skills (the `common/skills/` set). This directory adds
 two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router and
 `tizen-list-templates` — for 31 total. See
 `docs/SKILLS_COMMANDS_MAPPING.md` for the full mapping.
@@ -51,6 +51,7 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 | TV SDK ZIP 설치 / TV extension from ZIP | `tv-sdk-install-from-zip` | tizen-tv-sdk-install-from-zip |
 | 패키지 업데이트 / update packages | `update-package` | tizen-update-package |
 | 플랫폼 설치 / install platform package | `platform-install` | tizen-platform-install |
+| 설치된 플랫폼 목록 / list installed platforms | `platform-list` | tizen-platform-install |
 | 에뮬레이터 패키지 다운로드 / emulator package | `download-emulator-package` | tizen-download-emulator-package |
 | 모바일 플랫폼 다운로드 / MOBILE platform | `download-mobile-platform` | tizen-download-mobile-platform |
 | 커스텀 루트스트랩 설치 / install rootstrap | `install-rootstrap` | tizen-install-rootstrap |
@@ -107,7 +108,7 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 
 - `tizen-cli tizen-sdk --capabilities` — which commands are currently runnable (SDK-dependent commands are unavailable until `sdk-install` succeeds).
 - `tizen-cli tizen-sdk --doctor` — environment checks (Node, scripts, shell, SDK, sdb, em-cli). The em-cli check probes `em-cli list-vm`, so a broken emulator Java/JNA runtime is reported here before any create/launch-emulator call fails. It is a whole-setup sweep: a question about Node.js alone ("is Node.js installed?", "which node version?") is answered by `check-node`, not by doctor.
-- `tizen-cli tizen-sdk --schema` — full option schema (required/enum/default) for all 35 commands.
+- `tizen-cli tizen-sdk --schema` — full option schema (required/enum/default) for all 36 commands.
 - `tizen-cli --schema` — full option schema for every installed plugin.
 
 ## Typical pipeline

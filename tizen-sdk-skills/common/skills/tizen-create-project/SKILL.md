@@ -170,8 +170,8 @@ folders or run `tz` yourself. No `result.tv` → TV SDK not installed → do not
 > highest installed `tizen-X.Y` profile — `result.profile` says which). The runner never returns an
 > empty list as a success: `--type <type>` with no templates is a `template_not_found` **failure** whose
 > message names the profile it looked at, the profiles `tz` knows, and the fix (platform package /
-> .NET workload / TV SDK missing, or `TIZEN_TZ_PROFILE=<profile>` to list under another installed
-> profile). Report that envelope — never conclude "no templates" from the cache, and never hand-write
+> .NET workload / TV SDK missing, or `--platform-version <X.Y>` to list another installed platform).
+> Report that envelope — never conclude "no templates" from the cache, and never hand-write
 > a project instead (issue #72).
 
 **Codex sandbox (guard rule 12).** Run this runner's `list-templates` and `create` **with escalated
@@ -268,6 +268,13 @@ follow-up question with the remaining ones.
 - **`--force`** — optional flag: replace `<PARENT>/<APP>/` if it already exists.
   Only replaces an empty folder or one that looks like a Tizen project — never an
   arbitrary directory. Without it, creation fails when the target folder exists.
+- **`--platform-version <X.Y>`** — optional, on both `list-templates` and `create`: use that installed
+  platform (e.g. `9.0`) instead of the newest one. Pass it whenever the user names a version
+  ("9.0으로 만들어줘"), and use the SAME value for `list-templates` and `create`. Without it both use
+  the newest installed platform; when several are installed (`tizen-platform-install --list`), say
+  in the summary which one was used (`result.profile`). A version that is not installed — including
+  one whose `platforms/tizen-X.Y` holds only `common` — fails with `platform_version_not_found`
+  and names the `tizen-platform-install --platform-version X.Y` command to add it.
 
 ## Deleting a project
 

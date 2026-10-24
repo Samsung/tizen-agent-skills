@@ -41,7 +41,7 @@ LOCAL_TEMPLATES_PATH="$SCRIPT_DIR/templates"
 # scoped to it, so what we list is exactly what `tz new` can create. It is
 # DETECTED from the installed SDK (issue #72: a hardcoded tizen-10.0 made an
 # SDK that ships tizen-11.0 list zero templates, exit 0 — "webapp: []"):
-#   TIZEN_TZ_PROFILE env override
+#   --tz-profile (the Node runner's --platform-version) / TIZEN_TZ_PROFILE env override
 #   -> highest tizen-X.Y section in `tz list templates`
 #   -> highest platforms/tizen-* directory
 #   -> tizen-10.0
@@ -781,6 +781,10 @@ main() {
             --path)           OPT_PATH="${2:-}"; shift 2 ;;
             --list-templates) LIST_ONLY=true; shift ;;
             --open)           OPEN_CODE=true; shift ;;
+            # Pin the profile (e.g. tizen-9.0) when several platforms are
+            # installed; overrides TIZEN_TZ_PROFILE, and detect_tz_profile keeps it.
+            --tz-profile=*)   TZ_PROFILE="${1#*=}"; shift ;;
+            --tz-profile)     TZ_PROFILE="${2:-}"; shift 2 ;;
             *)                shift ;;
         esac
     done

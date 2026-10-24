@@ -47,6 +47,7 @@ const {
   formatRepoUrlValidation,
   formatCustomRepoInstall,
   formatPlatformInstall,
+  formatPlatformList,
   formatMobilePlatformDownload,
   formatRootstrapInstall,
 } = require("../envelope/response-formatter");
@@ -291,6 +292,96 @@ function listInstalledPlatformVersions(sdkPath) {
 }
 
 /**
+ * Marker tizen-platform-install writes before it installs TIZEN-X.Y and
+ * removes once that install succeeds. Mirrored in tizen-platform-install.{sh,ps1}.
+ */
+function platformInstallingMarker(sdkPath, version) {
+  return path.join(sdkPath, `.platform-installing-${version}`);
+}
+
+/**
+ * Sub-directories of platforms/tizen-X.Y that are not a platform profile.
+ * The base SDK ships "common" (features, privileges, on-demand) for every
+ * older API version too, so platforms/tizen-9.0/common alone does NOT mean
+ * TIZEN-9.0 is installed.
+ */
+const PLATFORM_SHARED_DIRS = ["common"];
+
+/**
+ * Entries of a profile directory that do not make it a platform payload:
+ * tizen-create-project syncs the plugin's templates into
+ * platforms/<profile>/tizen/samples, which creates that directory even for a
+ * version whose platform was never installed.
+ */
+const PROFILE_NON_PAYLOAD = ["samples"];
+
+/**
+ * platforms/tizen-X.Y of this SDK, or null. Looked up by name the way
+ * listInstalledPlatformVersions matches it (case-insensitive), so
+ * "Tizen-13.0" works on a case-sensitive file system too.
+ */
+function platformDirPath(sdkPath, version) {
+  if (!sdkPath || !version) return null;
+  const platformsDir = path.join(sdkPath, "platforms");
+  const dirName = listSubdirectories(platformsDir).find((name) => {
+    const m = PLATFORM_DIR_RE.exec(name);
+    return m && m[1] === version;
+  });
+  return dirName ? path.join(platformsDir, dirName) : null;
+}
+
+/** Sub-directories of platforms/tizen-X.Y, sorted; [] when it is missing. */
+function platformProfiles(sdkPath, version) {
+  const dir = platformDirPath(sdkPath, version);
+  return dir ? listSubdirectories(dir).sort() : [];
+}
+
+/**
+ * Is TIZEN-X.Y installed? platforms/tizen-X.Y holds a platform profile — a
+ * sub-directory besides "common" (e.g. "tizen") with content besides the
+ * synced "samples" (rootstraps, emulator-images, features, ...) — and no
+ * tizen-platform-install run of that version is still marked in progress.
+ *
+ * The directory is the source of truth: the platform the base SDK install put
+ * in (it writes no platform marker) counts, and so does every version added
+ * later. .platform-installed held one version only and was overwritten by the
+ * next install, so it could not answer for several versions side by side.
+ * A run that failed partway leaves its in-progress marker, so its half-filled
+ * directory does not count until a re-run (which resumes) completes it.
+ *
+ * Mirrored by platform_installed (scripts/lib/common.sh) and
+ * Test-PlatformInstalled (scripts/lib/common.ps1).
+ *
+ * @param {string} sdkPath
+ * @param {string} version - "X.Y"
+ * @returns {boolean}
+ */
+function isPlatformInstalled(sdkPath, version) {
+  const dir = platformDirPath(sdkPath, version);
+  if (!dir || fs.existsSync(platformInstallingMarker(sdkPath, version))) {
+    return false;
+  }
+  return platformProfiles(sdkPath, version)
+    .filter((p) => !PLATFORM_SHARED_DIRS.includes(p))
+    .some((p) => {
+      let entries = [];
+      try {
+        entries = fs.readdirSync(path.join(dir, p));
+      } catch (_e) {
+        return false;
+      }
+      return entries.some((e) => !PROFILE_NON_PAYLOAD.includes(e));
+    });
+}
+
+/** Installed platform versions (isPlatformInstalled), oldest first. */
+function listFullyInstalledPlatformVersions(sdkPath) {
+  return listInstalledPlatformVersions(sdkPath).filter((v) =>
+    isPlatformInstalled(sdkPath, v),
+  );
+}
+
+/**
  * Emulator images present on disk — every
  * `{sdkPath}/platforms/tizen-X.Y/<profile>/emulator-images/<image>/` directory,
  * regardless of which installer put it there. The .emulator-package-installed
@@ -351,7 +442,7 @@ function describeEmulatorImages(images) {
  */
 function installedVersionLabel(sdkPath, version) {
   if (version) return version;
-  const installed = listInstalledPlatformVersions(sdkPath);
+  const installed = listFullyInstalledPlatformVersions(sdkPath);
   return installed.length > 0 ? installed[installed.length - 1] : "installed";
 }
 
@@ -385,13 +476,15 @@ function requestedPlatformMissing(
   opts = {},
 ) {
   if (!version) return null;
-  const installed = listInstalledPlatformVersions(sdkPath);
-  if (installed.includes(version)) return null;
+  // platforms/tizen-X.Y with only "common" is not an installed platform (see
+  // isPlatformInstalled): the base SDK ships that for older API versions.
+  if (isPlatformInstalled(sdkPath, version)) return null;
+  const installed = listFullyInstalledPlatformVersions(sdkPath);
 
   const installedNote =
     installed.length > 0
       ? `installed platforms: ${installed.join(", ")}`
-      : "no platforms/tizen-X.Y directory found";
+      : "no installed platforms/tizen-X.Y found";
   const platformInstall = `tizen-sdk platform-install --platform-version ${version}`;
 
   if (opts.afterInstall) {
@@ -2867,7 +2960,7 @@ async function downloadEmulatorPackage(
  *
  * Flow:
  * 1. Check if Tizen SDK is installed (sdk.info) — abort if not
- * 2. Check if the platform package is already installed (.platform-installed marker)
+ * 2. Check if this version is already installed (isPlatformInstalled: platforms/tizen-X.Y, no in-progress marker)
  * 3. Return the download script command (suggested_fix) — agent executes in Phase 2 background
  *
  * @param {string} platformVersion - Tizen platform version (e.g., "10.0", "11.0"). Auto-detects latest if empty.
@@ -2937,42 +3030,40 @@ async function installPlatform(
       `[tizen-platform-pkg] Tizen SDK found at ${sdkPath}. Continuing.`,
     );
 
-    // 2. Check if platform package is already installed
-    const platformPkgMarker = path.join(sdkPath, ".platform-installed");
-    if (fs.existsSync(platformPkgMarker) && !force) {
-      // Read the marker to check which platform version was installed
-      let markerVersion = "";
-      try {
-        const markerContent = fs.readFileSync(platformPkgMarker, "utf-8");
-        const versionMatch = markerContent.match(/Platform version:\s*(.+)/);
-        if (versionMatch) {
-          markerVersion = versionMatch[1].trim();
-        }
-      } catch (_e) {
-        // If we can't read the marker, proceed with installation
+    // 2. Check if this platform version is already installed. Other installed
+    // versions do not matter: several TIZEN-X.Y live side by side.
+    const platformDir = path.join(
+      sdkPath,
+      "platforms",
+      `tizen-${platformVersion}`,
+    );
+    const installingMarker = platformInstallingMarker(sdkPath, platformVersion);
+    if (!force && isPlatformInstalled(sdkPath, platformVersion)) {
+      console.error(
+        `[tizen-platform-pkg] Platform package TIZEN-${platformVersion} is already installed (${platformDir} found).`,
+      );
+      const packages = [
+        {
+          name: `TIZEN-${platformVersion}`,
+          status: "installed",
+          version: platformVersion,
+        },
+      ];
+      const others = listFullyInstalledPlatformVersions(sdkPath).filter(
+        (v) => v !== platformVersion,
+      );
+      const warnings = [
+        `Platform package installation verified at ${platformDir}. To force a reinstall, run with --force.`,
+      ];
+      if (others.length) {
+        warnings.push(`Other installed platforms: ${others.join(", ")}.`);
       }
-
-      // Only skip if the marker version matches the requested version
-      if (markerVersion === platformVersion) {
-        console.error(
-          `[tizen-platform-pkg] Platform package TIZEN-${platformVersion} is already installed (.platform-installed found, version ${markerVersion}).`,
-        );
-        const packages = [
-          {
-            name: `TIZEN-${platformVersion}`,
-            status: "installed",
-            version: platformVersion,
-          },
-        ];
-        const warnings = [
-          `Platform package installation verified at ${sdkPath} (.platform-installed found, version ${markerVersion}). To force a reinstall, run with --force.`,
-        ];
-        return formatPlatformInstall(packages, warnings, startTime, command);
-      } else {
-        console.error(
-          `[tizen-platform-pkg] .platform-installed found but for version ${markerVersion || "unknown"}, requested ${platformVersion}. Proceeding with installation.`,
-        );
-      }
+      return formatPlatformInstall(packages, warnings, startTime, command);
+    }
+    if (fs.existsSync(installingMarker)) {
+      console.error(
+        `[tizen-platform-pkg] An earlier TIZEN-${platformVersion} install did not finish (${installingMarker} found). Re-running it resumes from the packages already installed.`,
+      );
     }
 
     // 3. Resolve platform package install script
@@ -3019,10 +3110,11 @@ async function installPlatform(
         execPluginScript(installer.scriptPath, winArgs, unixArgs);
         console.error("[tizen-platform-pkg] Installer completed.");
 
-        // Verify installation: check .platform-installed marker
-        if (fs.existsSync(platformPkgMarker)) {
+        // Verify installation: the platform directory exists and the run's
+        // in-progress marker is gone.
+        if (isPlatformInstalled(sdkPath, platformVersion)) {
           console.error(
-            "[tizen-platform-pkg] Platform package installation verified (.platform-installed found).",
+            `[tizen-platform-pkg] Platform package installation verified (${platformDir} found).`,
           );
           const packages = [
             {
@@ -3041,7 +3133,7 @@ async function installPlatform(
           return formatError(
             command,
             "execution_error",
-            `Installer completed but .platform-installed not found at ${platformPkgMarker}. Installation may have failed.`,
+            `Installer completed but TIZEN-${platformVersion} is not installed (${platformDir} missing, or ${installingMarker} still present). Installation may have failed.`,
             null,
             startTime,
           );
@@ -3075,7 +3167,7 @@ async function installPlatform(
         "execution_error",
         "Platform package is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("foreground") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/.platform-installed exists. " +
+          `Either way, afterwards re-run this CLI to verify <sdk-path>/platforms/tizen-${platformVersion} exists and <sdk-path>/.platform-installing-${platformVersion} is gone. ` +
           "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
         installerCommand,
         startTime,
@@ -3086,6 +3178,76 @@ async function installPlatform(
       command,
       "io_error",
       `Failed to install platform package: ${error.message}`,
+      null,
+      startTime,
+    );
+  }
+}
+
+/**
+ * List the Tizen platform versions in the installed SDK (read-only).
+ *
+ * One entry per platforms/tizen-X.Y directory, oldest first:
+ *   - status: "installed" (see isPlatformInstalled); "incomplete" while a
+ *     tizen-platform-install run of that version has not finished; or
+ *     "common_only" when the directory holds only the shared API data the base
+ *     SDK ships for older versions — that version can still be installed
+ *   - profiles: sub-directories of platforms/tizen-X.Y (e.g. "tizen",
+ *     "tv-samsung" when the TV extension is installed for that version)
+ *   - emulator_images: emulator image directories of that version
+ * result.newest is the newest installed version — what create-project and
+ * list-templates use when no --platform-version is given.
+ *
+ * @param {string} [command]
+ * @returns {object} Standard JSON Envelope
+ */
+async function listPlatforms(command = "tizen-sdk platform-list") {
+  const startTime = Date.now();
+  try {
+    const sdkPath = readSdkPath();
+    if (!checkSdkInstallStatus(sdkPath).installed) {
+      return formatError(
+        command,
+        "sdk_path_invalid",
+        `Tizen SDK is not installed at ${sdkPath} (sdk.info not found). Install it with the tizen-sdk-install skill, or run tizen-sdk-init if it lives elsewhere.`,
+        null,
+        startTime,
+      );
+    }
+    const images = listInstalledEmulatorImages(sdkPath);
+    const platforms = listInstalledPlatformVersions(sdkPath).map((version) => {
+      let status = "installed";
+      if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
+        status = "incomplete";
+      } else if (!isPlatformInstalled(sdkPath, version)) {
+        status = "common_only";
+      }
+      return {
+        version,
+        status,
+        profiles: platformProfiles(sdkPath, version),
+        emulator_images: images
+          .filter((i) => i.platform === version)
+          .map((i) => ({ profile: i.profile, image: i.image })),
+      };
+    });
+    const warnings = platforms
+      .filter((p) => p.status === "incomplete")
+      .map(
+        (p) =>
+          `TIZEN-${p.version} did not finish installing — re-run tizen-platform-install --platform-version ${p.version} to resume it.`,
+      );
+    if (!platforms.some((p) => p.status === "installed")) {
+      warnings.push(
+        `No installed platform found under ${sdkPath}/platforms. Install one with tizen-platform-install --platform-version <X.Y>.`,
+      );
+    }
+    return formatPlatformList(sdkPath, platforms, startTime, warnings, command);
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `Failed to list platforms: ${error.message}`,
       null,
       startTime,
     );
@@ -3854,6 +4016,8 @@ module.exports = {
   ensureSdkPathConfig,
   validateTizenVersion,
   listInstalledPlatformVersions,
+  isPlatformInstalled,
+  listFullyInstalledPlatformVersions,
   requestedPlatformMissing,
   describeInstallerFailure,
   describeChildExit,
@@ -3883,6 +4047,7 @@ module.exports = {
   describeEmulatorImages,
   comparePlatformVersions,
   installPlatform,
+  listPlatforms,
   downloadMobilePlatform,
   installRootstrap,
   parseRootstrapMarker,

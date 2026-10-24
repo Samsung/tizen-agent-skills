@@ -93,7 +93,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js launcher
 
 node bin/tizen-sdk.js --doctor           # SDK path, cache and runner status
-node bin/tizen-sdk.js --capabilities     # which of the 35 commands are usable right now
+node bin/tizen-sdk.js --capabilities     # which of the 36 commands are usable right now
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -146,7 +146,7 @@ returns the result as a Standard JSON Envelope. See the
 [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) for end-to-end examples and the
 [Skills Reference](docs/SKILLS_REFERENCE.en.md) for the full list of trigger phrases.
 
-## Commands (35)
+## Commands (36)
 
 Every command below is exposed as a skill named `tizen-<command>` in the AI hosts
 (for example `tizen-build-project`) and as `tizen-sdk <command>` in the standalone CLI.
@@ -165,6 +165,7 @@ correspondence.
 | `sdk-repo-info` | SDK | Show SDK package repository information |
 | `download-emulator-package` | SDK | Download and install the Tizen emulator package |
 | `platform-install` | SDK | Download and install a Tizen platform package |
+| `platform-list` | SDK | List the installed Tizen platform versions (read-only) |
 | `download-mobile-platform` | SDK | Download and install a Tizen Mobile platform package |
 | `install-rootstrap` | SDK | Install a custom rootstrap ZIP into the SDK |
 | `dotnet-setup` | SDK | Verify .NET SDK + install Tizen .NET workload |
@@ -227,7 +228,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │   ├── hooks/              #   BeforeTool adapter (Gemini hook protocol -> shared guards)
 │   └── setup/              #   wrappers
 ├── tizen-cli/              # standalone tizen-sdk CLI (canonical source)
-│   ├── src/                #   TypeScript shell (35 flat commands, envelope adapter, --schema/--doctor)
+│   ├── src/                #   TypeScript shell (36 flat commands, envelope adapter, --schema/--doctor)
 │   │   └── command-specs/  #   Per-domain declarative specs (sdk, check, project, device, debug, test, certificate)
 │   ├── skills/             #   31 SKILL.md files for agents driving the CLI (29 + umbrella router + tizen-list-templates)
 │   ├── esbuild.config.js   #   Build config
@@ -309,7 +310,7 @@ or test suite is added.
 | Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
 | Skills (`common/skills/`) | 29 (+2 CLI-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI commands | 35 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI commands | 36 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Guard hooks | 3 PreToolUse scripts, 13 guard rules | `common/hooks/` |
 | Unit tests (`common/lib/tests/`) | 80 files, ≈2,890 assertions | `node common/lib/tests/run-all.js` |
