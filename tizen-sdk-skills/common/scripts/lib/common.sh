@@ -667,3 +667,20 @@ download_queue_parallel() {
 download_queue_status() {
   awk -F '\t' -v id="$1" '$1==id {s=$2} END {print s}' "$2/results" 2>/dev/null
 }
+
+# ----------------------------------------------------------------------------
+# Is an installer run of the script named $1 (e.g. "tizen-tv-sdk-install.sh")
+# in progress? Used by the --status / --wait pollers.
+# Processes running with --status or --wait are skipped: that covers the
+# poller itself, the subshells it forks, and a `bash -c "… --status"` wrapper.
+# Excluding only $$ / $PPID was not enough: procps pgrep (Linux), unlike BSD
+# pgrep (macOS), does not exclude its ancestors, so it matched the poller's own
+# command-substitution subshell and every poll reported STATUS=running.
+# The name reaches awk through the environment, not its arguments, so awk does
+# not match itself.
+# ----------------------------------------------------------------------------
+installer_running() {
+  ps -eo pid=,args= 2>/dev/null |
+    NAME="$1" awk -v self="$$" \
+      '$1 != self && index($0, ENVIRON["NAME"]) && $0 !~ /--(status|wait)([^a-z-]|$)/ { found = 1 } END { exit !found }'
+}

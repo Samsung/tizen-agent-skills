@@ -121,9 +121,12 @@ if ($Wait -or $Status) {
 # when it was given.
 if ($Detach) {
     $logFile = Join-Path $env:TEMP "tizen-tv-sdk-install.log"
+    # Start-Process joins -ArgumentList with spaces and does not quote the
+    # elements, so a path with a space (a user profile directory, for example)
+    # must carry its own quotes.
     $procArgs = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass',
-        '-File', $PSCommandPath,
+        '-File', "`"$PSCommandPath`"",
         '-SdkPath', "`"$SdkPath`"",
         '-DownloadJobs', $DownloadJobs
     )

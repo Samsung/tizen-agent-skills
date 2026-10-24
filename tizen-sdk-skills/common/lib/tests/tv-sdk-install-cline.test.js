@@ -12,13 +12,16 @@
  * --force (and, for the ZIP skill on Windows, -ZipPath) never reached the
  * installer. And tizen-tv-sdk-install-from-zip.sh forwarded
  * ${FORCE:+--force} on --detach, which expands for FORCE=false too, so every
- * detached ZIP install was forced.
+ * detached ZIP install was forced. Both bash scripts also found "running"
+ * installers with a pgrep -f loop that, on Linux, matched the poller's own
+ * subshell, so a failed install was reported as running forever.
  *
  * Covered here:
  *   - tizen-tv-sdk-install.{sh,ps1} accept --status / -Status and
- *     --detach / -Detach, and forward --force / -Force only when given
- *   - bash --status prints STATUS=done EXIT=0 / EXIT=1 and exits 0
- *     (skipped on win32)
+ *     --detach / -Detach, and forward --force / -Force only when given;
+ *     the .ps1 quotes the script path it re-launches
+ *   - both bash --status pollers report done EXIT=1 / running / done EXIT=0
+ *     correctly (skipped on win32)
  *   - tizen-tv-sdk-install-from-zip.sh forwards --force only when given
  *   - the Cline launch templates of both TV skills run suggested_fix.command
  */
@@ -26,7 +29,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 
 console.log("=== TV SDK installer Cline-flow tests ===\n");
 
@@ -118,27 +121,64 @@ for (const skill of ["tizen-tv-sdk-install", "tizen-tv-sdk-install-from-zip"]) {
   );
 }
 
+console.log("--- process check ---");
+for (const [name, src] of [
+  ["tizen-tv-sdk-install.sh", sh],
+  ["tizen-tv-sdk-install-from-zip.sh", zipSh],
+]) {
+  check(
+    `${name}: uses installer_running, not a pgrep -f loop`,
+    src.includes(`installer_running "${name}"`) && !/pgrep -f/.test(src),
+  );
+}
+check(
+  "ps1: -Detach quotes the script path for Start-Process",
+  procArgs !== null && /'-File', "`"\$PSCommandPath`""/.test(procArgs[1]),
+);
+
 console.log("--- bash --status ---");
 if (process.platform === "win32") {
   console.log("SKIP bash --status (win32)");
 } else {
   const sdk = fs.mkdtempSync(path.join(os.tmpdir(), "tv-sdk-status-"));
+  const marker = path.join(sdk, ".tv-sdk-installed");
   try {
-    const status = () =>
-      spawnSync("bash", [tvSh, `--sdk-path=${sdk}`, "--status"], {
-        encoding: "utf8",
+    for (const name of [
+      "tizen-tv-sdk-install.sh",
+      "tizen-tv-sdk-install-from-zip.sh",
+    ]) {
+      const script = path.join(scriptsDir, name.replace(/\.sh$/, ""), name);
+      const status = () =>
+        spawnSync("bash", [script, `--sdk-path=${sdk}`, "--status"], {
+          encoding: "utf8",
+        }).stdout.trim();
+      fs.rmSync(marker, { force: true });
+      // Linux CI caught this one: procps pgrep matched the poller's own
+      // command-substitution subshell, so it always said STATUS=running.
+      check(
+        `${name}: no marker, no installer running → STATUS=done EXIT=1`,
+        status() === "STATUS=done EXIT=1",
+      );
+      // A process whose command line names the script, as a detached
+      // installer's does. `; :` keeps bash from exec'ing sleep in its place.
+      const fake = spawn("bash", ["-c", "sleep 30; :", name], {
+        stdio: "ignore",
       });
-    let r = status();
-    check(
-      "no marker, no installer running → STATUS=done EXIT=1, exit 0",
-      r.status === 0 && r.stdout.trim() === "STATUS=done EXIT=1",
-    );
-    fs.writeFileSync(path.join(sdk, ".tv-sdk-installed"), "");
-    r = status();
-    check(
-      "marker present → STATUS=done EXIT=0, exit 0",
-      r.status === 0 && r.stdout.trim() === "STATUS=done EXIT=0",
-    );
+      try {
+        spawnSync("sleep", ["0.3"]);
+        check(
+          `${name}: installer running → STATUS=running`,
+          status() === "STATUS=running",
+        );
+      } finally {
+        fake.kill();
+      }
+      fs.writeFileSync(marker, "");
+      check(
+        `${name}: marker present → STATUS=done EXIT=0`,
+        status() === "STATUS=done EXIT=0",
+      );
+    }
   } finally {
     fs.rmSync(sdk, { recursive: true, force: true });
   }

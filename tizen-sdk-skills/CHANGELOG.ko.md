@@ -65,7 +65,13 @@
   `suggested_fix.command`를 인자까지 그대로 실행합니다. 예전에는 `--force`가 빠졌고, Windows의
   ZIP 스킬은 `-ZipPath`까지 빠졌습니다. `tizen-tv-sdk-install-from-zip.sh --detach`는
   `${FORCE:+--force}`가 비어 있지 않은 모든 값에서 펼쳐지기 때문에 `FORCE=false`여도 `--force`를
-  붙였는데, 이제 `--force`를 줬을 때만 붙입니다.
+  붙였는데, 이제 `--force`를 줬을 때만 붙입니다. Linux에서는 두 bash 폴링(`--status`, `--wait`)이
+  실행 중인 설치가 없어도 `STATUS=running`을 냈습니다. macOS와 달리 procps `pgrep`는 조상
+  프로세스를 결과에서 빼지 않아, 폴링 프로세스 자신의 명령 치환 서브셸을 설치 프로세스로 잡았기
+  때문입니다. 그래서 설치가 실패해도 실패로 보고되지 않았습니다. 이제 두 스크립트는
+  `--status` / `--wait` 프로세스를 모두 건너뛰는 `installer_running` 함수
+  (`common/scripts/lib/common.sh`)를 함께 씁니다. `.ps1`의 `-Detach`는 다시 실행할 스크립트
+  경로를 따옴표로 감싸므로, 공백이 있는 경로가 두 인자로 쪼개지지 않습니다.
 - **`--force` / `-Force`가 설치된 SDK를 다시 설치**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,

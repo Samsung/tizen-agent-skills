@@ -90,21 +90,10 @@ if [[ "$WAIT" == "true" || "$STATUS" == "true" ]]; then
     TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
     if [[ -f "$TV_SDK_MARKER" ]]; then
         echo "STATUS=done EXIT=0"
+    elif installer_running "tizen-tv-sdk-install.sh"; then
+        echo "STATUS=running"
     else
-        # Check if the installer is still running, excluding this poller
-        # process (and its parent), which pgrep -f would otherwise match.
-        RUNNING=false
-        for pid in $(pgrep -f "tizen-tv-sdk-install.sh" 2>/dev/null || true); do
-            if [[ "$pid" != "$$" && "$pid" != "$PPID" ]]; then
-                RUNNING=true
-                break
-            fi
-        done
-        if [[ "$RUNNING" == "true" ]]; then
-            echo "STATUS=running"
-        else
-            echo "STATUS=done EXIT=1"
-        fi
+        echo "STATUS=done EXIT=1"
     fi
     exit 0
 fi

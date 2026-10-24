@@ -69,7 +69,13 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   and on Windows the ZIP skill also dropped `-ZipPath`.
   `tizen-tv-sdk-install-from-zip.sh --detach` used to add `--force` even for `FORCE=false`,
   because `${FORCE:+--force}` expands for any non-empty value; it now adds it only when
-  `--force` was given.
+  `--force` was given. On Linux, both bash pollers (`--status` and `--wait`) reported
+  `STATUS=running` even when nothing was running: procps `pgrep`, unlike the macOS one, does
+  not exclude its ancestors, so it matched the poller's own command-substitution subshell. A
+  failed install was therefore never reported as failed. They now share an
+  `installer_running` helper (`common/scripts/lib/common.sh`) that skips every
+  `--status` / `--wait` process. The `.ps1` `-Detach` quotes the script path it re-launches,
+  so a path with a space no longer splits into two arguments.
 - **`--force` / `-Force` now reinstalls an installed SDK**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,
