@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.5.0] — 2026-10-25
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** can now manage several Tizen platform versions side by side (`platform-install --list`, `--platform-version` on `create` / `list-templates`), screenshots fall back for Wayland/HWC targets, dlog-analyzer gains a `crash-report` action, and the TV SDK hints and `--force` reinstalls are fixed. See the project CHANGELOG for details.
+
 ## [1.4.5] — 2026-10-21
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** command guard hook is scoped to Tizen work (fixes #47): its Tizen tooling rules now apply only once an SDK is configured through the plugin, it no longer forbids the `tizen` CLI or looking up where sdb is, and a hand-typed sdb must be the configured SDK's `tools/sdb`. See the project CHANGELOG for details.

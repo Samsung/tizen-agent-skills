@@ -4,7 +4,7 @@
 
 `tizen-sdk-skills` 저장소 전체를 한눈에 보여주는 다이어그램 모음입니다. AI 코딩 어시스턴트(Claude Code, Cline, Codex CLI, Gemini CLI, VS Code 확장)와 독립 실행형 `tizen-sdk` CLI가 **하나의 `common/`** 을 어떻게 공유하고, 자연어 요청이 어떤 계층을 거쳐 실제 Tizen SDK 도구(`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`)까지 도달하는지, 그 결과가 어떻게 Standard JSON Envelope로 돌아오는지를 그림으로 설명합니다.
 
-> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 36, 에러 코드 61, TC 290)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.4.5) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
+> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 36, 에러 코드 61, TC 296)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.5.0) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
 
 ---
 
@@ -85,7 +85,7 @@ graph LR
     ROOT --> GEMINI["gemini/<br/>hooks/ BeforeTool 어댑터<br/>setup/ 래퍼"]
     ROOT --> TCLI["tizen-cli/<br/>독립 tizen-sdk CLI (TypeScript + esbuild)"]
     ROOT --> VSC["vscode/<br/>Tizen AI Extension (.vsix)"]
-    ROOT --> TESTS["tests/<br/>290 TC YAML + runner.mjs + fixtures"]
+    ROOT --> TESTS["tests/<br/>296 TC YAML + runner.mjs + fixtures"]
     ROOT --> DOCS["docs/ · usage/<br/>문서 (ko/en 쌍) · 시나리오"]
     ROOT --> SCR["scripts/<br/>저장소 유지보수 (SPDX, 러너 스니펫 동기화, 공개 게시)"]
     ROOT --> REPOROOT["_repo-root/<br/>공개 저장소 루트 파일 스테이징"]
@@ -455,7 +455,7 @@ graph TB
         VT["vscode: npm test<br/>118 케이스"]
     end
 
-    subgraph SUITE["tests/ 통합 TC 스위트 (290 TC)"]
+    subgraph SUITE["tests/ 통합 TC 스위트 (296 TC)"]
         TC["tc/*.yaml<br/>cli lane + prompt lane"]
         RUNNER["runner.mjs<br/>→ tizen-cli/dist/tizen-sdk.js 실행<br/>→ Envelope 검증 (status · jsonpath · errors)"]
         TIERS["policy/tiers.yaml"]

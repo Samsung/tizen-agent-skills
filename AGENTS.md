@@ -33,8 +33,9 @@ detailed authoring and review instructions, read each plugin's own
   Bump them independently of the release version.
 - Keep `plugin.json` `version` and `package.json` `version` in sync within a
   plugin.
-- `marketplace.json` `metadata.version` is the catalog-structure version; bump
-  it only when the catalog itself changes, not on every plugin version bump.
+- `marketplace.json` top-level `version` and `metadata.version` are the catalog
+  version. They follow the `tizen-sdk-skills` plugin version: bump them together
+  with every `tizen-sdk-skills` version bump.
 
 ### Adding a new plugin
 

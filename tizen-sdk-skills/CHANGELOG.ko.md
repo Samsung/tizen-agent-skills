@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-25
+
 ### Added
 
 - **여러 Tizen 플랫폼 버전을 나란히 관리** (`common/lib/core/sdk.js`,
@@ -32,11 +34,6 @@
     (`--strict-profile` / `-StrictProfile`), 그 버전에 TV 확장이 없으면 TV 확장이 있는 버전을 알려 주며
     실패합니다(`create`는 스크립트를 실행하기 전에 확인). 지정하지 않으면
     지금처럼 가장 높은 TV 프로필을 씁니다.
-- **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
-  `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
-  규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG
-  항목)으로 검사하고 규칙 ID별로 `ERROR` / `WARN`을 보고합니다. CI가 모든 PR에서
-  `--format github`으로 실행하므로, 각 항목이 PR의 변경된 파일에 주석으로도 표시됩니다.
 - **DA 가전 등 Wayland/HWC 타겟용 스크린샷 폴백**
   (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
   `common/lib/core/screenshot.js`). HWC가 UI를 오버레이 플레인에 올리는 타겟에서는
@@ -1713,7 +1710,9 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...HEAD
+[1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.5...tizen-sdk-skills-v1.5.0
+[1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...tizen-sdk-skills-v1.4.5
 [1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
 [1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2

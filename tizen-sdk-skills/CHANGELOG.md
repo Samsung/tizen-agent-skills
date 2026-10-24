@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-25
+
 ### Added
 
 - **Manage several Tizen platform versions side by side** (`common/lib/core/sdk.js`,
@@ -33,12 +35,6 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
     (`--strict-profile` / `-StrictProfile`) and fails when that TV extension is missing, naming
     the versions that do have it (`create` checks this before it runs the script); without one,
     TV keeps the newest installed TV profile.
-- **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
-  `ci.yml`). Checks the files a pull request changes against the mechanical rules in
-  `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
-  documents, one H1, kebab-case names, CHANGELOG entry — and reports `ERROR` / `WARN` by
-  rule ID. CI runs it on every pull request with `--format github`, so each finding also
-  appears as an annotation on the pull request's changed files.
 - **Screenshot fallbacks for Wayland/HWC targets such as DA appliances**
   (`common/scripts/tizen-screenshot/tizen-screenshot.sh`, `.ps1`,
   `common/lib/core/screenshot.js`). Where HWC puts the UI on overlay planes, every on-device
@@ -1831,7 +1827,9 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...HEAD
+[1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.5...tizen-sdk-skills-v1.5.0
+[1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...tizen-sdk-skills-v1.4.5
 [1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
 [1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2

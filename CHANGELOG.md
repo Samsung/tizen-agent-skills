@@ -12,6 +12,24 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-10-25
+
+Repository-wide release that ships `tizen-sdk-skills` 1.5.0 and `tizen-action-skills` 1.0.0.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.4.5 to 1.5.0. Highlights: several Tizen
+  platform versions can be managed side by side (`platform-install --list`, and
+  `--platform-version` on `create` / `list-templates`), screenshots fall back for
+  Wayland/HWC targets, dlog-analyzer gains a `crash-report` action, TV SDK hints offer
+  the ZIP installer for any version, and `--force` reinstalls an installed SDK. See
+  [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for the full list. The
+  release assets stamped with the plugin version are therefore `tizen-sdk-v1.5.0.zip`
+  and `tizen-ai-extension-v1.5.0.vsix`.
+- Root `.claude-plugin/marketplace.json` catalog version follows the `tizen-sdk-skills`
+  plugin (1.5.0). `AGENTS.md` and `CONTRIBUTING.md` now state this rule instead of
+  "bump only when the catalog itself changes".
+
 ## [1.1.2] — 2026-10-21
 
 Repository-wide release that ships `tizen-sdk-skills` 1.4.5 and `tizen-action-skills` 1.0.0.
