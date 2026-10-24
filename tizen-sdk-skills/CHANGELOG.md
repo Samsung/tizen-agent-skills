@@ -55,11 +55,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 - **SDK install skills now report the envelope on every completion path**
   (`common/skills/tizen-sdk-install/SKILL.md`,
-  `common/skills/tizen-sdk-install-custom-repo/SKILL.md`). A failed Cline install
+  `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`). A failed Cline install
   (`STATUS=done EXIT=1`) only pointed at the installer log, which is plain text, so the user
   saw no envelope. It now re-runs the Phase 1 pre-check, reports that envelope and adds one
-  line from the log. In `tizen-sdk-install-custom-repo`, the Codex path and the Recovery
-  section also say to report the pre-check envelope, as `tizen-sdk-install` already did.
+  line from the log. In `tizen-sdk-install-custom-repo` and the two TV SDK skills, the Codex
+  path and the Recovery section also say to report the pre-check envelope, as
+  `tizen-sdk-install` already did. The TV SDK skills also report it after a successful Cline
+  install (`EXIT=0`).
 
 ## [1.4.5] — 2026-10-21
 

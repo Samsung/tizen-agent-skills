@@ -51,11 +51,14 @@
 ### Fixed
 
 - **SDK 설치 스킬이 모든 완료 경로에서 envelope를 보고** (`common/skills/tizen-sdk-install/SKILL.md`,
-  `common/skills/tizen-sdk-install-custom-repo/SKILL.md`). Cline에서 설치가 실패하면
+  `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`). Cline에서 설치가 실패하면
   (`STATUS=done EXIT=1`) 사람이 읽는 텍스트인 설치 로그만 확인하도록 되어 있어 사용자에게
   envelope가 보이지 않았습니다. 이제 Phase 1 pre-check를 다시 실행해 그 envelope를 보고하고
-  로그의 원인을 1줄 덧붙입니다. `tizen-sdk-install-custom-repo`의 Codex 경로와 Recovery 섹션도
-  `tizen-sdk-install`처럼 pre-check envelope를 보고하라고 안내합니다.
+  로그의 원인을 1줄 덧붙입니다. `tizen-sdk-install-custom-repo`와 TV SDK 스킬 2개의 Codex 경로와
+  Recovery 섹션도 `tizen-sdk-install`처럼 pre-check envelope를 보고하라고 안내합니다. TV SDK
+  스킬은 Cline 설치가 성공했을 때(`EXIT=0`)도 envelope를 보고합니다.
 
 ## [1.4.5] — 2026-10-21
 

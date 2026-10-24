@@ -98,7 +98,7 @@ while the install keeps running — issue #48). Use the Phase 1 envelope's
 `suggested_fix.background_command` (`node "<lib/cli>/job-cli.js" run --script tizen-tv-sdk-install-from-zip -- …`,
 which forwards the same ZIP path / SDK path flags). It returns a job receipt at once; then poll
 `node "<lib/cli>/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until `job.state` is `done`
-(`result.exit_code`, `log_tail`), and re-run the Phase 1 pre-check to verify. Never run
+(`result.exit_code`, `log_tail`), and re-run the Phase 1 pre-check to verify and report that envelope. Never run
 `suggested_fix.command` in the Codex foreground. Recovery: `job-cli.js list` / `status --id`.
 
 ### Claude Code — Background + `<task-notification>`
@@ -155,8 +155,9 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
      설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
      확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
      (직접 확인: `bash "<installer-script>" --sdk-path="<sdk-path>" --status`)
-   - `STATUS=done EXIT=0` → 완료
-   - `STATUS=done EXIT=1` → 실패. `tail -20 /tmp/tizen-tv-sdk-install-from-zip.log` 로 원인 확인
+   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 +
+     `tail -20 /tmp/tizen-tv-sdk-install-from-zip.log` 원인 요지 1줄
 
    **`sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
@@ -183,8 +184,8 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
      설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
      확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
      (직접 확인: `powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Status`)
-   - `STATUS=done EXIT=0` → 완료
-   - `STATUS=done EXIT=1` → 실패. 로그 파일 확인
+   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 + 로그 파일 원인 요지 1줄
 
    **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `-Status`만 단독으로 연속 실행하지 마세요. 항상 시도 번호를 붙인 `Start-Sleep 25; -Status`를 사용하세요.
@@ -192,7 +193,7 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
 3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
 
 If the run state is unknown (interrupted session), just re-run the Phase 1 pre-check CLI —
-it is idempotent and reports whether `.tv-sdk-installed` exists.
+it is idempotent and reports whether `.tv-sdk-installed` exists. Report that envelope.
 
 **Do NOT (any harness):**
 
