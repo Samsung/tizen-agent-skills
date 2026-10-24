@@ -493,6 +493,39 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         ),
         true,
       );
+
+      // The runner's hint, end to end: 9.0 asked for, TV extension on 10.0 only.
+      const hintSdk = path.join(sandboxHome, "tv-hint-sdk");
+      for (const d of [
+        ["tools", "tizen-core"],
+        ["platforms", "tizen-9.0", "tizen", "rootstraps"],
+        ["platforms", "tizen-10.0", "tizen", "rootstraps"],
+        ["platforms", "tizen-10.0", "tv-samsung", "x"],
+      ]) {
+        fs.mkdirSync(path.join(hintSdk, ...d), { recursive: true });
+      }
+      fs.writeFileSync(path.join(hintSdk, "sdk.info"), "x=y\n");
+      const hintStub = path.join(hintSdk, "tools", "tizen-core", "tz");
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\ntv-samsung-10.0:\\n  Tv10 [web_app]\\n'\n",
+      );
+      fs.chmodSync(hintStub, 0o755);
+      fs.writeFileSync(CONFIG_FILE, `${hintSdk}\n`);
+      const hintEnv = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "9.0",
+      );
+      check(
+        "TV hint names the version that lacks the extension and where it is installed",
+        hintEnv.status === "failure" &&
+          hintEnv.errors[0].message.includes(
+            "not installed for TIZEN-9.0 (installed for: 10.0)",
+          ),
+        true,
+      );
+      fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
   } finally {
     console.error = realConsoleError;

@@ -402,7 +402,36 @@ function platformVersionArgs(platformVersion, command, startTime) {
       ),
     };
   }
-  return tzProfileArgs(version, true);
+  return { ...tzProfileArgs(version, true), version };
+}
+
+/**
+ * TIZEN versions whose Samsung TV extension is installed — the same test as
+ * detect_tv_profile / Detect-TvProfile: `tz` lists tv-samsung-X.Y AND the SDK
+ * has platforms/tizen-X.Y/tv-samsung or platforms/tv-samsung-X.Y. The tz
+ * profile list alone also names TV profiles whose extension is absent.
+ *
+ * @param {string} sdkPath
+ * @param {string[]} tzProfiles - profile names `tz list templates` reported
+ * @returns {string[]} "X.Y" versions
+ */
+function installedTvVersions(sdkPath, tzProfiles) {
+  const isDir = (p) => {
+    try {
+      return fs.statSync(p).isDirectory();
+    } catch (_e) {
+      return false;
+    }
+  };
+  return tzProfiles
+    .map((p) => /^tv-samsung-(\d+\.\d+)$/.exec(p))
+    .filter(Boolean)
+    .map((m) => m[1])
+    .filter(
+      (v) =>
+        isDir(path.join(sdkPath, "platforms", `tizen-${v}`, "tv-samsung")) ||
+        isDir(path.join(sdkPath, "platforms", `tv-samsung-${v}`)),
+    );
 }
 
 /**
@@ -1603,6 +1632,18 @@ async function listTemplates(
           platform:
             "No GBS platform sample apps ship with this plugin version.",
         };
+        // An explicit version with the TV extension only on other versions is
+        // not "TV SDK not installed": tizen-tv-sdk-install would not fix it.
+        if (key === "tv" && versionArgs.version) {
+          const others = installedTvVersions(readSdkPath(), profiles).filter(
+            (v) => v !== versionArgs.version,
+          );
+          if (others.length) {
+            hints.tv =
+              `The Samsung TV SDK extension is not installed for TIZEN-${versionArgs.version} (installed for: ${others.join(", ")}). ` +
+              "Omit --platform-version to use the newest installed TV profile, or pass one of those versions.";
+          }
+        }
         const hint =
           hints[key] ||
           `The platform package for${where || " that profile"} may be missing or incomplete — run tizen-platform-install (or tizen-update-package), then retry. ` +
