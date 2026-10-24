@@ -573,13 +573,53 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
             "is installed for TIZEN-9.0, but tz lists no TV templates",
           ) &&
           bothEnv.errors[0].message.includes("may target another version") &&
-          bothEnv.errors[0].message.includes("pass one of: 10.0"),
+          bothEnv.errors[0].message.includes(
+            "omit --platform-version or pass one of: 10.0",
+          ),
+        true,
+      );
+      // The newest (10.0) is the incomplete one: omitting the version would
+      // pick it again, so only the other version is offered.
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\ntv-samsung-10.0:\\ntv-samsung-9.0:\\n  Tv9 [web_app]\\n'\n",
+      );
+      const newestEnv = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "10.0",
+      );
+      check(
+        "TV hint for the newest incomplete version does not offer omitting it",
+        newestEnv.status === "failure" &&
+          newestEnv.errors[0].message.includes(
+            "To use a complete one, pass one of: 9.0.",
+          ) &&
+          !newestEnv.errors[0].message.includes("omit --platform-version"),
+        true,
+      );
+      // The only TV extension is the incomplete one: reinstalling is the step.
+      fs.rmSync(path.join(hintSdk, "platforms", "tizen-10.0", "tv-samsung"), {
+        recursive: true,
+      });
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\ntv-samsung-9.0:\\n'\n",
+      );
+      const onlyEnv = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "9.0",
+      );
+      check(
+        "TV hint with no other TV version suggests reinstalling",
+        onlyEnv.status === "failure" &&
+          onlyEnv.errors[0].message.includes(
+            "Run it if the repository's TV package is for TIZEN-9.0.",
+          ),
         true,
       );
       fs.rmSync(path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung"), {
-        recursive: true,
-      });
-      fs.rmSync(path.join(hintSdk, "platforms", "tizen-10.0", "tv-samsung"), {
         recursive: true,
       });
       const noTv = await createProject(
