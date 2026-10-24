@@ -73,6 +73,18 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **TV hints offer the TV SDK ZIP installer for any version**
+  (`common/lib/core/project.js`, `common/lib/tests/multi-platform.test.js`).
+  `tizen-tv-sdk-install` installs the one TV version the online repository carries, so the
+  `create` / `list-templates --type tv --platform-version X.Y` hints could not fix a missing
+  or incomplete TV extension of another version. They now offer both installers:
+  `tizen-tv-sdk-install` if the repository's TV package is for TIZEN-X.Y, or
+  `tizen-tv-sdk-install-from-zip --zip-path <zip>` with a TIZEN-X.Y ZIP (older, the same or
+  newer). `--force` is added when `.tv-sdk-installed` exists, since both installers skip on
+  that single marker whatever version it was written for. `list-templates` with an explicit
+  version and no TV extension anywhere now gives this hint too, instead of the generic
+  "run tizen-tv-sdk-install".
+
 - **A platform version counts as installed only when it really is**
   (`common/lib/core/sdk.js`, `common/scripts/lib/common.sh`, `.ps1`,
   `common/scripts/tizen-platform-install/tizen-platform-install.sh`, `.ps1`,
