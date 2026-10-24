@@ -28,6 +28,9 @@
     `platform_version_not_found`로 실패하며 `platform-install` 명령을 안내합니다. 지정하지 않으면
     가장 높은 설치 버전(`result.newest`)으로 고정합니다. 예전에는 스크립트가 `tz list templates`의
     가장 높은 `tizen-X.Y` 항목을 골랐는데, 이 목록에는 `common`만 있는 버전도 들어 있습니다.
+    `--type tv`에서는 직접 지정한 버전이 TV 프로필(`tv-samsung-X.Y`)도 정하며
+    (`--strict-profile` / `-StrictProfile`), 그 버전에 TV 확장이 없으면 실패합니다. 지정하지 않으면
+    지금처럼 가장 높은 TV 프로필을 씁니다.
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
   `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
   규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG

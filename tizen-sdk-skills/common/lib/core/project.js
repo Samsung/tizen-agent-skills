@@ -402,14 +402,20 @@ function platformVersionArgs(platformVersion, command, startTime) {
       ),
     };
   }
-  return tzProfileArgs(version);
+  return tzProfileArgs(version, true);
 }
 
-/** The --tz-profile / -TzProfile suffixes for TIZEN-X.Y (leading space included). */
-function tzProfileArgs(version) {
+/**
+ * The --tz-profile / -TzProfile suffixes for TIZEN-X.Y (leading space
+ * included). `strict` adds --strict-profile / -StrictProfile for a version the
+ * user asked for: TV projects then use tv-samsung-X.Y or fail, instead of the
+ * newest TV profile the scripts pick otherwise (an SDK whose newest platform is
+ * 11.0 can have the TV extension on 10.0 only, so the default pin stays loose).
+ */
+function tzProfileArgs(version, strict = false) {
   return {
-    win: ` -TzProfile "tizen-${version}"`,
-    unix: ` --tz-profile=tizen-${version}`,
+    win: ` -TzProfile "tizen-${version}"${strict ? " -StrictProfile" : ""}`,
+    unix: ` --tz-profile=tizen-${version}${strict ? " --strict-profile" : ""}`,
   };
 }
 

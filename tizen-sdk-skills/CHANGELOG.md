@@ -29,7 +29,9 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
     `platform_version_not_found` and names the `platform-install` command. Without it both
     pin the newest installed platform (`result.newest`). Before, the script picked the highest
     `tizen-X.Y` section of `tz list templates`, which also lists versions that hold only
-    `common`.
+    `common`. For `--type tv`, an explicit version also selects `tv-samsung-X.Y`
+    (`--strict-profile` / `-StrictProfile`) and fails when that TV extension is missing; without
+    one, TV keeps the newest installed TV profile.
 - **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
   `ci.yml`). Checks the files a pull request changes against the mechanical rules in
   `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired

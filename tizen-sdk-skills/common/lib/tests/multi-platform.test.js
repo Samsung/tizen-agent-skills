@@ -264,9 +264,12 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         0,
       );
       check(
-        "explicit installed version is passed as is",
-        explicit.unix,
-        " --tz-profile=tizen-10.0",
+        "explicit version is pinned strictly (TV may not fall back)",
+        [explicit.unix, explicit.win],
+        [
+          " --tz-profile=tizen-10.0 --strict-profile",
+          ' -TzProfile "tizen-10.0" -StrictProfile',
+        ],
       );
       const bare = path.join(sandboxHome, "no-platform-sdk");
       fs.mkdirSync(bare);
@@ -371,6 +374,18 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       );
     }
 
+    {
+      const cps = read("tizen-create-project", "create-project-app.ps1");
+      check(
+        "create-project-app.ps1: -StrictProfile limits Detect-TvProfile to the pinned version",
+        /\[switch\]\$StrictProfile/.test(cps) &&
+          /if \(\$StrictProfile\) \{ \$candidates = @\(\$candidates \| Where-Object \{ \$_ -eq \$wanted \}\) \}/.test(
+            cps,
+          ),
+        true,
+      );
+    }
+
     console.log("--- bash ---");
     if (process.platform === "win32") {
       console.log("SKIP bash checks (win32)");
@@ -410,6 +425,72 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "installer exits 0 at once for an installed version (no download)",
         run.status === 0 &&
           /TIZEN-10\.0 is already installed/.test(run.stderr + run.stdout),
+        true,
+      );
+
+      // TV profile choice in create-project-app.sh, with a stub `tz` that
+      // lists tv-samsung-9.0 and tv-samsung-10.0 (both extensions installed).
+      const tvRoot = path.join(sandboxHome, "tv");
+      const tvSdk = path.join(tvRoot, "sdk");
+      const tvHome = path.join(tvRoot, "home");
+      for (const d of [
+        ["tools", "tizen-core"],
+        ["platforms", "tizen-9.0", "tv-samsung"],
+        ["platforms", "tizen-10.0", "tv-samsung"],
+      ]) {
+        fs.mkdirSync(path.join(tvSdk, ...d), { recursive: true });
+      }
+      fs.mkdirSync(tvHome);
+      fs.writeFileSync(
+        path.join(tvHome, ".tizen.sdk.path.config"),
+        `${tvSdk}\n`,
+      );
+      const stub = path.join(tvSdk, "tools", "tizen-core", "tz");
+      fs.writeFileSync(
+        stub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntv-samsung-10.0:\\n  Tv10 [web_app]\\ntv-samsung-9.0:\\n  Tv9 [web_app]\\n'\n",
+      );
+      fs.chmodSync(stub, 0o755);
+      const tvProfile = (...extra) => {
+        const r = spawnSync(
+          "bash",
+          [
+            path.join(
+              scriptsDir,
+              "tizen-create-project",
+              "create-project-app.sh",
+            ),
+            "--list-templates",
+            "--type=tv",
+            ...extra,
+          ],
+          { encoding: "utf8", env: { ...process.env, HOME: tvHome } },
+        );
+        const m = /^TV_PROFILE=(.*)$/m.exec(r.stdout);
+        return m
+          ? m[1]
+          : `none: ${(r.stderr.match(/\[ERROR\][^\n]*/) || [""])[0]}`;
+      };
+      check(
+        "TV: no version → newest TV profile",
+        tvProfile(),
+        "tv-samsung-10.0",
+      );
+      check(
+        "TV: default pin (--tz-profile only) keeps the newest-first scan",
+        tvProfile("--tz-profile=tizen-9.0"),
+        "tv-samsung-10.0",
+      );
+      check(
+        "TV: --strict-profile uses the requested version",
+        tvProfile("--tz-profile=tizen-9.0", "--strict-profile"),
+        "tv-samsung-9.0",
+      );
+      check(
+        "TV: --strict-profile without that TV extension → named error",
+        /TV SDK extension is not installed for tizen-8\.0/.test(
+          tvProfile("--tz-profile=tizen-8.0", "--strict-profile"),
+        ),
         true,
       );
     }

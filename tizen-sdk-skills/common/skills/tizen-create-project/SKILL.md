@@ -274,7 +274,10 @@ follow-up question with the remaining ones.
   the newest installed platform; when several are installed (`tizen-platform-install --list`), say
   in the summary which one was used (`result.profile`). A version that is not installed — including
   one whose `platforms/tizen-X.Y` holds only `common` — fails with `platform_version_not_found`
-  and names the `tizen-platform-install --platform-version X.Y` command to add it.
+  and names the `tizen-platform-install --platform-version X.Y` command to add it. For `--type tv`
+  the version also picks the TV profile (`tv-samsung-X.Y`); when the TV extension is not installed
+  for that version the run fails instead of falling back to another TV version. Without
+  `--platform-version`, TV keeps using the newest installed TV profile.
 
 ## Deleting a project
 
