@@ -522,6 +522,9 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         hintEnv.status === "failure" &&
           hintEnv.errors[0].message.includes(
             "not installed for TIZEN-9.0 (installed for: 10.0)",
+          ) &&
+          hintEnv.errors[0].message.includes(
+            "from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --force",
           ),
         true,
       );
@@ -572,7 +575,12 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
           bothEnv.errors[0].message.includes(
             "is installed for TIZEN-9.0, but tz lists no TV templates",
           ) &&
-          bothEnv.errors[0].message.includes("may target another version") &&
+          bothEnv.errors[0].message.includes(
+            "To reinstall it, install it with tizen-tv-sdk-install --force if the repository's TV package is for TIZEN-9.0",
+          ) &&
+          bothEnv.errors[0].message.includes(
+            "tizen-tv-sdk-install-from-zip --zip-path <zip> --force",
+          ) &&
           bothEnv.errors[0].message.includes(
             "omit --platform-version or pass one of: 10.0",
           ),
@@ -615,7 +623,8 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "TV hint with no other TV version suggests reinstalling",
         onlyEnv.status === "failure" &&
           onlyEnv.errors[0].message.includes(
-            "Run it if the repository's TV package is for TIZEN-9.0.",
+            "To reinstall it, install it with tizen-tv-sdk-install --force if the repository's TV package is for TIZEN-9.0, " +
+              "or from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --force.",
           ),
         true,
       );
@@ -633,10 +642,10 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "9.0",
       );
       check(
-        "no TV extension anywhere → points at tizen-tv-sdk-install",
-        /not installed for TIZEN-9\.0\. Install it with tizen-tv-sdk-install/.test(
+        "no TV extension anywhere → offers both installers without --force",
+        /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install if .*tizen-tv-sdk-install-from-zip --zip-path <zip>;/.test(
           noTv.errors[0].message,
-        ),
+        ) && !noTv.errors[0].message.includes("--force"),
         true,
       );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
