@@ -43,7 +43,11 @@ const {
   listPlatforms,
   installPlatform,
 } = require("../core/sdk");
-const { listTemplates, createProject } = require("../core/project");
+const {
+  listTemplates,
+  createProject,
+  platformVersionArgs,
+} = require("../core/project");
 
 console.log("=== multi-platform tests ===\n");
 
@@ -122,7 +126,7 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "one entry per directory, oldest first, with its status",
         env.result.platforms.map((p) => [p.version, p.status]),
         [
-          ["9.0", "common_only"],
+          ["9.0", "not_installed"],
           ["10.0", "installed"],
           ["11.0", "incomplete"],
         ],
@@ -243,6 +247,37 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         fs.existsSync(path.join(parent, "MyTizenWebApp")),
         false,
       );
+    }
+    {
+      // No --platform-version: pin the newest INSTALLED platform (result.newest),
+      // not the highest `tz list templates` section, which also lists versions
+      // that hold only "common".
+      const dflt = platformVersionArgs("", "tizen-sdk list-templates", 0);
+      check(
+        "default pins the newest installed platform",
+        [dflt.unix, dflt.win],
+        [" --tz-profile=tizen-10.0", ' -TzProfile "tizen-10.0"'],
+      );
+      const explicit = platformVersionArgs(
+        "10.0",
+        "tizen-sdk list-templates",
+        0,
+      );
+      check(
+        "explicit installed version is passed as is",
+        explicit.unix,
+        " --tz-profile=tizen-10.0",
+      );
+      const bare = path.join(sandboxHome, "no-platform-sdk");
+      fs.mkdirSync(bare);
+      fs.writeFileSync(CONFIG_FILE, `${bare}\n`);
+      const none = platformVersionArgs("", "tizen-sdk list-templates", 0);
+      check(
+        "nothing installed → no pin (the script's own detection decides)",
+        [none.unix, none.win],
+        ["", ""],
+      );
+      fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
     {
       const src = fs.readFileSync(

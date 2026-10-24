@@ -265,7 +265,7 @@ export const SDK_SPECS: CommandSpec[] = [
   {
     name: "platform-list",
     description:
-      "List the Tizen platform versions in the installed SDK (platforms/tizen-X.Y): installed, incomplete (an unfinished platform-install) or common_only (only the shared API data the base SDK ships for older versions), with their profiles and emulator images",
+      "List the Tizen platform versions in the installed SDK (platforms/tizen-X.Y): installed, incomplete (an unfinished platform-install) or not_installed (no platform payload: only the shared common data the base SDK ships for older versions, or synced template samples), with their profiles and emulator images",
     requiresSdk: false,
     options: [],
     handler: () => sdkCommands.listPlatforms("tizen-sdk platform-list"),

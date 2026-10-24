@@ -3190,8 +3190,9 @@ async function installPlatform(
  * One entry per platforms/tizen-X.Y directory, oldest first:
  *   - status: "installed" (see isPlatformInstalled); "incomplete" while a
  *     tizen-platform-install run of that version has not finished; or
- *     "common_only" when the directory holds only the shared API data the base
- *     SDK ships for older versions — that version can still be installed
+ *     "not_installed" when the directory holds no platform payload — only the
+ *     shared "common" data the base SDK ships for older versions, or synced
+ *     template samples — so that version can still be installed
  *   - profiles: sub-directories of platforms/tizen-X.Y (e.g. "tizen",
  *     "tv-samsung" when the TV extension is installed for that version)
  *   - emulator_images: emulator image directories of that version
@@ -3220,7 +3221,7 @@ async function listPlatforms(command = "tizen-sdk platform-list") {
       if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
         status = "incomplete";
       } else if (!isPlatformInstalled(sdkPath, version)) {
-        status = "common_only";
+        status = "not_installed";
       }
       return {
         version,

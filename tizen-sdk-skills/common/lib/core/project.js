@@ -354,10 +354,14 @@ function patchRpkManifestResType(projectPath) {
 /**
  * Script arguments that pin create-project / list-templates to TIZEN-X.Y.
  *
- * Without a version the script keeps picking the newest installed profile.
- * With one, the version must be X.Y and installed (isPlatformInstalled: a
+ * With a version, it must be X.Y and installed (isPlatformInstalled: a
  * platforms/tizen-X.Y/common directory alone is not a platform), otherwise
  * `tz new -p tizen-X.Y` would fail later with a less helpful message.
+ * Without one, the newest installed platform is pinned — the same version
+ * platform-list reports as result.newest. The script's own detection (the
+ * highest tizen-X.Y section of `tz list templates`) also lists versions that
+ * hold only "common", so it is left to fall back on only when no platform
+ * passes isPlatformInstalled.
  *
  * @param {string} platformVersion - "X.Y", or "" for the newest installed one
  * @param {string} command - envelope command name
@@ -366,7 +370,10 @@ function patchRpkManifestResType(projectPath) {
  *   (leading space included) or an error envelope
  */
 function platformVersionArgs(platformVersion, command, startTime) {
-  if (!platformVersion) return { win: "", unix: "" };
+  if (!platformVersion) {
+    const newest = listFullyInstalledPlatformVersions(readSdkPath()).pop();
+    return newest ? tzProfileArgs(newest) : { win: "", unix: "" };
+  }
   const check = validateTizenVersion(platformVersion, { required: true });
   if (check.error) {
     return {
@@ -395,6 +402,11 @@ function platformVersionArgs(platformVersion, command, startTime) {
       ),
     };
   }
+  return tzProfileArgs(version);
+}
+
+/** The --tz-profile / -TzProfile suffixes for TIZEN-X.Y (leading space included). */
+function tzProfileArgs(version) {
   return {
     win: ` -TzProfile "tizen-${version}"`,
     unix: ` --tz-profile=tizen-${version}`,
@@ -2428,4 +2440,6 @@ module.exports = {
   patchRpkManifestResType,
   // Exported for tests — the RDS "is this package the Debug output" gate.
   isRdsTrackedPackage,
+  // Exported for tests — the --platform-version / default-platform hand-off.
+  platformVersionArgs,
 };

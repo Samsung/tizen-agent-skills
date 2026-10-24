@@ -21,12 +21,13 @@
   볼 방법이 없었고, 프로젝트는 항상 가장 높은 버전으로 만들어졌습니다.
   - `platform-install-cli.js --list`(tizen-cli의 새 읽기 전용 명령 `platform-list`)는
     `platforms/tizen-X.Y`마다 상태를 보여 줍니다: `installed`, `incomplete`(끝나지 않은
-    `platform-install`), `common_only`(기본 SDK가 예전 버전용으로 넣는 공용 API 데이터만 있음).
+    `platform-install`), `not_installed`(플랫폼 내용 없음: 기본 SDK가 예전 버전용으로 넣는 공용 `common` 데이터나 복사된 템플릿 `samples`만 있음).
     프로필(`tizen`, `tv-samsung` 등), 에뮬레이터 이미지, `result.newest`도 함께 나옵니다.
   - `create`와 `list-templates`가 `--platform-version <X.Y>`를 받아 스크립트에
     `--tz-profile=tizen-X.Y` / `-TzProfile`로 넘깁니다. 설치되지 않은 버전은
     `platform_version_not_found`로 실패하며 `platform-install` 명령을 안내합니다. 지정하지 않으면
-    지금처럼 가장 높은 설치 버전을 씁니다.
+    가장 높은 설치 버전(`result.newest`)으로 고정합니다. 예전에는 스크립트가 `tz list templates`의
+    가장 높은 `tizen-X.Y` 항목을 골랐는데, 이 목록에는 `common`만 있는 버전도 들어 있습니다.
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
   `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한
   규칙(버전 동기화, 비밀 정보와 사설 주소, 짝 문서, 단일 H1, kebab-case 이름, CHANGELOG

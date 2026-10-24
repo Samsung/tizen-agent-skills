@@ -21,13 +21,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   to see which versions were installed, and projects were always created for the newest one.
   - `platform-install-cli.js --list` (tizen-cli `platform-list`, a new read-only command)
     reports one entry per `platforms/tizen-X.Y`: `installed`, `incomplete` (an unfinished
-    `platform-install`) or `common_only` (only the shared API data the base SDK ships for
-    older versions), with its profiles (`tizen`, `tv-samsung`, …) and emulator images, plus
+    `platform-install`) or `not_installed` (no platform payload: only the shared `common`
+    data the base SDK ships for older versions, or synced template samples), with its profiles (`tizen`, `tv-samsung`, …) and emulator images, plus
     `result.newest`.
   - `create` and `list-templates` take `--platform-version <X.Y>` and pass it to the script
     as `--tz-profile=tizen-X.Y` / `-TzProfile`. A version that is not installed fails with
     `platform_version_not_found` and names the `platform-install` command. Without it both
-    still use the newest installed platform.
+    pin the newest installed platform (`result.newest`). Before, the script picked the highest
+    `tizen-X.Y` section of `tz list templates`, which also lists versions that hold only
+    `common`.
 - **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
   `ci.yml`). Checks the files a pull request changes against the mechanical rules in
   `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
