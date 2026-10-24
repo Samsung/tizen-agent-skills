@@ -301,7 +301,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-10-21 against v1.4.5. Every row can be re-measured with the
+Measured on 2026-10-25 against v1.5.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -313,11 +313,11 @@ or test suite is added.
 | tizen-sdk CLI commands | 36 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Guard hooks | 3 PreToolUse scripts, 13 guard rules | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 80 files, ≈2,890 assertions | `node common/lib/tests/run-all.js` |
+| Unit tests (`common/lib/tests/`) | 90 files | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 118 cases in 3 files | `cd vscode && npm test` |
-| Hook tests | 122 cases | `bash common/hooks/hooks.test.sh` |
-| Integration TCs (`tests/tc/`) | 295 TCs in 288 YAML files — safe 73 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 217 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Hook tests | 217 cases | `bash common/hooks/hooks.test.sh` |
+| Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| Documentation | 211 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 

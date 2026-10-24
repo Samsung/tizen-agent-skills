@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (29 skills, 24 agents, 36 commands, 61 error codes, 290 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.4.5). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (29 skills, 24 agents, 36 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.5.0). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -85,7 +85,7 @@ graph LR
     ROOT --> GEMINI["gemini/<br/>hooks/ BeforeTool adapter<br/>setup/ wrappers"]
     ROOT --> TCLI["tizen-cli/<br/>standalone tizen-sdk CLI (TypeScript + esbuild)"]
     ROOT --> VSC["vscode/<br/>Tizen AI Extension (.vsix)"]
-    ROOT --> TESTS["tests/<br/>290 TC YAML + runner.mjs + fixtures"]
+    ROOT --> TESTS["tests/<br/>296 TC YAML + runner.mjs + fixtures"]
     ROOT --> DOCS["docs/ · usage/<br/>documentation (ko/en pairs) · scenarios"]
     ROOT --> SCR["scripts/<br/>repo maintenance (SPDX, runner-snippet sync, publication)"]
     ROOT --> REPOROOT["_repo-root/<br/>staging copy of the public repo root files"]
@@ -455,7 +455,7 @@ graph TB
         VT["vscode: npm test<br/>118 cases"]
     end
 
-    subgraph SUITE["tests/ integration TC suite (290 TCs)"]
+    subgraph SUITE["tests/ integration TC suite (296 TCs)"]
         TC["tc/*.yaml<br/>cli lane + prompt lane"]
         RUNNER["runner.mjs<br/>→ runs tizen-cli/dist/tizen-sdk.js<br/>→ checks the Envelope (status · jsonpath · errors)"]
         TIERS["policy/tiers.yaml"]
