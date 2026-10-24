@@ -297,10 +297,12 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
 
 #### Linux / macOS (Bash)
 
-1. `nohup` 으로 설치 프로세스를 분리 (즉시 반환, PID와 로그 경로 출력):
+1. `nohup` 으로 Phase 1 envelope의 `suggested_fix.command`(`bash "<installer.sh path>" --path … [--force] …`)를
+   **인자까지 그대로** 분리 실행 (즉시 반환, PID 출력). 인자를 빼면 `--force`·`--path`·`--platform`
+   요청이 적용되지 않습니다:
 
    ```bash
-   nohup bash "<installer.sh path>" > /tmp/tizen-sdk-install.log 2>&1 & jobs -p
+   nohup <suggested_fix.command> > /tmp/tizen-sdk-install.log 2>&1 & jobs -p
    ```
 
    출력: `PID=12345`
@@ -329,10 +331,12 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
 
 #### Windows (PowerShell)
 
-1. `nohup` 대신 `Start-Process` 없이 직접 분리:
+1. Phase 1 envelope의 `suggested_fix.command`(`powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Path … [-Force] …`)를
+   **인자까지 그대로** 쓰고 끝에 `-Detach`만 붙여 분리 실행. 인자를 빼면 `-Force`·`-Path`·`-Platform`
+   요청이 적용되지 않습니다:
 
    ```powershell
-   powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Detach
+   <suggested_fix.command> -Detach
    ```
 
    출력: `PID=12345 LOG=C:\Users\...\Temp\tizen-sdk-install.log`

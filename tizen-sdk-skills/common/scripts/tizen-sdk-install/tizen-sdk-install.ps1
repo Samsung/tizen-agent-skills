@@ -806,6 +806,9 @@ function Stop-InstallLog {
 if (-not $DryRun) {
     New-Item -ItemType Directory -Force -Path $Path | Out-Null
     Remove-Item $ResultMarker -Force -ErrorAction SilentlyContinue
+    # A forced reinstall overwrites a complete install: drop its sdk.info first so
+    # a run that fails partway is not later taken for a completed install.
+    if ($Force) { Remove-Item $sdkInfoPath -Force -ErrorAction SilentlyContinue }
     Set-Content -Path $RunningMarker -Value "running" -ErrorAction SilentlyContinue
     try {
         Start-Transcript -Path $InstallLog -Force -ErrorAction Stop | Out-Null

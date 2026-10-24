@@ -11,9 +11,16 @@
  * --force / -Force unconditionally, so making the resume skip honour --force
  * alone would have made every resumed detached install start over.
  *
- * Covered here (source guards on both installer twins):
+ * A forced run also kept the old sdk.info, so one that failed partway was
+ * later reported as a completed install. And the Cline launch templates in
+ * the SKILL.md files dropped the flags the pre-check put into
+ * suggested_fix.command, so a forced reinstall never reached the installer.
+ *
+ * Covered here (source guards):
  *   - the per-package resume skip is bypassed under --force / -Force
  *   - --detach / -Detach forwards --force / -Force only when it was given
+ *   - a forced run removes sdk.info before installing
+ *   - the Cline launch templates run suggested_fix.command with its arguments
  */
 
 const fs = require("fs");
@@ -84,6 +91,35 @@ check(
   "ps1: -Detach forwards -Force only when $Force is set",
   /if \(\$Force\) \{ \$procArgs \+= '-Force' \}/.test(ps1),
 );
+
+console.log("--- stale sdk.info ---");
+check(
+  "sh: a forced run removes sdk.info before installing",
+  /\[ "\$FORCE" = true \] && rm -f "\$INSTALL_PATH\/sdk\.info"/.test(sh) &&
+    sh.indexOf('rm -f "$INSTALL_PATH/sdk.info"') <
+      sh.indexOf("if ! install_platform_packages; then"),
+);
+check(
+  "ps1: a forced run removes sdk.info before installing",
+  /if \(\$Force\) \{ Remove-Item \$sdkInfoPath /.test(ps1) &&
+    ps1.indexOf("Remove-Item $sdkInfoPath") <
+      ps1.indexOf("$pkgOk = Install-PlatformPackages"),
+);
+
+console.log("--- Cline launch templates ---");
+const skillsDir = path.join(__dirname, "..", "..", "skills");
+for (const skill of ["tizen-sdk-install", "tizen-sdk-install-custom-repo"]) {
+  const md = fs.readFileSync(path.join(skillsDir, skill, "SKILL.md"), "utf8");
+  check(
+    `${skill}: bash launch runs suggested_fix.command under nohup`,
+    /nohup <suggested_fix\.command> > /.test(md) && !/nohup bash "</.test(md),
+  );
+  check(
+    `${skill}: PowerShell launch appends -Detach to suggested_fix.command`,
+    /<suggested_fix\.command> -Detach/.test(md) &&
+      !/path>"(?: -RepoUrl "<url>")? -Detach/.test(md),
+  );
+}
 
 console.log(
   `\n${failures === 0 ? "All sdk-install-force tests passed" : `${failures} FAILED`}`,

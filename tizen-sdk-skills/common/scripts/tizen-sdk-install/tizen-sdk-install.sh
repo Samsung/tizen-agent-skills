@@ -1091,6 +1091,9 @@ fi
 if [ "$DRY_RUN" != true ]; then
   mkdir -p "$INSTALL_PATH"
   rm -f "$INSTALL_PATH/.install-result" 2>/dev/null || true
+  # A forced reinstall overwrites a complete install: drop its sdk.info first so
+  # a run that fails partway is not later taken for a completed install.
+  [ "$FORCE" = true ] && rm -f "$INSTALL_PATH/sdk.info"
   : > "$INSTALL_PATH/.install-running"
   trap _on_exit_marker EXIT
 
