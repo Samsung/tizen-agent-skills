@@ -162,11 +162,11 @@ Optional: `node "$CLI" --repo-url "<url>" --platform-version 11.0 --force --down
 Exit code: `0` = success (SDK already installed — **read the warnings**, see below),
 `1` = not installed yet or URL rejected. Inspect `errors[0].error_category`:
 
-| `error_category`       | Meaning                                             | What to do                                                   |
-| ---------------------- | --------------------------------------------------- | ------------------------------------------------------------ |
-| `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list   | Ask the user for the repository **directory** URL             |
-| `repo_url_unreachable` | Well-formed, but no `pkg_list_{OS}-{64,32}` served  | Wrong URL, or internal mirror needs VPN/proxy                 |
-| `execution_error`      | URL is valid, SDK not installed                     | Run `suggested_fix.command` (Phase 2)                         |
+| `error_category`       | Meaning                                            | What to do                                        |
+| ---------------------- | -------------------------------------------------- | ------------------------------------------------- |
+| `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list  | Ask the user for the repository **directory** URL |
+| `repo_url_unreachable` | Well-formed, but no `pkg_list_{OS}-{64,32}` served | Wrong URL, or internal mirror needs VPN/proxy     |
+| `execution_error`      | URL is valid, SDK not installed                    | Run `suggested_fix.command` (Phase 2)             |
 
 ### installSdkFromRepo() Flow
 
@@ -198,7 +198,7 @@ while the install keeps running — issue #48). Use the Phase 1 envelope's
 which forwards the same `--repo-url`/`-RepoUrl` and platform flags) **with escalated permissions**
 (it downloads; the default sandbox disables network). It returns a job receipt at once; then poll
 `node "<lib/cli>/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until `job.state` is `done`
-(`result.exit_code`, `log_tail`), and re-run the Phase 1 pre-check to verify. Never run
+(`result.exit_code`, `log_tail`), and re-run the Phase 1 pre-check to verify and report that envelope. Never run
 `suggested_fix.command` in the Codex foreground. Recovery: `job-cli.js list` / `status --id`.
 
 ### Claude Code — Background + `<task-notification>`
@@ -254,7 +254,8 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
      않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
      이어갑니다. (직접 확인: `bash "<tizen-sdk-install-custom-repo.sh path>" --status`)
    - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. `tail -20 /tmp/tizen-sdk-install.log` 로 원인 확인
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 +
+     `tail -20 /tmp/tizen-sdk-install.log` 원인 요지 1줄
 
 #### Windows (PowerShell)
 
@@ -276,7 +277,7 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
      않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
      이어갑니다. (직접 확인: `powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -Status`)
    - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. 로그 파일 확인
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 + 로그 파일 원인 요지 1줄
 
 ### Recovery — 진행 상태를 모를 때 (any harness)
 
@@ -285,7 +286,7 @@ The run state is durable on disk, so a lost completion signal is always recovera
 - Windows: `powershell -ExecutionPolicy Bypass -File "<...custom-repo.ps1>" -Status`
 - Linux/macOS: `bash "<...custom-repo.sh>" --status`
 
-Output: `STATUS=running` / `STATUS=done EXIT=<code>` / `STATUS=none`.
+Output: `STATUS=running` / `STATUS=done EXIT=<code>` (Phase 1 pre-check 재실행 후 envelope 보고) / `STATUS=none`.
 
 **Do NOT (any harness):**
 

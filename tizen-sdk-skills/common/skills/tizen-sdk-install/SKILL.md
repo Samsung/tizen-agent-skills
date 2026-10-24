@@ -172,9 +172,9 @@ The response includes:
 - `current_repository` — the CDN mirror URL from `{SDK_PATH}/.package/repository.info` (null if SDK not installed)
 - `repositories` — array of known repository metadata:
 
-| URL                                                      | Name                                       | Type     | Access                              |
-| -------------------------------------------------------- | ------------------------------------------ | -------- | ----------------------------------- |
-| `https://download.tizen.org/sdk/tizenstudio/official/`   | Official CDN                               | public   | Internet (timezone-based mirrors)   |
+| URL                                                    | Name         | Type   | Access                            |
+| ------------------------------------------------------ | ------------ | ------ | --------------------------------- |
+| `https://download.tizen.org/sdk/tizenstudio/official/` | Official CDN | public | Internet (timezone-based mirrors) |
 
 Private / in-house mirrors are not listed; install from one with `tizen-sdk-install-custom-repo` (`--repo-url <url>`).
 
@@ -318,7 +318,8 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
      않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
      이어갑니다. (직접 확인: `bash "<installer.sh path>" --status`)
    - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. `tail -20 /tmp/tizen-sdk-install.log` 로 원인 확인
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 +
+     `tail -20 /tmp/tizen-sdk-install.log` 원인 요지 1줄
 
    **`sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
@@ -348,7 +349,7 @@ Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리�
      않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
      이어갑니다. (직접 확인: `powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Status`)
    - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. 로그 파일 확인
+   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 + 로그 파일 원인 요지 1줄
 
    **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `-Status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
