@@ -89,7 +89,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js 런처
 
 node bin/tizen-sdk.js --doctor           # SDK 경로, 캐시, 러너 상태
-node bin/tizen-sdk.js --capabilities     # 35개 명령 중 지금 사용 가능한 명령
+node bin/tizen-sdk.js --capabilities     # 36개 명령 중 지금 사용 가능한 명령
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -140,7 +140,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 돌려줍니다. 엔드투엔드 예시는 [사용 사례 & 시나리오 가이드](usage/usage.md), 전체 트리거
 문구 목록은 [스킬 레퍼런스](docs/SKILLS_REFERENCE.md)를 참고하세요.
 
-## 명령어 (35개)
+## 명령어 (36개)
 
 아래 각 명령어는 AI 호스트에서는 `tizen-<명령어>` 이름의 스킬(예: `tizen-build-project`)로,
 독립 실행형 CLI에서는 `tizen-sdk <명령어>`로 노출됩니다. 정확한 대응 관계는
@@ -158,6 +158,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 | `sdk-repo-info` | SDK | SDK 패키지 저장소 정보 조회 |
 | `download-emulator-package` | SDK | Tizen 에뮬레이터 패키지 다운로드 및 설치 |
 | `platform-install` | SDK | Tizen 플랫폼 패키지 다운로드 및 설치 |
+| `platform-list` | SDK | 설치된 Tizen 플랫폼 버전 목록 (읽기 전용) |
 | `download-mobile-platform` | SDK | Tizen 모바일 플랫폼 패키지 다운로드 및 설치 |
 | `install-rootstrap` | SDK | 커스텀 루트스트랩 ZIP을 SDK에 설치 |
 | `dotnet-setup` | SDK | .NET SDK 확인 + Tizen .NET workload 설치 |
@@ -218,7 +219,7 @@ tizen-sdk-skills/
 │   ├── hooks/              #   BeforeTool 어댑터 (Gemini 훅 프로토콜 -> 공용 가드)
 │   └── setup/              #   wrapper
 ├── tizen-cli/              # 독립 실행형 tizen-sdk CLI (canonical 소스)
-│   ├── src/                #   TypeScript 셸 (flat 35 커맨드, envelope 어댑터, --schema/--doctor)
+│   ├── src/                #   TypeScript 셸 (flat 36 커맨드, envelope 어댑터, --schema/--doctor)
 │   │   └── command-specs/  #   도메인별 선언적 스펙 (sdk, check, project, device, debug, test, certificate)
 │   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
 │   ├── esbuild.config.js   #   빌드 설정
@@ -295,7 +296,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
 | 스킬 (`common/skills/`) | 29개 (+CLI 전용 2개 → `tizen-cli/skills/`는 31개) | `ls -d common/skills/*/ \| wc -l` |
 | 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI 커맨드 | 35개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| tizen-sdk CLI 커맨드 | 36개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 61개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 가드 훅 | PreToolUse 스크립트 3개, 가드 규칙 13개 | `common/hooks/` |
 | 단위 테스트 (`common/lib/tests/`) | 80 파일, 어설션 약 2,890개 | `node common/lib/tests/run-all.js` |

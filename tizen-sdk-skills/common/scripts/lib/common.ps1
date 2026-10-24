@@ -102,6 +102,29 @@ function ConvertTo-QuotedArgument {
 }
 
 # ----------------------------------------------------------------------------
+# Is platform TIZEN-$Version installed in the SDK at $SdkPath? Mirror of
+# isPlatformInstalled (lib/core/sdk.js): platforms\tizen-X.Y must hold a
+# platform profile - a sub-directory besides "common" (which the base SDK ships
+# for older API versions too) with content besides "samples" (which
+# tizen-create-project syncs templates into) - and no tizen-platform-install
+# run of that version may still be marked in progress (.platform-installing-X.Y).
+# ----------------------------------------------------------------------------
+function Test-PlatformInstalled {
+    param([string]$SdkPath, [string]$Version)
+    if (-not $SdkPath -or -not $Version) { return $false }
+    if (Test-Path (Join-Path $SdkPath ".platform-installing-$Version")) { return $false }
+    $dir = Join-Path $SdkPath "platforms\tizen-$Version"
+    $profiles = Get-ChildItem -Path $dir -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $_.Name -ne 'common' }
+    foreach ($p in $profiles) {
+        $payload = Get-ChildItem -Path $p.FullName -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne 'samples' }
+        if ($payload) { return $true }
+    }
+    return $false
+}
+
+# ----------------------------------------------------------------------------
 # SDK path resolution
 #   ~\.tizen.sdk.path.config -> TIZEN_SDK_PATH -> %USERPROFILE%\tizen-sdk -> C:\tizen-sdk
 # The config file is the path saved by sdk-init (the only source the Node lib's

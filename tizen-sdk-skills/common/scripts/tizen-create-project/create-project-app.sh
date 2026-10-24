@@ -41,12 +41,15 @@ LOCAL_TEMPLATES_PATH="$SCRIPT_DIR/templates"
 # scoped to it, so what we list is exactly what `tz new` can create. It is
 # DETECTED from the installed SDK (issue #72: a hardcoded tizen-10.0 made an
 # SDK that ships tizen-11.0 list zero templates, exit 0 — "webapp: []"):
-#   TIZEN_TZ_PROFILE env override
+#   --tz-profile (the Node runner's --platform-version) / TIZEN_TZ_PROFILE env override
 #   -> highest tizen-X.Y section in `tz list templates`
 #   -> highest platforms/tizen-* directory
 #   -> tizen-10.0
 # Resolved in main() once $TZ_TOOL is known (detect_tz_profile).
 TZ_PROFILE="${TIZEN_TZ_PROFILE:-}"
+# --strict-profile: TZ_PROFILE was requested by the user (--platform-version),
+# so TV detection may not fall back to another version (detect_tv_profile).
+STRICT_PROFILE=false
 
 _tz_profile_sections() {
     # Profile section headers of `tz list templates`, e.g. "tizen-10.0", one per line.
@@ -123,11 +126,20 @@ declare -A TYPE_YAML_TOKEN=(
 # extension installed on tizen-10.0 used to be reported as "TV SDK not installed"
 # and its TV templates were hidden.
 # Prints the profile name (e.g. "tv-samsung-10.0"); fails when none is installed.
+# With --strict-profile (the user asked for a platform version), only the TV
+# profile of that version qualifies: the newest-first scan would otherwise
+# create a tv-samsung-10.0 project for "--platform-version 9.0".
 detect_tv_profile() {
     local tz_output candidates p ver
     tz_output="$("$TZ_TOOL" list templates 2>/dev/null)" || return 1
     candidates=$(echo "$tz_output" | awk '/^tv-samsung-/ { sub(/:[[:space:]]*$/,""); print }' | sort -rV)
-    [ -n "$candidates" ] || return 1
+    if [ "$STRICT_PROFILE" = true ]; then
+        candidates=$(echo "$candidates" | grep -xF "tv-samsung-${TZ_PROFILE#tizen-}" || true)
+    fi
+    if [ -z "$candidates" ]; then
+        tv_profile_missing_note
+        return 1
+    fi
     while IFS= read -r p; do
         [ -n "$p" ] || continue
         ver="${p#tv-samsung-}"
@@ -142,7 +154,14 @@ detect_tv_profile() {
         echo "$candidates" | head -1
         return 0
     fi
+    tv_profile_missing_note
     return 1
+}
+
+# Name the requested version when --strict-profile ruled the others out.
+tv_profile_missing_note() {
+    [ "$STRICT_PROFILE" = true ] || return 0
+    echo "[ERROR] The TV SDK extension is not installed for ${TZ_PROFILE} (no tv-samsung-${TZ_PROFILE#tizen-} profile)." >&2
 }
 
 # Filter one `tz list templates` output (stdin) down to the template names of
@@ -781,6 +800,11 @@ main() {
             --path)           OPT_PATH="${2:-}"; shift 2 ;;
             --list-templates) LIST_ONLY=true; shift ;;
             --open)           OPEN_CODE=true; shift ;;
+            # Pin the profile (e.g. tizen-9.0) when several platforms are
+            # installed; overrides TIZEN_TZ_PROFILE, and detect_tz_profile keeps it.
+            --tz-profile=*)   TZ_PROFILE="${1#*=}"; shift ;;
+            --tz-profile)     TZ_PROFILE="${2:-}"; shift 2 ;;
+            --strict-profile) STRICT_PROFILE=true; shift ;;
             *)                shift ;;
         esac
     done

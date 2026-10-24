@@ -29,6 +29,10 @@ const {
   repairSdkInfo,
   describeSdkInfoRepair,
   describeChildExit,
+  validateTizenVersion,
+  isPlatformInstalled,
+  listFullyInstalledPlatformVersions,
+  comparePlatformVersions,
 } = require("./sdk");
 const {
   resolveSdbBinary,
@@ -348,6 +352,142 @@ function patchRpkManifestResType(projectPath) {
  *   (only when it is empty or looks like a Tizen project — never an arbitrary dir)
  * @returns {object} Standard JSON Envelope
  */
+/**
+ * Script arguments that pin create-project / list-templates to TIZEN-X.Y.
+ *
+ * With a version, it must be X.Y and installed (isPlatformInstalled: a
+ * platforms/tizen-X.Y/common directory alone is not a platform), otherwise
+ * `tz new -p tizen-X.Y` would fail later with a less helpful message.
+ * Without one, the newest installed platform is pinned — the same version
+ * platform-list reports as result.newest. The script's own detection (the
+ * highest tizen-X.Y section of `tz list templates`) also lists versions that
+ * hold only "common", so it is left to fall back on only when no platform
+ * passes isPlatformInstalled.
+ *
+ * @param {string} platformVersion - "X.Y", or "" for the newest installed one
+ * @param {string} command - envelope command name
+ * @param {number} startTime
+ * @returns {{win: string, unix: string, error?: object}} argument suffixes
+ *   (leading space included) or an error envelope
+ */
+function platformVersionArgs(platformVersion, command, startTime) {
+  if (!platformVersion) {
+    const newest = listFullyInstalledPlatformVersions(readSdkPath()).pop();
+    return newest ? tzProfileArgs(newest) : { win: "", unix: "" };
+  }
+  const check = validateTizenVersion(platformVersion, { required: true });
+  if (check.error) {
+    return {
+      error: formatError(
+        command,
+        "invalid_argument",
+        check.error,
+        null,
+        startTime,
+      ),
+    };
+  }
+  const version = check.version;
+  const sdkPath = readSdkPath();
+  if (!isPlatformInstalled(sdkPath, version)) {
+    const installed = listFullyInstalledPlatformVersions(sdkPath);
+    const install = `tizen-sdk platform-install --platform-version ${version}`;
+    return {
+      error: formatError(
+        command,
+        "platform_version_not_found",
+        `Platform TIZEN-${version} is not installed in ${sdkPath} (installed platforms: ${installed.join(", ") || "none"}). ` +
+          `Install it with "${install}", or omit --platform-version to use the newest installed platform.`,
+        install,
+        startTime,
+      ),
+    };
+  }
+  return { ...tzProfileArgs(version, true), version };
+}
+
+/**
+ * TIZEN versions whose Samsung TV extension is installed — the same test as
+ * detect_tv_profile / Detect-TvProfile: `tz` lists tv-samsung-X.Y AND the SDK
+ * has platforms/tizen-X.Y/tv-samsung or platforms/tv-samsung-X.Y. The tz
+ * profile list alone also names TV profiles whose extension is absent.
+ *
+ * @param {string} sdkPath
+ * @param {string[]} tzProfiles - profile names `tz list templates` reported
+ * @returns {string[]} "X.Y" versions
+ */
+function installedTvVersions(sdkPath, tzProfiles) {
+  return tzProfiles
+    .map((p) => /^tv-samsung-(\d+\.\d+)$/.exec(p))
+    .filter(Boolean)
+    .map((m) => m[1])
+    .filter((v) => hasTvExtensionDir(sdkPath, v));
+}
+
+/** Does the SDK have the TV extension directory of TIZEN-X.Y? */
+function hasTvExtensionDir(sdkPath, version) {
+  const isDir = (p) => {
+    try {
+      return fs.statSync(p).isDirectory();
+    } catch (_e) {
+      return false;
+    }
+  };
+  return (
+    isDir(path.join(sdkPath, "platforms", `tizen-${version}`, "tv-samsung")) ||
+    isDir(path.join(sdkPath, "platforms", `tv-samsung-${version}`))
+  );
+}
+
+/** "X.Y" versions with a TV extension directory, oldest first (no tz needed). */
+function tvVersionsOnDisk(sdkPath) {
+  let names = [];
+  try {
+    names = fs.readdirSync(path.join(sdkPath, "platforms"));
+  } catch (_e) {
+    return [];
+  }
+  const versions = new Set();
+  for (const name of names) {
+    const m = /^(?:tizen|tv-samsung)-(\d+\.\d+)$/i.exec(name);
+    if (m && hasTvExtensionDir(sdkPath, m[1])) versions.add(m[1]);
+  }
+  return [...versions].sort((a, b) => {
+    const [am, an] = a.split(".").map(Number);
+    const [bm, bn] = b.split(".").map(Number);
+    return am - bm || an - bn;
+  });
+}
+
+/**
+ * The message for an explicit --platform-version whose TV extension is
+ * missing — shared by create-project and list-templates so both point at the
+ * same fix: another version when one has the extension, tizen-tv-sdk-install
+ * otherwise.
+ */
+function tvVersionMissingMessage(version, installed) {
+  const others = installed.filter((v) => v !== version);
+  return others.length
+    ? `The Samsung TV SDK extension is not installed for TIZEN-${version} (installed for: ${others.join(", ")}). ` +
+        "Omit --platform-version to use the newest installed TV profile, or pass one of those versions."
+    : `The Samsung TV SDK extension is not installed for TIZEN-${version}. ` +
+        "Install it with tizen-tv-sdk-install, or omit --platform-version.";
+}
+
+/**
+ * The --tz-profile / -TzProfile suffixes for TIZEN-X.Y (leading space
+ * included). `strict` adds --strict-profile / -StrictProfile for a version the
+ * user asked for: TV projects then use tv-samsung-X.Y or fail, instead of the
+ * newest TV profile the scripts pick otherwise (an SDK whose newest platform is
+ * 11.0 can have the TV extension on 10.0 only, so the default pin stays loose).
+ */
+function tzProfileArgs(version, strict = false) {
+  return {
+    win: ` -TzProfile "tizen-${version}"${strict ? " -StrictProfile" : ""}`,
+    unix: ` --tz-profile=tizen-${version}${strict ? " --strict-profile" : ""}`,
+  };
+}
+
 async function createProject(
   type,
   template,
@@ -356,6 +496,7 @@ async function createProject(
   force = false,
   command = "tizen-sdk create-project",
   open = false,
+  platformVersion = "",
 ) {
   // Start time: pass to success/failure responses so duration_ms reflects actual work time
   const startTime = Date.now();
@@ -516,6 +657,33 @@ async function createProject(
       return formatError(command, "io_error", resolved.error, null, startTime);
     }
 
+    const versionArgs = platformVersionArgs(
+      platformVersion,
+      command,
+      startTime,
+    );
+    if (versionArgs.error) return versionArgs.error;
+
+    // A TV project for an explicit version needs that version's TV extension.
+    // Without this check the script failed later with "Install TV SDK
+    // extension first" and an empty template list — the wrong fix when the
+    // extension is installed for another version.
+    if (type.toLowerCase() === "tv" && versionArgs.version) {
+      const sdkPath = readSdkPath();
+      if (!hasTvExtensionDir(sdkPath, versionArgs.version)) {
+        return formatError(
+          command,
+          "platform_version_not_found",
+          tvVersionMissingMessage(
+            versionArgs.version,
+            tvVersionsOnDisk(sdkPath),
+          ),
+          null,
+          startTime,
+        );
+      }
+    }
+
     // All validation passed — now (and only now) clear the existing target.
     if (replaceExisting) {
       console.error(
@@ -545,8 +713,8 @@ async function createProject(
       // The scripts only launch `code` (workspace open) when explicitly asked.
       output = execPluginScript(
         resolved.scriptPath,
-        `-Type "${type}" -Template "${template}" -Path "${winPath}" -Name "${appName}"${open ? " -Open" : ""}`,
-        `--type="${type}" --template="${template}" --path="${normalizedParentPath}" --name="${appName}"${open ? " --open" : ""}`,
+        `-Type "${type}" -Template "${template}" -Path "${winPath}" -Name "${appName}"${open ? " -Open" : ""}${versionArgs.win}`,
+        `--type="${type}" --template="${template}" --path="${normalizedParentPath}" --name="${appName}"${open ? " --open" : ""}${versionArgs.unix}`,
       );
     } catch (error) {
       return formatError(
@@ -1402,7 +1570,11 @@ async function buildProject(
  *   result.profile = tz profile listed under, and result.tv = { profile, web, dotnet }
  *   when the TV SDK is installed (absent otherwise) — present for typed lists too.
  */
-async function listTemplates(type, command = "tizen-sdk list-templates") {
+async function listTemplates(
+  type,
+  command = "tizen-sdk list-templates",
+  platformVersion = "",
+) {
   const envelope = new Envelope(command);
   try {
     if (type && !VALID_PROJECT_TYPES.includes(type.toLowerCase())) {
@@ -1426,8 +1598,15 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
       );
     }
 
-    const winArgs = `-ListTemplates${type ? ` -Type ${type.toLowerCase()}` : ""}`;
-    const unixArgs = `--list-templates${type ? ` --type=${type.toLowerCase()}` : ""}`;
+    const versionArgs = platformVersionArgs(
+      platformVersion,
+      command,
+      envelope.startTime,
+    );
+    if (versionArgs.error) return versionArgs.error;
+
+    const winArgs = `-ListTemplates${type ? ` -Type ${type.toLowerCase()}` : ""}${versionArgs.win}`;
+    const unixArgs = `--list-templates${type ? ` --type=${type.toLowerCase()}` : ""}${versionArgs.unix}`;
     const output = execPluginScript(resolved.scriptPath, winArgs, unixArgs);
 
     // Debug: log raw script output to stderr for troubleshooting parse failures
@@ -1513,10 +1692,36 @@ async function listTemplates(type, command = "tizen-sdk list-templates") {
           platform:
             "No GBS platform sample apps ship with this plugin version.",
         };
+        // An explicit version with the TV extension only on other versions is
+        // not "TV SDK not installed": tizen-tv-sdk-install would not fix it.
+        if (key === "tv" && versionArgs.version) {
+          const installed = installedTvVersions(readSdkPath(), profiles);
+          if (installed.includes(versionArgs.version)) {
+            // Installed, yet tz lists no TV template under it. The installer
+            // has no version option, so --force may reinstall another version.
+            // Omitting the version helps only when a newer one exists: the
+            // newest-first scan would otherwise pick this version again.
+            const version = versionArgs.version;
+            const others = installed.filter((v) => v !== version);
+            const newer = others.some(
+              (v) => comparePlatformVersions(v, version) > 0,
+            );
+            let next = ` Run it if the repository's TV package is for TIZEN-${version}.`;
+            if (others.length) {
+              next = ` To use a complete one, ${newer ? "omit --platform-version or " : ""}pass one of: ${others.join(", ")}.`;
+            }
+            hints.tv =
+              `The Samsung TV SDK extension is installed for TIZEN-${version}, but tz lists no TV templates for it — the extension may be incomplete. ` +
+              "tizen-tv-sdk-install --force reinstalls the repository's current TV package, which may target another version." +
+              next;
+          } else if (installed.length) {
+            hints.tv = tvVersionMissingMessage(versionArgs.version, installed);
+          }
+        }
         const hint =
           hints[key] ||
           `The platform package for${where || " that profile"} may be missing or incomplete — run tizen-platform-install (or tizen-update-package), then retry. ` +
-            "Set TIZEN_TZ_PROFILE=<profile> to list under a different installed profile.";
+            "Pass --platform-version <X.Y> to list the templates of another installed platform.";
         return formatError(
           command,
           "template_not_found",
@@ -2356,4 +2561,6 @@ module.exports = {
   patchRpkManifestResType,
   // Exported for tests — the RDS "is this package the Debug output" gate.
   isRdsTrackedPackage,
+  // Exported for tests — the --platform-version / default-platform hand-off.
+  platformVersionArgs,
 };

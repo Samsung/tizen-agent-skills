@@ -11,7 +11,7 @@
 # - Auto-detects the latest TIZEN-X.Y platform (or uses -PlatformVersion)
 # - Resolves TIZEN-{version} and its Install-dependency packages
 # - Downloads each from (repo + Path) and merges data\ into the SDK root
-# - Creates .platform-installed marker on success
+# - Records the version in .platform-installed on success (.platform-installing-X.Y while in progress)
 
 param(
     [string]$SdkPath = "",
@@ -67,7 +67,7 @@ What it does:
   4) Auto-detects latest TIZEN-X.Y platform (or uses -PlatformVersion)
   5) Resolves TIZEN-{version} and its Install-dependency packages
   6) Downloads each from (repo + Path) and merges data\ into the SDK root
-  7) Creates .platform-installed marker on success
+  7) Records TIZEN-X.Y in .platform-installed on success (.platform-installing-X.Y marks a run in progress)
 
 Examples:
   .\tizen-platform-install.ps1
@@ -109,30 +109,18 @@ if (-not (Test-Path $pkgInfoDir)) {
 }
 Write-Success "Package directory found: $pkgInfoDir"
 
-# Check mode / skip if already installed (only if marker version matches requested version)
+# .platform-installed is a history of completed installs (one block per
+# version); .platform-installing-X.Y marks a run that has not finished yet.
 $platformPkgMarkerPath = Join-Path $SdkPath ".platform-installed"
-if ((Test-Path $platformPkgMarkerPath) -and -not $Force) {
-    # Read the marker to check which platform version was installed
-    $markerVersion = $null
-    foreach ($mline in [System.IO.File]::ReadAllLines($platformPkgMarkerPath)) {
-        if ($mline -match '^Platform version:\s*(.+)$') {
-            $markerVersion = $Matches[1].Trim()
-            break
-        }
-    }
 
-    if ($markerVersion -and $PlatformVersion -and $markerVersion -eq $PlatformVersion) {
-        Write-Success "Platform package TIZEN-$PlatformVersion is already installed: $SdkPath"
-        Write-Info ".platform-installed found (version $markerVersion). To reinstall, run again with -Force"
-        exit 0
-    } else {
-        Write-Info ".platform-installed found but for version '$markerVersion', requested '$PlatformVersion'. Proceeding with installation."
-    }
-}
-
-if ($Force) {
-    Write-Warn "Force reinstall requested - removing .platform-installed marker"
-    Remove-Item $platformPkgMarkerPath -Force -ErrorAction SilentlyContinue
+# Skip when THIS version is already installed (Test-PlatformInstalled,
+# lib\common.ps1). Other installed versions do not matter: several TIZEN-X.Y
+# live side by side. Without -PlatformVersion the version is resolved from
+# pkg_list below and checked again there.
+if ($PlatformVersion -and -not $Force -and (Test-PlatformInstalled -SdkPath $SdkPath -Version $PlatformVersion)) {
+    Write-Success "Platform package TIZEN-$PlatformVersion is already installed: $(Join-Path $SdkPath "platforms\tizen-$PlatformVersion")"
+    Write-Info "To reinstall, run again with -Force"
+    exit 0
 }
 
 # -----------------------------------------------------------------------------
@@ -254,6 +242,14 @@ if (-not $db.ContainsKey($TargetPackage)) {
 
 Write-Success "Target package found: $TargetPackage (version $($db[$TargetPackage].Version))"
 
+# The auto-detected version may already be installed too.
+if (-not $Force -and (Test-PlatformInstalled -SdkPath $SdkPath -Version $PlatformVersion)) {
+    Write-Success "Platform package TIZEN-$PlatformVersion is already installed: $(Join-Path $SdkPath "platforms\tizen-$PlatformVersion")"
+    Write-Info "To reinstall, run again with -Force"
+    Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    exit 0
+}
+
 # Recursively resolve dependencies
 Write-Info "Resolving dependencies (transitive Install-dependency)..."
 $resolved = New-Object System.Collections.Generic.List[string]
@@ -328,6 +324,12 @@ if ($DryRun) {
     Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 0
 }
+
+# Mark the run in progress before anything lands under platforms\: until it
+# succeeds, a half-filled platforms\tizen-X.Y must not count as installed.
+# A failed or interrupted run leaves the marker; re-running resumes it.
+$platformInstallingMarkerPath = Join-Path $SdkPath ".platform-installing-$PlatformVersion"
+Set-Content -Path $platformInstallingMarkerPath -Value "Platform install started at $(Get-Date -Format 'o')" -Encoding UTF8
 
 # Download and merge each package
 if (-not (Test-Path $SdkPath)) {
@@ -410,16 +412,22 @@ Write-Info "Extraction phase took $(Format-Duration $extractTimer.Elapsed)"
 Write-Success "Platform package result: OK $ok / skipped $skip / failed $fail (total $total)"
 
 if ($fail -gt 0) {
-    Write-Err "Some packages failed to install. Not creating .platform-installed marker."
+    Write-Err "Some packages failed to install. Keeping $platformInstallingMarkerPath; re-run to resume."
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
     Write-Info "Total time: $(Format-Duration $scriptTimer.Elapsed)"
     exit 1
 }
 
-# Create .platform-installed marker
-$markerContent = "Platform package installed at $(Get-Date -Format 'o')`nTarget: $TargetPackage`nPlatform version: $PlatformVersion`n"
-Set-Content -Path $platformPkgMarkerPath -Value $markerContent -Encoding UTF8
-Write-Success ".platform-installed created: $platformPkgMarkerPath"
+# Completed: drop the in-progress marker and record the version in the history
+# (once per version; the other versions' entries stay).
+Remove-Item $platformInstallingMarkerPath -Force -ErrorAction SilentlyContinue
+$recorded = (Test-Path $platformPkgMarkerPath) -and
+    ([System.IO.File]::ReadAllLines($platformPkgMarkerPath) -contains "Platform version: $PlatformVersion")
+if (-not $recorded) {
+    $markerContent = "Platform package installed at $(Get-Date -Format 'o')`nTarget: $TargetPackage`nPlatform version: $PlatformVersion`n"
+    Add-Content -Path $platformPkgMarkerPath -Value $markerContent -Encoding UTF8 -NoNewline
+}
+Write-Success "TIZEN-$PlatformVersion recorded in $platformPkgMarkerPath"
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
 Write-Success "Tizen platform package installation completed!"

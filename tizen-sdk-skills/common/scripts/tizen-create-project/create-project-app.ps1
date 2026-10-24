@@ -18,7 +18,9 @@ param(
     [string]$Name,
     [string]$Path,
     [switch]$ListTemplates,
-    [switch]$Open
+    [switch]$Open,
+    [string]$TzProfile,            # pin the profile (e.g. tizen-9.0); overrides TIZEN_TZ_PROFILE
+    [switch]$StrictProfile         # TzProfile was requested by the user: TV detection may not fall back to another version
 )
 
 # Configuration
@@ -61,12 +63,12 @@ $TZ_TYPE = @{
 # scoped to it, so what we list is exactly what `tz new` can create. It is
 # DETECTED from the installed SDK (issue #72: a hardcoded tizen-10.0 made an
 # SDK that ships tizen-11.0 list zero templates, exit 0 - "webapp: []"):
-#   TIZEN_TZ_PROFILE env override
+#   -TzProfile (the Node runner's --platform-version) / TIZEN_TZ_PROFILE env override
 #   -> highest tizen-X.Y section in `tz list templates`
 #   -> highest platforms\tizen-* directory
 #   -> tizen-10.0
 # Resolved in the main block once $TZ_TOOL is known (Detect-TzProfile).
-$TZ_PROFILE = if ($env:TIZEN_TZ_PROFILE) { $env:TIZEN_TZ_PROFILE } else { '' }
+$TZ_PROFILE = if ($TzProfile) { $TzProfile } elseif ($env:TIZEN_TZ_PROFILE) { $env:TIZEN_TZ_PROFILE } else { '' }
 
 function Get-TzProfileSections {
     # Profile section headers of `tz list templates`, e.g. "tizen-10.0".
@@ -151,8 +153,10 @@ function Detect-TvProfile {
     # Studio layout) or platforms/tv-samsung-<ver> - NOT necessarily under the
     # tizen-X.Y profile used for non-TV projects: an SDK whose newest platform
     # is tizen-11.0 with the TV extension on tizen-10.0 used to be reported as
-    # "TV SDK not installed". Returns $null when none is installed. Mirrors
-    # detect_tv_profile in create-project-app.sh.
+    # "TV SDK not installed". Returns $null when none is installed. With
+    # -StrictProfile (the user asked for a platform version) only the TV
+    # profile of that version qualifies. Mirrors detect_tv_profile in
+    # create-project-app.sh.
     $output = & $TZ_TOOL list templates 2>$null
     if ($LASTEXITCODE -ne 0) { return $null }
 
@@ -164,6 +168,12 @@ function Detect-TvProfile {
 
     $candidates = @($profiles |
         Sort-Object { [version]($_ -replace '^tv-samsung-', '') } -Descending)
+    $wanted = "tv-samsung-" + ($TZ_PROFILE -replace '^tizen-', '')
+    if ($StrictProfile) { $candidates = @($candidates | Where-Object { $_ -eq $wanted }) }
+    if ($candidates.Count -eq 0) {
+        if ($StrictProfile) { [Console]::Error.WriteLine("[ERROR] The TV SDK extension is not installed for $TZ_PROFILE (no $wanted profile).") }
+        return $null
+    }
 
     foreach ($p in $candidates) {
         $ver = $p -replace '^tv-samsung-', ''
@@ -176,6 +186,7 @@ function Detect-TvProfile {
     if (Test-Path (Join-Path $TIZEN_STUDIO_PATH "platforms/$TZ_PROFILE/tv-samsung") -PathType Container) {
         return $candidates[0]
     }
+    if ($StrictProfile) { [Console]::Error.WriteLine("[ERROR] The TV SDK extension is not installed for $TZ_PROFILE (no $wanted profile).") }
     return $null
 }
 

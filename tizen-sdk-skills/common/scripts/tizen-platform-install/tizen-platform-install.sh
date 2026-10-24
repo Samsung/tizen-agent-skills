@@ -11,7 +11,7 @@
 # - Auto-detects the latest TIZEN-X.Y platform (or uses --platform-version)
 # - Resolves TIZEN-{version} and its Install-dependency packages
 # - Downloads each from (repo + Path) and merges data/ into the SDK root
-# - Creates .platform-installed marker on success
+# - Records the version in .platform-installed on success (.platform-installing-X.Y while in progress)
 
 set -euo pipefail
 
@@ -73,7 +73,7 @@ What it does:
   4) Auto-detects latest TIZEN-X.Y platform (or uses --platform-version)
   5) Resolves TIZEN-{version} and its Install-dependency packages
   6) Downloads each from (repo + Path) and merges data/ into the SDK root
-  7) Creates .platform-installed marker on success
+  7) Records TIZEN-X.Y in .platform-installed on success (.platform-installing-X.Y marks a run in progress)
 EOF
             exit 0 ;;
         *) log_error "Unknown option: $1"; exit 1 ;;
@@ -114,31 +114,18 @@ if [[ ! -d "$PKG_INFO_DIR" ]]; then
 fi
 log_ok "Package directory found: $PKG_INFO_DIR"
 
-# Check mode / skip if already installed (only if marker version matches requested version)
+# .platform-installed is a history of completed installs (one block per
+# version); .platform-installing-X.Y marks a run that has not finished yet.
 PLATFORM_PKG_MARKER="${SDK_PATH}/.platform-installed"
-if [[ -f "$PLATFORM_PKG_MARKER" && "$FORCE" == "false" ]]; then
-    # Read the marker to check which platform version was installed
-    MARKER_VERSION=""
-    while IFS= read -r mline; do
-        if [[ "$mline" =~ ^Platform\ version:\ *(.+)$ ]]; then
-            MARKER_VERSION="${BASH_REMATCH[1]//$'\r'/}"
-            MARKER_VERSION="${MARKER_VERSION#"${MARKER_VERSION%%[![:space:]]*}"}"
-            break
-        fi
-    done < "$PLATFORM_PKG_MARKER"
 
-    if [[ -n "$MARKER_VERSION" && -n "$PLATFORM_VERSION" && "$MARKER_VERSION" == "$PLATFORM_VERSION" ]]; then
-        log_ok "Platform package TIZEN-$PLATFORM_VERSION is already installed: $SDK_PATH"
-        log_info ".platform-installed found (version $MARKER_VERSION). To reinstall, run again with --force"
-        exit 0
-    else
-        log_info ".platform-installed found but for version '$MARKER_VERSION', requested '$PLATFORM_VERSION'. Proceeding with installation."
-    fi
-fi
-
-if [[ "$FORCE" == "true" ]]; then
-    log_warn "Force reinstall requested — removing .platform-installed marker"
-    rm -f "$PLATFORM_PKG_MARKER"
+# Skip when THIS version is already installed (platform_installed,
+# lib/common.sh). Other installed versions do not matter: several TIZEN-X.Y
+# live side by side. Without --platform-version the version is resolved from
+# pkg_list below and checked again there.
+if [[ -n "$PLATFORM_VERSION" && "$FORCE" == "false" ]] && platform_installed "$SDK_PATH" "$PLATFORM_VERSION"; then
+    log_ok "Platform package TIZEN-$PLATFORM_VERSION is already installed: $SDK_PATH/platforms/tizen-$PLATFORM_VERSION"
+    log_info "To reinstall, run again with --force"
+    exit 0
 fi
 
 # -----------------------------------------------------------------------------
@@ -266,6 +253,14 @@ fi
 
 log_ok "Target package found: $TARGET_PACKAGE (version ${PKG_VERSION[$TARGET_PACKAGE]})"
 
+# The auto-detected version may already be installed too.
+if [[ "$FORCE" == "false" ]] && platform_installed "$SDK_PATH" "$PLATFORM_VERSION"; then
+    log_ok "Platform package TIZEN-$PLATFORM_VERSION is already installed: $SDK_PATH/platforms/tizen-$PLATFORM_VERSION"
+    log_info "To reinstall, run again with --force"
+    rm -rf "$WORKDIR"
+    exit 0
+fi
+
 # -----------------------------------------------------------------------------
 # Recursively resolve dependencies
 # -----------------------------------------------------------------------------
@@ -344,6 +339,12 @@ if [[ "$DRY_RUN" == "true" ]]; then
     log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 0
 fi
+
+# Mark the run in progress before anything lands under platforms/: until it
+# succeeds, a half-filled platforms/tizen-X.Y must not count as installed.
+# A failed or interrupted run leaves the marker; re-running resumes it.
+PLATFORM_INSTALLING_MARKER="${SDK_PATH}/.platform-installing-${PLATFORM_VERSION}"
+echo "Platform install started at $(date -Iseconds)" > "$PLATFORM_INSTALLING_MARKER"
 
 # -----------------------------------------------------------------------------
 # Download and merge each package
@@ -475,17 +476,23 @@ log_info "Extraction phase took $(format_duration $((SECONDS - EXTRACT_START)))"
 log_ok "Platform package result: OK $OK / skipped $SKIP / failed $FAIL (total $TOTAL)"
 
 if [[ $FAIL -gt 0 ]]; then
-    log_error "Some packages failed to install. Not creating .platform-installed marker."
+    log_error "Some packages failed to install. Keeping $PLATFORM_INSTALLING_MARKER; re-run to resume."
     rm -rf "$WORKDIR"
     log_info "Total time: $(format_duration $((SECONDS - SCRIPT_START)))"
     exit 1
 fi
 
-# Create .platform-installed marker
-echo "Platform package installed at $(date -Iseconds)" > "$PLATFORM_PKG_MARKER"
-echo "Target: $TARGET_PACKAGE" >> "$PLATFORM_PKG_MARKER"
-echo "Platform version: $PLATFORM_VERSION" >> "$PLATFORM_PKG_MARKER"
-log_ok ".platform-installed created: $PLATFORM_PKG_MARKER"
+# Completed: drop the in-progress marker and record the version in the history
+# (once per version; the other versions' entries stay).
+rm -f "$PLATFORM_INSTALLING_MARKER"
+if ! grep -qxF "Platform version: $PLATFORM_VERSION" "$PLATFORM_PKG_MARKER" 2>/dev/null; then
+    {
+        echo "Platform package installed at $(date -Iseconds)"
+        echo "Target: $TARGET_PACKAGE"
+        echo "Platform version: $PLATFORM_VERSION"
+    } >> "$PLATFORM_PKG_MARKER"
+fi
+log_ok "TIZEN-$PLATFORM_VERSION recorded in $PLATFORM_PKG_MARKER"
 
 rm -rf "$WORKDIR"
 log_ok "Tizen platform package installation completed!"

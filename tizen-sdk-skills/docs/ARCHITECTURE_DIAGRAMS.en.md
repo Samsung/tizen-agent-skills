@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (29 skills, 24 agents, 35 commands, 61 error codes, 290 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.4.5). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (29 skills, 24 agents, 36 commands, 61 error codes, 290 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.4.5). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -22,7 +22,7 @@ graph TB
         CODEX["Codex CLI<br/>skills + agents(.toml) + hooks.json"]
         GEMINI["Gemini CLI<br/>skills + agents + BeforeTool adapter"]
         VSCODE["VS Code extension<br/>installs & syncs the plugin for Claude/Cline/Codex"]
-        CLI["tizen-sdk standalone CLI<br/>runs all 35 commands without an AI host"]
+        CLI["tizen-sdk standalone CLI<br/>runs all 36 commands without an AI host"]
     end
 
     subgraph COMMON["common/ — single source of truth"]
@@ -334,7 +334,7 @@ graph LR
         I1["--schema<br/>command catalog (generated from commander)"]
         I2["--doctor<br/>SDK path · cache · runner status"]
         I3["--capabilities<br/>commands usable right now"]
-        I4["&lt;command&gt; [options]<br/>run one of 35 flat commands"]
+        I4["&lt;command&gt; [options]<br/>run one of 36 flat commands"]
     end
 
     ADAPT["envelope-adapter.ts<br/>inner Envelope → tizen-cli Envelope<br/>records user_command · never process.exit"]
@@ -357,15 +357,15 @@ graph LR
 
 ---
 
-## 8. Command Domains (35)
+## 8. Command Domains (36)
 
 Skills are named `tizen-<command>`; the CLI form is `tizen-sdk <command>`. The exact correspondence is in [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md).
 
 ```mermaid
 graph LR
-    ROOT["tizen-sdk<br/>35 commands"]
+    ROOT["tizen-sdk<br/>36 commands"]
 
-    ROOT --> SDK["SDK (13)"]
+    ROOT --> SDK["SDK (14)"]
     ROOT --> CHECK["Check (2)"]
     ROOT --> PROJECT["Project (5)"]
     ROOT --> DEVICE["Device (9)"]
@@ -373,7 +373,7 @@ graph LR
     ROOT --> TEST["Test (1)"]
     ROOT --> CERT["Certificate (1)"]
 
-    SDK --> SDK_CMDS["sdk-init<br/>sdk-install<br/>sdk-install-custom-repo<br/>validate-repo-url<br/>sdk-repo-info<br/>tv-sdk-install<br/>tv-sdk-install-from-zip<br/>update-package<br/>platform-install<br/>download-emulator-package<br/>download-mobile-platform<br/>install-rootstrap<br/>dotnet-setup"]
+    SDK --> SDK_CMDS["sdk-init<br/>sdk-install<br/>sdk-install-custom-repo<br/>validate-repo-url<br/>sdk-repo-info<br/>tv-sdk-install<br/>tv-sdk-install-from-zip<br/>update-package<br/>platform-install<br/>platform-list<br/>download-emulator-package<br/>download-mobile-platform<br/>install-rootstrap<br/>dotnet-setup"]
     CHECK --> CHECK_CMDS["check-node<br/>check-disk-space"]
     PROJECT --> PROJECT_CMDS["create-project<br/>list-templates<br/>import-wgt<br/>build-project<br/>project-delete"]
     DEVICE --> DEVICE_CMDS["create-emulator<br/>launch-emulator<br/>emulator-manager<br/>device-manager<br/>install-app<br/>sdb-helper<br/>screenshot<br/>file-transfer<br/>remote-device"]
@@ -498,7 +498,7 @@ How to run the TC suite and the per-tier caveats are in [tests/README.md](../tes
 
 ## Related Documents
 
-- [README.md](../README.md) — project overview, quick start, the 35-command table, "Project at a Glance"
+- [README.md](../README.md) — project overview, quick start, the 36-command table, "Project at a Glance"
 - [SDK_LAYERS_OVERVIEW.en.md](SDK_LAYERS_OVERVIEW.en.md) — why the intermediate layers (CLI runner → sdk-commands → plugin-cache → script) exist
 - [SDK_COMMANDS_ARCHITECTURE.en.md](SDK_COMMANDS_ARCHITECTURE.en.md) — full call flow and runner-to-function mapping
 - [SKILLS_REFERENCE.en.md](SKILLS_REFERENCE.en.md) — trigger phrases, parameters and response formats per skill

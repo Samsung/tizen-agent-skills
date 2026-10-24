@@ -81,6 +81,7 @@ module.exports = {
   updatePackage: sdk.updatePackage,
   downloadEmulatorPackage: sdk.downloadEmulatorPackage,
   installPlatform: sdk.installPlatform,
+  listPlatforms: sdk.listPlatforms,
   readSdkPath: sdk.readSdkPath,
   getRepoInfo: sdk.getRepoInfo,
   downloadMobilePlatform: sdk.downloadMobilePlatform,

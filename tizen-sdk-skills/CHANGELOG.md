@@ -13,6 +13,26 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Added
 
+- **Manage several Tizen platform versions side by side** (`common/lib/core/sdk.js`,
+  `common/lib/core/project.js`, `common/lib/cli/platform-install-cli.js`,
+  `common/lib/cli/project-manager-cli.js`, `common/scripts/tizen-create-project/create-project-app.sh`,
+  `.ps1`, `tizen-cli/src/command-specs/sdk.ts`, `project.ts`,
+  `common/lib/tests/multi-platform.test.js`). After adding 9.0 next to 10.0 there was no way
+  to see which versions were installed, and projects were always created for the newest one.
+  - `platform-install-cli.js --list` (tizen-cli `platform-list`, a new read-only command)
+    reports one entry per `platforms/tizen-X.Y`: `installed`, `incomplete` (an unfinished
+    `platform-install`) or `not_installed` (no platform payload: only the shared `common`
+    data the base SDK ships for older versions, or synced template samples), with its profiles (`tizen`, `tv-samsung`, …) and emulator images, plus
+    `result.newest`.
+  - `create` and `list-templates` take `--platform-version <X.Y>` and pass it to the script
+    as `--tz-profile=tizen-X.Y` / `-TzProfile`. A version that is not installed fails with
+    `platform_version_not_found` and names the `platform-install` command. Without it both
+    pin the newest installed platform (`result.newest`). Before, the script picked the highest
+    `tizen-X.Y` section of `tz list templates`, which also lists versions that hold only
+    `common`. For `--type tv`, an explicit version also selects `tv-samsung-X.Y`
+    (`--strict-profile` / `-StrictProfile`) and fails when that TV extension is missing, naming
+    the versions that do have it (`create` checks this before it runs the script); without one,
+    TV keeps the newest installed TV profile.
 - **PR check** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, repository-root
   `ci.yml`). Checks the files a pull request changes against the mechanical rules in
   `AGENTS.md` and `CONTRIBUTING.md` — version sync, secrets and private addresses, paired
@@ -53,6 +73,29 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **A platform version counts as installed only when it really is**
+  (`common/lib/core/sdk.js`, `common/scripts/lib/common.sh`, `.ps1`,
+  `common/scripts/tizen-platform-install/tizen-platform-install.sh`, `.ps1`,
+  `common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`).
+  - `tizen-platform-install` decided "already installed" from `.platform-installed`, which
+    held one version and was overwritten by the next install, so it re-downloaded versions
+    that were present (such as the base SDK's 10.0) and `--force` wiped the record of the
+    others.
+  - The new rule, shared by the pre-check and both scripts (`isPlatformInstalled`,
+    `platform_installed`, `Test-PlatformInstalled`): `platforms/tizen-X.Y` holds a profile
+    besides `common` with content besides `samples` (rootstraps, emulator images, …), and no
+    `.platform-installing-X.Y` is left. `samples` is excluded because `tizen-create-project`
+    syncs its templates into `platforms/<profile>/tizen/samples`, which created that profile
+    directory for a version whose platform was never installed.
+  - `common` matters because the base SDK ships `platforms/tizen-X.Y/common` for older API
+    versions: `tizen-sdk-install --platform 9.0` and its pre-check used to report such a
+    9.0 as already installed.
+  - The installer now writes `.platform-installing-X.Y` before it installs and removes it
+    on success, so a failed run is not mistaken for a finished one and a re-run resumes.
+    `.platform-installed` became a history that gains one entry per version and is no
+    longer wiped by `--force`.
+  - Known limit: a run that failed before this change left no in-progress marker; re-run
+    it with `--force` if that version looks installed but is not.
 - **TV SDK installs now work under Cline and keep `--force`**
   (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
   `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`, `.ps1`,

@@ -51,6 +51,11 @@ export const PROJECT_SPECS: CommandSpec[] = [
         description:
           "Open the generated .code-workspace in VS Code after creation (default: create only, no window switch)",
       },
+      {
+        flags: "--platform-version <version>",
+        description:
+          "Installed Tizen platform to use, X.Y (e.g. 9.0). Omit for the newest installed platform. A version that is not installed fails with platform_version_not_found.",
+      },
     ],
     handler: (o) =>
       sdkCommands.createProject(
@@ -61,6 +66,7 @@ export const PROJECT_SPECS: CommandSpec[] = [
         !!o.force,
         "tizen-sdk create-project",
         !!o.open,
+        o.platformVersion,
       ),
   },
   {
@@ -103,9 +109,18 @@ export const PROJECT_SPECS: CommandSpec[] = [
         description: "Filter by project type (omit for all)",
         choices: PROJECT_TYPES,
       },
+      {
+        flags: "--platform-version <version>",
+        description:
+          "Installed Tizen platform to use, X.Y (e.g. 9.0). Omit for the newest installed platform. A version that is not installed fails with platform_version_not_found.",
+      },
     ],
     handler: (o) =>
-      sdkCommands.listTemplates(o.type, "tizen-sdk list-templates"),
+      sdkCommands.listTemplates(
+        o.type,
+        "tizen-sdk list-templates",
+        o.platformVersion,
+      ),
   },
   {
     name: "import-wgt",

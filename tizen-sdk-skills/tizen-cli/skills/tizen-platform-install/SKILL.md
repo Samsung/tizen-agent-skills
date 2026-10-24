@@ -1,9 +1,9 @@
 ---
 name: tizen-platform-install
-description: Install Tizen platform, platform install, 플랫폼 설치, 플랫폼 설치해줘, 타이젠 플랫폼 설치, Tizen platform package, TIZEN-Version platform, platform package download, 플랫폼 패키지 설치. Use this skill to download and install the Tizen platform package (TIZEN-{version}) from the Tizen package repository. Reads the repository URL from repository.info. Requires Tizen SDK to be installed first.
+description: Install Tizen platform, platform install, 플랫폼 설치, 플랫폼 설치해줘, 타이젠 플랫폼 설치, Tizen platform package, TIZEN-Version platform, platform package download, 플랫폼 패키지 설치, 설치된 플랫폼, 설치된 버전 목록, installed platforms, list platforms. Use this skill to download and install the Tizen platform package (TIZEN-{version}) from the Tizen package repository — several versions live side by side — and to list the installed versions (platform-list). Reads the repository URL from repository.info. Requires Tizen SDK to be installed first.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-08-13"
+  last-updated: "2026-10-24"
   keywords:
     - platform install
     - Tizen platform
@@ -12,12 +12,27 @@ metadata:
     - 플랫폼 패키지
     - repository.info
     - platform package
+    - platform-list
+    - 설치된 플랫폼
 ---
 
 # Tizen Platform Package Install
 
 ## When to use
-The user asks to download / install the Tizen platform package (TIZEN-{version}). The base Tizen SDK must already be installed (`tizen-cli tizen-sdk sdk-install` returns success).
+The user asks to download / install the Tizen platform package (TIZEN-{version}), or which platform versions are installed. The base Tizen SDK must already be installed (`tizen-cli tizen-sdk sdk-install` returns success).
+
+## List installed platforms (read-only)
+
+```
+tizen-cli tizen-sdk platform-list
+```
+
+No options. `result.platforms` has one entry per `platforms/tizen-X.Y`, oldest first:
+
+- `status`: `installed`; `incomplete` (an unfinished `platform-install` — re-run it to resume); or `not_installed` (the directory holds no platform payload — only the shared `common` data the base SDK ships for older versions, or synced template `samples` — so that version can still be installed)
+- `profiles` (e.g. `tizen`, `tv-samsung`) and `emulator_images`
+
+`result.newest` is the version `create-project` / `list-templates` use when no `--platform-version` is given.
 
 ## Command
 
@@ -34,7 +49,7 @@ tizen-cli tizen-sdk platform-install
 ## Two-phase flow (same pattern as sdk-install / tv-sdk-install)
 
 1. **Phase 1 — pre-check**: run the command.
-   - `status: "success"` → platform package already installed.
+   - `status: "success"` → that version is already installed. Other installed versions do not matter: 9.0 can be added next to 10.0.
    - `status: "failure"` with `suggested_fix` → run `errors[0].suggested_fix.command` with the Bash tool using `run_in_background: true` (download can take several minutes; installer output is plain text, not JSON).
    - `status: "failure"` mentioning the base SDK → run `tizen-cli tizen-sdk sdk-install` first.
 2. **Verify**: re-run `tizen-cli tizen-sdk platform-install` and confirm `status: "success"`.
@@ -46,7 +61,7 @@ tizen-cli tizen-sdk platform-install
 3. Auto-detects the latest TIZEN-X.Y platform (or uses the specified `--platform-version`)
 4. Resolves `TIZEN-{version}` and all its Install-dependency packages
 5. Downloads and merges each package into the SDK root
-6. Creates `.platform-installed` marker on success
+6. Marks the run with `.platform-installing-X.Y`; on success removes it and appends the version to the `.platform-installed` history. A version counts as installed when `platforms/tizen-X.Y` holds a profile besides `common` with content besides the synced `samples` (rootstraps, emulator images, …) and no `.platform-installing-X.Y` is left.
 
 ## Output
 - Success `result`: platform package/installation status.

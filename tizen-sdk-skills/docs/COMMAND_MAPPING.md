@@ -87,6 +87,7 @@ same shape: `tizen-sdk sdk-status` (internal SDK status probe),
 | `certificate-manager` (get-sdk-data-path)        | `tizen-sdk certificate-manager get-sdk-data-path`   | `certificate.getCertificateSdkDataPath`     |
 | `certificate-manager` (Samsung / DUID actions)   | `tizen-sdk certificate-manager <action>`            | `samsung-cert.*`, `certificate.*`           |
 | `platform-install`                               | `tizen-sdk platform-install`                        | `sdk.installPlatform`                       |
+| `platform-list`                                  | `tizen-sdk platform-list`                           | `sdk.listPlatforms`                         |
 | `download-mobile-platform`                       | `tizen-sdk download-mobile-platform`                | `sdk.downloadMobilePlatform`                |
 | `install-rootstrap`                              | `tizen-sdk install-rootstrap`                       | `sdk.installRootstrap`                      |
 | `dlog-analyzer` (start)                          | `tizen-sdk dlog-analyzer start`                     | `sdkCommands.startDlogAnalyzer`             |

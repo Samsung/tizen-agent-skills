@@ -2,9 +2,9 @@
 
 English | [한국어](README.ko.md)
 
-Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 35 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
+Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 36 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
 
-**296 test cases** across 8 domains, covering 34 of the 35 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` is classified in `policy/tiers.yaml` (mutating) but has no TCs yet.
+**296 test cases** across 8 domains, covering 34 of the 36 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` (mutating) and `platform-list` (safe) are classified in `policy/tiers.yaml` but have no TCs yet; `platform-list` needs an installed SDK, so it cannot run in the SDK-free safe tier.
 
 ## Architecture Diagram
 
@@ -13,7 +13,7 @@ graph TB
     subgraph "Test Suite Components"
         TC["tc/*.yaml<br/>296 Test Cases (289 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
-        POLICY["policy/tiers.yaml<br/>35 commands → tier classification"]
+        POLICY["policy/tiers.yaml<br/>36 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
         SKILLS["skills/run-test-suite.md<br/>Prompt-lane execution guide"]
     end
@@ -38,7 +38,7 @@ graph TB
     end
 
     subgraph "Tier System"
-        SAFE["safe (6 cmds / 74 TCs)<br/>No side effects<br/>CI gate ✅"]
+        SAFE["safe (7 cmds / 74 TCs)<br/>No side effects<br/>CI gate ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>Install/modify/delete<br/>⚠️ With setup"]
         DEVICE["device (14 cmds / 143 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
@@ -180,7 +180,7 @@ tests/
   schema/
     tc-schema.json        ← TC YAML JSON Schema
   policy/
-    tiers.yaml            ← 35 commands classified by tier
+    tiers.yaml            ← 36 commands classified by tier
     device-run-order.yaml    ← phased run order for the device tier (see "Device tier")
     mutating-run-order.yaml  ← phased run order for the mutating tier (see "Mutating tier")
   fixtures/               ← committed state files (test cert, profiles.xml) for mutating TCs
@@ -530,10 +530,10 @@ promoted once it has run in the CI gate.
 
 | Tier      | Commands | TCs     | Description              | CI-safe?      |
 | --------- | -------- | ------- | ------------------------ | ------------- |
-| safe      | 6        | 74      | No side effects          | ✅ Yes        |
+| safe      | 7        | 74      | No side effects          | ✅ Yes        |
 | mutating  | 15       | 79      | Install/modify/delete    | ⚠️ With setup |
 | device    | 14       | 143     | Requires emulator/device | ❌ Manual     |
-| **Total** | **35**   | **296** |                          |               |
+| **Total** | **36**   | **296** |                          |               |
 
 See `policy/tiers.yaml` for the full classification. CI runs the `approved` safe TCs on
 every PR (see "CI gate" under Runner Options); the device tier is run manually through

@@ -1,9 +1,9 @@
 ---
 name: tizen-platform-install
-description: Install Tizen platform, platform install, 플랫폼 설치, 플랫폼 설치해줘, 타이젠 플랫폼 설치, Tizen platform package, TIZEN-Version platform, platform package download, 플랫폼 패키지 설치. Use this skill to download and install the Tizen platform package (TIZEN-{Version}) from the Tizen package repository. Reads the repository URL from repository.info. Requires Tizen SDK to be installed first.
+description: Install Tizen platform, platform install, 플랫폼 설치, 플랫폼 설치해줘, 타이젠 플랫폼 설치, Tizen platform package, TIZEN-Version platform, platform package download, 플랫폼 패키지 설치, 설치된 플랫폼, 설치된 버전 목록, 설치된 타이젠 버전, installed platforms, list platforms, which Tizen versions are installed. Use this skill to download and install the Tizen platform package (TIZEN-{Version}) from the Tizen package repository — several versions (e.g. 10.0 and 9.0) live side by side — and to list the platform versions already installed (--list). Reads the repository URL from repository.info. Requires Tizen SDK to be installed first.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-09-10"
+  last-updated: "2026-10-24"
   keywords:
     - platform install
     - Tizen platform
@@ -12,6 +12,10 @@ metadata:
     - 플랫폼 패키지
     - repository.info
     - platform package
+    - installed platforms
+    - list platforms
+    - 설치된 플랫폼
+    - 설치된 버전 목록
 ---
 
 ### Claude Code (서브에이전트 위임)
@@ -35,7 +39,9 @@ metadata:
 
 ```
 1. Tizen SDK 설치 여부 확인 (sdk.info) ← 미설치 시 중단
-2. 플랫폼 패키지 이미 설치? (.platform-installed 마커) ← 설치 시 success 반환
+2. 요청한 버전이 이미 설치? (platforms/tizen-X.Y에 "common" 외 프로필 폴더가 있고, 그 안에 "samples" 말고 다른 내용(rootstraps 등)이 있으며, .platform-installing-X.Y가 없음) ← 설치 시 success 반환
+   - 다른 버전이 설치돼 있어도 상관없음: 여러 TIZEN-X.Y가 나란히 설치된다
+   - platforms/tizen-X.Y/common만 있는 버전은 미설치 (기본 SDK가 예전 API 버전용으로 함께 넣는 공용 데이터). 프로젝트 템플릿 복사로 생긴 <profile>/samples만 있어도 미설치
 3. 플랫폼 패키지 설치 스크립트 명령 반환 (suggested_fix) — 에이전트가 Phase 2로 실행
 ```
 
@@ -47,7 +53,7 @@ metadata:
 4. Targets `TIZEN-{version}` from the required `--platform-version` argument (there is no auto-detection of the latest platform)
 5. Recursively resolves all Install-dependency packages of the platform package
 6. Downloads each package zip from `{PKG_REPO_URL}{Path}` and extracts/merges `data/` into the SDK root
-7. Creates `.platform-installed` marker on success
+7. Marks the run with `.platform-installing-X.Y` while it runs; on success removes it and appends the version to the `.platform-installed` history (a failed run keeps the marker, and a re-run resumes)
 8. Reports summary: OK / skipped / failed counts
 
 ### repository.info
@@ -93,6 +99,8 @@ node "<found-path>"
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
+**List installed platforms (read-only):** `node "$CLI" --list` — no `--platform-version`. `result.platforms` has one entry per `platforms/tizen-X.Y`: `status` is `installed`, `incomplete` (an unfinished install — re-run it to resume) or `not_installed` (the directory holds no platform payload — only the shared `common` data the base SDK ships for older versions, or synced template `samples` — so that version can still be installed), plus `profiles` (e.g. `tizen`, `tv-samsung`) and `emulator_images`. `result.newest` is what project creation uses when no `--platform-version` is given. Report it per the "결과 보고" rules below.
+
 **Required:** `node "$CLI" --platform-version 10.0` (specify platform version — **mandatory**, `X.Y` form; anything else such as `99.99.99` fails with `invalid_argument` before anything runs), `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
 Exit code: `0` = success (platform package already installed), `1` = failure (platform package not installed — proceed to Phase 2, or Tizen SDK not installed).
@@ -116,7 +124,7 @@ Never run `suggested_fix.command` in the Codex foreground. Recovery: `job-cli.js
 
 1. Run the installer command from `suggested_fix` with the Bash tool, `run_in_background: true`
 2. **END YOUR TURN** — wait for `<task-notification>` (do NOT poll/sleep)
-3. After notification, re-run the Phase 1 pre-check CLI (foreground) to verify `.platform-installed` exists
+3. After notification, re-run the Phase 1 pre-check CLI (foreground) to verify the version is reported installed
 4. Report the final success/failure envelope to the user
 
 **Do NOT (Claude Code):**
@@ -132,12 +140,12 @@ Cline의 `execute_command`에는 10분 제한이 없고, 명령이 끝날 때까
 1. Run the installer command from `suggested_fix` in the **FOREGROUND** — copy it verbatim.
    It blocks a few minutes; that is expected.
    Do NOT background it: no `Start-Process`, no `start /b`, no trailing `&`.
-2. When the command exits, **in the SAME turn** re-run the Phase 1 pre-check CLI to verify `.platform-installed` exists
+2. When the command exits, **in the SAME turn** re-run the Phase 1 pre-check CLI to verify the version is reported installed
 3. **Proactively** report the final success/failure envelope — 설치 완료/실패 보고 전에 턴을
    끝내지 마세요. 사용자가 "끝났어?"라고 물을 때까지 기다리는 것은 버그입니다.
 
 If the run state is unknown (interrupted session), just re-run the Phase 1 pre-check CLI —
-it is idempotent and reports whether `.platform-installed` exists.
+it is idempotent and reports whether the version is installed (`platforms/tizen-X.Y` with a profile, no `.platform-installing-X.Y`).
 
 **Do NOT (any harness):**
 - Parse installer output as JSON (it's human-readable text only)

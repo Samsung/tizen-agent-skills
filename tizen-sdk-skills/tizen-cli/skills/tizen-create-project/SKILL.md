@@ -94,6 +94,7 @@ tizen-cli tizen-sdk create-project --type <type> --template <name> --parent-path
 | `--name <appName>` | **yes** | — | App name = folder name to create (always the user-specified value). **At least 10 ASCII letters/digits** (`A-Za-z0-9`; nothing else is counted) — Tizen derives the 10-character package ID from them; shorter names are rejected with `invalid_parameters`. |
 | `--force` | no | off | Replace the target folder if it already exists. Only replaces an empty folder or one that looks like a Tizen project — never an arbitrary directory. Makes repeated fresh-project runs repeatable. |
 | `--open` | no | off | Open the generated `.code-workspace` in VS Code after creation. Default is create-only (no window switch) — pass this ONLY when the user explicitly asks to open the project. |
+| `--platform-version <X.Y>` | no | newest installed | Installed Tizen platform to create for (e.g. `9.0`). Use the same value as for `list-templates`. Not installed (including a `platforms/tizen-X.Y` with only `common`) → `platform_version_not_found` naming `platform-install --platform-version X.Y`. For `--type tv` it also picks `tv-samsung-X.Y`, and fails when the TV extension is not installed for that version. See installed versions with `platform-list`. |
 
 Example:
 
