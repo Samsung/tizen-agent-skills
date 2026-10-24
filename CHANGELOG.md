@@ -26,6 +26,9 @@ Repository-wide release that ships `tizen-sdk-skills` 1.5.0 and `tizen-action-sk
   [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for the full list. The
   release assets stamped with the plugin version are therefore `tizen-sdk-v1.5.0.zip`
   and `tizen-ai-extension-v1.5.0.vsix`.
+- Root `.claude-plugin/marketplace.json` catalog version follows the `tizen-sdk-skills`
+  plugin (1.5.0). `AGENTS.md` and `CONTRIBUTING.md` now state this rule instead of
+  "bump only when the catalog itself changes".
 
 ## [1.1.2] — 2026-10-21
 

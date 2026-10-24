@@ -47,7 +47,8 @@ Register the plugin in the repository-root files:
 1. `.claude-plugin/marketplace.json`: append an entry to `plugins[]` with
    `"source": "./<plugin-name>/common"`, the same `name`, `version`, `description` and
    `keywords` as its `plugin.json`, plus `homepage`, `repository` and `license`.
-   `metadata.version` is the catalog version; bump it only when the catalog itself changes.
+   The catalog `version` / `metadata.version` follow the `tizen-sdk-skills` plugin version;
+   adding a plugin does not change them.
 2. `README.md` and `README.ko.md`: add a row to the plugin table between the
    `<!-- plugins:start -->` / `<!-- plugins:end -->` markers.
 3. `llms.txt`: add the plugin README and its main reference doc under `## Plugins`.
