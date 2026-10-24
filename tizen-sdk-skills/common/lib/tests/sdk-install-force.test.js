@@ -93,7 +93,8 @@ check(
   "sh: detach forwards --force only when FORCE is true",
   /\[ "\$FORCE" = true \] && detach_args\+=\(--force\)/.test(sh),
 );
-const procArgs = ps1.match(/\$procArgs = @\(([\s\S]*?)\)/);
+// Up to the line that closes the array: elements may hold parentheses.
+const procArgs = ps1.match(/\$procArgs = @\(([\s\S]*?)\r?\n\s*\)/);
 check(
   "ps1: -Detach procArgs does not hard-code -Force",
   procArgs !== null && !/'-Force'/.test(procArgs[1]),
@@ -101,6 +102,16 @@ check(
 check(
   "ps1: -Detach forwards -Force only when $Force is set",
   /if \(\$Force\) \{ \$procArgs \+= '-Force' \}/.test(ps1),
+);
+// Start-Process does not quote -ArgumentList elements, so a path with a space
+// split into two arguments and the detached install never started.
+check(
+  "ps1: -Detach quotes the script path and -Path with ConvertTo-QuotedArgument",
+  procArgs !== null &&
+    /'-File', \(ConvertTo-QuotedArgument \$PSCommandPath\)/.test(procArgs[1]) &&
+    /if \(\$Path\) \{ \$procArgs \+= @\('-Path', \(ConvertTo-QuotedArgument \$Path\)\) \}/.test(
+      ps1,
+    ),
 );
 
 console.log("--- stale sdk.info and manifests ---");

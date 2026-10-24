@@ -37,6 +37,9 @@ DOWNLOAD_JOBS=4
 CHECK=false
 DRY_RUN=false
 WAIT=false
+STATUS=false
+DETACH=false
+DETACH_LOG="/tmp/tizen-tv-sdk-install.log"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -49,6 +52,8 @@ while [[ $# -gt 0 ]]; do
         --check)      CHECK=true; shift ;;
         --dry-run)    DRY_RUN=true; shift ;;
         --wait)       WAIT=true; shift ;;
+        --status)     STATUS=true; shift ;;
+        --detach)     DETACH=true; shift ;;
         --help|-h)
             cat <<EOF
 Tizen TV SDK extension installer
@@ -61,6 +66,8 @@ Options:
   --force             Reinstall even if TV SDK is already installed
   --check             Check TV SDK installation only
   --dry-run           Resolve and list packages only (no download/install)
+  --detach            Launch the install in the background (log: $DETACH_LOG)
+  --status            Print STATUS=running | STATUS=done EXIT=<code> and exit
   --help              Show this help
 
 What it does:
@@ -75,30 +82,32 @@ EOF
     esac
 done
 
-# --wait: sleep 60 seconds then check if TV SDK is installed.
-# This enforces a 60-second polling interval for harnesses (e.g. Cline) that
-# would otherwise poll in a tight loop. Used after a nohup background launch.
-if [[ "$WAIT" == "true" ]]; then
-    sleep 60
+# --status: report whether a background install is still running.
+# --wait: the same, after a 60-second sleep. The skills tell Cline to poll with
+# `sleep 25 && --status` instead, because --wait exceeds its 30 s tool timeout.
+if [[ "$WAIT" == "true" || "$STATUS" == "true" ]]; then
+    [[ "$WAIT" == "true" ]] && sleep 60
     TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
     if [[ -f "$TV_SDK_MARKER" ]]; then
         echo "STATUS=done EXIT=0"
+    elif installer_running "tizen-tv-sdk-install.sh"; then
+        echo "STATUS=running"
     else
-        # Check if the installer is still running, excluding this poller
-        # process (and its parent), which pgrep -f would otherwise match.
-        RUNNING=false
-        for pid in $(pgrep -f "tizen-tv-sdk-install.sh" 2>/dev/null || true); do
-            if [[ "$pid" != "$$" && "$pid" != "$PPID" ]]; then
-                RUNNING=true
-                break
-            fi
-        done
-        if [[ "$RUNNING" == "true" ]]; then
-            echo "STATUS=running"
-        else
-            echo "STATUS=done EXIT=1"
-        fi
+        echo "STATUS=done EXIT=1"
     fi
+    exit 0
+fi
+
+# --detach: re-launch in the background and return at once, for harnesses
+# (e.g. Cline) without a completion notification; poll with --status.
+# Forward every option that changes what gets installed, and --force only
+# when it was given.
+if [[ "$DETACH" == "true" ]]; then
+    detach_args=(--sdk-path="$SDK_PATH" --download-jobs "$DOWNLOAD_JOBS")
+    [[ "$FORCE" == "true" ]] && detach_args+=(--force)
+    nohup bash "$0" "${detach_args[@]}" > "$DETACH_LOG" 2>&1 &
+    jobs -p
+    echo "LOG=$DETACH_LOG"
     exit 0
 fi
 

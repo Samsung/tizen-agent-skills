@@ -89,8 +89,9 @@ STATUS=done EXIT=0
 **설치 방법 (Linux에서 Cline 사용 시):**
 
 ```bash
-# Phase 2: 백그라운드에서 TV SDK 설치 프로그램 실행
-nohup bash "<tv-sdk-install.sh 경로>" --sdk-path="/home/user/tizen-sdk" > /tmp/tizen-tv-sdk-install.log 2>&1 & \
+# Phase 2: Phase 1 envelope의 suggested_fix.command를 인자(--sdk-path, --force)까지 그대로
+# nohup로 백그라운드에서 실행
+nohup <suggested_fix.command> > /tmp/tizen-tv-sdk-install.log 2>&1 & \
 jobs -p
 ```
 

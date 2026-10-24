@@ -72,54 +72,28 @@ EOF
     esac
 done
 
-# --status: check if a background install is still running
-if [[ "$STATUS" == "true" ]]; then
+# --status: check if a background install is still running.
+# --wait: the same, after a 60-second sleep.
+if [[ "$WAIT" == "true" || "$STATUS" == "true" ]]; then
+    [[ "$WAIT" == "true" ]] && sleep 60
     TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
     if [[ -f "$TV_SDK_MARKER" ]]; then
         echo "STATUS=done EXIT=0"
+    elif installer_running "tizen-tv-sdk-install-from-zip.sh"; then
+        echo "STATUS=running"
     else
-        RUNNING=false
-        for pid in $(pgrep -f "tizen-tv-sdk-install-from-zip.sh" 2>/dev/null || true); do
-            if [[ "$pid" != "$$" && "$pid" != "$PPID" ]]; then
-                RUNNING=true
-                break
-            fi
-        done
-        if [[ "$RUNNING" == "true" ]]; then
-            echo "STATUS=running"
-        else
-            echo "STATUS=done EXIT=1"
-        fi
-    fi
-    exit 0
-fi
-
-# --wait: sleep 60 seconds then check if TV SDK is installed.
-if [[ "$WAIT" == "true" ]]; then
-    sleep 60
-    TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
-    if [[ -f "$TV_SDK_MARKER" ]]; then
-        echo "STATUS=done EXIT=0"
-    else
-        RUNNING=false
-        for pid in $(pgrep -f "tizen-tv-sdk-install-from-zip.sh" 2>/dev/null || true); do
-            if [[ "$pid" != "$$" && "$pid" != "$PPID" ]]; then
-                RUNNING=true
-                break
-            fi
-        done
-        if [[ "$RUNNING" == "true" ]]; then
-            echo "STATUS=running"
-        else
-            echo "STATUS=done EXIT=1"
-        fi
+        echo "STATUS=done EXIT=1"
     fi
     exit 0
 fi
 
 # --detach: re-launch in background
 if [[ "$DETACH" == "true" ]]; then
-    nohup bash "$0" --sdk-path="$SDK_PATH" --zip-path="$ZIP_PATH" ${FORCE:+--force} > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 &
+    # --force only when it was given. (The old ":+" parameter expansion fired for
+    # FORCE=false too, since "false" is non-empty, so every detached run was forced.)
+    detach_args=(--sdk-path="$SDK_PATH" --zip-path="$ZIP_PATH")
+    [[ "$FORCE" == "true" ]] && detach_args+=(--force)
+    nohup bash "$0" "${detach_args[@]}" > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 &
     jobs -p
     exit 0
 fi

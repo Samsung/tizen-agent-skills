@@ -17,6 +17,8 @@ param(
     [switch]$Check,
     [switch]$DryRun,
     [switch]$Wait,                 # sleep 60 seconds then check status (for Cline polling)
+    [switch]$Status,               # print STATUS=running | STATUS=done EXIT=<code> and exit
+    [switch]$Detach,               # re-launch in the background and return at once
     [switch]$Help
 )
 
@@ -57,6 +59,8 @@ Options:
   -Force             Reinstall even if TV SDK is already installed
   -Check             Check TV SDK installation only
   -DryRun            Resolve and list packages only (no download/install)
+  -Detach            Launch the install in the background (log: %TEMP%\tizen-tv-sdk-install.log)
+  -Status            Print STATUS=running | STATUS=done EXIT=<code> and exit
   -Help              Show this help
 
 What it does:
@@ -84,11 +88,11 @@ if (-not $SdkPath) {
     $SdkPath = Get-SdkPath
 }
 
-# -Wait: sleep 60 seconds then check if TV SDK is installed.
-# This enforces a 60-second polling interval for harnesses (e.g. Cline) that
-# would otherwise poll in a tight loop. Used after a background launch.
-if ($Wait) {
-    Start-Sleep -Seconds 60
+# -Status: report whether a background install is still running.
+# -Wait: the same, after a 60-second sleep. The skills tell Cline to poll with
+# `Start-Sleep 25; -Status` instead, because -Wait exceeds its 30 s tool timeout.
+if ($Wait -or $Status) {
+    if ($Wait) { Start-Sleep -Seconds 60 }
     $tvMarker = Join-Path $SdkPath ".tv-sdk-installed"
     if (Test-Path $tvMarker) {
         Write-Host "STATUS=done EXIT=0"
@@ -108,6 +112,27 @@ if ($Wait) {
             Write-Host "STATUS=done EXIT=1"
         }
     }
+    exit 0
+}
+
+# -Detach: re-launch in the background and return at once, for harnesses
+# (e.g. Cline) without a completion notification; poll with -Status.
+# Forward every option that changes what gets installed, and -Force only
+# when it was given.
+if ($Detach) {
+    $logFile = Join-Path $env:TEMP "tizen-tv-sdk-install.log"
+    # Paths go through ConvertTo-QuotedArgument (lib\common.ps1): Start-Process
+    # quotes nothing, and a trailing backslash would escape a plain closing quote.
+    $procArgs = @(
+        '-NoProfile', '-ExecutionPolicy', 'Bypass',
+        '-File', (ConvertTo-QuotedArgument $PSCommandPath),
+        '-SdkPath', (ConvertTo-QuotedArgument $SdkPath),
+        '-DownloadJobs', $DownloadJobs
+    )
+    if ($Force) { $procArgs += '-Force' }
+    $proc = Start-Process -FilePath "powershell" -ArgumentList $procArgs -WindowStyle Hidden -PassThru -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
+    Write-Host "PID=$($proc.Id)"
+    Write-Host "LOG=$logFile"
     exit 0
 }
 

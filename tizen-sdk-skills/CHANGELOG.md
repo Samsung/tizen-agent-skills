@@ -53,6 +53,37 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **TV SDK installs now work under Cline and keep `--force`**
+  (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
+  `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`, `.ps1`,
+  `common/scripts/tizen-sdk-install/tizen-sdk-install.ps1`, `common/scripts/lib/common.sh`, `.ps1`,
+  `common/skills/tizen-tv-sdk-install/SKILL.md`,
+  `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`,
+  `common/lib/tests/tv-sdk-install-cline.test.js`, `common/lib/tests/sdk-install-force.test.js`,
+  `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  The `tizen-tv-sdk-install` skill told Cline to launch the installer with `--detach` /
+  `-Detach` and poll it with `--status` / `-Status`, but the installer had neither option.
+  The bash poll failed with `Unknown option: --status`, and `-Detach` / `-Status` were
+  PowerShell parameter errors. The installer now has both. `--detach` forwards
+  `--sdk-path`, `--download-jobs` and, only when given, `--force`. `--status` prints
+  `STATUS=running` or `STATUS=done EXIT=<code>`. The Cline launch commands of both TV skills
+  now run `suggested_fix.command` with all of its arguments. Before, they dropped `--force`,
+  and on Windows the ZIP skill also dropped `-ZipPath`.
+  `tizen-tv-sdk-install-from-zip.sh --detach` used to add `--force` even for `FORCE=false`,
+  because `${FORCE:+--force}` expands for any non-empty value; it now adds it only when
+  `--force` was given. On Linux, both bash pollers (`--status` and `--wait`) reported
+  `STATUS=running` even when nothing was running: procps `pgrep`, unlike the macOS one, does
+  not exclude its ancestors, so it matched the poller's own command-substitution subshell. A
+  failed install was therefore never reported as failed. They now share an
+  `installer_running` helper (`common/scripts/lib/common.sh`) that skips every
+  `--status` / `--wait` process. The `-Detach` of `tizen-tv-sdk-install.ps1`,
+  `tizen-tv-sdk-install-from-zip.ps1` and `tizen-sdk-install.ps1` now quotes every path it
+  forwards (the script path, `-Path`, `-SdkPath`, `-ZipPath`) with a new
+  `ConvertTo-QuotedArgument` helper (`common/scripts/lib/common.ps1`). `Start-Process` does
+  not quote `-ArgumentList` elements, so a path with a space split into two arguments and
+  the detached install never started. The helper also doubles trailing backslashes, because
+  Windows reads `\"` as an escaped quote: a plain `"C:\tizen-sdk\"` or drive root `"C:\"`
+  would have swallowed the arguments after it.
 - **`--force` / `-Force` now reinstalls an installed SDK**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,

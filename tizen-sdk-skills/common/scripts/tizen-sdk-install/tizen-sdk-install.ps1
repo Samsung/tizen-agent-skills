@@ -100,15 +100,18 @@ if ($Wait) {
 # the repository the user asked for.
 if ($Detach) {
     $logFile = Join-Path $env:TEMP "tizen-sdk-install.log"
+    # Paths go through ConvertTo-QuotedArgument (lib\common.ps1): Start-Process
+    # quotes nothing, and the drive root "C:\" that ConvertTo-CanonicalWindowsPath
+    # keeps would escape a plain closing quote.
     $procArgs = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass',
-        '-File', $PSCommandPath
+        '-File', (ConvertTo-QuotedArgument $PSCommandPath)
     )
     # -Force only when the caller asked for it: forcing every detached run
     # would make a resumed install re-download all packages.
     if ($Force) { $procArgs += '-Force' }
     if ($Platform) { $procArgs += @('-Platform', $Platform) }
-    if ($Path) { $procArgs += @('-Path', $Path) }
+    if ($Path) { $procArgs += @('-Path', (ConvertTo-QuotedArgument $Path)) }
     if ($RepoUrl) { $procArgs += @('-RepoUrl', $RepoUrl) }
     $procArgs += @('-DownloadJobs', $DownloadJobs)
     $proc = Start-Process -FilePath "powershell" -ArgumentList $procArgs -WindowStyle Hidden -PassThru -RedirectStandardOutput $logFile -RedirectStandardError "$logFile.err"
