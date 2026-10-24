@@ -505,8 +505,13 @@ install_platform_packages() {
 
     # Resume support: if manifest already exists for this package, it was installed in previous run,
     # so skip it without re-downloading (continue interrupted/timed-out install from where it left off).
-    # --force reinstalls every package, so it never resume-skips.
-    if [ "$FORCE" != true ] && [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
+    # --force reinstalls every package, so it never resume-skips. It drops this package's old
+    # manifest up front, so a failed forced run leaves none for a later resume to skip. Only the
+    # resolved base-SDK packages are touched: the TV SDK, emulator and platform installers keep
+    # their manifests in the same .package/ directory.
+    if [ "$FORCE" = true ]; then
+      rm -f "$INSTALL_PATH/.package/$pkg.manifest"
+    elif [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
       log_info "[$idx/$total] $pkg already installed, skipping"
       skip=$((skip+1))
       skipped="$skipped
@@ -1092,10 +1097,9 @@ if [ "$DRY_RUN" != true ]; then
   mkdir -p "$INSTALL_PATH"
   rm -f "$INSTALL_PATH/.install-result" 2>/dev/null || true
   # A forced reinstall overwrites a complete install: drop its sdk.info first so
-  # a run that fails partway is not later taken for a completed install, and its
-  # package manifests so a resume reinstalls the packages this run never reached
-  # instead of resume-skipping their old versions. repository.info is kept.
-  [ "$FORCE" = true ] && rm -f "$INSTALL_PATH/sdk.info" "$INSTALL_PATH"/.package/*.manifest
+  # a run that fails partway is not later taken for a completed install. (Its
+  # package manifests are dropped per package in install_platform_packages.)
+  [ "$FORCE" = true ] && rm -f "$INSTALL_PATH/sdk.info"
   : > "$INSTALL_PATH/.install-running"
   trap _on_exit_marker EXIT
 

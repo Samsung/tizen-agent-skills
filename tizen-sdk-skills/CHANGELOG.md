@@ -64,10 +64,12 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   came from the old repository. The per-package resume skip now applies only without
   `--force`. The detached re-launch (`--detach` / `-Detach`) used to add `--force`
   every time; it now adds it only when the caller asked for it, so a resumed install still
-  skips the packages it already installed. A forced run now deletes the old `sdk.info` and
-  the package manifests (not `repository.info`) before it starts. A run that fails partway
-  is no longer reported as installed, and resuming it reinstalls the packages it did not
-  reach instead of keeping their old versions. The
+  skips the packages it already installed. A forced run now deletes the old `sdk.info`
+  before it starts, and the old manifest of each base-SDK package it is about to install. A
+  run that fails partway is no longer reported as installed, and resuming it reinstalls the
+  packages it did not reach instead of keeping their old versions. Manifests of the TV SDK,
+  emulator and platform packages, which share `.package/`, and `repository.info` are kept.
+  The
   Cline launch commands in both SKILL.md files now run `suggested_fix.command` with all of
   its arguments (`nohup <suggested_fix.command>`, `<suggested_fix.command> -Detach`).
   Before, they dropped `--force`, `--path` and `--platform`.

@@ -17,13 +17,16 @@
  * suggested_fix.command, so a forced reinstall never reached the installer.
  * Removing sdk.info alone was not enough: a non-forced resume of a failed
  * forced run resume-skipped every package the run never reached, because
- * their old manifests were still there.
+ * their old manifests were still there. Removing every .package/*.manifest
+ * went too far: the TV SDK, emulator and platform installers keep their
+ * manifests in the same directory, and tizen-update-package stopped seeing
+ * those packages.
  *
  * Covered here (source guards):
- *   - the per-package resume skip is bypassed under --force / -Force
+ *   - under --force / -Force each resolved package's own manifest is removed
+ *     instead of resume-skipping it, and no manifest is removed by wildcard
  *   - --detach / -Detach forwards --force / -Force only when it was given
- *   - a forced run removes sdk.info and the package manifests (not
- *     repository.info) before installing
+ *   - a forced run removes sdk.info (not repository.info) before installing
  *   - the Cline launch templates run suggested_fix.command with its arguments
  */
 
@@ -56,24 +59,28 @@ const ps1 = fs.readFileSync(
 
 console.log("--- resume skip ---");
 check(
-  "sh: manifest resume skip requires FORCE != true",
-  /if \[ "\$FORCE" != true \] && \[ -f "\$INSTALL_PATH\/\.package\/\$pkg\.manifest" \]; then/.test(
+  "sh: --force drops the package's manifest instead of resume-skipping it",
+  /if \[ "\$FORCE" = true \]; then\n\s*rm -f "\$INSTALL_PATH\/\.package\/\$pkg\.manifest"\n\s*elif \[ -f "\$INSTALL_PATH\/\.package\/\$pkg\.manifest" \]; then/.test(
     sh,
   ),
 );
 check(
   "sh: no manifest resume skip without the FORCE guard",
-  !/if \[ -f "\$INSTALL_PATH\/\.package\/\$pkg\.manifest" \]; then/.test(sh),
+  !/^\s*if \[ -f "\$INSTALL_PATH\/\.package\/\$pkg\.manifest" \]; then/m.test(
+    sh,
+  ),
 );
 check(
-  "ps1: manifest resume skip requires -not $Force",
-  /if \(-not \$Force -and \(Test-Path \(Join-Path \$pkgInfoDir "\$pkg\.manifest"\)\)\)/.test(
+  "ps1: -Force drops the package's manifest instead of resume-skipping it",
+  /if \(\$Force\) \{\r?\n\s*Remove-Item \(Join-Path \$pkgInfoDir "\$pkg\.manifest"\) [^\r\n]*\r?\n\s*\} elseif \(Test-Path \(Join-Path \$pkgInfoDir "\$pkg\.manifest"\)\) \{/.test(
     ps1,
   ),
 );
 check(
   "ps1: no manifest resume skip without the -Force guard",
-  !/if \(Test-Path \(Join-Path \$pkgInfoDir "\$pkg\.manifest"\)\)/.test(ps1),
+  !/^\s*if \(Test-Path \(Join-Path \$pkgInfoDir "\$pkg\.manifest"\)\)/m.test(
+    ps1,
+  ),
 );
 
 console.log("--- detach forwarding ---");
@@ -99,19 +106,29 @@ check(
 console.log("--- stale sdk.info and manifests ---");
 const shInstall = sh.indexOf("if ! install_platform_packages; then");
 const shCleanup = sh.search(
-  /\[ "\$FORCE" = true \] && rm -f "\$INSTALL_PATH\/sdk\.info" "\$INSTALL_PATH"\/\.package\/\*\.manifest\n/,
+  /\[ "\$FORCE" = true \] && rm -f "\$INSTALL_PATH\/sdk\.info"\n/,
 );
 check(
-  "sh: a forced run removes sdk.info and the package manifests before installing",
+  "sh: a forced run removes sdk.info before installing",
   shCleanup !== -1 && shCleanup < shInstall,
 );
 const ps1Install = ps1.indexOf("$pkgOk = Install-PlatformPackages");
 const ps1Cleanup = ps1.search(
-  /if \(\$Force\) \{\s*Remove-Item \$sdkInfoPath [^\n]*\n\s*Remove-Item \(Join-Path \$Path "\.package\\\*\.manifest"\) /,
+  /if \(\$Force\) \{ Remove-Item \$sdkInfoPath -Force -ErrorAction SilentlyContinue \}/,
 );
 check(
-  "ps1: a forced run removes sdk.info and the package manifests before installing",
+  "ps1: a forced run removes sdk.info before installing",
   ps1Cleanup !== -1 && ps1Cleanup < ps1Install,
+);
+// .package/ is shared with the TV SDK, emulator and platform installers, so a
+// forced base-SDK run must never remove manifests by wildcard.
+check(
+  "sh: no wildcard removal of .package manifests",
+  !/rm -f[^\n]*\.package\/\*\.manifest/.test(sh),
+);
+check(
+  "ps1: no wildcard removal of .package manifests",
+  !/Remove-Item[^\n]*\.package[\\/]\*\.manifest/.test(ps1),
 );
 for (const [name, src] of [
   ["sh", sh],

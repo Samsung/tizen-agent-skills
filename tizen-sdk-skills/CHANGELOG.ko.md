@@ -60,9 +60,11 @@
   `repository.info`만 바뀌고 패키지는 예전 저장소의 것이 그대로 남았습니다. 이제 패키지별 이어받기
   건너뛰기는 `--force`가 없을 때만 적용됩니다. 분리 재실행(`--detach` / `-Detach`)은 항상
   `--force`를 붙였는데, 이제 호출한 쪽이 요청했을 때만 붙이므로 중단된 설치를 이어받을 때는
-  이미 설치한 패키지를 계속 건너뜁니다. 강제 설치는 시작하기 전에 예전 `sdk.info`와 패키지
-  manifest를 지웁니다(`repository.info`는 남김). 그래서 중간에 실패한 설치가 설치 완료로 보고되지
-  않고, 이어서 설치할 때 아직 다시 설치하지 못한 패키지도 예전 버전으로 남지 않고 다시 설치됩니다.
+  이미 설치한 패키지를 계속 건너뜁니다. 강제 설치는 시작하기 전에 예전 `sdk.info`를 지우고,
+  이번에 설치할 기본 SDK 패키지마다 예전 manifest를 지웁니다. 그래서 중간에 실패한 설치가 설치
+  완료로 보고되지 않고, 이어서 설치할 때 아직 다시 설치하지 못한 패키지도 예전 버전으로 남지 않고
+  다시 설치됩니다. `.package/`를 함께 쓰는 TV SDK, 에뮬레이터, 플랫폼 패키지의 manifest와
+  `repository.info`는 남깁니다.
   두 SKILL.md의 Cline 실행 명령은 이제
   `suggested_fix.command`를 인자까지 그대로 실행합니다(`nohup <suggested_fix.command>`,
   `<suggested_fix.command> -Detach`). 예전에는 `--force`, `--path`, `--platform`이 빠졌습니다.
