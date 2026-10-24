@@ -15,11 +15,15 @@
  * later reported as a completed install. And the Cline launch templates in
  * the SKILL.md files dropped the flags the pre-check put into
  * suggested_fix.command, so a forced reinstall never reached the installer.
+ * Removing sdk.info alone was not enough: a non-forced resume of a failed
+ * forced run resume-skipped every package the run never reached, because
+ * their old manifests were still there.
  *
  * Covered here (source guards):
  *   - the per-package resume skip is bypassed under --force / -Force
  *   - --detach / -Detach forwards --force / -Force only when it was given
- *   - a forced run removes sdk.info before installing
+ *   - a forced run removes sdk.info and the package manifests (not
+ *     repository.info) before installing
  *   - the Cline launch templates run suggested_fix.command with its arguments
  */
 
@@ -92,19 +96,32 @@ check(
   /if \(\$Force\) \{ \$procArgs \+= '-Force' \}/.test(ps1),
 );
 
-console.log("--- stale sdk.info ---");
-check(
-  "sh: a forced run removes sdk.info before installing",
-  /\[ "\$FORCE" = true \] && rm -f "\$INSTALL_PATH\/sdk\.info"/.test(sh) &&
-    sh.indexOf('rm -f "$INSTALL_PATH/sdk.info"') <
-      sh.indexOf("if ! install_platform_packages; then"),
+console.log("--- stale sdk.info and manifests ---");
+const shInstall = sh.indexOf("if ! install_platform_packages; then");
+const shCleanup = sh.search(
+  /\[ "\$FORCE" = true \] && rm -f "\$INSTALL_PATH\/sdk\.info" "\$INSTALL_PATH"\/\.package\/\*\.manifest\n/,
 );
 check(
-  "ps1: a forced run removes sdk.info before installing",
-  /if \(\$Force\) \{ Remove-Item \$sdkInfoPath /.test(ps1) &&
-    ps1.indexOf("Remove-Item $sdkInfoPath") <
-      ps1.indexOf("$pkgOk = Install-PlatformPackages"),
+  "sh: a forced run removes sdk.info and the package manifests before installing",
+  shCleanup !== -1 && shCleanup < shInstall,
 );
+const ps1Install = ps1.indexOf("$pkgOk = Install-PlatformPackages");
+const ps1Cleanup = ps1.search(
+  /if \(\$Force\) \{\s*Remove-Item \$sdkInfoPath [^\n]*\n\s*Remove-Item \(Join-Path \$Path "\.package\\\*\.manifest"\) /,
+);
+check(
+  "ps1: a forced run removes sdk.info and the package manifests before installing",
+  ps1Cleanup !== -1 && ps1Cleanup < ps1Install,
+);
+for (const [name, src] of [
+  ["sh", sh],
+  ["ps1", ps1],
+]) {
+  check(
+    `${name}: the forced cleanup keeps repository.info`,
+    !/(rm -f|Remove-Item)[^\n]*repository\.info/.test(src),
+  );
+}
 
 console.log("--- Cline launch templates ---");
 const skillsDir = path.join(__dirname, "..", "..", "skills");
