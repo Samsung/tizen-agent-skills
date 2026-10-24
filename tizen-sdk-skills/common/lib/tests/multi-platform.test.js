@@ -571,7 +571,9 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         bothEnv.status === "failure" &&
           bothEnv.errors[0].message.includes(
             "is installed for TIZEN-9.0, but tz lists no TV templates",
-          ),
+          ) &&
+          bothEnv.errors[0].message.includes("may target another version") &&
+          bothEnv.errors[0].message.includes("pass one of: 10.0"),
         true,
       );
       fs.rmSync(path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung"), {
