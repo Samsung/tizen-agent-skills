@@ -505,6 +505,9 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         fs.mkdirSync(path.join(hintSdk, ...d), { recursive: true });
       }
       fs.writeFileSync(path.join(hintSdk, "sdk.info"), "x=y\n");
+      // A TV installer ran: both installers skip on this marker without --force.
+      const tvMarker = path.join(hintSdk, ".tv-sdk-installed");
+      fs.writeFileSync(tvMarker, "TV SDK installed\n");
       const hintStub = path.join(hintSdk, "tools", "tizen-core", "tz");
       fs.writeFileSync(
         hintStub,
@@ -642,12 +645,47 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "9.0",
       );
       check(
-        "no TV extension anywhere → offers both installers without --force",
-        /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install if .*tizen-tv-sdk-install-from-zip --zip-path <zip>;/.test(
+        "no TV extension but a stale marker → both installers get --force",
+        /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install --force if .*tizen-tv-sdk-install-from-zip --zip-path <zip> --force;/.test(
           noTv.errors[0].message,
-        ) && !noTv.errors[0].message.includes("--force"),
+        ),
         true,
       );
+      // No marker either: list-templates gets the same version-aware hint as
+      // create, not the generic "run tizen-tv-sdk-install".
+      fs.rmSync(tvMarker);
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\n'\n",
+      );
+      const noTvList = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "9.0",
+      );
+      const noTvCreate = await createProject(
+        "tv",
+        "Tv10",
+        tvWs,
+        "MyTizenTvAppX",
+        false,
+        "tizen-sdk create-project",
+        false,
+        "9.0",
+      );
+      for (const [name, env] of [
+        ["create", noTvCreate],
+        ["list-templates", noTvList],
+      ]) {
+        const message = env.errors[0].message;
+        check(
+          `no TV extension anywhere → ${name} offers both installers without --force`,
+          /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install if .*tizen-tv-sdk-install-from-zip --zip-path <zip>;/.test(
+            message,
+          ) && !message.includes("--force"),
+          true,
+        );
+      }
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
   } finally {

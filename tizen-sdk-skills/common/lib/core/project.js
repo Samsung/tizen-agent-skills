@@ -462,11 +462,13 @@ function tvVersionsOnDisk(sdkPath) {
 /**
  * The two ways to get the TV extension of TIZEN-X.Y: tizen-tv-sdk-install
  * installs the one version the online repository carries, a TV SDK ZIP can
- * hold any version. `force` is for an SDK that already has another TV version:
- * both installers skip on the single .tv-sdk-installed marker otherwise.
+ * hold any version. Both installers skip while the single .tv-sdk-installed
+ * marker exists, whatever version it was written for, so --force follows it.
  */
-function tvInstallSteps(version, force) {
-  const f = force ? " --force" : "";
+function tvInstallSteps(version, sdkPath) {
+  const f = fs.existsSync(path.join(sdkPath, ".tv-sdk-installed"))
+    ? " --force"
+    : "";
   return (
     `install it with tizen-tv-sdk-install${f} if the repository's TV package is for TIZEN-${version}, ` +
     `or from a TIZEN-${version} TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip>${f}`
@@ -479,14 +481,14 @@ function tvInstallSteps(version, force) {
  * same fix: another version when one has the extension, or installing it
  * online or from a ZIP.
  */
-function tvVersionMissingMessage(version, installed) {
+function tvVersionMissingMessage(version, installed, sdkPath) {
   const others = installed.filter((v) => v !== version);
   return others.length
     ? `The Samsung TV SDK extension is not installed for TIZEN-${version} (installed for: ${others.join(", ")}). ` +
         "Omit --platform-version to use the newest installed TV profile, or pass one of those versions. " +
-        `To add TIZEN-${version}, ${tvInstallSteps(version, true)}.`
+        `To add TIZEN-${version}, ${tvInstallSteps(version, sdkPath)}.`
     : `The Samsung TV SDK extension is not installed for TIZEN-${version}. ` +
-        `To add it, ${tvInstallSteps(version, false)}; or omit --platform-version.`;
+        `To add it, ${tvInstallSteps(version, sdkPath)}; or omit --platform-version.`;
 }
 
 /**
@@ -692,6 +694,7 @@ async function createProject(
           tvVersionMissingMessage(
             versionArgs.version,
             tvVersionsOnDisk(sdkPath),
+            sdkPath,
           ),
           null,
           startTime,
@@ -1707,10 +1710,11 @@ async function listTemplates(
           platform:
             "No GBS platform sample apps ship with this plugin version.",
         };
-        // An explicit version with the TV extension only on other versions is
-        // not "TV SDK not installed": tizen-tv-sdk-install would not fix it.
+        // An explicit version gets a hint for that version: the generic "run
+        // tizen-tv-sdk-install" installs only the repository's TV version.
         if (key === "tv" && versionArgs.version) {
-          const installed = installedTvVersions(readSdkPath(), profiles);
+          const sdkPath = readSdkPath();
+          const installed = installedTvVersions(sdkPath, profiles);
           if (installed.includes(versionArgs.version)) {
             // Installed, yet tz lists no TV template under it. Omitting the
             // version helps only when a newer one exists: the newest-first
@@ -1725,10 +1729,14 @@ async function listTemplates(
               : "";
             hints.tv =
               `The Samsung TV SDK extension is installed for TIZEN-${version}, but tz lists no TV templates for it — the extension may be incomplete. ` +
-              `To reinstall it, ${tvInstallSteps(version, true)}.` +
+              `To reinstall it, ${tvInstallSteps(version, sdkPath)}.` +
               alternatives;
-          } else if (installed.length) {
-            hints.tv = tvVersionMissingMessage(versionArgs.version, installed);
+          } else {
+            hints.tv = tvVersionMissingMessage(
+              versionArgs.version,
+              installed,
+              sdkPath,
+            );
           }
         }
         const hint =

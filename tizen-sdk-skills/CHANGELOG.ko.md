@@ -75,9 +75,10 @@
   `create` / `list-templates --type tv --platform-version X.Y`의 안내로는 다른 버전의 TV 확장이
   없거나 불완전할 때 해결할 수 없었습니다. 이제 두 설치 방법을 함께 안내합니다. 저장소의 TV
   패키지가 TIZEN-X.Y이면 `tizen-tv-sdk-install`, 아니면 TIZEN-X.Y ZIP(예전·같은·새 버전)으로
-  `tizen-tv-sdk-install-from-zip --zip-path <zip>`을 씁니다. 다른 TV 버전이 이미 설치돼 있으면
-  `--force`를 붙입니다. 두 설치기 모두 `.tv-sdk-installed` 파일 하나로 설치 여부를 판단하기
-  때문입니다.
+  `tizen-tv-sdk-install-from-zip --zip-path <zip>`을 씁니다. `.tv-sdk-installed` 파일이 있으면
+  `--force`를 붙입니다. 두 설치기 모두 이 파일 하나로, 어느 버전이 기록됐는지와 상관없이 설치를
+  건너뛰기 때문입니다. 버전을 지정한 `list-templates`도 TV 확장이 하나도 없을 때 일반 안내
+  ("run tizen-tv-sdk-install") 대신 이 안내를 냅니다.
 
 - **실제로 설치된 플랫폼 버전만 설치됨으로 판단**
   (`common/lib/core/sdk.js`, `common/scripts/lib/common.sh`, `.ps1`,
