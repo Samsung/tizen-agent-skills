@@ -30,7 +30,7 @@
     가장 높은 `tizen-X.Y` 항목을 골랐는데, 이 목록에는 `common`만 있는 버전도 들어 있습니다.
     `--type tv`에서는 직접 지정한 버전이 TV 프로필(`tv-samsung-X.Y`)도 정하며
     (`--strict-profile` / `-StrictProfile`), 그 버전에 TV 확장이 없으면 TV 확장이 있는 버전을 알려 주며
-    실패합니다. 지정하지 않으면
+    실패합니다(`create`는 스크립트를 실행하기 전에 확인). 지정하지 않으면
     지금처럼 가장 높은 TV 프로필을 씁니다.
 - **PR 검사** (`scripts/check-pr.js`, `common/lib/tests/check-pr.test.js`, 저장소 루트
   `ci.yml`). PR이 변경한 파일을 `AGENTS.md`와 `CONTRIBUTING.md`의 기계적으로 확인 가능한

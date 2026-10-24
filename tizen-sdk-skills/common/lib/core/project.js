@@ -416,6 +416,15 @@ function platformVersionArgs(platformVersion, command, startTime) {
  * @returns {string[]} "X.Y" versions
  */
 function installedTvVersions(sdkPath, tzProfiles) {
+  return tzProfiles
+    .map((p) => /^tv-samsung-(\d+\.\d+)$/.exec(p))
+    .filter(Boolean)
+    .map((m) => m[1])
+    .filter((v) => hasTvExtensionDir(sdkPath, v));
+}
+
+/** Does the SDK have the TV extension directory of TIZEN-X.Y? */
+function hasTvExtensionDir(sdkPath, version) {
   const isDir = (p) => {
     try {
       return fs.statSync(p).isDirectory();
@@ -423,15 +432,45 @@ function installedTvVersions(sdkPath, tzProfiles) {
       return false;
     }
   };
-  return tzProfiles
-    .map((p) => /^tv-samsung-(\d+\.\d+)$/.exec(p))
-    .filter(Boolean)
-    .map((m) => m[1])
-    .filter(
-      (v) =>
-        isDir(path.join(sdkPath, "platforms", `tizen-${v}`, "tv-samsung")) ||
-        isDir(path.join(sdkPath, "platforms", `tv-samsung-${v}`)),
-    );
+  return (
+    isDir(path.join(sdkPath, "platforms", `tizen-${version}`, "tv-samsung")) ||
+    isDir(path.join(sdkPath, "platforms", `tv-samsung-${version}`))
+  );
+}
+
+/** "X.Y" versions with a TV extension directory, oldest first (no tz needed). */
+function tvVersionsOnDisk(sdkPath) {
+  let names = [];
+  try {
+    names = fs.readdirSync(path.join(sdkPath, "platforms"));
+  } catch (_e) {
+    return [];
+  }
+  const versions = new Set();
+  for (const name of names) {
+    const m = /^(?:tizen|tv-samsung)-(\d+\.\d+)$/i.exec(name);
+    if (m && hasTvExtensionDir(sdkPath, m[1])) versions.add(m[1]);
+  }
+  return [...versions].sort((a, b) => {
+    const [am, an] = a.split(".").map(Number);
+    const [bm, bn] = b.split(".").map(Number);
+    return am - bm || an - bn;
+  });
+}
+
+/**
+ * The message for an explicit --platform-version whose TV extension is
+ * missing — shared by create-project and list-templates so both point at the
+ * same fix: another version when one has the extension, tizen-tv-sdk-install
+ * otherwise.
+ */
+function tvVersionMissingMessage(version, installed) {
+  const others = installed.filter((v) => v !== version);
+  return others.length
+    ? `The Samsung TV SDK extension is not installed for TIZEN-${version} (installed for: ${others.join(", ")}). ` +
+        "Omit --platform-version to use the newest installed TV profile, or pass one of those versions."
+    : `The Samsung TV SDK extension is not installed for TIZEN-${version}. ` +
+        "Install it with tizen-tv-sdk-install, or omit --platform-version.";
 }
 
 /**
@@ -623,6 +662,26 @@ async function createProject(
       startTime,
     );
     if (versionArgs.error) return versionArgs.error;
+
+    // A TV project for an explicit version needs that version's TV extension.
+    // Without this check the script failed later with "Install TV SDK
+    // extension first" and an empty template list — the wrong fix when the
+    // extension is installed for another version.
+    if (type.toLowerCase() === "tv" && versionArgs.version) {
+      const sdkPath = readSdkPath();
+      if (!hasTvExtensionDir(sdkPath, versionArgs.version)) {
+        return formatError(
+          command,
+          "platform_version_not_found",
+          tvVersionMissingMessage(
+            versionArgs.version,
+            tvVersionsOnDisk(sdkPath),
+          ),
+          null,
+          startTime,
+        );
+      }
+    }
 
     // All validation passed — now (and only now) clear the existing target.
     if (replaceExisting) {
@@ -1635,13 +1694,9 @@ async function listTemplates(
         // An explicit version with the TV extension only on other versions is
         // not "TV SDK not installed": tizen-tv-sdk-install would not fix it.
         if (key === "tv" && versionArgs.version) {
-          const others = installedTvVersions(readSdkPath(), profiles).filter(
-            (v) => v !== versionArgs.version,
-          );
-          if (others.length) {
-            hints.tv =
-              `The Samsung TV SDK extension is not installed for TIZEN-${versionArgs.version} (installed for: ${others.join(", ")}). ` +
-              "Omit --platform-version to use the newest installed TV profile, or pass one of those versions.";
+          const installed = installedTvVersions(readSdkPath(), profiles);
+          if (installed.some((v) => v !== versionArgs.version)) {
+            hints.tv = tvVersionMissingMessage(versionArgs.version, installed);
           }
         }
         const hint =

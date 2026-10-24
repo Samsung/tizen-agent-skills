@@ -525,6 +525,50 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
           ),
         true,
       );
+      // create --type tv for that version stops BEFORE the script runs, with
+      // the same message (it used to end in "Install TV SDK extension first").
+      const tvWs = path.join(sandboxHome, "tv-ws");
+      fs.mkdirSync(tvWs);
+      const tvCreate = await createProject(
+        "tv",
+        "Tv10",
+        tvWs,
+        "MyTizenTvAppX",
+        false,
+        "tizen-sdk create-project",
+        false,
+        "9.0",
+      );
+      check(
+        "create --type tv for a version without TV → platform_version_not_found naming 10.0",
+        tvCreate.status === "failure" &&
+          tvCreate.errors[0].error_category === "platform_version_not_found" &&
+          tvCreate.errors[0].message.includes(
+            "not installed for TIZEN-9.0 (installed for: 10.0)",
+          ),
+        true,
+      );
+      check("nothing was created for it", fs.readdirSync(tvWs).length, 0);
+      fs.rmSync(path.join(hintSdk, "platforms", "tizen-10.0", "tv-samsung"), {
+        recursive: true,
+      });
+      const noTv = await createProject(
+        "tv",
+        "Tv10",
+        tvWs,
+        "MyTizenTvAppX",
+        false,
+        "tizen-sdk create-project",
+        false,
+        "9.0",
+      );
+      check(
+        "no TV extension anywhere → points at tizen-tv-sdk-install",
+        /not installed for TIZEN-9\.0\. Install it with tizen-tv-sdk-install/.test(
+          noTv.errors[0].message,
+        ),
+        true,
+      );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
   } finally {
