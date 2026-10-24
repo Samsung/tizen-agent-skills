@@ -54,7 +54,8 @@
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,
   `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,
-  `common/lib/tests/sdk-install-force.test.js`). 설치된 SDK에 `--force`를 주면 "이미 설치됨"
+  `common/lib/tests/sdk-install-force.test.js`, `docs/tv-setup/TV_SDK_SETUP.md`, `.en.md`).
+  설치된 SDK에 `--force`를 주면 "이미 설치됨"
   검사는 통과했지만, 그다음 `.package/<pkg>.manifest`가 있는 패키지를 모두 건너뛰어 아무것도
   다시 받지 않았습니다. 그래서 최신 패키지가 설치되지 않았고, `--repo-url`로 저장소를 바꿔도
   `repository.info`만 바뀌고 패키지는 예전 저장소의 것이 그대로 남았습니다. 이제 패키지별 이어받기
@@ -64,8 +65,7 @@
   이번에 설치할 기본 SDK 패키지마다 예전 manifest를 지웁니다. 그래서 중간에 실패한 설치가 설치
   완료로 보고되지 않고, 이어서 설치할 때 아직 다시 설치하지 못한 패키지도 예전 버전으로 남지 않고
   다시 설치됩니다. `.package/`를 함께 쓰는 TV SDK, 에뮬레이터, 플랫폼 패키지의 manifest와
-  `repository.info`는 남깁니다.
-  두 SKILL.md의 Cline 실행 명령은 이제
+  `repository.info`는 남깁니다. 두 SKILL.md와 TV SDK 설정 가이드의 Cline 실행 명령은 이제
   `suggested_fix.command`를 인자까지 그대로 실행합니다(`nohup <suggested_fix.command>`,
   `<suggested_fix.command> -Detach`). 예전에는 `--force`, `--path`, `--platform`이 빠졌습니다.
 - **SDK 설치 스킬이 모든 완료 경로에서 envelope를 보고** (`common/skills/tizen-sdk-install/SKILL.md`,

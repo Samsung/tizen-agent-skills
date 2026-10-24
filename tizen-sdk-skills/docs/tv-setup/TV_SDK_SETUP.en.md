@@ -47,8 +47,10 @@ The base Tizen SDK consists of **121 packages** including:
 **Installation method (Cline on Linux):**
 
 ```bash
-# Phase 2: Launch installer in background with nohup
-nohup bash "<installer.sh path>" > /tmp/tizen-sdk-install.log 2>&1 & \
+# Phase 2: Launch the Phase 1 envelope's suggested_fix.command in the background with nohup.
+# Keep all of its arguments (--path, --platform, --force, --download-jobs) — dropping them
+# ignores what the user asked for.
+nohup <suggested_fix.command> > /tmp/tizen-sdk-install.log 2>&1 & \
 jobs -p
 
 # Poll every 25 seconds until STATUS=done — increase the attempt number (#N) on every call

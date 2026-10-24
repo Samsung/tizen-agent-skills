@@ -47,8 +47,10 @@ TV SDK는 기본 Tizen SDK가 먼저 설치되어야 하는 **확장 패키지**
 **설치 방법 (Linux에서 Cline 사용 시):**
 
 ```bash
-# Phase 2: nohup로 백그라운드에서 설치 프로그램 실행
-nohup bash "<installer.sh 경로>" > /tmp/tizen-sdk-install.log 2>&1 & \
+# Phase 2: Phase 1 envelope의 suggested_fix.command를 nohup로 백그라운드에서 실행.
+# 인자(--path, --platform, --force, --download-jobs)를 모두 그대로 유지 — 빼면 사용자가 요청한
+# 옵션이 무시됩니다.
+nohup <suggested_fix.command> > /tmp/tizen-sdk-install.log 2>&1 & \
 jobs -p
 
 # 25초마다 상태 폴링하여 STATUS=done 확인 — 시도 번호(#N)는 호출마다 1씩 증가 (Cline은 동일 호출
