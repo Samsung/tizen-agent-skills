@@ -102,9 +102,11 @@ if ($Detach) {
     $logFile = Join-Path $env:TEMP "tizen-sdk-install.log"
     $procArgs = @(
         '-NoProfile', '-ExecutionPolicy', 'Bypass',
-        '-File', $PSCommandPath,
-        '-Force'
+        '-File', $PSCommandPath
     )
+    # -Force only when the caller asked for it: forcing every detached run
+    # would make a resumed install re-download all packages.
+    if ($Force) { $procArgs += '-Force' }
     if ($Platform) { $procArgs += @('-Platform', $Platform) }
     if ($Path) { $procArgs += @('-Path', $Path) }
     if ($RepoUrl) { $procArgs += @('-RepoUrl', $RepoUrl) }
@@ -702,8 +704,9 @@ function Install-PlatformPackages {
         # Resume support: if this package's manifest already exists it was
         # installed on a previous run, so skip it. This lets an
         # interrupted/timed-out install continue where it left off instead of
-        # starting over - just re-run the script.
-        if (Test-Path (Join-Path $pkgInfoDir "$pkg.manifest")) {
+        # starting over - just re-run the script. -Force reinstalls every
+        # package, so it never resume-skips.
+        if (-not $Force -and (Test-Path (Join-Path $pkgInfoDir "$pkg.manifest"))) {
             Write-Info "[$idx/$total] $pkg already installed, skip"
             $skip++
             $skipped += "$pkg - already installed (previous run)"

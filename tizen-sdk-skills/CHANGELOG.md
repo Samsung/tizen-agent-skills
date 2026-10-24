@@ -53,6 +53,16 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **`--force` / `-Force` now reinstalls an installed SDK**
+  (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
+  `common/lib/tests/sdk-install-force.test.js`). On an installed SDK, `--force` got past
+  the "already installed" check but then skipped every package whose
+  `.package/<pkg>.manifest` existed, so nothing was downloaded again. Newer packages never
+  arrived, and a `--repo-url` switch only rewrote `repository.info` while the packages still
+  came from the old repository. The per-package resume skip now applies only without
+  `--force`. The detached re-launch (`--detach` / `-Detach`) used to add `--force`
+  every time; it now adds it only when the caller asked for it, so a resumed install still
+  skips the packages it already installed.
 - **SDK install skills now report the envelope on every completion path**
   (`common/skills/tizen-sdk-install/SKILL.md`,
   `common/skills/tizen-sdk-install-custom-repo/SKILL.md`,

@@ -505,7 +505,8 @@ install_platform_packages() {
 
     # Resume support: if manifest already exists for this package, it was installed in previous run,
     # so skip it without re-downloading (continue interrupted/timed-out install from where it left off).
-    if [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
+    # --force reinstalls every package, so it never resume-skips.
+    if [ "$FORCE" != true ] && [ -f "$INSTALL_PATH/.package/$pkg.manifest" ]; then
       log_info "[$idx/$total] $pkg already installed, skipping"
       skip=$((skip+1))
       skipped="$skipped
@@ -998,7 +999,10 @@ SCRIPT_START=$SECONDS
 # repository the user asked for, and dropping --path would install elsewhere
 # than the path whose --status the caller then polls.
 if [ "$DETACH" = true ]; then
-  detach_args=(--force --path "$INSTALL_PATH")
+  # --force only when the caller asked for it: forcing every detached run
+  # would make a resumed install re-download all packages.
+  detach_args=(--path "$INSTALL_PATH")
+  [ "$FORCE" = true ] && detach_args+=(--force)
   [ -n "$PLATFORM_VERSION" ] && detach_args+=(--platform "$PLATFORM_VERSION")
   [ -n "$REPO_URL" ] && detach_args+=(--repo-url "$REPO_URL")
   detach_args+=(--download-jobs "$DOWNLOAD_JOBS")
