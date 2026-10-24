@@ -1,6 +1,6 @@
 {
   "name": "tizen-sdk-skills-test-suite",
-  "version": "1.4.5",
+  "version": "1.5.0",
   "description": "Self-contained test suite for tizen-sdk plugin commands",
   "type": "module",
   "private": true,

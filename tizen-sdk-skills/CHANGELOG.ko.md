@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-25
+
 ### Added
 
 - **여러 Tizen 플랫폼 버전을 나란히 관리** (`common/lib/core/sdk.js`,

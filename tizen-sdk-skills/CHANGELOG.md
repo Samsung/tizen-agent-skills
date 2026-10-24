@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-10-25
+
 ### Added
 
 - **Manage several Tizen platform versions side by side** (`common/lib/core/sdk.js`,

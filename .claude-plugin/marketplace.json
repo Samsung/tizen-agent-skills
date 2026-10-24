@@ -16,7 +16,7 @@
       "displayName": "Tizen SDK Skills",
       "source": "./tizen-sdk-skills/common",
       "description": "Automate the Tizen SDK end to end for AI coding agents: install the SDK and TV extension, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run emulators and devices over sdb, manage certificates, debug remotely with GDB / netcoredbg / CDP, analyse dlog and run Playwright tests.",
-      "version": "1.4.5",
+      "version": "1.5.0",
       "author": {
         "name": "Samsung Electronics"
       },
