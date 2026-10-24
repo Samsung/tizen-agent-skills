@@ -549,6 +549,34 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         true,
       );
       check("nothing was created for it", fs.readdirSync(tvWs).length, 0);
+      // The extension installed for 9.0 too, but tz lists no TV templates
+      // under it: not "not installed" — an incomplete extension.
+      fs.mkdirSync(
+        path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung", "x"),
+        {
+          recursive: true,
+        },
+      );
+      fs.writeFileSync(
+        hintStub,
+        "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\ntv-samsung-10.0:\\n  Tv10 [web_app]\\ntv-samsung-9.0:\\n'\n",
+      );
+      const bothEnv = await listTemplates(
+        "tv",
+        "tizen-sdk list-templates",
+        "9.0",
+      );
+      check(
+        "TV hint for an installed extension without templates says it may be incomplete",
+        bothEnv.status === "failure" &&
+          bothEnv.errors[0].message.includes(
+            "is installed for TIZEN-9.0, but tz lists no TV templates",
+          ),
+        true,
+      );
+      fs.rmSync(path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung"), {
+        recursive: true,
+      });
       fs.rmSync(path.join(hintSdk, "platforms", "tizen-10.0", "tv-samsung"), {
         recursive: true,
       });

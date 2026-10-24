@@ -1695,7 +1695,12 @@ async function listTemplates(
         // not "TV SDK not installed": tizen-tv-sdk-install would not fix it.
         if (key === "tv" && versionArgs.version) {
           const installed = installedTvVersions(readSdkPath(), profiles);
-          if (installed.some((v) => v !== versionArgs.version)) {
+          if (installed.includes(versionArgs.version)) {
+            // Installed, yet tz lists no TV template under it.
+            hints.tv =
+              `The Samsung TV SDK extension is installed for TIZEN-${versionArgs.version}, but tz lists no TV templates for it — the extension may be incomplete. ` +
+              "Reinstall it with tizen-tv-sdk-install --force, then retry.";
+          } else if (installed.length) {
             hints.tv = tvVersionMissingMessage(versionArgs.version, installed);
           }
         }
