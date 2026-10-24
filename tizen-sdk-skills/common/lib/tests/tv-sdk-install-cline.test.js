@@ -91,7 +91,8 @@ check(
   "-Status shares the -Wait status check",
   /if \(\$Wait -or \$Status\) \{/.test(ps1),
 );
-const procArgs = ps1.match(/\$procArgs = @\(([\s\S]*?)\)/);
+// Up to the line that closes the array: elements may hold parentheses.
+const procArgs = ps1.match(/\$procArgs = @\(([\s\S]*?)\r?\n\s*\)/);
 check(
   "-Detach forwards -SdkPath and -DownloadJobs, not a hard-coded -Force",
   procArgs !== null &&
@@ -139,15 +140,96 @@ for (const [name, src] of [
   );
 }
 check(
-  "ps1: -Detach quotes the script path for Start-Process",
-  procArgs !== null && /'-File', "`"\$PSCommandPath`""/.test(procArgs[1]),
+  "ps1: -Detach quotes the script path and -SdkPath with ConvertTo-QuotedArgument",
+  procArgs !== null &&
+    /'-File', \(ConvertTo-QuotedArgument \$PSCommandPath\)/.test(procArgs[1]) &&
+    /'-SdkPath', \(ConvertTo-QuotedArgument \$SdkPath\)/.test(procArgs[1]),
 );
 check(
-  "from-zip ps1: -Detach quotes the script path and passes a flat argument list",
-  /-ArgumentList \(@\("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", "`"\$PSCommandPath`""\) \+ \$argList\)/.test(
+  "from-zip ps1: -Detach quotes every path and passes a flat argument list",
+  /"-SdkPath", \(ConvertTo-QuotedArgument \$SdkPath\), "-ZipPath", \(ConvertTo-QuotedArgument \$ZipPath\)/.test(
     zipPs1,
-  ),
+  ) &&
+    /-ArgumentList \(@\("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", \(ConvertTo-QuotedArgument \$PSCommandPath\)\) \+ \$argList\)/.test(
+      zipPs1,
+    ),
 );
+for (const [name, src] of [
+  ["tizen-tv-sdk-install.ps1", ps1],
+  ["tizen-tv-sdk-install-from-zip.ps1", zipPs1],
+]) {
+  check(`${name}: no hand-quoted "\`"$…\`"" argument left`, !/"`"\$/.test(src));
+}
+
+// ConvertTo-QuotedArgument (lib/common.ps1), checked without PowerShell: apply
+// its own -replace pattern, then read the joined command line back the way
+// Windows does (CommandLineToArgvW). A value must come back unchanged and must
+// not swallow the argument after it.
+console.log("--- ConvertTo-QuotedArgument ---");
+const commonPs1 = read(path.join(scriptsDir, "lib", "common.ps1"));
+const quoteFn = commonPs1.match(
+  /function ConvertTo-QuotedArgument \{[\s\S]*?\$Value -replace '([^']+)', '([^']+)'/,
+);
+check(
+  "helper is defined with a -replace on the trailing backslashes",
+  !!quoteFn,
+);
+if (quoteFn) {
+  const re = new RegExp(quoteFn[1]);
+  const quote = (v) => `"${v.replace(re, quoteFn[2])}"`;
+  const parseWindowsArgs = (line) => {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    let started = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === "\\") {
+        let n = 0;
+        while (line[i] === "\\") {
+          n++;
+          i++;
+        }
+        if (line[i] === '"') {
+          cur += "\\".repeat(Math.floor(n / 2));
+          if (n % 2 === 1) cur += '"';
+          else inQuotes = !inQuotes;
+        } else {
+          cur += "\\".repeat(n);
+          i--;
+        }
+        started = true;
+      } else if (c === '"') {
+        inQuotes = !inQuotes;
+        started = true;
+      } else if (/\s/.test(c) && !inQuotes) {
+        if (started) out.push(cur);
+        cur = "";
+        started = false;
+      } else {
+        cur += c;
+        started = true;
+      }
+    }
+    if (started) out.push(cur);
+    return out;
+  };
+  for (const value of [
+    "C:\\Program Files\\tizen\\tizen-sdk-install.ps1",
+    "C:\\tizen-sdk\\",
+    "C:\\",
+    "D:\\sdk",
+  ]) {
+    const argv = parseWindowsArgs(
+      ["-Path", quote(value), "-DownloadJobs", "4"].join(" "),
+    );
+    check(
+      `${JSON.stringify(value)} survives the command line`,
+      JSON.stringify(argv) ===
+        JSON.stringify(["-Path", value, "-DownloadJobs", "4"]),
+    );
+  }
+}
 
 console.log("--- bash --status ---");
 if (process.platform === "win32") {

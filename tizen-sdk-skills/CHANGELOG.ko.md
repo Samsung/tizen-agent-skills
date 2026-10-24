@@ -53,7 +53,7 @@
 - **TV SDK 설치가 Cline에서 동작하고 `--force`도 유지**
   (`common/scripts/tizen-tv-sdk-install/tizen-tv-sdk-install.sh`, `.ps1`,
   `common/scripts/tizen-tv-sdk-install-from-zip/tizen-tv-sdk-install-from-zip.sh`, `.ps1`,
-  `common/scripts/tizen-sdk-install/tizen-sdk-install.ps1`, `common/scripts/lib/common.sh`,
+  `common/scripts/tizen-sdk-install/tizen-sdk-install.ps1`, `common/scripts/lib/common.sh`, `.ps1`,
   `common/skills/tizen-tv-sdk-install/SKILL.md`,
   `common/skills/tizen-tv-sdk-install-from-zip/SKILL.md`,
   `common/lib/tests/tv-sdk-install-cline.test.js`, `common/lib/tests/sdk-install-force.test.js`,
@@ -73,10 +73,12 @@
   때문입니다. 그래서 설치가 실패해도 실패로 보고되지 않았습니다. 이제 두 스크립트는
   `--status` / `--wait` 프로세스를 모두 건너뛰는 `installer_running` 함수
   (`common/scripts/lib/common.sh`)를 함께 씁니다. `tizen-tv-sdk-install.ps1`,
-  `tizen-tv-sdk-install-from-zip.ps1`, `tizen-sdk-install.ps1`의 `-Detach`는 이제 다시 실행할
-  스크립트 경로를 따옴표로 감쌉니다(`tizen-sdk-install.ps1`은 `-Path`도). `Start-Process`는
-  `-ArgumentList` 원소를 따옴표로 감싸지 않아서, 공백이 있는 경로가 두 인자로 쪼개져 분리 실행된
-  설치가 시작되지 않았습니다.
+  `tizen-tv-sdk-install-from-zip.ps1`, `tizen-sdk-install.ps1`의 `-Detach`는 이제 넘기는 모든
+  경로(스크립트 경로, `-Path`, `-SdkPath`, `-ZipPath`)를 새 `ConvertTo-QuotedArgument` 함수
+  (`common/scripts/lib/common.ps1`)로 따옴표로 감쌉니다. `Start-Process`는 `-ArgumentList` 원소를
+  따옴표로 감싸지 않아서, 공백이 있는 경로가 두 인자로 쪼개져 분리 실행된 설치가 시작되지
+  않았습니다. 이 함수는 끝의 `\`도 두 배로 늘립니다. Windows는 `\"`를 이스케이프된 따옴표로 읽기
+  때문에, 그냥 감싼 `"C:\tizen-sdk\"`나 드라이브 루트 `"C:\"`는 뒤의 인자까지 삼켰을 것입니다.
 - **`--force` / `-Force`가 설치된 SDK를 다시 설치**
   (`common/scripts/tizen-sdk-install/tizen-sdk-install.sh`, `.ps1`,
   `common/skills/tizen-sdk-install/SKILL.md`,

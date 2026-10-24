@@ -113,12 +113,12 @@ if ($Wait) {
 
 # -Detach: re-launch in background
 if ($Detach) {
-    $argList = @("-SdkPath", "`"$SdkPath`"", "-ZipPath", "`"$ZipPath`"")
+    # Paths go through ConvertTo-QuotedArgument (lib\common.ps1): Start-Process
+    # quotes nothing, and a trailing backslash would escape a plain closing quote.
+    $argList = @("-SdkPath", (ConvertTo-QuotedArgument $SdkPath), "-ZipPath", (ConvertTo-QuotedArgument $ZipPath))
     if ($Force) { $argList += "-Force" }
-    # Start-Process joins -ArgumentList with spaces and does not quote the
-    # elements, so the script path must carry its own quotes like the others.
     $proc = Start-Process -FilePath "powershell" `
-        -ArgumentList (@("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", "`"$PSCommandPath`"") + $argList) `
+        -ArgumentList (@("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", (ConvertTo-QuotedArgument $PSCommandPath)) + $argList) `
         -WindowStyle Hidden -PassThru
     Write-Host "PID=$($proc.Id)"
     exit 0

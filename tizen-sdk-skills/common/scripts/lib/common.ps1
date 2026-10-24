@@ -87,6 +87,21 @@ function ConvertTo-CanonicalWindowsPath {
 }
 
 # ----------------------------------------------------------------------------
+# Quote one value for Start-Process -ArgumentList, which joins the elements
+# with spaces and quotes none of them: a path with a space (a user profile
+# directory, for example) split into two arguments.
+# Backslashes right before the closing quote are doubled rather than trimmed:
+# Windows reads \" as an escaped quote, so "C:\tizen-sdk\" would swallow the
+# arguments after it, and trimming would turn a drive root "C:\" into "C:"
+# (the current directory on C:). "\\" followed by the quote reads as one
+# backslash, so the child gets the value unchanged.
+# ----------------------------------------------------------------------------
+function ConvertTo-QuotedArgument {
+    param([string]$Value)
+    return '"' + ($Value -replace '(\\+)$', '$1$1') + '"'
+}
+
+# ----------------------------------------------------------------------------
 # SDK path resolution
 #   ~\.tizen.sdk.path.config -> TIZEN_SDK_PATH -> %USERPROFILE%\tizen-sdk -> C:\tizen-sdk
 # The config file is the path saved by sdk-init (the only source the Node lib's
