@@ -38,6 +38,7 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 | 스킬 | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (Gemini와 공유) | `~/.gemini/skills/<n>/` |
 | 에이전트 | `~/.claude/agents/*.md` (원본 그대로) | — (Cline 서브에이전트는 이를 지원하는 빌드에 내장) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (tools를 Gemini 이름으로 매핑, `maxTurns` → `max_turns`, `model` 제거) |
 | 가드(훅) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + `settings.json` `hooks.PreToolUse` 항목 자동 병합(3개 훅 모두; 파일을 파싱할 수 없을 때만 스니펫 출력) | `Documents/Cline/Hooks/PreToolUse` 어댑터 + 가드 (훅을 지원하는 Cline 빌드; macOS/Linux만) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` 작성(외부 `hooks.json`이 있으면 병합 스니펫 출력) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` 어댑터 + 가드; `settings.json` `hooks.BeforeTool` 항목 자동 병합(파일을 파싱할 수 없을 때만 스니펫 출력) |
+| 업데이트 확인(세션 시작) | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 | `Documents/Cline/Hooks/TaskStart` 어댑터 + `check-update.js` (macOS/Linux만) | 훅 디렉터리의 `check-update.js`; `hooks.json` `SessionStart` 항목 | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 |
 | 상시 규칙 | — | `Documents/Cline/Rules/tizen-sdk-skills-guard.md` (한국어) | `~/.codex/AGENTS.md` — 마커 구획 | `~/.gemini/GEMINI.md` — 마커 구획 |
 | 탐색 스니펫이 쓰는 호스트 마커 | `CLAUDECODE=1` | 없음(기본값) | Codex가 셸에 주입하는 `CODEX_*` 변수 중 하나: `CODEX_THREAD_ID`, `CODEX_SANDBOX_NETWORK_DISABLED`(기본 샌드박스), `CODEX_SANDBOX`(macOS), `CODEX_VERSION` | `GEMINI_CLI=1` |
 
@@ -46,6 +47,15 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 이름이 그대로 `Bash`, deny는 `hookSpecificOutput.permissionDecision`) 가드가 무수정으로
 동작하고, Cline과 Gemini는 도구 이름을 바꾸고 deny JSON을 변환하는 60줄 내외의 어댑터를
 거칩니다.
+
+업데이트 확인(`common/hooks/check-update.js`)은 새 세션마다 한 번 실행됩니다. 설치된 플러그인
+버전(`<dot-dir>/plugins/cache/tizen-platform/<plugin>/<X.Y.Z>/`)을 GitHub `main`의
+`.claude-plugin/marketplace.json`과 비교하며, 이 파일은 하루에 한 번만 받아
+`~/.tizen.agent.update.json`에 캐시합니다. 새 버전이 있을 때만 알림을 출력하고, 실패(오프라인,
+시간 초과, HTTP 오류)하면 아무것도 출력하지 않고 4시간 뒤에 다시 시도합니다. 프록시
+환경(`HTTPS_PROXY`)에서는 Node 내장 프록시 지원(Node 22.21+ / 24+)을 쓰고, 그보다 오래된
+Node에서는 확인을 건너뜁니다. setup 스크립트만 이 훅을 등록하며 VS Code 확장은 등록하지
+않습니다(확장 제거 시에는 이 항목도 지웁니다).
 
 `AGENTS.md` / `GEMINI.md`의 마커 구획은
 `<!-- tizen-sdk-skills:begin --> … <!-- tizen-sdk-skills:end -->`이며, setup을 다시 실행하면
@@ -136,9 +146,11 @@ setup은 멱등합니다: 캐시는 클린 미러, 개인 스킬 폴더는 스�
 rm -rf ~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills
 rm -rf <skills-dir>/tizen-*                 # <skills-dir>는 위 표 참조
 rm -f  <agents-dir>/tizen-*.md <agents-dir>/tizen-*.toml
-rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # codex / gemini
+rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # claude / codex / gemini
+rm -f  ~/.tizen.agent.update.json           # 업데이트 확인 캐시(모든 호스트 공용)
+# Cline: Documents/Cline/Hooks/PreToolUse, TaskStart, tizen-sdk-skills/도 삭제
 # 그 다음 AGENTS.md / GEMINI.md의 tizen-sdk-skills 구획과
-# settings.json / hooks.json의 훅 항목을 삭제
+# settings.json / hooks.json의 훅 항목(PreToolUse / BeforeTool / SessionStart)을 삭제
 ```
 
 ## 하네스 추가하기

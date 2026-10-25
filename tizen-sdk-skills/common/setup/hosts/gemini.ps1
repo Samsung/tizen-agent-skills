@@ -32,10 +32,28 @@ function Get-GeminiHookEntries {
 '@ -replace '__NAME__', $name -replace '__ADAPTER__', $adapter
 }
 
+# The SessionStart entry: check-update.js reports a newer release of an
+# installed plugin. It runs via node, so it needs no bash on Windows.
+function Get-GeminiSessionEntries {
+    $dir = $script:HooksDir -replace '\\', '/'
+    $cache = (Join-Path $script:HostHome (Split-Path $script:CacheTail -Parent)) -replace '\\', '/'
+    $name = $script:PluginName
+    @'
+[
+  {
+    "matcher": "startup",
+    "hooks": [{ "name": "__NAME__-update-check", "type": "command",
+      "command": "node \"__DIR__/check-update.js\" --host gemini --cache-root \"__CACHE__\"", "timeout": 5000 }]
+  }
+]
+'@ -replace '__NAME__', $name -replace '__DIR__', $dir -replace '__CACHE__', $cache
+}
+
 function Install-HostExtras {
     Install-ShellScript $script:AdapterSrc $script:AdapterDst
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-tizen-commands.sh") (Join-Path $script:HooksDir "check-tizen-commands.sh")
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-project-writes.sh") (Join-Path $script:HooksDir "check-project-writes.sh")
+    Install-ShellScript (Join-Path $script:CommonDir "hooks\check-update.js") (Join-Path $script:HooksDir "check-update.js")
     Write-Status "Gemini BeforeTool hook installed: $script:AdapterDst" "Success"
 
     # Register the BeforeTool entry in settings.json. The merge tool replaces our
@@ -53,6 +71,13 @@ function Install-HostExtras {
             if ($LASTEXITCODE -eq 0) {
                 Write-Status "BeforeTool hook registered in $script:SettingsFile (hooks.BeforeTool)" "Success"
                 $merged = $true
+                [IO.File]::WriteAllText($tmp, (Get-GeminiSessionEntries), (New-Object System.Text.UTF8Encoding $false))
+                & node (Join-Path $script:CommonDir "lib\tools\merge-hooks-json.js") --file $script:SettingsFile --event SessionStart --entries-file $tmp
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Status "Update check registered in $script:SettingsFile (hooks.SessionStart)" "Success"
+                } else {
+                    Write-Status "Could not register the update check in $script:SettingsFile (hooks.SessionStart)" "Warning"
+                }
             } else {
                 Write-Status "Could not merge the hook into $script:SettingsFile - merge the snippet below by hand" "Warning"
                 Write-Snippet
@@ -87,19 +112,25 @@ function Write-Snippet {
     Write-Host "  Merge this into $script:SettingsFile -> `"hooks`":" -ForegroundColor Yellow
     Write-Host '  "BeforeTool": ' -ForegroundColor Gray
     Write-Host (Get-GeminiHookEntries) -ForegroundColor Gray
+    Write-Host '  ,' -ForegroundColor Gray
+    Write-Host '  "SessionStart": ' -ForegroundColor Gray
+    Write-Host (Get-GeminiSessionEntries) -ForegroundColor Gray
     Write-Host ""
 }
 
 
 function Test-HostExtras {
     $ok = $true
-    foreach ($f in $script:AdapterDst, (Join-Path $script:HooksDir "check-tizen-commands.sh"), (Join-Path $script:HooksDir "check-project-writes.sh")) {
+    foreach ($f in $script:AdapterDst, (Join-Path $script:HooksDir "check-tizen-commands.sh"), (Join-Path $script:HooksDir "check-project-writes.sh"), (Join-Path $script:HooksDir "check-update.js")) {
         if (-not (Test-Path $f)) { Write-Status "Gemini hooks : File missing - $f" "Warning"; $ok = $false }
     }
     if (Test-Path $script:SettingsFile) {
         $settings = Get-Content $script:SettingsFile -Raw
         if ($settings -notmatch "BeforeTool" -or $settings -notmatch [regex]::Escape(($script:AdapterDst -replace '\\', '/'))) {
             Write-Status "Gemini hooks : $script:SettingsFile does not reference the BeforeTool adapter" "Warning"; $ok = $false
+        }
+        if ($settings -notmatch [regex]::Escape("check-update.js")) {
+            Write-Status "Gemini hooks : $script:SettingsFile does not reference check-update.js" "Warning"; $ok = $false
         }
     } else {
         Write-Status "Gemini hooks : $script:SettingsFile not found" "Warning"; $ok = $false
@@ -111,7 +142,7 @@ function Test-HostExtras {
 }
 
 function Write-HostSummary {
-    Write-Status "Gemini hooks: $script:HooksDir + entry in $script:SettingsFile (hooks.BeforeTool)" "Info"
+    Write-Status "Gemini hooks: $script:HooksDir + entries in $script:SettingsFile (hooks.BeforeTool, hooks.SessionStart)" "Info"
     Write-Status "Gemini context: $script:ContextFile (tizen-sdk-skills section)" "Info"
 }
 

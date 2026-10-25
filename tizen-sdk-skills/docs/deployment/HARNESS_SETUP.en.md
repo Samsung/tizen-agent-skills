@@ -38,6 +38,7 @@ snippet in every agent/skill search.
 | Skills | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (shared with Gemini) | `~/.gemini/skills/<n>/` |
 | Agents | `~/.claude/agents/*.md` (verbatim) | — (Cline subagents are built in, on builds that support them) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (tools mapped to Gemini names, `maxTurns` → `max_turns`, `model` dropped) |
 | Guards (hooks) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + entries merged into `settings.json` `hooks.PreToolUse` (all 3 hooks; snippet printed only when the file cannot be parsed) | `Documents/Cline/Hooks/PreToolUse` adapter + guards (Cline builds with hooks support; macOS/Linux only) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` written (or a merge snippet if a foreign `hooks.json` exists) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` adapter + guards; `settings.json` `hooks.BeforeTool` entry merged (snippet printed only when the file cannot be parsed) |
+| Update check (session start) | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged | `Documents/Cline/Hooks/TaskStart` adapter + `check-update.js` (macOS/Linux only) | `check-update.js` in the hook dir; `hooks.json` `SessionStart` entry | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged |
 | Always-on rules | — | `Documents/Cline/Rules/tizen-sdk-skills-guard.md` (Korean) | `~/.codex/AGENTS.md` — marker-delimited section | `~/.gemini/GEMINI.md` — marker-delimited section |
 | Host marker used by lookup snippets | `CLAUDECODE=1` | none (default) | any `CODEX_*` var Codex injects into its shells: `CODEX_THREAD_ID`, `CODEX_SANDBOX_NETWORK_DISABLED` (default sandbox), `CODEX_SANDBOX` (macOS), `CODEX_VERSION` | `GEMINI_CLI=1` |
 
@@ -46,6 +47,15 @@ The guard scripts themselves (`common/hooks/check-tizen-commands.sh`,
 same PreToolUse JSON as Claude Code (shell tool is literally `Bash`, deny is
 `hookSpecificOutput.permissionDecision`), so they run unmodified there; Cline and
 Gemini get a ~60-line adapter that renames the tool and converts the deny JSON.
+
+The update check (`common/hooks/check-update.js`) runs once per new session. It
+compares the installed plugin versions (`<dot-dir>/plugins/cache/tizen-platform/<plugin>/<X.Y.Z>/`)
+with `.claude-plugin/marketplace.json` on GitHub `main`, fetched at most once a day
+and cached in `~/.tizen.agent.update.json`, and prints a notice only when a newer
+version exists. Any failure (offline, timeout, HTTP error) prints nothing and is
+retried after 4 hours. Behind a proxy (`HTTPS_PROXY`), it uses Node's built-in proxy
+support (Node 22.21+ / 24+) and is skipped on older Node. Only the setup scripts
+register it; the VS Code extension does not (its uninstall still removes the entries).
 
 The marker-delimited section in `AGENTS.md` / `GEMINI.md` is
 `<!-- tizen-sdk-skills:begin --> … <!-- tizen-sdk-skills:end -->`; re-running the
@@ -144,9 +154,11 @@ To remove a harness install by hand:
 rm -rf ~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills
 rm -rf <skills-dir>/tizen-*                 # see the table for <skills-dir>
 rm -f  <agents-dir>/tizen-*.md <agents-dir>/tizen-*.toml
-rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # codex / gemini
+rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # claude / codex / gemini
+rm -f  ~/.tizen.agent.update.json           # update-check cache, shared by all hosts
+# Cline: also delete Documents/Cline/Hooks/PreToolUse, TaskStart and tizen-sdk-skills/
 # then delete the tizen-sdk-skills section from AGENTS.md / GEMINI.md and the
-# hooks entries from settings.json / hooks.json
+# hooks entries (PreToolUse / BeforeTool / SessionStart) from settings.json / hooks.json
 ```
 
 ## Adding another harness

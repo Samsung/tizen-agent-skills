@@ -47,6 +47,10 @@ For `tizen-sdk-skills` start with the
 [tizen-sdk-skills Quick Start](tizen-sdk-skills/README.md#quick-start); the first request to
 make is "Install the Tizen SDK".
 
+To hear about new versions, choose **Watch → Custom → Releases** on this repository. To update,
+`git pull` and re-run the plugin's setup script (see
+[Updating to a new release](tizen-sdk-skills/README.md#updating-to-a-new-release)).
+
 ## Featured plugin: tizen-sdk-skills
 
 | Area | Skills |

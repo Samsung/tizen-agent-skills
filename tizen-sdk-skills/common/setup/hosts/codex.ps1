@@ -18,6 +18,7 @@ function Initialize-HostConfig {
 
 function Get-CodexHooksJson {
     $dir = $script:HooksDir -replace '\\', '/'
+    $cache = (Join-Path $script:HostHome (Split-Path $script:CacheTail -Parent)) -replace '\\', '/'
     $name = $script:PluginName
     return @"
 {
@@ -34,6 +35,13 @@ function Get-CodexHooksJson {
         "hooks": [{ "type": "command",
           "command": "bash \"$dir/check-project-writes.sh\"" }]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [{ "type": "command", "timeout": 5,
+          "command": "node \"$dir/check-update.js\" --host codex --cache-root \"$cache\"" }]
+      }
     ]
   }
 }
@@ -43,6 +51,7 @@ function Get-CodexHooksJson {
 function Install-HostExtras {
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-tizen-commands.sh") (Join-Path $script:HooksDir "check-tizen-commands.sh")
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-project-writes.sh") (Join-Path $script:HooksDir "check-project-writes.sh")
+    Install-ShellScript (Join-Path $script:CommonDir "hooks\check-update.js") (Join-Path $script:HooksDir "check-update.js")
     Write-Status "Guard scripts installed: $script:HooksDir" "Success"
 
     $utf8 = New-Object System.Text.UTF8Encoding $false
@@ -55,7 +64,7 @@ function Install-HostExtras {
             Remove-LegacyPath (Join-Path $script:HostHome "hooks\$legacy") "Codex guard dir"
         }
     } else {
-        Write-Status "Existing $script:HooksJson (not ours) found - NOT overwriting. Merge the PreToolUse entries below into it:" "Warning"
+        Write-Status "Existing $script:HooksJson (not ours) found - NOT overwriting. Merge the PreToolUse and SessionStart entries below into it:" "Warning"
         Write-Host (Get-CodexHooksJson) -ForegroundColor Gray
     }
 
@@ -95,11 +104,14 @@ envelope is not a tool failure - re-run its ``suggested_fix.command`` (your own 
 
 function Test-HostExtras {
     $ok = $true
-    foreach ($g in "check-tizen-commands.sh", "check-project-writes.sh") {
+    foreach ($g in "check-tizen-commands.sh", "check-project-writes.sh", "check-update.js") {
         if (-not (Test-Path (Join-Path $script:HooksDir $g))) { Write-Status "Codex hooks : File missing - $script:HooksDir\$g" "Warning"; $ok = $false }
     }
     if (-not ((Test-Path $script:HooksJson) -and (Select-String -Path $script:HooksJson -Pattern "check-tizen-commands.sh" -Quiet))) {
         Write-Status "Codex hooks : $script:HooksJson does not reference the guard" "Warning"; $ok = $false
+    }
+    if (-not ((Test-Path $script:HooksJson) -and (Select-String -Path $script:HooksJson -Pattern "check-update.js" -SimpleMatch -Quiet))) {
+        Write-Status "Codex hooks : $script:HooksJson does not reference check-update.js" "Warning"; $ok = $false
     }
     if (-not ((Test-Path $script:ContextFile) -and (Select-String -Path $script:ContextFile -Pattern "tizen-sdk-skills:begin" -Quiet))) {
         Write-Status "AGENTS.md : guard section missing - $script:ContextFile" "Warning"; $ok = $false

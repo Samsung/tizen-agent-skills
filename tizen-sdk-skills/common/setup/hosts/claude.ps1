@@ -39,8 +39,22 @@ function Get-ClaudeHookEntries {
 
 }
 
+# The SessionStart entry: check-update.js reports a newer release of an
+# installed plugin. It runs via node, so it needs no bash on Windows.
+function Get-ClaudeSessionEntries {
+    $dir = $script:HooksDir -replace '\\', '/'
+    $cache = (Join-Path $script:HostHome (Split-Path $script:CacheTail -Parent)) -replace '\\', '/'
+    @'
+  {
+    "matcher": "startup",
+    "hooks": [{ "type": "command", "timeout": 5,
+      "command": "node \"__DIR__/check-update.js\" --host claude --cache-root \"__CACHE__\"" }]
+  }
+'@ -replace '__DIR__', $dir -replace '__CACHE__', $cache
+}
+
 function Install-HostExtras {
-    foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh") {
+    foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh", "check-update.js") {
         Install-ShellScript (Join-Path $script:CommonDir "hooks\$h") (Join-Path $script:HooksDir $h)
     }
     Write-Status "Hook scripts installed (version-independent path): $script:HooksDir" "Success"
@@ -61,6 +75,13 @@ function Install-HostExtras {
             if ($LASTEXITCODE -eq 0) {
                 Write-Status "All 3 hooks registered in $script:SettingsFile (hooks.PreToolUse)" "Success"
                 $merged = $true
+                [IO.File]::WriteAllText($tmp, "[" + (Get-ClaudeSessionEntries) + "]", (New-Object System.Text.UTF8Encoding $false))
+                & node (Join-Path $script:CommonDir "lib\tools\merge-hooks-json.js") --file $script:SettingsFile --event SessionStart --entries-file $tmp
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Status "Update check registered in $script:SettingsFile (hooks.SessionStart)" "Success"
+                } else {
+                    Write-Status "Could not register the update check in $script:SettingsFile (hooks.SessionStart)" "Warning"
+                }
             } else {
                 Write-Status "Could not merge hooks into $script:SettingsFile - merge the snippet below by hand" "Warning"
                 Write-Snippet
@@ -90,18 +111,20 @@ function Write-Snippet {
     Write-Host ""
     Write-Host "  Merge this into $script:SettingsFile -> hooks.PreToolUse:" -ForegroundColor Yellow
     Write-Host (Get-ClaudeHookEntries) -ForegroundColor Gray
+    Write-Host "  and this into $script:SettingsFile -> hooks.SessionStart:" -ForegroundColor Yellow
+    Write-Host (Get-ClaudeSessionEntries) -ForegroundColor Gray
 }
 
 function Test-HostExtras {
     $ok = $true
-    foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh") {
+    foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh", "check-update.js") {
         if (-not (Test-Path (Join-Path $script:HooksDir $h))) {
             Write-Status "Claude hooks : File missing - $script:HooksDir\$h" "Warning"; $ok = $false
         }
     }
     if (Test-Path $script:SettingsFile) {
         $settings = Get-Content $script:SettingsFile -Raw
-        foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh") {
+        foreach ($h in "check-tizen-commands.sh", "check-project-writes.sh", "check-skill-routing.sh", "check-update.js") {
             if ($settings -notmatch [regex]::Escape($h)) {
                 Write-Status "Claude hooks : $script:SettingsFile does not reference $h" "Warning"; $ok = $false
             }
@@ -113,7 +136,7 @@ function Test-HostExtras {
 }
 
 function Write-HostSummary {
-    Write-Status "Hooks: $script:HooksDir + entries in $script:SettingsFile (hooks.PreToolUse)" "Info"
+    Write-Status "Hooks: $script:HooksDir + entries in $script:SettingsFile (hooks.PreToolUse, hooks.SessionStart)" "Info"
 }
 
 function Write-HostNotes {

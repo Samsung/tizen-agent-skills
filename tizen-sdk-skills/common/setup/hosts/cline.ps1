@@ -16,6 +16,7 @@ function Initialize-HostConfig {
     $script:ClineRules = Join-Path $docs "Cline\Rules"
     $script:ClineSrc = Join-Path $script:CommonDir "..\cline\hooks"
     $script:AdapterDst = Join-Path $script:ClineHooks "PreToolUse"
+    $script:TaskStartDst = Join-Path $script:ClineHooks "TaskStart"
     $script:GuardDir = Join-Path $script:ClineHooks $script:PluginName
     $script:GuardRuleDst = Join-Path $script:ClineRules "$script:PluginName-guard.md"
 }
@@ -37,6 +38,15 @@ function Install-HostExtras {
         }
     }
 
+    # TaskStart: the update check (check-update.js reports a newer release).
+    if ((Test-Path $script:TaskStartDst) -and -not (Select-String -Path $script:TaskStartDst -Pattern $script:MarkerRegex -Quiet)) {
+        Write-Status "Existing TaskStart hook (not ours) found - NOT overwriting: $script:TaskStartDst. Merge the update check manually from $script:ClineSrc\TaskStart" "Warning"
+    } else {
+        Install-ShellScript (Join-Path $script:ClineSrc "TaskStart") $script:TaskStartDst
+        Install-ShellScript (Join-Path $script:CommonDir "hooks\check-update.js") (Join-Path $script:GuardDir "check-update.js")
+        Write-Status "Cline TaskStart hook installed (update check): $script:TaskStartDst" "Success"
+    }
+
     New-Item -ItemType Directory -Force $script:ClineRules | Out-Null
     Copy-Item (Join-Path $script:ClineSrc "$script:PluginName-guard.md") $script:GuardRuleDst -Force
     Write-Status "Cline guard rule installed (always-on; Windows fallback for the hook): $script:GuardRuleDst" "Success"
@@ -53,8 +63,10 @@ function Install-HostExtras {
 
 function Test-HostExtras {
     $files = @($script:AdapterDst,
+               $script:TaskStartDst,
                (Join-Path $script:GuardDir "check-tizen-commands.sh"),
                (Join-Path $script:GuardDir "check-project-writes.sh"),
+               (Join-Path $script:GuardDir "check-update.js"),
                $script:GuardRuleDst)
     $missing = @($files | Where-Object { -not (Test-Path $_) })
     if ($missing.Count -gt 0) { $missing | ForEach-Object { Write-Status "Cline hooks : File missing - $_" "Warning" } }

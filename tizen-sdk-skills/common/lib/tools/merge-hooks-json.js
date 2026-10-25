@@ -231,7 +231,7 @@ function mergeHooksFile(file, event, entries) {
 
 function usage() {
   return [
-    "usage: merge-hooks-json.js --file <settings.json> --event <PreToolUse|BeforeTool>",
+    "usage: merge-hooks-json.js --file <settings.json> --event <PreToolUse|BeforeTool|SessionStart>",
     "                     (--entries '<json array>' | --entries-file <path|->)",
   ].join("\n");
 }

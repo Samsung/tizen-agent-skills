@@ -161,18 +161,20 @@ export function isOurHookEntry(entry: unknown): boolean {
 }
 
 /**
- * Drop our PreToolUse entries from a parsed settings object, in place.
- * Returns how many entries were removed. Foreign entries are never touched.
+ * Drop our entries for one hook event (PreToolUse by default) from a parsed
+ * settings object, in place. Returns how many entries were removed. Foreign
+ * entries are never touched. Uninstall also passes "SessionStart" to drop the
+ * update check that setup.sh registers.
  *
  * Takes `unknown` on purpose: this also runs on uninstall against whatever is
  * in the file, before any shape check, and must no-op on anything malformed.
  */
-export function stripOurHooks(settings: unknown): number {
+export function stripOurHooks(settings: unknown, event = "PreToolUse"): number {
   const hooks = hooksSection(settings);
-  const list = preToolUseEntries(settings);
-  if (!hooks || !list) return 0;
-  const kept = list.filter((entry) => !isOurHookEntry(entry));
-  hooks.PreToolUse = kept;
+  const list = hooks?.[event];
+  if (!hooks || !Array.isArray(list)) return 0;
+  const kept = (list as unknown[]).filter((entry) => !isOurHookEntry(entry));
+  hooks[event] = kept;
   return list.length - kept.length;
 }
 

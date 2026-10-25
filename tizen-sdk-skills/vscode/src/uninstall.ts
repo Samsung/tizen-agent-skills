@@ -99,7 +99,8 @@ function removeClaudeAll(): void {
     try {
       const raw = fs.readFileSync(settingsFile, "utf-8");
       const settings = JSON.parse(raw);
-      const removed = stripOurHooks(settings);
+      const removed =
+        stripOurHooks(settings) + stripOurHooks(settings, "SessionStart");
       if (removed > 0) {
         const tmp = `${settingsFile}.tizen-tmp`;
         fs.writeFileSync(
@@ -134,14 +135,15 @@ function removeClineAll(): void {
 
   // Hooks
   const hooksDir = path.join(home, "Documents", "Cline", "Hooks");
-  const adapterDst = path.join(hooksDir, "PreToolUse");
-
-  // Only remove PreToolUse if it's ours (current or pre-rename marker)
-  if (fs.existsSync(adapterDst)) {
+  // Only remove an adapter if it's ours (current or pre-rename marker).
+  // TaskStart is the update check setup.sh installs.
+  for (const event of ["PreToolUse", "TaskStart"]) {
+    const adapterDst = path.join(hooksDir, event);
+    if (!fs.existsSync(adapterDst)) continue;
     if (hasOurMarker(fs.readFileSync(adapterDst, "utf-8"))) {
       removeFile(adapterDst);
     } else {
-      log(`Existing PreToolUse hook (not ours) kept: ${adapterDst}`);
+      log(`Existing ${event} hook (not ours) kept: ${adapterDst}`);
     }
   }
 

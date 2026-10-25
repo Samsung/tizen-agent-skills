@@ -10,7 +10,8 @@
 # workaround). Hooks: the guard scripts are copied to the version-independent
 # ~/.claude/hooks/tizen-sdk-skills/ and registered as PreToolUse entries in
 # ~/.claude/settings.json by common/lib/tools/merge-hooks-json.js (all three
-# hooks from common/hooks/hooks.json). The merge never touches entries that are
+# hooks from common/hooks/hooks.json), plus the check-update.js SessionStart
+# entry (new-release notice). The merge never touches entries that are
 # not ours; if settings.json cannot be parsed (or has a wrong-shaped hooks
 # section) it is left untouched and the snippet is printed for a manual merge.
 
@@ -50,9 +51,26 @@ _claude_hook_entries() {
 EOF
 }
 
+# The SessionStart entry: check-update.js reports a newer release of an
+# installed plugin. It runs via node, so it needs no bash on Windows.
+_claude_session_entries() {
+  local dir cache
+  dir="$(printf '%s' "$HOOKS_DIR" | sed 's|\\|/|g')"
+  cache="$(printf '%s' "$HOST_HOME/$(dirname "$CACHE_TAIL")" | sed 's|\\|/|g')"
+  cat <<EOF
+[
+  {
+    "matcher": "startup",
+    "hooks": [{ "type": "command", "timeout": 5,
+      "command": "node \"$dir/check-update.js\" --host claude --cache-root \"$cache\"" }]
+  }
+]
+EOF
+}
+
 host_install_extras() {
   local h
-  for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh; do
+  for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh check-update.js; do
     install_shell_script "$COMMON_DIR/hooks/$h" "$HOOKS_DIR/$h"
   done
   write_status "Hook scripts installed (version-independent path): $HOOKS_DIR" "Success"
@@ -68,6 +86,12 @@ host_install_extras() {
         --file "$SETTINGS_FILE" --event PreToolUse --entries-file -; then
       write_status "All 3 hooks registered in $SETTINGS_FILE (hooks.PreToolUse)" "Success"
       merged=true
+      if _claude_session_entries | node "$COMMON_DIR/lib/tools/merge-hooks-json.js" \
+          --file "$SETTINGS_FILE" --event SessionStart --entries-file -; then
+        write_status "Update check registered in $SETTINGS_FILE (hooks.SessionStart)" "Success"
+      else
+        write_status "Could not register the update check in $SETTINGS_FILE (hooks.SessionStart)" "Warning"
+      fi
     else
       write_status "Could not merge hooks into $SETTINGS_FILE - merge the snippet below by hand" "Warning"
       _claude_print_snippet
@@ -94,15 +118,17 @@ _claude_print_snippet() {
   echo ""
   echo -e "${YELLOW}  Merge this into $SETTINGS_FILE -> hooks.PreToolUse:${NC}"
   _claude_hook_entries | sed -n '2,$p' | sed '$d'   # strip the JSON array brackets
+  echo -e "${YELLOW}  and this into $SETTINGS_FILE -> hooks.SessionStart:${NC}"
+  _claude_session_entries | sed -n '2,$p' | sed '$d'
 }
 
 host_validate_extras() {
   local ok=true h
-  for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh; do
+  for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh check-update.js; do
     [[ -f "$HOOKS_DIR/$h" ]] || { write_status "Claude hooks : File missing - $HOOKS_DIR/$h" "Warning"; ok=false; }
   done
   if [[ -f "$SETTINGS_FILE" ]]; then
-    for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh; do
+    for h in check-tizen-commands.sh check-project-writes.sh check-skill-routing.sh check-update.js; do
       grep -qF "$h" "$SETTINGS_FILE" || {
         write_status "Claude hooks : $SETTINGS_FILE does not reference $h" "Warning"; ok=false; }
     done
@@ -113,7 +139,7 @@ host_validate_extras() {
 }
 
 host_summary() {
-  write_status "Hooks: $HOOKS_DIR + entries in $SETTINGS_FILE (hooks.PreToolUse)" "Info"
+  write_status "Hooks: $HOOKS_DIR + entries in $SETTINGS_FILE (hooks.PreToolUse, hooks.SessionStart)" "Info"
 }
 
 host_notes() {

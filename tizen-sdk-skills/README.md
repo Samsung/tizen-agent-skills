@@ -146,6 +146,31 @@ returns the result as a Standard JSON Envelope. See the
 [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) for end-to-end examples and the
 [Skills Reference](docs/SKILLS_REFERENCE.en.md) for the full list of trigger phrases.
 
+### Updating to a new release
+
+When a new session starts, the setup-installed hook checks GitHub for a newer
+release (at most once a day) and shows a one-line notice if one exists. For release
+announcements as well, open the
+[repository](https://github.com/Samsung/tizen-agent-skills) and choose
+**Watch → Custom → Releases**, or subscribe to the
+[releases feed](https://github.com/Samsung/tizen-agent-skills/releases.atom). Each
+release lists its changes in [CHANGELOG.md](CHANGELOG.md).
+
+To update a script install, pull the checkout and re-run the same setup script, then
+restart the host:
+
+```bash
+cd tizen-agent-skills
+git pull
+cd tizen-sdk-skills
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts)
+```
+
+The VS Code extension does not install the session-start check; watch the releases
+instead. To update it, download the new `.vsix` from
+[GitHub Releases](https://github.com/Samsung/tizen-agent-skills/releases) and install it
+over the old one with `code --install-extension`.
+
 ## Commands (36)
 
 Every command below is exposed as a skill named `tizen-<command>` in the AI hosts
