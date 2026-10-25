@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-25
+
 ### Added
 
 - **New-release notice at session start** (`common/hooks/check-update.js`,

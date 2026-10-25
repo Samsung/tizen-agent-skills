@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-25
+
 ### 추가
 
 - **세션 시작 시 새 릴리스 알림** (`common/hooks/check-update.js`,
