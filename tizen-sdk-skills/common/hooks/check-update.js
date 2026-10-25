@@ -167,7 +167,7 @@ function shownToday(cache, notice) {
 // the plugin addressed to the user, which a model is more willing to pass on
 // than a bare instruction found in injected context.
 const RELAY_PREFIX =
-  "Notice from the installed tizen-sdk-skills plugin, addressed to the user. " +
+  "Notice from the tizen-agent-skills update check (an installed plugin hook), addressed to the user. " +
   "The user's chat UI may not display hook messages, so the user has not seen it. " +
   "Please begin your first reply with one short line passing it on, then answer as usual. " +
   "The notice:";
