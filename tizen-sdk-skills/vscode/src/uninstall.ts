@@ -5,8 +5,12 @@
 //
 // This runs when the user uninstalls the extension via
 // `code --uninstall-extension`. It cleans up what the extension installed:
-//   - Claude: cache, personal skills/agents (per manifest), hooks (settings.json + scripts)
-//   - Cline:  cache, personal skills (per manifest), hooks (PreToolUse, guard scripts, guard rule)
+//   - Claude: cache, personal skills/agents (per manifest), hooks (settings.json
+//             PreToolUse + SessionStart entries, scripts)
+//   - Cline:  cache, personal skills (per manifest), hooks (PreToolUse, TaskStart,
+//             guard scripts, guard rule)
+// The SessionStart / TaskStart update check is registered by setup.sh, not by
+// the extension; it is removed here too so no hook points at a deleted script.
 //   - Codex:  cache, ~/.agents/skills + ~/.codex/agents/*.toml (per manifest),
 //             hooks.json (only if ours), guard scripts, the AGENTS.md section
 //
