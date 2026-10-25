@@ -4,7 +4,7 @@
 
 `tizen-sdk-skills` 저장소 전체를 한눈에 보여주는 다이어그램 모음입니다. AI 코딩 어시스턴트(Claude Code, Cline, Codex CLI, Gemini CLI, VS Code 확장)와 독립 실행형 `tizen-sdk` CLI가 **하나의 `common/`** 을 어떻게 공유하고, 자연어 요청이 어떤 계층을 거쳐 실제 Tizen SDK 도구(`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`)까지 도달하는지, 그 결과가 어떻게 Standard JSON Envelope로 돌아오는지를 그림으로 설명합니다.
 
-> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 36, 에러 코드 61, TC 296)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.5.0) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
+> 다이어그램의 개수(스킬 29, 에이전트 24, 커맨드 36, 에러 코드 61, TC 296)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.6.0) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
 
 ---
 
@@ -244,7 +244,7 @@ graph TB
     style RESULT fill:#c8e6c9,stroke:#546e7a,color:#1a1a1a
 ```
 
-훅 테스트는 `bash common/hooks/hooks.test.sh`로 실행합니다(122 케이스).
+훅 테스트는 `bash common/hooks/hooks.test.sh`로 실행합니다(244 케이스).
 
 ---
 
@@ -450,9 +450,9 @@ flowchart LR
 graph TB
     subgraph UNIT["단위 · 훅 테스트"]
         UT["common/lib/tests/run-all.js<br/>80 파일 · ≈2,890 assertions"]
-        HT["common/hooks/hooks.test.sh<br/>122 케이스"]
+        HT["common/hooks/hooks.test.sh<br/>244 케이스"]
         SLT["common/scripts/lib/common.test.sh<br/>셸 라이브러리"]
-        VT["vscode: npm test<br/>118 케이스"]
+        VT["vscode: npm test<br/>119 케이스"]
     end
 
     subgraph SUITE["tests/ 통합 TC 스위트 (296 TC)"]

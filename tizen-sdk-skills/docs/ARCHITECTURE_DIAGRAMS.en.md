@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (29 skills, 24 agents, 36 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.5.0). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (29 skills, 24 agents, 36 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.0). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -244,7 +244,7 @@ graph TB
     style RESULT fill:#c8e6c9,stroke:#546e7a,color:#1a1a1a
 ```
 
-Run the hook tests with `bash common/hooks/hooks.test.sh` (122 cases).
+Run the hook tests with `bash common/hooks/hooks.test.sh` (244 cases).
 
 ---
 
@@ -450,9 +450,9 @@ Three layers of verification: unit tests (functions), hook tests (guards) and in
 graph TB
     subgraph UNIT["Unit · hook tests"]
         UT["common/lib/tests/run-all.js<br/>80 files · ≈2,890 assertions"]
-        HT["common/hooks/hooks.test.sh<br/>122 cases"]
+        HT["common/hooks/hooks.test.sh<br/>244 cases"]
         SLT["common/scripts/lib/common.test.sh<br/>shell library"]
-        VT["vscode: npm test<br/>118 cases"]
+        VT["vscode: npm test<br/>119 cases"]
     end
 
     subgraph SUITE["tests/ integration TC suite (296 TCs)"]

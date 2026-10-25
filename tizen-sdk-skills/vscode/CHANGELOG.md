@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.6.0] — 2026-10-25
+
+The extension's uninstall now also removes the Claude Code `SessionStart` entry and the Cline `TaskStart` adapter that the setup scripts register for the new update check, so no hook is left pointing at a deleted script. The extension itself does not register the update check. The **(skills)** setup scripts now register a session-start hook for every host that tells the user when a newer release is out (at most once a day). See the project CHANGELOG for details.
+
 ## [1.5.0] — 2026-10-25
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** can now manage several Tizen platform versions side by side (`platform-install --list`, `--platform-version` on `create` / `list-templates`), screenshots fall back for Wayland/HWC targets, dlog-analyzer gains a `crash-report` action, and the TV SDK hints and `--force` reinstalls are fixed. See the project CHANGELOG for details.

@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-10-25
+
 ### Added
 
 - **New-release notice at session start** (`common/hooks/check-update.js`,
@@ -1845,7 +1847,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.6.0...HEAD
+[1.6.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...tizen-sdk-skills-v1.6.0
 [1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.5...tizen-sdk-skills-v1.5.0
 [1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...tizen-sdk-skills-v1.4.5
 [1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
