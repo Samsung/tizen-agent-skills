@@ -12,6 +12,23 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-10-25
+
+Repository-wide release that ships `tizen-sdk-skills` 1.6.0 and `tizen-action-skills` 1.0.0.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.5.0 to 1.6.0. Highlight: the setup scripts now
+  register a session-start hook for Claude Code, Codex CLI, Gemini CLI and Cline that tells
+  the user when a newer release is out. It checks `.claude-plugin/marketplace.json` on
+  `main` at most once a day, shows the same notice at most once a day, works behind
+  `HTTPS_PROXY` on Node 22.21+ / 24+, and stays silent on any failure. The VS Code
+  extension's uninstall also removes these entries. See
+  [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
+  assets stamped with the plugin version are therefore `tizen-sdk-v1.6.0.zip` and
+  `tizen-ai-extension-v1.6.0.vsix`.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.6.0.
+
 ## [1.2.0] — 2026-10-25
 
 Repository-wide release that ships `tizen-sdk-skills` 1.5.0 and `tizen-action-skills` 1.0.0.
