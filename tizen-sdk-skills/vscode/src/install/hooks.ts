@@ -346,9 +346,11 @@ export async function removeClaudeHooks(home: string): Promise<void> {
     try {
       const raw = await fsp.readFile(settingsFile, "utf-8");
       const settings: unknown = JSON.parse(raw);
-      // stripOurHooks no-ops on a malformed PreToolUse, so a shape error just
-      // means there is nothing of ours to remove.
-      const removed = stripOurHooks(settings);
+      // stripOurHooks no-ops on a malformed hook list, so a shape error just
+      // means there is nothing of ours to remove. SessionStart holds the
+      // update check setup.sh registers; its script dir is removed below.
+      const removed =
+        stripOurHooks(settings) + stripOurHooks(settings, "SessionStart");
       if (removed > 0) {
         await writeJsonAtomic(settingsFile, settings, detectIndent(raw));
         writeStatus(
@@ -388,17 +390,18 @@ export async function removeClineHooks(home: string): Promise<void> {
     clineGuardRuleName(PLUGIN_NAME),
   );
 
-  // Only remove PreToolUse if it's ours (current or pre-rename marker)
-  if (await pathExists(adapterDst)) {
-    const content = await fsp.readFile(adapterDst, "utf-8");
+  // Only remove an adapter if it's ours (current or pre-rename marker).
+  // TaskStart is the update check setup.sh installs; it runs a script from
+  // guardDir, which is removed below.
+  for (const dst of [adapterDst, path.join(hooksDir, "TaskStart")]) {
+    if (!(await pathExists(dst))) continue;
+    const content = await fsp.readFile(dst, "utf-8");
+    const event = path.basename(dst);
     if (hasOurMarker(content)) {
-      await fsp.rm(adapterDst, { force: true });
-      writeStatus(`Removed Cline PreToolUse: ${adapterDst}`, "Success");
+      await fsp.rm(dst, { force: true });
+      writeStatus(`Removed Cline ${event}: ${dst}`, "Success");
     } else {
-      writeStatus(
-        `Existing PreToolUse hook (not ours) kept: ${adapterDst}`,
-        "Info",
-      );
+      writeStatus(`Existing ${event} hook (not ours) kept: ${dst}`, "Info");
     }
   }
 

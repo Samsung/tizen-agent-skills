@@ -140,6 +140,29 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 돌려줍니다. 엔드투엔드 예시는 [사용 사례 & 시나리오 가이드](usage/usage.md), 전체 트리거
 문구 목록은 [스킬 레퍼런스](docs/SKILLS_REFERENCE.md)를 참고하세요.
 
+### 새 버전으로 업데이트
+
+setup이 설치한 훅이 새 세션을 시작할 때 GitHub에서 새 릴리스를 확인(하루 최대 1회)하고, 새
+버전이 있으면 한 줄 알림을 보여 줍니다(같은 알림은 하루 1회). 호스트 화면이 이 알림을 표시하지 않는 경우(예: Claude
+Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 요청합니다. 릴리스 공지도 받으려면
+[저장소](https://github.com/Samsung/tizen-agent-skills)에서 **Watch → Custom → Releases**를
+선택하거나 [릴리스 피드](https://github.com/Samsung/tizen-agent-skills/releases.atom)를
+구독하세요. 릴리스별 변경 사항은 [CHANGELOG.ko.md](CHANGELOG.ko.md)에 있습니다.
+
+스크립트로 설치했다면 설치에 사용한 클론(다른 작업 브랜치가 아닌)을 pull 한 뒤 같은 setup
+스크립트를 다시 실행하고 호스트를 재시작합니다:
+
+```bash
+cd tizen-agent-skills
+git pull
+cd tizen-sdk-skills
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/)
+```
+
+VS Code 확장은 세션 시작 확인을 설치하지 않으므로 릴리스 Watch로 알림을 받으세요. 업데이트는
+[GitHub Releases](https://github.com/Samsung/tizen-agent-skills/releases)에서
+새 `.vsix`를 받아 `code --install-extension`으로 기존 설치 위에 설치하세요.
+
 ## 명령어 (36개)
 
 아래 각 명령어는 AI 호스트에서는 `tizen-<명령어>` 이름의 스킬(예: `tizen-build-project`)로,

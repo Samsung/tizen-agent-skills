@@ -11,6 +11,24 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Added
+
+- **New-release notice at session start** (`common/hooks/check-update.js`,
+  `cline/hooks/TaskStart`, `common/hooks/hooks.json`, `common/setup/hosts/*.sh`, `.ps1`).
+  Installed copies never told the user that a newer version was out. Setup now registers a
+  session-start hook for every host (Claude Code, Codex CLI and Gemini CLI `SessionStart`,
+  Cline `TaskStart`) that compares the installed plugin versions with
+  `.claude-plugin/marketplace.json` on GitHub `main` and shows a one-line notice when one
+  is newer; where the UI does not display it (Claude Code VS Code extension, Cline), the
+  assistant is asked to mention it in its first reply. The same notice is shown at most once
+  a day. The catalog is fetched at most once a day (cached in
+  `~/.tizen.agent.update.json`, 3 s timeout); any failure prints nothing and is retried
+  after 4 hours. Behind `HTTPS_PROXY` it re-runs with Node's built-in proxy support
+  (Node 22.21+ / 24+) and is skipped on older Node. The VS Code extension does not register
+  the check, but its uninstall now also removes the `SessionStart` entry and the Cline
+  `TaskStart` adapter (`vscode/src/uninstall.ts`, `vscode/src/install/hooks.ts`,
+  `claudeSettings.ts`).
+
 ## [1.5.0] — 2026-10-25
 
 ### Added

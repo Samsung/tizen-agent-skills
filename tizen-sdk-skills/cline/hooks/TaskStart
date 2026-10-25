@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2026 Samsung Electronics Co., Ltd.
+
+# Cline TaskStart hook - tizen-sdk-skills update-check adapter.
+# marker: tizen-sdk-skills (setup-and-sync uses this to detect its own install)
+#
+# Runs the shared common/hooks/check-update.js (installed next to the guards in
+# ./tizen-sdk-skills/), which reports a newer release of an installed plugin:
+#   stdout: {"cancel": false, "contextModification": "..."} or {"cancel": false}
+# Exit code is always 0. Like PreToolUse, this hook is effective on macOS/Linux
+# only and must be enabled in the Cline settings UI.
+
+if ! command -v node >/dev/null 2>&1; then
+  printf '{"cancel": false}\n'
+  exit 0
+fi
+exec node "$(cd "$(dirname "$0")" && pwd)/tizen-sdk-skills/check-update.js" \
+  --host cline --cache-root "$HOME/.cline/plugins/cache/tizen-platform"

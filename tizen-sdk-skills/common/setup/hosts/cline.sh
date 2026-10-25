@@ -9,7 +9,8 @@
 # Hooks: a PreToolUse adapter in ~/Documents/Cline/Hooks bridges Cline's hook
 # protocol to the shared guard scripts (Cline builds with hooks support,
 # macOS/Linux only — check your build; upstream Cline may differ); on Windows
-# the same rules are installed as an always-on global Rule instead.
+# the same rules are installed as an always-on global Rule instead. A TaskStart
+# adapter next to it runs check-update.js (new-release notice).
 
 host_configure() {
   HOST_LABEL="Cline"
@@ -22,6 +23,7 @@ host_configure() {
   CLINE_RULES="$HOME/Documents/Cline/Rules"
   CLINE_SRC="$COMMON_DIR/../cline/hooks"
   ADAPTER_DST="$CLINE_HOOKS/PreToolUse"
+  TASKSTART_DST="$CLINE_HOOKS/TaskStart"
   GUARD_DIR="$CLINE_HOOKS/$PLUGIN_NAME"
   GUARD_RULE_DST="$CLINE_RULES/$PLUGIN_NAME-guard.md"
 }
@@ -45,6 +47,15 @@ host_install_extras() {
     done
   fi
 
+  # TaskStart: the update check (check-update.js reports a newer release).
+  if [[ -f "$TASKSTART_DST" ]] && ! grep -qE "$MARKER_RE" "$TASKSTART_DST"; then
+    write_status "Existing TaskStart hook (not ours) found - NOT overwriting: $TASKSTART_DST. Merge the update check manually from $CLINE_SRC/TaskStart" "Warning"
+  else
+    install_shell_script "$CLINE_SRC/TaskStart" "$TASKSTART_DST"
+    install_shell_script "$COMMON_DIR/hooks/check-update.js" "$GUARD_DIR/check-update.js"
+    write_status "Cline TaskStart hook installed (update check): $TASKSTART_DST" "Success"
+  fi
+
   # Windows fallback / macOS-Linux complement: the Korean, Cline-specific rule.
   mkdir -p "$CLINE_RULES"
   cp "$CLINE_SRC/$PLUGIN_NAME-guard.md" "$GUARD_RULE_DST"
@@ -65,7 +76,10 @@ host_validate_extras() {
   if [[ ! -x "$ADAPTER_DST" ]]; then
     write_status "Cline hooks : PreToolUse missing or not executable - $ADAPTER_DST" "Warning"; ok=false
   fi
-  for g in check-tizen-commands.sh check-project-writes.sh; do
+  if [[ ! -x "$TASKSTART_DST" ]]; then
+    write_status "Cline hooks : TaskStart missing or not executable - $TASKSTART_DST" "Warning"; ok=false
+  fi
+  for g in check-tizen-commands.sh check-project-writes.sh check-update.js; do
     [[ -f "$GUARD_DIR/$g" ]] || { write_status "Cline hooks : File missing - $GUARD_DIR/$g" "Warning"; ok=false; }
   done
   [[ -f "$GUARD_RULE_DST" ]] || { write_status "Cline hooks : Guard rule missing - $GUARD_RULE_DST" "Warning"; ok=false; }

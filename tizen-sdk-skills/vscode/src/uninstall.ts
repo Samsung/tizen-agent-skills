@@ -5,8 +5,12 @@
 //
 // This runs when the user uninstalls the extension via
 // `code --uninstall-extension`. It cleans up what the extension installed:
-//   - Claude: cache, personal skills/agents (per manifest), hooks (settings.json + scripts)
-//   - Cline:  cache, personal skills (per manifest), hooks (PreToolUse, guard scripts, guard rule)
+//   - Claude: cache, personal skills/agents (per manifest), hooks (settings.json
+//             PreToolUse + SessionStart entries, scripts)
+//   - Cline:  cache, personal skills (per manifest), hooks (PreToolUse, TaskStart,
+//             guard scripts, guard rule)
+// The SessionStart / TaskStart update check is registered by setup.sh, not by
+// the extension; it is removed here too so no hook points at a deleted script.
 //   - Codex:  cache, ~/.agents/skills + ~/.codex/agents/*.toml (per manifest),
 //             hooks.json (only if ours), guard scripts, the AGENTS.md section
 //
@@ -99,7 +103,8 @@ function removeClaudeAll(): void {
     try {
       const raw = fs.readFileSync(settingsFile, "utf-8");
       const settings = JSON.parse(raw);
-      const removed = stripOurHooks(settings);
+      const removed =
+        stripOurHooks(settings) + stripOurHooks(settings, "SessionStart");
       if (removed > 0) {
         const tmp = `${settingsFile}.tizen-tmp`;
         fs.writeFileSync(
@@ -134,14 +139,15 @@ function removeClineAll(): void {
 
   // Hooks
   const hooksDir = path.join(home, "Documents", "Cline", "Hooks");
-  const adapterDst = path.join(hooksDir, "PreToolUse");
-
-  // Only remove PreToolUse if it's ours (current or pre-rename marker)
-  if (fs.existsSync(adapterDst)) {
+  // Only remove an adapter if it's ours (current or pre-rename marker).
+  // TaskStart is the update check setup.sh installs.
+  for (const event of ["PreToolUse", "TaskStart"]) {
+    const adapterDst = path.join(hooksDir, event);
+    if (!fs.existsSync(adapterDst)) continue;
     if (hasOurMarker(fs.readFileSync(adapterDst, "utf-8"))) {
       removeFile(adapterDst);
     } else {
-      log(`Existing PreToolUse hook (not ours) kept: ${adapterDst}`);
+      log(`Existing ${event} hook (not ours) kept: ${adapterDst}`);
     }
   }
 

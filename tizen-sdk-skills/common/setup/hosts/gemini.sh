@@ -7,7 +7,8 @@
 #   skills   ~/.gemini/skills/<name>/SKILL.md   (Agent Skills standard)
 #   agents   ~/.gemini/agents/*.md              (YAML name/description/tools/max_turns)
 #   hooks    ~/.gemini/settings.json -> hooks.BeforeTool[...]; stdin carries
-#            tool_name + tool_input, deny = stdout {"decision":"deny","reason":…}
+#            tool_name + tool_input, deny = stdout {"decision":"deny","reason":…};
+#            hooks.SessionStart[...] runs check-update.js (new-release notice)
 #   context  ~/.gemini/GEMINI.md (global instructions)
 #   marker   GEMINI_CLI=1 in spawned shells (used by the runner-lookup snippets)
 # The cache keeps the shared ~/<dot>/plugins/cache/tizen-platform/tizen-sdk-skills/<VER>
@@ -42,6 +43,23 @@ _gemini_hook_entries() {
 EOF
 }
 
+# The SessionStart entry: check-update.js reports a newer release of an
+# installed plugin. It runs via node, so it needs no bash on Windows.
+_gemini_session_entries() {
+  local dir cache
+  dir="$(printf '%s' "$HOOKS_DIR" | sed 's|\\|/|g')"
+  cache="$(printf '%s' "$HOST_HOME/$(dirname "$CACHE_TAIL")" | sed 's|\\|/|g')"
+  cat <<EOF
+[
+  {
+    "matcher": "startup",
+    "hooks": [{ "name": "$PLUGIN_NAME-update-check", "type": "command",
+      "command": "node \"$dir/check-update.js\" --host gemini --cache-root \"$cache\"", "timeout": 5000 }]
+  }
+]
+EOF
+}
+
 
 host_install_extras() {
   # Hook adapter + the two guards it dispatches to. The adapter maps Gemini's
@@ -50,6 +68,7 @@ host_install_extras() {
   install_shell_script "$ADAPTER_SRC" "$ADAPTER_DST"
   install_shell_script "$COMMON_DIR/hooks/check-tizen-commands.sh" "$HOOKS_DIR/check-tizen-commands.sh"
   install_shell_script "$COMMON_DIR/hooks/check-project-writes.sh" "$HOOKS_DIR/check-project-writes.sh"
+  install_shell_script "$COMMON_DIR/hooks/check-update.js" "$HOOKS_DIR/check-update.js"
   write_status "Gemini BeforeTool hook installed: $ADAPTER_DST" "Success"
 
   # Register the BeforeTool entry in settings.json. The merge tool replaces our
@@ -63,6 +82,12 @@ host_install_extras() {
         --file "$SETTINGS_FILE" --event BeforeTool --entries-file -; then
       write_status "BeforeTool hook registered in $SETTINGS_FILE (hooks.BeforeTool)" "Success"
       merged=true
+      if _gemini_session_entries | node "$COMMON_DIR/lib/tools/merge-hooks-json.js" \
+          --file "$SETTINGS_FILE" --event SessionStart --entries-file -; then
+        write_status "Update check registered in $SETTINGS_FILE (hooks.SessionStart)" "Success"
+      else
+        write_status "Could not register the update check in $SETTINGS_FILE (hooks.SessionStart)" "Warning"
+      fi
     else
       write_status "Could not merge the hook into $SETTINGS_FILE - merge the snippet below by hand" "Warning"
       _gemini_print_snippet
@@ -96,6 +121,9 @@ _gemini_print_snippet() {
   echo -e "${YELLOW}  Merge this into $SETTINGS_FILE -> \"hooks\":${NC}"
   echo '  "BeforeTool": '
   _gemini_hook_entries
+  echo '  ,'
+  echo '  "SessionStart": '
+  _gemini_session_entries
   echo ""
 }
 
@@ -103,17 +131,19 @@ _gemini_print_snippet() {
 host_validate_extras() {
   local ok=true g
   [[ -x "$ADAPTER_DST" ]] || { write_status "Gemini hooks : BeforeTool missing or not executable - $ADAPTER_DST" "Warning"; ok=false; }
-  for g in check-tizen-commands.sh check-project-writes.sh; do
+  for g in check-tizen-commands.sh check-project-writes.sh check-update.js; do
     [[ -f "$HOOKS_DIR/$g" ]] || { write_status "Gemini hooks : File missing - $HOOKS_DIR/$g" "Warning"; ok=false; }
   done
   grep -q "BeforeTool" "$SETTINGS_FILE" 2>/dev/null && grep -q "$ADAPTER_DST" "$SETTINGS_FILE" 2>/dev/null || {
     write_status "Gemini hooks : $SETTINGS_FILE does not reference the BeforeTool adapter" "Warning"; ok=false; }
+  grep -qF "check-update.js" "$SETTINGS_FILE" 2>/dev/null || {
+    write_status "Gemini hooks : $SETTINGS_FILE does not reference check-update.js" "Warning"; ok=false; }
   grep -qF "tizen-sdk-skills:begin" "$CONTEXT_FILE" 2>/dev/null || { write_status "GEMINI.md : guard section missing - $CONTEXT_FILE" "Warning"; ok=false; }
   [[ "$ok" == "true" ]] && write_status "Gemini hooks/context : Validation passed" "Success"
 }
 
 host_summary() {
-  write_status "Gemini hooks: $HOOKS_DIR + entry in $SETTINGS_FILE (hooks.BeforeTool)" "Info"
+  write_status "Gemini hooks: $HOOKS_DIR + entries in $SETTINGS_FILE (hooks.BeforeTool, hooks.SessionStart)" "Info"
   write_status "Gemini context: $CONTEXT_FILE (tizen-sdk-skills section)" "Info"
 }
 

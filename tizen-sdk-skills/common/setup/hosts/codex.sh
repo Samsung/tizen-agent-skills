@@ -10,6 +10,7 @@
 #   hooks    ~/.codex/hooks.json — SAME 3-level JSON as Claude Code, shell tool
 #            is literally "Bash", deny JSON identical -> guards run unmodified.
 #            User must trust hooks once via /hooks; features.hooks may be off.
+#            SessionStart runs check-update.js (new-release notice).
 #   context  ~/.codex/AGENTS.md (global instructions, 32 KiB cap)
 #   marker   CODEX_THREAD_ID / CODEX_SESSION_ID / CODEX_VERSION (injected into
 #            every exec by newer builds), CODEX_SANDBOX_NETWORK_DISABLED=1 (default
@@ -32,6 +33,7 @@ host_configure() {
 }
 
 _codex_hooks_json() {
+  local cache="$HOST_HOME/$(dirname "$CACHE_TAIL")"
   cat <<EOF
 {
   "_source": "$PLUGIN_NAME",
@@ -47,6 +49,13 @@ _codex_hooks_json() {
         "hooks": [{ "type": "command",
           "command": "bash \"$HOOKS_DIR/check-project-writes.sh\"" }]
       }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [{ "type": "command", "timeout": 5,
+          "command": "node \"$HOOKS_DIR/check-update.js\" --host codex --cache-root \"$cache\"" }]
+      }
     ]
   }
 }
@@ -56,6 +65,7 @@ EOF
 host_install_extras() {
   install_shell_script "$COMMON_DIR/hooks/check-tizen-commands.sh" "$HOOKS_DIR/check-tizen-commands.sh"
   install_shell_script "$COMMON_DIR/hooks/check-project-writes.sh" "$HOOKS_DIR/check-project-writes.sh"
+  install_shell_script "$COMMON_DIR/hooks/check-update.js" "$HOOKS_DIR/check-update.js"
   write_status "Guard scripts installed: $HOOKS_DIR" "Success"
 
   # A hooks.json tagged with the pre-rename "_source" is ours too: rewrite it,
@@ -68,8 +78,8 @@ host_install_extras() {
       remove_legacy_path "$HOST_HOME/hooks/$legacy" "Codex guard dir"
     done
   else
-    write_status "Existing $HOOKS_JSON (not ours) found - NOT overwriting. Merge this into its hooks.PreToolUse:" "Warning"
-    _codex_hooks_json | sed -n '/"PreToolUse"/,/^    \]/p'
+    write_status "Existing $HOOKS_JSON (not ours) found - NOT overwriting. Merge this into its hooks.PreToolUse and hooks.SessionStart:" "Warning"
+    _codex_hooks_json | sed -n '/^    "/,/^    \]/p'
   fi
 
   # The shared guard rules name every host's cache; only the installer knows
@@ -108,10 +118,11 @@ EOF
 
 host_validate_extras() {
   local ok=true g
-  for g in check-tizen-commands.sh check-project-writes.sh; do
+  for g in check-tizen-commands.sh check-project-writes.sh check-update.js; do
     [[ -f "$HOOKS_DIR/$g" ]] || { write_status "Codex hooks : File missing - $HOOKS_DIR/$g" "Warning"; ok=false; }
   done
   grep -q "check-tizen-commands.sh" "$HOOKS_JSON" 2>/dev/null || { write_status "Codex hooks : $HOOKS_JSON does not reference the guard" "Warning"; ok=false; }
+  grep -q "check-update.js" "$HOOKS_JSON" 2>/dev/null || { write_status "Codex hooks : $HOOKS_JSON does not reference check-update.js" "Warning"; ok=false; }
   grep -qF "tizen-sdk-skills:begin" "$CONTEXT_FILE" 2>/dev/null || { write_status "AGENTS.md : guard section missing - $CONTEXT_FILE" "Warning"; ok=false; }
   grep -qF "This host is Codex CLI" "$CONTEXT_FILE" 2>/dev/null || { write_status "AGENTS.md : Codex cache-root line missing - $CONTEXT_FILE" "Warning"; ok=false; }
   grep -qF "sandbox_blocked" "$CONTEXT_FILE" 2>/dev/null || { write_status "AGENTS.md : Codex sandbox/escalation guidance (rule 12) missing - $CONTEXT_FILE" "Warning"; ok=false; }

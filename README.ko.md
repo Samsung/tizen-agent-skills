@@ -46,6 +46,10 @@
 `tizen-sdk-skills`는 [tizen-sdk-skills 빠른 시작](tizen-sdk-skills/README.ko.md#빠른-시작)부터
 보세요. 첫 요청은 "타이젠 SDK 설치해줘"입니다.
 
+새 버전 알림은 이 저장소에서 **Watch → Custom → Releases**를 선택하면 받을 수 있습니다.
+업데이트는 `git pull` 후 플러그인의 setup 스크립트를 다시 실행하면 됩니다
+([새 버전으로 업데이트](tizen-sdk-skills/README.ko.md#새-버전으로-업데이트) 참고).
+
 ## 대표 플러그인: tizen-sdk-skills
 
 | 영역 | 스킬 |

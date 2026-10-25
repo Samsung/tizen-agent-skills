@@ -472,6 +472,129 @@ else
 fi
 
 echo
+echo "--- check-update.js: new-release notice (no network) ---"
+# GitHub is never contacted: a fresh cache answers without a fetch, and a due
+# fetch goes through HTTPS_PROXY on a closed local port. Node 20 (CI) skips the
+# fetch outright behind a proxy; Node 22.21+/24 re-runs with NODE_USE_ENV_PROXY
+# and the closed port fails at once. Either way the fetch fails.
+uc_tmp="$(mktemp -d)"
+uc_cache="$uc_tmp/user/.tizen.agent.update.json"
+uc_dead_proxy="http://127.0.0.1:1"
+mkdir -p "$uc_tmp/user" "$uc_tmp/plugins/tizen-sdk-skills/1.4.2" \
+  "$uc_tmp/plugins/tizen-sdk-skills/1.4.10"
+uc_now="$(node -e 'console.log(Date.now())')"
+
+# uc <host> [VAR=value...] -> stdout of check-update.js
+uc() {
+  local host="$1"; shift
+  env -u HTTPS_PROXY -u https_proxy -u NODE_USE_ENV_PROXY -u NODE_OPTIONS \
+    HOME="$uc_tmp/user" "$@" \
+    node check-update.js --host "$host" --cache-root "$uc_tmp/plugins" </dev/null
+}
+# uc_cache_set <hours-ago> <failed> <latest-json>
+uc_cache_set() {
+  printf '{"checkedAt":%s,"failed":%s,"latest":%s}' \
+    "$((uc_now - $1 * 3600000))" "$2" "$3" > "$uc_cache"
+}
+# uc_field <name> -> the cache field, JSON-encoded
+uc_field() {
+  node -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1]));console.log(JSON.stringify(c[process.argv[2]]))' \
+    "$uc_cache" "$1"
+}
+uc_expect() {
+  if [ "$2" = "$3" ]; then
+    echo "PASS $1"
+  else
+    failures=$((failures + 1))
+    echo "FAIL $1 (want $3, got $2)"
+  fi
+}
+uc_contains() {
+  case "$2" in
+    *"$3"*) echo "PASS $1" ;;
+    *) failures=$((failures + 1)); echo "FAIL $1 (missing $3 in: $2)" ;;
+  esac
+}
+
+uc_cache_set 1 false '{"tizen-sdk-skills":"1.5.0","tizen-action-skills":"9.0.0"}'
+out="$(uc claude)"
+uc_contains "claude: notice names the highest installed version (1.4.10 > 1.4.2)" \
+  "$out" 'tizen-sdk-skills 1.5.0 (installed 1.4.10)'
+uc_contains "claude: notice is a systemMessage" "$out" '"systemMessage"'
+uc_contains "claude: notice is SessionStart additionalContext" "$out" '"hookEventName":"SessionStart"'
+# The VS Code extension does not display systemMessage: the model must relay it.
+uc_contains "claude: model context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
+uc_expect "a plugin that is not installed is not reported" \
+  "$(printf '%s' "$out" | grep -c 'tizen-action-skills 9.0.0')" "0"
+
+# The same notice is shown at most once a day, across hosts.
+uc_expect "same notice again the same day: claude prints nothing" "$(uc claude)" ""
+uc_expect "same notice again the same day: cline prints only cancel:false" \
+  "$(uc cline)" '{"cancel":false}'
+uc_expect "the shown notice is recorded" "$(uc_field notified)" \
+  '"tizen-sdk-skills 1.5.0 (installed 1.4.10)"'
+
+uc_cache_set 1 false '{"tizen-sdk-skills":"1.5.0"}'
+out="$(uc cline)"
+uc_contains "cline: notice is contextModification" "$out" '"contextModification"'
+uc_contains "cline: never cancels the task" "$out" '"cancel":false'
+uc_contains "cline: context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
+
+# A newer release is a different notice: shown at once, not a day later.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.latest={"tizen-sdk-skills":"1.6.0"};fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_contains "a newer release is shown the same day" "$(uc claude)" 'tizen-sdk-skills 1.6.0 (installed 1.4.10)'
+
+# A day after it was shown, the same notice comes back.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.notifiedAt-=25*3600e3;fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_contains "the same notice is shown again a day later" "$(uc claude)" 'tizen-sdk-skills 1.6.0'
+
+# Re-fetching the catalog must not forget what was shown.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.checkedAt-=25*3600e3;fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_expect "a catalog re-check keeps today's shown notice quiet" \
+  "$(uc claude HTTPS_PROXY="$uc_dead_proxy")" ""
+
+uc_cache_set 1 false '{"tizen-sdk-skills":"1.4.10"}'
+uc_expect "claude: same version prints nothing" "$(uc claude)" ""
+uc_expect "cline: same version prints only cancel:false" "$(uc cline)" '{"cancel":false}'
+
+uc_expect "unknown host prints nothing" "$(uc foo)" ""
+uc_expect "unknown host exits 0" "$(uc foo >/dev/null; echo $?)" "0"
+
+uc_cache_set 1 true '{}'
+before="$(uc_field checkedAt)"
+uc claude HTTPS_PROXY="$uc_dead_proxy" >/dev/null
+uc_expect "failed 1 h ago: no retry yet (4 h window)" "$(uc_field checkedAt)" "$before"
+
+uc_cache_set 5 true '{"tizen-sdk-skills":"1.5.0"}'
+before="$(uc_field checkedAt)"
+out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
+uc_expect "failed 5 h ago: retried (checkedAt moved)" \
+  "$([ "$(uc_field checkedAt)" != "$before" ] && echo moved || echo same)" "moved"
+uc_expect "failed retry keeps failed:true" "$(uc_field failed)" "true"
+uc_expect "failed retry keeps the last known versions" \
+  "$(uc_field latest)" '{"tizen-sdk-skills":"1.5.0"}'
+uc_contains "failed retry still reports from the last known versions" \
+  "$out" 'tizen-sdk-skills 1.5.0 (installed 1.4.10)'
+
+uc_cache_set 23 false '{"tizen-sdk-skills":"1.4.10"}'
+before="$(uc_field checkedAt)"
+uc claude HTTPS_PROXY="$uc_dead_proxy" >/dev/null
+uc_expect "succeeded 23 h ago: no re-check yet (24 h window)" "$(uc_field checkedAt)" "$before"
+
+printf 'not json' > "$uc_cache"
+out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
+uc_expect "corrupt cache: nothing printed" "$out" ""
+uc_expect "corrupt cache: replaced by a failed record" "$(uc_field failed)" "true"
+
+# Behind a proxy a fresh cache must not re-spawn Node for proxy support.
+printf 'require("fs").appendFileSync(%s, "x\\n")\n' "'$uc_tmp/spawns'" > "$uc_tmp/count.js"
+uc_cache_set 1 false '{"tizen-sdk-skills":"1.4.10"}'
+: > "$uc_tmp/spawns"
+uc claude HTTPS_PROXY="$uc_dead_proxy" NODE_OPTIONS="--require $uc_tmp/count.js" >/dev/null
+uc_expect "proxy + fresh cache: one Node process" "$(wc -l < "$uc_tmp/spawns" | tr -d ' ')" "1"
+rm -rf "$uc_tmp"
+
+echo
 if [ "$failures" -eq 0 ]; then
   echo "=== ALL PASS ==="
   exit 0

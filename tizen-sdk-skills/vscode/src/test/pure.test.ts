@@ -545,6 +545,39 @@ test("stripOurHooks removes only our entries and reports the count", () => {
   assert.deepStrictEqual(settings.permissions, { allow: ["Bash"] });
 });
 
+test("stripOurHooks with an event name strips only that event's entries", () => {
+  // The update check setup.sh registers; uninstall removes it explicitly.
+  const ourSessionStart = {
+    matcher: "startup",
+    hooks: [
+      {
+        type: "command",
+        command: `node "${OUR_DIR}/check-update.js" --host claude --cache-root "/c"`,
+      },
+    ],
+  };
+  const foreign = {
+    matcher: "startup",
+    hooks: [{ type: "command", command: 'bash "/home/me/hello.sh"' }],
+  };
+  const ourPreToolUse = buildHookEntry(OUR_DIR, HOOK_SPECS[0]);
+  const settings = {
+    hooks: {
+      PreToolUse: [ourPreToolUse],
+      SessionStart: [foreign, ourSessionStart],
+    },
+  };
+
+  assert.strictEqual(stripOurHooks(settings, "SessionStart"), 1);
+  assert.deepStrictEqual(settings.hooks.SessionStart, [foreign]);
+  // The default event (used by install) leaves SessionStart alone.
+  assert.deepStrictEqual(settings.hooks.PreToolUse, [ourPreToolUse]);
+  assert.strictEqual(
+    stripOurHooks({ hooks: { PreToolUse: [] } }, "SessionStart"),
+    0,
+  );
+});
+
 test("re-installing twice does not accumulate entries", () => {
   const settings: { hooks: { PreToolUse: HookEntry[] } } = {
     hooks: { PreToolUse: [] },
