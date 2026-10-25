@@ -151,7 +151,8 @@ returns the result as a Standard JSON Envelope. See the
 When a new session starts, the setup-installed hook checks GitHub for a newer
 release (at most once a day) and, if one exists, shows a one-line notice. Where the
 host UI does not display it (for example the Claude Code VS Code extension), the
-assistant mentions it in its first reply. For release announcements as well, open the
+assistant is asked to mention it in its first reply. For release announcements as
+well, open the
 [repository](https://github.com/Samsung/tizen-agent-skills) and choose
 **Watch → Custom → Releases**, or subscribe to the
 [releases feed](https://github.com/Samsung/tizen-agent-skills/releases.atom). Each

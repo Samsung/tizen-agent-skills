@@ -144,7 +144,7 @@ SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standa
 
 setup이 설치한 훅이 새 세션을 시작할 때 GitHub에서 새 릴리스를 확인(하루 최대 1회)하고, 새
 버전이 있으면 한 줄 알림을 보여 줍니다. 호스트 화면이 이 알림을 표시하지 않는 경우(예: Claude
-Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 줍니다. 릴리스 공지도 받으려면
+Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 요청합니다. 릴리스 공지도 받으려면
 [저장소](https://github.com/Samsung/tizen-agent-skills)에서 **Watch → Custom → Releases**를
 선택하거나 [릴리스 피드](https://github.com/Samsung/tizen-agent-skills/releases.atom)를
 구독하세요. 릴리스별 변경 사항은 [CHANGELOG.ko.md](CHANGELOG.ko.md)에 있습니다.
