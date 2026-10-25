@@ -19,7 +19,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   session-start hook for every host (Claude Code, Codex CLI and Gemini CLI `SessionStart`,
   Cline `TaskStart`) that compares the installed plugin versions with
   `.claude-plugin/marketplace.json` on GitHub `main` and shows a one-line notice when one
-  is newer. The catalog is fetched at most once a day (cached in
+  is newer; where the UI does not display it (Claude Code VS Code extension, Cline), the
+  assistant is asked to mention it in its first reply. The catalog is fetched at most once a day (cached in
   `~/.tizen.agent.update.json`, 3 s timeout); any failure prints nothing and is retried
   after 4 hours. Behind `HTTPS_PROXY` it re-runs with Node's built-in proxy support
   (Node 22.21+ / 24+) and is skipped on older Node. The VS Code extension does not register

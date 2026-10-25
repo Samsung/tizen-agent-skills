@@ -26,6 +26,8 @@
  * Output (only when an update exists; exit code is always 0):
  *   claude, codex, gemini: {"systemMessage", "hookSpecificOutput.additionalContext"}
  *   cline (TaskStart):     {"cancel": false, "contextModification"}
+ * The model-facing text also asks the model to relay the notice once, since
+ * the Claude Code VS Code extension does not display systemMessage.
  *
  * Behind a proxy (HTTPS_PROXY / https_proxy): Node's fetch ignores the proxy
  * unless NODE_USE_ENV_PROXY=1 was set at startup (Node 22.21+ / 24+), so the
@@ -147,10 +149,16 @@ async function latestVersions() {
   return latest;
 }
 
+// Some UIs (the Claude Code VS Code extension, Cline) never show the notice
+// itself, so the model is asked to relay it once.
+const RELAY_INSTRUCTION =
+  "Mention this update notice to the user once, briefly, at the start of your first reply.";
+
 function formatOutput(host, message) {
+  const context = message ? `${message}\n${RELAY_INSTRUCTION}` : "";
   if (host === "cline") {
-    return message
-      ? { cancel: false, contextModification: message }
+    return context
+      ? { cancel: false, contextModification: context }
       : { cancel: false };
   }
   if (!message) return null;
@@ -158,7 +166,7 @@ function formatOutput(host, message) {
     systemMessage: message,
     hookSpecificOutput: {
       hookEventName: "SessionStart",
-      additionalContext: message,
+      additionalContext: context,
     },
   };
 }
@@ -206,7 +214,7 @@ async function main() {
     if (updates.length > 0) {
       message =
         `New tizen-agent-skills release: ${updates.join(", ")}. ` +
-        "To update: git pull, then re-run the plugin's setup script " +
+        "To update: git pull in the clone you installed from, then re-run its setup script " +
         `(marketplace installs: /plugin marketplace update tizen-platform). ${RELEASES_URL}`;
     }
   } catch {

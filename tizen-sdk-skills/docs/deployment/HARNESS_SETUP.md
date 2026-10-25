@@ -51,7 +51,9 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 업데이트 확인(`common/hooks/check-update.js`)은 새 세션마다 한 번 실행됩니다. 설치된 플러그인
 버전(`<dot-dir>/plugins/cache/tizen-platform/<plugin>/<X.Y.Z>/`)을 GitHub `main`의
 `.claude-plugin/marketplace.json`과 비교하며, 이 파일은 하루에 한 번만 받아
-`~/.tizen.agent.update.json`에 캐시합니다. 새 버전이 있을 때만 알림을 출력하고, 실패(오프라인,
+`~/.tizen.agent.update.json`에 캐시합니다. 새 버전이 있을 때만 알림을 출력합니다. 사용자용
+`systemMessage`와 함께, 어시스턴트가 한 번 전달하도록 요청하는 모델 컨텍스트를 넘깁니다(Claude
+Code VS Code 확장과 Cline은 알림을 화면에 직접 표시하지 않음). 실패(오프라인,
 시간 초과, HTTP 오류)하면 아무것도 출력하지 않고 4시간 뒤에 다시 시도합니다. 프록시
 환경(`HTTPS_PROXY`)에서는 Node 내장 프록시 지원(Node 22.21+ / 24+)을 쓰고, 그보다 오래된
 Node에서는 확인을 건너뜁니다. setup 스크립트만 이 훅을 등록하며 VS Code 확장은 등록하지

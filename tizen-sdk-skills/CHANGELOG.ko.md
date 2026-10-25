@@ -18,7 +18,8 @@
   설치된 플러그인은 새 버전이 나와도 사용자에게 알려 주지 않았습니다. 이제 setup이 모든
   호스트에 세션 시작 훅(Claude Code·Codex CLI·Gemini CLI `SessionStart`, Cline `TaskStart`)을
   등록합니다. 이 훅은 설치된 플러그인 버전을 GitHub `main`의 `.claude-plugin/marketplace.json`과
-  비교해 더 새 버전이 있으면 한 줄 알림을 보여 줍니다. 카탈로그는 하루에 한 번만 받고
+  비교해 더 새 버전이 있으면 한 줄 알림을 보여 줍니다. 화면에 표시되지 않는 환경(Claude Code
+  VS Code 확장, Cline)에서는 어시스턴트가 첫 답변에서 알려 주도록 요청합니다. 카탈로그는 하루에 한 번만 받고
   (`~/.tizen.agent.update.json`에 캐시, 시간 초과 3초) 실패하면 아무것도 출력하지 않고 4시간
   뒤에 다시 시도합니다. `HTTPS_PROXY` 환경에서는 Node 내장 프록시 지원(Node 22.21+ / 24+)으로
   다시 실행하고, 그보다 오래된 Node에서는 건너뜁니다. VS Code 확장은 이 확인을 등록하지

@@ -149,15 +149,16 @@ returns the result as a Standard JSON Envelope. See the
 ### Updating to a new release
 
 When a new session starts, the setup-installed hook checks GitHub for a newer
-release (at most once a day) and shows a one-line notice if one exists. For release
-announcements as well, open the
+release (at most once a day) and, if one exists, shows a one-line notice. Where the
+host UI does not display it (for example the Claude Code VS Code extension), the
+assistant mentions it in its first reply. For release announcements as well, open the
 [repository](https://github.com/Samsung/tizen-agent-skills) and choose
 **Watch → Custom → Releases**, or subscribe to the
 [releases feed](https://github.com/Samsung/tizen-agent-skills/releases.atom). Each
 release lists its changes in [CHANGELOG.md](CHANGELOG.md).
 
-To update a script install, pull the checkout and re-run the same setup script, then
-restart the host:
+To update a script install, pull the clone you installed from (not a working branch
+of another checkout) and re-run the same setup script, then restart the host:
 
 ```bash
 cd tizen-agent-skills
