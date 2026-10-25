@@ -150,12 +150,17 @@ async function latestVersions() {
 }
 
 // Some UIs (the Claude Code VS Code extension, Cline) never show the notice
-// itself, so the model is asked to relay it once.
-const RELAY_INSTRUCTION =
-  "Mention this update notice to the user once, briefly, at the start of your first reply.";
+// itself, so the model is asked to relay it once. Phrased as a message from
+// the plugin addressed to the user, which a model is more willing to pass on
+// than a bare instruction found in injected context.
+const RELAY_PREFIX =
+  "Notice from the installed tizen-sdk-skills plugin, addressed to the user. " +
+  "The user's chat UI may not display hook messages, so the user has not seen it. " +
+  "Please begin your first reply with one short line passing it on, then answer as usual. " +
+  "The notice:";
 
 function formatOutput(host, message) {
-  const context = message ? `${message}\n${RELAY_INSTRUCTION}` : "";
+  const context = message ? `${RELAY_PREFIX} ${message}` : "";
   if (host === "cline") {
     return context
       ? { cancel: false, contextModification: context }

@@ -523,13 +523,13 @@ uc_contains "claude: notice names the highest installed version (1.4.10 > 1.4.2)
 uc_contains "claude: notice is a systemMessage" "$out" '"systemMessage"'
 uc_contains "claude: notice is SessionStart additionalContext" "$out" '"hookEventName":"SessionStart"'
 # The VS Code extension does not display systemMessage: the model must relay it.
-uc_contains "claude: model context asks to relay the notice" "$out" 'Mention this update notice to the user once'
+uc_contains "claude: model context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
 uc_expect "a plugin that is not installed is not reported" \
   "$(printf '%s' "$out" | grep -c 'tizen-action-skills 9.0.0')" "0"
 out="$(uc cline)"
 uc_contains "cline: notice is contextModification" "$out" '"contextModification"'
 uc_contains "cline: never cancels the task" "$out" '"cancel":false'
-uc_contains "cline: context asks to relay the notice" "$out" 'Mention this update notice to the user once'
+uc_contains "cline: context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
 
 uc_cache_set 1 false '{"tizen-sdk-skills":"1.4.10"}'
 uc_expect "claude: same version prints nothing" "$(uc claude)" ""
