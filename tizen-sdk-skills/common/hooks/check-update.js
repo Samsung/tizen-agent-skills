@@ -132,12 +132,15 @@ async function fetchLatest() {
   }
 }
 
+function isFresh(cache) {
+  if (!cache) return false;
+  const interval = cache.failed ? RETRY_INTERVAL_MS : CHECK_INTERVAL_MS;
+  return Date.now() - cache.checkedAt < interval;
+}
+
 async function latestVersions() {
   const cache = readCache();
-  const interval = cache?.failed ? RETRY_INTERVAL_MS : CHECK_INTERVAL_MS;
-  if (cache && Date.now() - cache.checkedAt < interval) {
-    return cache.latest;
-  }
+  if (isFresh(cache)) return cache.latest;
   const fetched = await fetchLatest();
   const latest = fetched || (cache ? cache.latest : {});
   writeCache({ checkedAt: Date.now(), failed: !fetched, latest });
@@ -168,12 +171,24 @@ async function main() {
   const { host, cacheRoot } = parseArgs(process.argv.slice(2));
   if (!HOSTS.includes(host) || !cacheRoot) return;
 
-  if (proxyConfigured() && !proxyEnabled() && nodeSupportsEnvProxy()) {
-    spawnSync(process.execPath, process.argv.slice(1), {
+  // Re-run with proxy support only when a fetch is due; a fresh cache needs
+  // no network, so this process answers from it directly.
+  if (
+    proxyConfigured() &&
+    !proxyEnabled() &&
+    nodeSupportsEnvProxy() &&
+    !isFresh(readCache())
+  ) {
+    const r = spawnSync(process.execPath, process.argv.slice(1), {
       env: { ...process.env, NODE_USE_ENV_PROXY: "1" },
       stdio: ["ignore", "inherit", "ignore"],
       timeout: FETCH_TIMEOUT_MS + 1000,
     });
+    if (!r.error && r.status === 0) return;
+    // Silent by design: a failed re-run prints nothing (Cline still gets
+    // its {"cancel": false} below).
+    const output = formatOutput(host, "");
+    if (output) process.stdout.write(JSON.stringify(output) + "\n");
     return;
   }
 
