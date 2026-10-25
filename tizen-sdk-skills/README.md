@@ -149,7 +149,8 @@ returns the result as a Standard JSON Envelope. See the
 ### Updating to a new release
 
 When a new session starts, the setup-installed hook checks GitHub for a newer
-release (at most once a day) and, if one exists, shows a one-line notice. Where the
+release (at most once a day) and, if one exists, shows a one-line notice (the same
+notice at most once a day). Where the
 host UI does not display it (for example the Claude Code VS Code extension), the
 assistant is asked to mention it in its first reply. For release announcements as
 well, open the

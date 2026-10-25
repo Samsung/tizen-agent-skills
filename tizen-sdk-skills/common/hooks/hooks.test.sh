@@ -526,10 +526,32 @@ uc_contains "claude: notice is SessionStart additionalContext" "$out" '"hookEven
 uc_contains "claude: model context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
 uc_expect "a plugin that is not installed is not reported" \
   "$(printf '%s' "$out" | grep -c 'tizen-action-skills 9.0.0')" "0"
+
+# The same notice is shown at most once a day, across hosts.
+uc_expect "same notice again the same day: claude prints nothing" "$(uc claude)" ""
+uc_expect "same notice again the same day: cline prints only cancel:false" \
+  "$(uc cline)" '{"cancel":false}'
+uc_expect "the shown notice is recorded" "$(uc_field notified)" \
+  '"tizen-sdk-skills 1.5.0 (installed 1.4.10)"'
+
+uc_cache_set 1 false '{"tizen-sdk-skills":"1.5.0"}'
 out="$(uc cline)"
 uc_contains "cline: notice is contextModification" "$out" '"contextModification"'
 uc_contains "cline: never cancels the task" "$out" '"cancel":false'
 uc_contains "cline: context asks to relay the notice" "$out" 'Please begin your first reply with one short line passing it on'
+
+# A newer release is a different notice: shown at once, not a day later.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.latest={"tizen-sdk-skills":"1.6.0"};fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_contains "a newer release is shown the same day" "$(uc claude)" 'tizen-sdk-skills 1.6.0 (installed 1.4.10)'
+
+# A day after it was shown, the same notice comes back.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.notifiedAt-=25*3600e3;fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_contains "the same notice is shown again a day later" "$(uc claude)" 'tizen-sdk-skills 1.6.0'
+
+# Re-fetching the catalog must not forget what was shown.
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.checkedAt-=25*3600e3;fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+uc_expect "a catalog re-check keeps today's shown notice quiet" \
+  "$(uc claude HTTPS_PROXY="$uc_dead_proxy")" ""
 
 uc_cache_set 1 false '{"tizen-sdk-skills":"1.4.10"}'
 uc_expect "claude: same version prints nothing" "$(uc claude)" ""

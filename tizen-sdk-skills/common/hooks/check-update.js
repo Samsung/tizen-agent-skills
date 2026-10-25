@@ -23,6 +23,9 @@
  * outage is caught up soon while an offline machine does not wait for the
  * timeout on every session.
  *
+ * The same notice is shown at most once a day (shared by every host); a new
+ * release or a different installed version shows again at once.
+ *
  * Output (only when an update exists; exit code is always 0):
  *   claude, codex, gemini: {"systemMessage", "hookSpecificOutput.additionalContext"}
  *   cline (TaskStart):     {"cancel": false, "contextModification"}
@@ -48,6 +51,7 @@ const RELEASES_URL = "https://github.com/Samsung/tizen-agent-skills/releases";
 const CACHE_FILE = path.join(os.homedir(), ".tizen.agent.update.json");
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const RETRY_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const NOTIFY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 3000;
 const HOSTS = ["claude", "codex", "gemini", "cline"];
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
@@ -145,8 +149,17 @@ async function latestVersions() {
   if (isFresh(cache)) return cache.latest;
   const fetched = await fetchLatest();
   const latest = fetched || (cache ? cache.latest : {});
-  writeCache({ checkedAt: Date.now(), failed: !fetched, latest });
+  writeCache({ ...cache, checkedAt: Date.now(), failed: !fetched, latest });
   return latest;
+}
+
+/** Whether this exact notice was already shown within the last day. */
+function shownToday(cache, notice) {
+  return (
+    cache?.notified === notice &&
+    typeof cache.notifiedAt === "number" &&
+    Date.now() - cache.notifiedAt < NOTIFY_INTERVAL_MS
+  );
 }
 
 // Some UIs (the Claude Code VS Code extension, Cline) never show the notice
@@ -216,9 +229,14 @@ async function main() {
         updates.push(`${plugin} ${version} (installed ${installed})`);
       }
     }
-    if (updates.length > 0) {
+    const notice = updates.join(", ");
+    const cache = readCache();
+    if (updates.length > 0 && !shownToday(cache, notice)) {
+      if (cache) {
+        writeCache({ ...cache, notified: notice, notifiedAt: Date.now() });
+      }
       message =
-        `New tizen-agent-skills release: ${updates.join(", ")}. ` +
+        `New tizen-agent-skills release: ${notice}. ` +
         "To update: git pull in the clone you installed from, then re-run its setup script " +
         `(marketplace installs: /plugin marketplace update tizen-platform). ${RELEASES_URL}`;
     }

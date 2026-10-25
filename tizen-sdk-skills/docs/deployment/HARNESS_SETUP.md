@@ -53,7 +53,8 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 `.claude-plugin/marketplace.json`과 비교하며, 이 파일은 하루에 한 번만 받아
 `~/.tizen.agent.update.json`에 캐시합니다. 새 버전이 있을 때만 알림을 출력합니다. 사용자용
 `systemMessage`와 함께, 어시스턴트가 한 번 전달하도록 요청하는 모델 컨텍스트를 넘깁니다(Claude
-Code VS Code 확장과 Cline은 알림을 화면에 직접 표시하지 않음). 실패(오프라인,
+Code VS Code 확장과 Cline은 알림을 화면에 직접 표시하지 않음). 같은 알림은 모든 호스트를 통틀어
+하루에 한 번만 보여 주고, 더 새 릴리스가 나오면 바로 보여 줍니다. 실패(오프라인,
 시간 초과, HTTP 오류)하면 아무것도 출력하지 않고 4시간 뒤에 다시 시도합니다. 프록시
 환경(`HTTPS_PROXY`)에서는 Node 내장 프록시 지원(Node 22.21+ / 24+)을 쓰고, 그보다 오래된
 Node에서는 확인을 건너뜁니다. setup 스크립트만 이 훅을 등록하며 VS Code 확장은 등록하지

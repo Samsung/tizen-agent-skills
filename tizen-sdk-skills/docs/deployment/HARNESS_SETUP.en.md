@@ -54,7 +54,8 @@ with `.claude-plugin/marketplace.json` on GitHub `main`, fetched at most once a 
 and cached in `~/.tizen.agent.update.json`, and prints a notice only when a newer
 version exists: `systemMessage` for the user and model context that asks the assistant
 to relay it once (the Claude Code VS Code extension and Cline do not display the
-notice themselves). Any failure (offline, timeout, HTTP error) prints nothing and is
+notice themselves). The same notice is shown at most once a day across all hosts; a
+newer release shows at once. Any failure (offline, timeout, HTTP error) prints nothing and is
 retried after 4 hours. Behind a proxy (`HTTPS_PROXY`), it uses Node's built-in proxy
 support (Node 22.21+ / 24+) and is skipped on older Node. Only the setup scripts
 register it; the VS Code extension does not (its uninstall still removes the entries).
