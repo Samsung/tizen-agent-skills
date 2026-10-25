@@ -478,9 +478,9 @@ echo "--- check-update.js: new-release notice (no network) ---"
 # fetch outright behind a proxy; Node 22.21+/24 re-runs with NODE_USE_ENV_PROXY
 # and the closed port fails at once. Either way the fetch fails.
 uc_tmp="$(mktemp -d)"
-uc_cache="$uc_tmp/home/.tizen.agent.update.json"
+uc_cache="$uc_tmp/user/.tizen.agent.update.json"
 uc_dead_proxy="http://127.0.0.1:1"
-mkdir -p "$uc_tmp/home" "$uc_tmp/plugins/tizen-sdk-skills/1.4.2" \
+mkdir -p "$uc_tmp/user" "$uc_tmp/plugins/tizen-sdk-skills/1.4.2" \
   "$uc_tmp/plugins/tizen-sdk-skills/1.4.10"
 uc_now="$(node -e 'console.log(Date.now())')"
 
@@ -488,7 +488,7 @@ uc_now="$(node -e 'console.log(Date.now())')"
 uc() {
   local host="$1"; shift
   env -u HTTPS_PROXY -u https_proxy -u NODE_USE_ENV_PROXY -u NODE_OPTIONS \
-    HOME="$uc_tmp/home" "$@" \
+    HOME="$uc_tmp/user" "$@" \
     node check-update.js --host "$host" --cache-root "$uc_tmp/plugins" </dev/null
 }
 # uc_cache_set <hours-ago> <failed> <latest-json>
