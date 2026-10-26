@@ -310,7 +310,8 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
   "check node" (`check-node`) or run `node --version`.
 - **No update notice** — the session-start check stays silent on failure; its last result
   is in `~/.tizen.agent.update.json`. `"failed": false` with a `latest` list means the
-  check works and you are up to date. `"failed": true` carries an `error` code:
+  check works: you are up to date, or the same notice was already shown in the last 24
+  hours (`notifiedAt`; it shows again a day later). `"failed": true` carries an `error` code:
   - a certificate code such as `UNABLE_TO_VERIFY_LEAF_SIGNATURE` or
     `SELF_SIGNED_CERT_IN_CHAIN` — a proxy re-signs HTTPS with a root certificate the OS
     trusts but Node's bundled list does not. Behind `HTTPS_PROXY` on Node 22.21+ / 24+

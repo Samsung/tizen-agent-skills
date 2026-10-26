@@ -293,7 +293,8 @@ tizen-sdk-skills/
   "node 확인해줘"(`check-node`)라고 요청하거나 `node --version`을 실행해 보세요.
 - **업데이트 알림이 오지 않음** — 세션 시작 확인은 실패해도 아무것도 출력하지 않으며, 마지막
   결과는 `~/.tizen.agent.update.json`에 남습니다. `"failed": false`이고 `latest` 목록이 있으면
-  확인은 정상이고 최신 버전을 쓰고 있는 것입니다. `"failed": true`이면 `error` 코드를 보세요:
+  확인은 정상입니다. 최신 버전을 쓰고 있거나, 같은 알림을 24시간 안에 이미 보여 준 경우입니다
+  (`notifiedAt`, 하루 뒤 다시 표시). `"failed": true`이면 `error` 코드를 보세요:
   - `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `SELF_SIGNED_CERT_IN_CHAIN` 같은 인증서 코드 — 프록시가
     HTTPS를 OS는 신뢰하지만 Node 내장 목록에는 없는 루트 인증서로 다시 서명합니다.
     `HTTPS_PROXY` 환경의 Node 22.21+ / 24+에서는 확인 훅이 이미 OS 인증서 저장소를 함께
