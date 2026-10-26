@@ -147,7 +147,9 @@ setup이 설치한 훅이 새 세션을 시작할 때 GitHub에서 새 릴리스
 Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 요청합니다. 릴리스 공지도 받으려면
 [저장소](https://github.com/Samsung/tizen-agent-skills)에서 **Watch → Custom → Releases**를
 선택하거나 [릴리스 피드](https://github.com/Samsung/tizen-agent-skills/releases.atom)를
-구독하세요. 릴리스별 변경 사항은 [CHANGELOG.ko.md](CHANGELOG.ko.md)에 있습니다.
+구독하세요. 릴리스별 변경 사항은 [CHANGELOG.ko.md](CHANGELOG.ko.md)에 있습니다. 회사
+프록시 환경에서 알림이 전혀 오지 않으면 [문제 해결](#문제-해결--제거)의 *업데이트 알림이 오지
+않음*을 참고하세요.
 
 스크립트로 설치했다면 설치에 사용한 클론(다른 작업 브랜치가 아닌)을 pull 한 뒤 같은 setup
 스크립트를 다시 실행하고 호스트를 재시작합니다:
@@ -287,6 +289,24 @@ tizen-sdk-skills/
   스킬·에이전트 파일은 그 자리에서 교체됩니다.
 - **`node`를 찾을 수 없음** — 러너는 `PATH`의 Node.js 20+가 필요합니다. 어시스턴트에
   "node 확인해줘"(`check-node`)라고 요청하거나 `node --version`을 실행해 보세요.
+- **업데이트 알림이 오지 않음** — 세션 시작 확인은 실패해도 아무것도 출력하지 않으며, 마지막
+  결과는 `~/.tizen.agent.update.json`에 남습니다. `"failed": false`이고 `latest` 목록이 있으면
+  확인은 정상이고 최신 버전을 쓰고 있는 것입니다. `"failed": true`이면 `error` 코드를 보세요:
+  - `UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `SELF_SIGNED_CERT_IN_CHAIN` 같은 인증서 코드 — 프록시가
+    HTTPS를 OS는 신뢰하지만 Node 내장 목록에는 없는 루트 인증서로 다시 서명합니다.
+    `HTTPS_PROXY` 환경의 Node 22.21+ / 24+에서는 확인 훅이 이미 OS 인증서 저장소를 함께
+    씁니다. 그 밖의 경우에는 `NODE_USE_SYSTEM_CA=1`을 설정하거나(Node 22.19+ / 24.6+, Windows:
+    `setx NODE_USE_SYSTEM_CA 1`), 모든 Node 버전에서 쓸 수 있는 `NODE_EXTRA_CA_CERTS`에 PEM
+    형식의 회사 루트 인증서 경로를 지정한 뒤 호스트를 재시작하세요. 두 설정 모두 다른 Node
+    도구에도 함께 적용됩니다.
+  - `PROXY_NEEDS_NODE_22_21` — `HTTPS_PROXY`가 설정됐지만 Node가 22.21보다 오래됐습니다. Node를
+    업그레이드하세요.
+  - `RERUN_ETIMEDOUT` — 프록시용 재실행의 4초 제한 안에 Node가 시작되지 못했습니다(실시간 백신
+    검사가 흔한 원인).
+  - `TIMEOUT`, `ECONNREFUSED`, `ENOTFOUND`, `HTTP_<status>` — 네트워크 문제이거나 GitHub에
+    접속할 수 없습니다.
+
+  실패한 확인은 4시간 뒤에 다시 시도합니다. 파일을 지우면 다음 세션에서 바로 다시 확인합니다.
 - **독립 실행형 CLI** — `tizen-sdk --doctor`(또는 `tizen-cli/`에서
   `node bin/tizen-sdk.js --doctor`)가 SDK 경로, 캐시, 러너 상태를 보고합니다.
 - **제거** — VS Code 확장은 제거 시 자신이 설치한 파일을 모두 정리합니다. 스크립트로 설치한

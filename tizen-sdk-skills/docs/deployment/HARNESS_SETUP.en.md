@@ -55,10 +55,14 @@ and cached in `~/.tizen.agent.update.json`, and prints a notice only when a newe
 version exists: `systemMessage` for the user and model context that asks the assistant
 to relay it once (the Claude Code VS Code extension and Cline do not display the
 notice themselves). The same notice is shown at most once a day across all hosts; a
-newer release shows at once. Any failure (offline, timeout, HTTP error) prints nothing and is
-retried after 4 hours. Behind a proxy (`HTTPS_PROXY`), it uses Node's built-in proxy
-support (Node 22.21+ / 24+) and is skipped on older Node. Only the setup scripts
-register it; the VS Code extension does not (its uninstall still removes the entries).
+newer release shows at once. Any failure (offline, timeout, HTTP error) prints nothing, is
+recorded as an `error` code in the cache file and is retried after 4 hours. Behind a proxy
+(`HTTPS_PROXY`), it re-runs itself with Node's built-in proxy support (Node 22.21+ / 24+)
+and `--use-system-ca`, so a proxy that re-signs HTTPS with a root the OS trusts is
+accepted; on older Node it is skipped. Without a proxy, Node trusts only its bundled
+certificates unless `NODE_USE_SYSTEM_CA=1` (Node 22.19+ / 24.6+) or `NODE_EXTRA_CA_CERTS`
+is set. The README's *Troubleshooting → No update notice* lists the error codes. Only
+the setup scripts register it; the VS Code extension does not (its uninstall still removes the entries).
 
 The marker-delimited section in `AGENTS.md` / `GEMINI.md` is
 `<!-- tizen-sdk-skills:begin --> … <!-- tizen-sdk-skills:end -->`; re-running the

@@ -18,8 +18,25 @@
   `checkedAt` / `notifiedAt`과 같은 시각을 현지 시간(`2026-10-26 14:04:12 +09:00`)으로 적은
   값입니다. 하루·4시간 간격 판단이 숫자 필드를 읽으므로 숫자 필드는 그대로 epoch 밀리초로
   유지하며, 텍스트 필드는 파일을 여는 사람을 위한 것입니다.
+- **업데이트 확인 캐시에 실패 원인 기록** (`common/hooks/check-update.js`, `README.md`,
+  `README.ko.md`, `docs/deployment/HARNESS_SETUP*.md`). 지금까지는 실패해도 `"failed": true`만
+  남아, 알림을 받지 못하는 사용자가 이유를 알 수 없었습니다. 이제 `error` 코드
+  (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `TIMEOUT`, `HTTP_404`, `PROXY_NEEDS_NODE_22_21` 등)를
+  기록하고, 다음에 성공하면 지웁니다. 프록시용 재실행이 4초 제한에 걸려 종료되면 이제 부모
+  프로세스가 아무것도 남기지 않는 대신 `RERUN_ETIMEDOUT` 기록을 남깁니다. 이 경우에도 매 세션
+  재실행하지 않고 4시간 뒤에 다시 시도하게 됩니다. README 문제 해결에 _업데이트 알림이 오지
+  않음_ 항목을 추가해 코드별 대처를 설명합니다.
 
 ### 수정
+
+- **HTTPS를 다시 서명하는 프록시 뒤에서 업데이트 알림이 오지 않던 문제**
+  (`common/hooks/check-update.js`). 회사 프록시는 OS는 신뢰하지만 Node 내장 목록에는 없는 루트
+  인증서로 HTTPS를 다시 서명하는 경우가 많아, 카탈로그 조회가
+  `UNABLE_TO_VERIFY_LEAF_SIGNATURE`로 실패하고 알림이 전혀 표시되지 않았습니다. 이제 프록시용
+  재실행에 `--use-system-ca`(Node 22.15+ / 23.8+, 재실행이 일어나는 버전에서는 항상 지원)를
+  넘겨 그 요청에 한해 OS 인증서 저장소를 신뢰합니다. 사용자 환경은 바꾸지 않습니다. 프록시가
+  없는 환경에서는 README에 설명한 대로 `NODE_USE_SYSTEM_CA=1`이나 `NODE_EXTRA_CA_CERTS`를
+  사용자가 설정해야 합니다.
 
 - **업데이트 확인 훅이 자신의 시간 제한에 걸려 종료되던 문제** (`common/hooks/hooks.json`,
   `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). `check-update.js`의 `SessionStart`
