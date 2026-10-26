@@ -55,9 +55,13 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 `systemMessage`와 함께, 어시스턴트가 한 번 전달하도록 요청하는 모델 컨텍스트를 넘깁니다(Claude
 Code VS Code 확장과 Cline은 알림을 화면에 직접 표시하지 않음). 같은 알림은 모든 호스트를 통틀어
 하루에 한 번만 보여 주고, 더 새 릴리스가 나오면 바로 보여 줍니다. 실패(오프라인,
-시간 초과, HTTP 오류)하면 아무것도 출력하지 않고 4시간 뒤에 다시 시도합니다. 프록시
-환경(`HTTPS_PROXY`)에서는 Node 내장 프록시 지원(Node 22.21+ / 24+)을 쓰고, 그보다 오래된
-Node에서는 확인을 건너뜁니다. setup 스크립트만 이 훅을 등록하며 VS Code 확장은 등록하지
+시간 초과, HTTP 오류)하면 아무것도 출력하지 않고, 캐시 파일에 `error` 코드를 기록한 뒤 4시간
+뒤에 다시 시도합니다. 프록시 환경(`HTTPS_PROXY`)에서는 Node 내장 프록시 지원(Node 22.21+ /
+24+)과 `--use-system-ca`로 자신을 다시 실행하므로, OS가 신뢰하는 루트로 HTTPS를 다시 서명하는
+프록시도 통과합니다. 그보다 오래된 Node에서는 확인을 건너뜁니다. 프록시가 없으면 Node는
+`NODE_USE_SYSTEM_CA=1`(Node 22.19+ / 24.6+)이나 `NODE_EXTRA_CA_CERTS`를 설정하지 않는 한 내장
+인증서만 신뢰합니다. 오류 코드 목록은 README의 *문제 해결 → 업데이트 알림이 오지 않음*에
+있습니다. setup 스크립트만 이 훅을 등록하며 VS Code 확장은 등록하지
 않습니다(확장 제거 시에는 이 항목도 지웁니다).
 
 `AGENTS.md` / `GEMINI.md`의 마커 구획은

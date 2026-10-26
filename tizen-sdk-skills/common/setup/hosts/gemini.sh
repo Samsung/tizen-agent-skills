@@ -45,6 +45,7 @@ EOF
 
 # The SessionStart entry: check-update.js reports a newer release of an
 # installed plugin. It runs via node, so it needs no bash on Windows.
+# Timeout 20 s (Gemini takes milliseconds): see hosts/claude.sh for the budget.
 _gemini_session_entries() {
   local dir cache
   dir="$(printf '%s' "$HOOKS_DIR" | sed 's|\\|/|g')"
@@ -54,7 +55,7 @@ _gemini_session_entries() {
   {
     "matcher": "startup",
     "hooks": [{ "name": "$PLUGIN_NAME-update-check", "type": "command",
-      "command": "node \"$dir/check-update.js\" --host gemini --cache-root \"$cache\"", "timeout": 5000 }]
+      "command": "node \"$dir/check-update.js\" --host gemini --cache-root \"$cache\"", "timeout": 20000 }]
   }
 ]
 EOF

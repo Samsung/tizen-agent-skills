@@ -157,7 +157,9 @@ well, open the
 [repository](https://github.com/Samsung/tizen-agent-skills) and choose
 **Watch → Custom → Releases**, or subscribe to the
 [releases feed](https://github.com/Samsung/tizen-agent-skills/releases.atom). Each
-release lists its changes in [CHANGELOG.md](CHANGELOG.md).
+release lists its changes in [CHANGELOG.md](CHANGELOG.md). If no notice ever
+arrives behind a corporate proxy, see *No update notice* under
+[Troubleshooting](#troubleshooting--uninstall).
 
 To update a script install, pull the clone you installed from (not a working branch
 of another checkout) and re-run the same setup script, then restart the host:
@@ -304,6 +306,28 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
   personal skill/agent files are replaced in place.
 - **`node` not found** — the runners need Node.js 20+ on `PATH`; ask the assistant to
   "check node" (`check-node`) or run `node --version`.
+- **No update notice** — the session-start check stays silent on failure; its last result
+  is in `~/.tizen.agent.update.json`. `"failed": false` with a `latest` list means the
+  check works and you are up to date. `"failed": true` carries an `error` code:
+  - a certificate code such as `UNABLE_TO_VERIFY_LEAF_SIGNATURE` or
+    `SELF_SIGNED_CERT_IN_CHAIN` — a proxy re-signs HTTPS with a root certificate the OS
+    trusts but Node's bundled list does not. Behind `HTTPS_PROXY` on Node 22.21+ / 24+
+    the check already adds the OS certificate store. Otherwise set
+    `NODE_USE_SYSTEM_CA=1` (Node 22.19+ / 24.6+; Windows: `setx NODE_USE_SYSTEM_CA 1`),
+    or on any Node point `NODE_EXTRA_CA_CERTS` at the company root certificate in PEM
+    form, and restart the host. Either setting also applies to every other Node tool.
+  - `PROXY_NEEDS_NODE_22_21` — `HTTPS_PROXY` is set but Node is older than 22.21; upgrade
+    Node.
+  - `RERUN_ETIMEDOUT` — the proxy re-run did not finish within 13 s. That leaves room
+    for a `node` startup of several seconds, so it usually means a stalled network; the
+    check retries by itself. If it persists, time `node -e 0`: tens of seconds point to
+    on-access virus scanning of `node.exe`, which your IT team can exclude.
+  - `RERUN_SIG<NAME>`, `RERUN_EXIT_<n>` — the proxy re-run was killed or crashed; run the
+    hook command from the host settings by hand to see its error.
+  - `TIMEOUT`, `ECONNREFUSED`, `ENOTFOUND`, `HTTP_<status>` — network or GitHub
+    unreachable.
+
+  A failed check is retried after 4 hours; delete the file to retry at the next session.
 - **Standalone CLI** — `tizen-sdk --doctor` (or `node bin/tizen-sdk.js --doctor` from
   `tizen-cli/`) reports the SDK path, cache and runner status.
 - **Uninstall** — the VS Code extension removes everything it installed when

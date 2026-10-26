@@ -41,13 +41,17 @@ function Get-ClaudeHookEntries {
 
 # The SessionStart entry: check-update.js reports a newer release of an
 # installed plugin. It runs via node, so it needs no bash on Windows.
+# Timeout 20 s: the fetch itself is capped at 3 s, but node startup alone takes
+# 4-6 s on Windows machines with on-access virus scanning, and behind a proxy
+# the script re-runs itself once more — 11-12 s end to end was measured on such
+# a machine. The old 5 s cap killed it before it could write its cache.
 function Get-ClaudeSessionEntries {
     $dir = $script:HooksDir -replace '\\', '/'
     $cache = (Join-Path $script:HostHome (Split-Path $script:CacheTail -Parent)) -replace '\\', '/'
     @'
   {
     "matcher": "startup",
-    "hooks": [{ "type": "command", "timeout": 5,
+    "hooks": [{ "type": "command", "timeout": 20,
       "command": "node \"__DIR__/check-update.js\" --host claude --cache-root \"__CACHE__\"" }]
   }
 '@ -replace '__DIR__', $dir -replace '__CACHE__', $cache

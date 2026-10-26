@@ -11,6 +11,47 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **업데이트 확인 캐시에 읽기 쉬운 시각 추가** (`common/hooks/check-update.js`).
+  `~/.tizen.agent.update.json`에 `checkedAtText`와 `notifiedAtText`를 함께 저장합니다.
+  `checkedAt` / `notifiedAt`과 같은 시각을 현지 시간(`2026-10-26 14:04:12 +09:00`)으로 적은
+  값입니다. 하루·4시간 간격 판단이 숫자 필드를 읽으므로 숫자 필드는 그대로 epoch 밀리초로
+  유지하며, 텍스트 필드는 파일을 여는 사람을 위한 것입니다.
+- **업데이트 확인 캐시에 실패 원인 기록** (`common/hooks/check-update.js`, `README.md`,
+  `README.ko.md`, `docs/deployment/HARNESS_SETUP*.md`). 지금까지는 실패해도 `"failed": true`만
+  남아, 알림을 받지 못하는 사용자가 이유를 알 수 없었습니다. 이제 `error` 코드
+  (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `TIMEOUT`, `HTTP_404`, `PROXY_NEEDS_NODE_22_21` 등)를
+  기록하고, 다음에 성공하면 지웁니다. 프록시용 재실행이 끝나지 못하면 이제 부모 프로세스가
+  아무것도 남기지 않는 대신 `RERUN_ETIMEDOUT`, `RERUN_SIG<이름>`, `RERUN_EXIT_<n>` 기록을
+  남깁니다. 이 경우에도 매 세션 재실행하지 않고 4시간 뒤에 다시 시도하게 됩니다. README 문제 해결에 _업데이트 알림이 오지
+  않음_ 항목을 추가해 코드별 대처를 설명합니다.
+
+### 수정
+
+- **HTTPS를 다시 서명하는 프록시 뒤에서 업데이트 알림이 오지 않던 문제**
+  (`common/hooks/check-update.js`). 회사 프록시는 OS는 신뢰하지만 Node 내장 목록에는 없는 루트
+  인증서로 HTTPS를 다시 서명하는 경우가 많아, 카탈로그 조회가
+  `UNABLE_TO_VERIFY_LEAF_SIGNATURE`로 실패하고 알림이 전혀 표시되지 않았습니다. 이제 프록시용
+  재실행에 `--use-system-ca`(Node 22.15+ / 23.8+, 재실행이 일어나는 버전에서는 항상 지원)를
+  넘겨 그 요청에 한해 OS 인증서 저장소를 신뢰합니다. 사용자 환경은 바꾸지 않습니다. 프록시가
+  없는 환경에서는 README에 설명한 대로 `NODE_USE_SYSTEM_CA=1`이나 `NODE_EXTRA_CA_CERTS`를
+  사용자가 설정해야 합니다.
+- **느린 머신에서 프록시용 재실행이 강제 종료되던 문제** (`common/hooks/check-update.js`).
+  프록시 지원을 켜는 재실행의 제한이 4초(조회 제한 + 1초)였지만, 실시간 백신 검사가 동작하는
+  Windows에서는 두 번째 `node`가 시작되는 데만 약 5.5초가 걸립니다. 이제 제한은 13초(조회 제한 +
+  10초)이며, 부모 프로세스의 시작 시간을 더해도 20초 훅 시간 제한 안에 들어갑니다.
+
+- **업데이트 확인 훅이 자신의 시간 제한에 걸려 종료되던 문제** (`common/hooks/hooks.json`,
+  `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). `check-update.js`의 `SessionStart`
+  항목이 5초 시간 제한으로 등록돼 있었습니다. 카탈로그 조회 자체는 3초로 제한되지만, 실시간
+  백신 검사가 동작하는 Windows 머신에서는 `node` 시작에만 4–6초가 걸리고 `HTTPS_PROXY`
+  환경에서는 스크립트가 자신을 한 번 더 실행하므로(이런 머신에서 전체 11–12초 측정), 훅이
+  `~/.tizen.agent.update.json`을 쓰기 전에 강제 종료됐습니다. 이런 머신에서는 캐시 파일이
+  생기지 않았고 알림도 표시될 수 없었습니다. 이제 모든 호스트에서 시간 제한이 20초입니다
+  (Gemini CLI는 `20000` ms). 이 값은 상한선이지 대기 시간이 아니며, 훅은 작업을 마치는 즉시
+  종료됩니다. 등록된 항목을 갱신하려면 setup 스크립트를 다시 실행하세요.
+
 ## [1.6.0] — 2026-10-25
 
 ### 추가

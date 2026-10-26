@@ -11,6 +11,50 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Changed
+
+- **Readable times in the update-check cache** (`common/hooks/check-update.js`).
+  `~/.tizen.agent.update.json` now also stores `checkedAtText` and `notifiedAtText`, the
+  same instants as `checkedAt` / `notifiedAt` in local time (`2026-10-26 14:04:12 +09:00`).
+  The numeric fields stay epoch milliseconds because the daily and 4-hour checks read them;
+  the text fields are only for a person opening the file.
+- **Failure reason in the update-check cache** (`common/hooks/check-update.js`,
+  `README.md`, `README.ko.md`, `docs/deployment/HARNESS_SETUP*.md`). A failed check used to
+  leave only `"failed": true`, so a user who never saw a notice had no way to tell why. It
+  now records an `error` code (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `TIMEOUT`, `HTTP_404`,
+  `PROXY_NEEDS_NODE_22_21`, …), cleared on the next success. When the proxy re-run does
+  not finish, the parent now writes a `RERUN_ETIMEDOUT`, `RERUN_SIG<NAME>` or
+  `RERUN_EXIT_<n>` record instead of nothing, which also gives that case the 4-hour retry
+  instead of a re-run every session. A new README troubleshooting entry, _No update
+  notice_, explains each code.
+
+### Fixed
+
+- **No update notice behind a proxy that re-signs HTTPS** (`common/hooks/check-update.js`).
+  Corporate proxies often re-sign HTTPS with a root certificate the OS trusts but Node's
+  bundled list does not, so the catalog fetch failed with
+  `UNABLE_TO_VERIFY_LEAF_SIGNATURE` and no notice was ever shown. The proxy re-run now
+  passes `--use-system-ca` (Node 22.15+ / 23.8+, always available where the re-run happens)
+  so the OS certificate store is trusted for that request only; the user's environment is
+  not changed. Without a proxy, `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` remains the
+  user's fix, as the README now explains.
+- **Proxy re-run killed on slow machines** (`common/hooks/check-update.js`). The re-run
+  that adds proxy support was capped at 4 s (fetch timeout + 1 s), but the second `node`
+  alone can take ~5.5 s to start on Windows with on-access virus scanning. The cap is now
+  13 s (fetch timeout + 10 s), which with the parent's own startup still fits the 20 s
+  hook timeout.
+
+- **Update check killed by its own hook timeout** (`common/hooks/hooks.json`,
+  `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). The `SessionStart` entry for
+  `check-update.js` was registered with a 5 s timeout. The catalog fetch itself is capped at
+  3 s, but starting `node` alone takes 4–6 s on Windows machines with on-access virus
+  scanning, and behind `HTTPS_PROXY` the script re-runs itself once more — 11–12 s end to
+  end was measured on such a machine — so the hook was killed before it could write
+  `~/.tizen.agent.update.json`; no cache file ever appeared and no notice could be shown.
+  The timeout is now 20 s on every host (`20000` ms for Gemini CLI). This is a ceiling, not
+  a delay: the hook still exits as soon as it is done. Re-run the setup script to update the
+  registered entry.
+
 ## [1.6.0] — 2026-10-25
 
 ### Added

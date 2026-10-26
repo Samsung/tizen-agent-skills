@@ -43,7 +43,7 @@ function Get-GeminiSessionEntries {
   {
     "matcher": "startup",
     "hooks": [{ "name": "__NAME__-update-check", "type": "command",
-      "command": "node \"__DIR__/check-update.js\" --host gemini --cache-root \"__CACHE__\"", "timeout": 5000 }]
+      "command": "node \"__DIR__/check-update.js\" --host gemini --cache-root \"__CACHE__\"", "timeout": 20000 }]
   }
 ]
 '@ -replace '__NAME__', $name -replace '__DIR__', $dir -replace '__CACHE__', $cache

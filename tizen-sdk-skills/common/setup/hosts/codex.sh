@@ -32,6 +32,7 @@ host_configure() {
   CONTEXT_FILE="$HOST_HOME/AGENTS.md"
 }
 
+# SessionStart timeout 20 s: see hosts/claude.sh for the budget.
 _codex_hooks_json() {
   local cache="$HOST_HOME/$(dirname "$CACHE_TAIL")"
   cat <<EOF
@@ -53,7 +54,7 @@ _codex_hooks_json() {
     "SessionStart": [
       {
         "matcher": "startup",
-        "hooks": [{ "type": "command", "timeout": 5,
+        "hooks": [{ "type": "command", "timeout": 20,
           "command": "node \"$HOOKS_DIR/check-update.js\" --host codex --cache-root \"$cache\"" }]
       }
     ]

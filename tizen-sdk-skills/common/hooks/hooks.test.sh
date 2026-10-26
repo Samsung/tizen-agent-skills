@@ -478,6 +478,9 @@ echo "--- check-update.js: new-release notice (no network) ---"
 # fetch outright behind a proxy; Node 22.21+/24 re-runs with NODE_USE_ENV_PROXY
 # and the closed port fails at once. Either way the fetch fails.
 uc_tmp="$(mktemp -d)"
+# Git Bash: a C:/... path is valid for both bash and Windows Node (HOME,
+# USERPROFILE, NODE_OPTIONS --require); /tmp/... is not.
+command -v cygpath >/dev/null 2>&1 && uc_tmp="$(cygpath -m "$uc_tmp")"
 uc_cache="$uc_tmp/user/.tizen.agent.update.json"
 uc_dead_proxy="http://127.0.0.1:1"
 mkdir -p "$uc_tmp/user" "$uc_tmp/plugins/tizen-sdk-skills/1.4.2" \
@@ -485,10 +488,12 @@ mkdir -p "$uc_tmp/user" "$uc_tmp/plugins/tizen-sdk-skills/1.4.2" \
 uc_now="$(node -e 'console.log(Date.now())')"
 
 # uc <host> [VAR=value...] -> stdout of check-update.js
+# Node on Windows takes the home from USERPROFILE, not HOME: set both so a Git
+# Bash run cannot touch the real ~/.tizen.agent.update.json.
 uc() {
   local host="$1"; shift
   env -u HTTPS_PROXY -u https_proxy -u NODE_USE_ENV_PROXY -u NODE_OPTIONS \
-    HOME="$uc_tmp/user" "$@" \
+    HOME="$uc_tmp/user" USERPROFILE="$uc_tmp/user" "$@" \
     node check-update.js --host "$host" --cache-root "$uc_tmp/plugins" </dev/null
 }
 # uc_cache_set <hours-ago> <failed> <latest-json>
@@ -533,6 +538,8 @@ uc_expect "same notice again the same day: cline prints only cancel:false" \
   "$(uc cline)" '{"cancel":false}'
 uc_expect "the shown notice is recorded" "$(uc_field notified)" \
   '"tizen-sdk-skills 1.5.0 (installed 1.4.10)"'
+uc_expect "the shown notice time is recorded readably" \
+  "$(uc_field notifiedAtText | grep -cE '^"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{2}:[0-9]{2}"$')" "1"
 
 uc_cache_set 1 false '{"tizen-sdk-skills":"1.5.0"}'
 out="$(uc cline)"
@@ -571,6 +578,8 @@ out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
 uc_expect "failed 5 h ago: retried (checkedAt moved)" \
   "$([ "$(uc_field checkedAt)" != "$before" ] && echo moved || echo same)" "moved"
 uc_expect "failed retry keeps failed:true" "$(uc_field failed)" "true"
+uc_expect "checkedAtText is the same instant as checkedAt" \
+  "$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1]));const t=c.checkedAtText.replace(" ","T").replace(" ","");console.log(Date.parse(t)===Math.floor(c.checkedAt/1000)*1000)' "$uc_cache")" "true"
 uc_expect "failed retry keeps the last known versions" \
   "$(uc_field latest)" '{"tizen-sdk-skills":"1.5.0"}'
 uc_contains "failed retry still reports from the last known versions" \
@@ -585,6 +594,59 @@ printf 'not json' > "$uc_cache"
 out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
 uc_expect "corrupt cache: nothing printed" "$out" ""
 uc_expect "corrupt cache: replaced by a failed record" "$(uc_field failed)" "true"
+# Node 20 cannot use the proxy (PROXY_NEEDS_NODE_22_21); 22.21+ re-runs and
+# the closed port refuses (ECONNREFUSED). Either way a code is recorded.
+uc_expect "a failed fetch records an error code" \
+  "$(uc_field error | grep -cE '^"[A-Z0-9_]+"$')" "1"
+
+# A success drops the stale code (fetchLatest stubbed: GitHub is never contacted).
+uc_cache_set 30 true '{}'
+node -e 'const fs=require("fs"),f=process.argv[1],c=JSON.parse(fs.readFileSync(f));c.error="TIMEOUT";fs.writeFileSync(f,JSON.stringify(c))' "$uc_cache"
+printf '%s\n' 'globalThis.fetch = async () => ({ status: 200, json: async () => ({ plugins: [{ name: "tizen-sdk-skills", version: "1.4.10" }] }) });' \
+  > "$uc_tmp/fetch-ok.js"
+uc claude NODE_OPTIONS="--require $uc_tmp/fetch-ok.js" >/dev/null
+uc_expect "a successful fetch clears failed" "$(uc_field failed)" "false"
+uc_expect "a successful fetch drops the stale error code" "$(uc_field error)" "undefined"
+
+# The proxy re-run (Node 22.21+ / 24+ only) adds --use-system-ca, and a re-run
+# that never writes its own record leaves one behind with the reason.
+if node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>=24||(a===22&&b>=21)?0:1)'; then
+  printf '%s\n' \
+    'if (process.env.NODE_USE_ENV_PROXY === "1") {' \
+    '  require("fs").writeFileSync(process.env.UC_ARGV_FILE, process.execArgv.join(" "));' \
+    '  if (process.env.UC_DELAY) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.UC_DELAY));' \
+    '  if (process.env.UC_SIGNAL) process.kill(process.pid, process.env.UC_SIGNAL);' \
+    '}' > "$uc_tmp/child.js"
+  uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" \
+    NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+  uc_contains "proxy re-run passes --use-system-ca" "$(cat "$uc_tmp/argv")" "--use-system-ca"
+
+  # 6 s startup (slow Windows node) was over the old 4 s cap; the re-run must
+  # now finish and record its own fetch result, not RERUN_ETIMEDOUT.
+  uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_DELAY=6000 \
+    NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+  uc_expect "a re-run slower than 4 s still finishes" \
+    "$(uc_field error | grep -c RERUN_)" "0"
+
+  uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_DELAY=15000 \
+    NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+  uc_expect "a re-run killed by its cap records RERUN_ETIMEDOUT" "$(uc_field error)" '"RERUN_ETIMEDOUT"'
+  uc_expect "a killed re-run keeps the last known versions" \
+    "$(uc_field latest)" '{"tizen-sdk-skills":"1.4.10"}'
+
+  # Windows has no real signals: process.kill ends the child with an exit code.
+  if [ "$(node -p process.platform)" != "win32" ]; then
+    uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+    uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_SIGNAL=SIGTERM \
+      NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+    uc_expect "a re-run killed by a signal records it (not EXIT_null)" "$(uc_field error)" '"RERUN_SIGTERM"'
+  fi
+else
+  echo "SKIP proxy re-run cases (Node $(node --version) has no NODE_USE_ENV_PROXY)"
+fi
 
 # Behind a proxy a fresh cache must not re-spawn Node for proxy support.
 printf 'require("fs").appendFileSync(%s, "x\\n")\n' "'$uc_tmp/spawns'" > "$uc_tmp/count.js"
