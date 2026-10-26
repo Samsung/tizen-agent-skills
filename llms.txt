@@ -26,8 +26,8 @@ Each top-level directory of the repository is one independently versioned plugin
 - [Repository README (Korean)](https://github.com/Samsung/tizen-agent-skills/blob/main/README.ko.md)
 - [AGENTS.md](https://github.com/Samsung/tizen-agent-skills/blob/main/AGENTS.md): Essential rules for AI coding agents working in this repository
 - [Review skill](https://github.com/Samsung/tizen-agent-skills/blob/main/.claude/skills/tizen-sdk-skills-review/SKILL.md): How an agent reviews a tizen-sdk-skills pull request and posts the review comment
-- [Codex review skill](https://github.com/Samsung/tizen-agent-skills/blob/main/.agents/skills/tizen-sdk-skills-review/SKILL.md): Self-contained Codex pull request review procedure
-- [Cline review skill](https://github.com/Samsung/tizen-agent-skills/blob/main/.cline/skills/tizen-sdk-skills-review/SKILL.md): Self-contained Cline pull request review procedure
+- [Codex review skill](https://github.com/Samsung/tizen-agent-skills/blob/main/.agents/skills/tizen-sdk-skills-review/SKILL.md): Codex entrypoint that points to the canonical review skill
+- [Cline review skill](https://github.com/Samsung/tizen-agent-skills/blob/main/.cline/skills/tizen-sdk-skills-review/SKILL.md): Cline entrypoint that points to the canonical review skill
 - [Documentation index](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/README.en.md): Full list of guides (certificate, debug, emulator, platform, TV setup)
 - [Usage scenarios](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/usage/usage.en.md): End-to-end walkthroughs
 - [Changelog](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/CHANGELOG.md)

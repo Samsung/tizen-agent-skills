@@ -124,13 +124,17 @@ versions are in sync and that the skill README renders correctly.
 
 ## Reviewing a pull request
 
-To review someone else's `tizen-sdk-skills` pull request, use the entrypoint
-for your host:
+To review someone else's `tizen-sdk-skills` pull request, follow
+[`.claude/skills/tizen-sdk-skills-review/SKILL.md`](.claude/skills/tizen-sdk-skills-review/SKILL.md).
+It runs `check-pr.js` and the matching safe-tier checks, rechecks earlier
+review findings, and posts one English review comment after the reviewer
+confirms the draft. Agents never approve, request changes or merge.
 
-- Claude Code: [`.claude/skills/tizen-sdk-skills-review/SKILL.md`](.claude/skills/tizen-sdk-skills-review/SKILL.md)
+That file is the single copy of the procedure. Codex and Cline load it
+through thin entrypoints that only point back to it:
+
 - Codex: [`.agents/skills/tizen-sdk-skills-review/SKILL.md`](.agents/skills/tizen-sdk-skills-review/SKILL.md)
 - Cline: [`.cline/skills/tizen-sdk-skills-review/SKILL.md`](.cline/skills/tizen-sdk-skills-review/SKILL.md)
 
-Each skill contains the complete review procedure. It runs `check-pr.js` and the matching safe-tier checks, rechecks earlier
-review findings, and posts one English review comment after the reviewer
-confirms the draft. Agents never approve, request changes or merge.
+Change the procedure in `.claude/skills/` only; do not copy it into the
+entrypoints.
