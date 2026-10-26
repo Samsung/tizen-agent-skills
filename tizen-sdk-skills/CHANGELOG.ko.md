@@ -13,6 +13,15 @@
 
 ### 변경
 
+- **번들 DLog Analyzer 바이너리를 0.2.9a0으로 업데이트** (`common/tools/tizen-dlog-analyzer/`).
+  `tizen-dlog-analyzer` 스킬이 이제 0.2.9a0 Linux·Windows·macOS 실행 파일을 제공하며,
+  `NOTICE.md`에 검증된 파일 크기와 체크섬 및 번들 구성 요소 메타데이터를 기록합니다.
+  이 릴리스에는 독립 실행형 릴리스 자동화와 Pyright 검사가 추가되고, 수집·저장 기본값과
+  편집기 설정이 정리되었습니다. 또한 프로젝트 전체 타입 오류, 개발 도구 import, Ruff 및
+  테스트 정리를 수정하고, 모든 모드에서 `exception-detect --category` 값을 검증하며,
+  `tls-trust` 프로브가 해시 이름 인증서와 번들 파일을 포함한 Tizen trust store를 올바르게
+  검색하도록 수정했습니다.
+
 - **업데이트 확인 캐시에 읽기 쉬운 시각 추가** (`common/hooks/check-update.js`).
   `~/.tizen.agent.update.json`에 `checkedAtText`와 `notifiedAtText`를 함께 저장합니다.
   `checkedAt` / `notifiedAt`과 같은 시각을 현지 시간(`2026-10-26 14:04:12 +09:00`)으로 적은

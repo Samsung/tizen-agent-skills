@@ -44,7 +44,7 @@ Their license texts are available from the linked upstream projects.
 | [Expat](https://libexpat.github.io/) (`libexpat`) | 2.x | MIT |
 | [libffi](https://sourceware.org/libffi/) | 3.x | MIT |
 | [util-linux libuuid](https://github.com/util-linux/util-linux) | 2.x | BSD-3-Clause |
-| [pydantic](https://github.com/pydantic/pydantic) / pydantic-core | 2.13.4 (Linux) / 2.13.5 (Windows/macOS) | MIT |
+| [pydantic](https://github.com/pydantic/pydantic) / pydantic-core | 2.13.5 | MIT |
 | [typer](https://github.com/fastapi/typer) | — | MIT |
 | [click](https://github.com/pallets/click) | — | BSD-3-Clause |
 | [rich](https://github.com/Textualize/rich) | — | MIT |
