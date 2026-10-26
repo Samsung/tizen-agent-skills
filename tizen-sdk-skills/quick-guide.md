@@ -1,5 +1,7 @@
 # tizen-sdk-skills Guide
 
+English | [한국어](quick-guide.ko.md)
+
 Reflects `main` after v1.6.0 (2026-10-26) · one-page summary (see README.md for details)
 
 ## 1. What is tizen-sdk-skills
