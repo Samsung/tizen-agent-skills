@@ -18,9 +18,9 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   executables; `NOTICE.md` records their verified sizes, checksums and bundled component
   metadata. The release adds standalone release automation and Pyright checks, centralizes
   collection and storage defaults, and improves editor configuration. It also fixes project-wide
-  type errors, development-tool imports and Ruff/test cleanup, validates `exception-detect
-  --category` values in every mode, and correctly discovers Tizen trust stores in the `tls-trust`
-  probe, including hash-named certificates and bundle files.
+  type errors, development-tool imports and Ruff/test cleanup, and validates
+  `exception-detect --category` values in every mode. The `tls-trust` probe now correctly
+  discovers Tizen trust stores, including hash-named certificates and bundle files.
 
 - **Readable times in the update-check cache** (`common/hooks/check-update.js`).
   `~/.tizen.agent.update.json` now also stores `checkedAtText` and `notifiedAtText`, the
