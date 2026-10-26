@@ -11,6 +11,14 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+### Changed
+
+- **Readable times in the update-check cache** (`common/hooks/check-update.js`).
+  `~/.tizen.agent.update.json` now also stores `checkedAtText` and `notifiedAtText`, the
+  same instants as `checkedAt` / `notifiedAt` in local time (`2026-10-26 14:04:12 +09:00`).
+  The numeric fields stay epoch milliseconds because the daily and 4-hour checks read them;
+  the text fields are only for a person opening the file.
+
 ### Fixed
 
 - **Update check killed by its own hook timeout** (`common/hooks/hooks.json`,

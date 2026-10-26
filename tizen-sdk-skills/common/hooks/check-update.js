@@ -17,7 +17,8 @@
  *                 version of <plugin> is its highest <cache-root>/<plugin>/<X.Y.Z>/
  *
  * The catalog is fetched at most once a day; the result is cached in
- * ~/.tizen.agent.update.json. Any failure (offline, timeout, HTTP error,
+ * ~/.tizen.agent.update.json (checkedAt / notifiedAt in epoch ms, plus
+ * checkedAtText / notifiedAtText in local time for reading). Any failure (offline, timeout, HTTP error,
  * malformed catalog, unreadable file) prints nothing — the session starts as
  * usual. A failed fetch is retried after 4 hours instead of a day, so a brief
  * outage is caught up soon while an offline machine does not wait for the
@@ -108,7 +109,28 @@ function readCache() {
   }
 }
 
+/** "2026-10-26 14:30:26 +09:00" in the machine's local time zone. */
+function localTime(ms) {
+  const d = new Date(ms);
+  const pad = (n) => String(n).padStart(2, "0");
+  const off = -d.getTimezoneOffset();
+  const sign = off >= 0 ? "+" : "-";
+  return (
+    `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+    `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ` +
+    `${sign}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`
+  );
+}
+
+// checkedAt / notifiedAt stay epoch milliseconds: the interval checks read
+// them. The *Text twins are for a person opening the file and are never read.
 function writeCache(cache) {
+  if (typeof cache.checkedAt === "number") {
+    cache.checkedAtText = localTime(cache.checkedAt);
+  }
+  if (typeof cache.notifiedAt === "number") {
+    cache.notifiedAtText = localTime(cache.notifiedAt);
+  }
   try {
     fs.writeFileSync(CACHE_FILE, JSON.stringify(cache) + "\n", "utf-8");
   } catch {

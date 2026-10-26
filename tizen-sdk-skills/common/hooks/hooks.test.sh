@@ -533,6 +533,8 @@ uc_expect "same notice again the same day: cline prints only cancel:false" \
   "$(uc cline)" '{"cancel":false}'
 uc_expect "the shown notice is recorded" "$(uc_field notified)" \
   '"tizen-sdk-skills 1.5.0 (installed 1.4.10)"'
+uc_expect "the shown notice time is recorded readably" \
+  "$(uc_field notifiedAtText | grep -cE '^"[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2} [+-][0-9]{2}:[0-9]{2}"$')" "1"
 
 uc_cache_set 1 false '{"tizen-sdk-skills":"1.5.0"}'
 out="$(uc cline)"
@@ -571,6 +573,8 @@ out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
 uc_expect "failed 5 h ago: retried (checkedAt moved)" \
   "$([ "$(uc_field checkedAt)" != "$before" ] && echo moved || echo same)" "moved"
 uc_expect "failed retry keeps failed:true" "$(uc_field failed)" "true"
+uc_expect "checkedAtText is the same instant as checkedAt" \
+  "$(node -e 'const c=JSON.parse(require("fs").readFileSync(process.argv[1]));const t=c.checkedAtText.replace(" ","T").replace(" ","");console.log(Date.parse(t)===Math.floor(c.checkedAt/1000)*1000)' "$uc_cache")" "true"
 uc_expect "failed retry keeps the last known versions" \
   "$(uc_field latest)" '{"tizen-sdk-skills":"1.5.0"}'
 uc_contains "failed retry still reports from the last known versions" \

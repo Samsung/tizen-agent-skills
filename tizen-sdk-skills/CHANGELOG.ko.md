@@ -11,6 +11,14 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **업데이트 확인 캐시에 읽기 쉬운 시각 추가** (`common/hooks/check-update.js`).
+  `~/.tizen.agent.update.json`에 `checkedAtText`와 `notifiedAtText`를 함께 저장합니다.
+  `checkedAt` / `notifiedAt`과 같은 시각을 현지 시간(`2026-10-26 14:04:12 +09:00`)으로 적은
+  값입니다. 하루·4시간 간격 판단이 숫자 필드를 읽으므로 숫자 필드는 그대로 epoch 밀리초로
+  유지하며, 텍스트 필드는 파일을 여는 사람을 위한 것입니다.
+
 ### 수정
 
 - **업데이트 확인 훅이 자신의 시간 제한에 걸려 종료되던 문제** (`common/hooks/hooks.json`,
