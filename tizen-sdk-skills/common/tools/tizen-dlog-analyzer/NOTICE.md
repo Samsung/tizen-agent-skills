@@ -6,11 +6,11 @@ redistributed here so that the skill works without a Python toolchain on the hos
 
 | File | Platform | Size (bytes) | SHA-256 |
 |---|---|---|---|
-| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,449,584 | `457c1685dd531d5f481cc1869c5f98692c5847246ec4777e320ae6577695cd1e` |
-| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,771,176 | `1ec6ca16e14f221726057063620cc50ca4458fb9356de4d75f284ce7dd9b9c0e` |
-| `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 18,089,504 | `2fa01232077a57ff6ea599ee9430d65879208f3b49b70effa5572cbd4562506e` |
+| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,451,720 | `44e7ed1edc0309c156979dc38094d510a59243813d5cfc5d50ba9179690c8bd8` |
+| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,776,778 | `fce9adc71010dfba0477f772ea04f053b52887887b445b834d0d0999463bd11e` |
+| `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 18,067,808 | `d8c6221834f05e3b30854cf9d2498a55c91d677ed3827d26ede886c6c67e873a` |
 
-- **Version:** tizen-dlog-analyzer `0.2.8a0`
+- **Version:** tizen-dlog-analyzer `0.2.9a0`
 - **Packaging:** [PyInstaller](https://pyinstaller.org/) one-file bundles. The Linux build embeds
   CPython 3.12 and was linked on Ubuntu 18.04 (GCC 7.5); the Windows build embeds CPython 3.13;
   the macOS build embeds CPython 3.14.
@@ -18,7 +18,7 @@ redistributed here so that the skill works without a Python toolchain on the hos
   <!-- TODO(open-source release): add the public URL of the tizen-dlog-analyzer source repository
        (or the release page these binaries were downloaded from). -->
 - **License of the analyzer itself:** Apache License 2.0, Copyright 2026 Samsung Electronics Co., Ltd.
-  (a copy is included inside the bundle as of `0.2.8a0`; see the project `LICENSE`).
+  (a copy is included inside the bundle as of `0.2.9a0`; see the project `LICENSE`).
 
 Verify a download with:
 
@@ -44,7 +44,7 @@ Their license texts are available from the linked upstream projects.
 | [Expat](https://libexpat.github.io/) (`libexpat`) | 2.x | MIT |
 | [libffi](https://sourceware.org/libffi/) | 3.x | MIT |
 | [util-linux libuuid](https://github.com/util-linux/util-linux) | 2.x | BSD-3-Clause |
-| [pydantic](https://github.com/pydantic/pydantic) / pydantic-core | 2.13.4 (Linux) / 2.13.5 (Windows/macOS) | MIT |
+| [pydantic](https://github.com/pydantic/pydantic) / pydantic-core | 2.13.5 | MIT |
 | [typer](https://github.com/fastapi/typer) | — | MIT |
 | [click](https://github.com/pallets/click) | — | BSD-3-Clause |
 | [rich](https://github.com/Textualize/rich) | — | MIT |

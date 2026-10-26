@@ -13,6 +13,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Changed
 
+- **Updated bundled DLog Analyzer binaries to 0.2.9a0** (`common/tools/tizen-dlog-analyzer/`).
+  The `tizen-dlog-analyzer` skill now ships the 0.2.9a0 Linux, Windows and macOS
+  executables; `NOTICE.md` records their verified sizes, checksums and bundled component
+  metadata. The release adds standalone release automation and Pyright checks, centralizes
+  collection and storage defaults, and improves editor configuration. It also fixes project-wide
+  type errors, development-tool imports and Ruff/test cleanup, and validates
+  `exception-detect --category` values in every mode. The `tls-trust` probe now correctly
+  discovers Tizen trust stores, including hash-named certificates and bundle files.
+
 - **Readable times in the update-check cache** (`common/hooks/check-update.js`).
   `~/.tizen.agent.update.json` now also stores `checkedAtText` and `notifiedAtText`, the
   same instants as `checkedAt` / `notifiedAt` in local time (`2026-10-26 14:04:12 +09:00`).
