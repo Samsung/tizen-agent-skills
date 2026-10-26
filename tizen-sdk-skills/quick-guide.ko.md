@@ -2,7 +2,7 @@
 
 [English](quick-guide.md) | 한국어
 
-v1.6.0 이후 `main` 기준 (2026-10-26) · 한 장 요약본 (상세 내용은 README.ko.md)
+v1.6.1 기준 · 2026-10-26 실측 · 한 장 요약본 (상세 내용은 README.ko.md)
 
 ## 1. tizen-sdk-skills란
 
@@ -169,7 +169,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 | 스킬이 인식되지 않음 | 호스트를 재시작했는지 확인하고 setup을 다시 실행 (멱등 동작) |
 | 어시스턴트의 명령이 가드에 거부된 뒤 다른 방법으로 다시 실행됨 | 정상 동작. PreToolUse 가드 훅이 자주 틀리는 명령 형태(직접 입력한 `sdb` 등)를 막고 올바른 스킬 러너로 다시 실행하게 합니다 |
 | `node`를 찾을 수 없음 | `PATH`에 Node.js 20+ 필요. "node 확인해줘"(`check-node`) 또는 `node --version` |
-| 업데이트 알림이 오지 않음 | `~/.tizen.agent.update.json` 확인. `failed: false`면 확인은 정상이며, 이미 최신이거나 같은 알림을 24시간 안에 이미 보여 준 경우입니다(`notifiedAt`). `failed: true`면 `error` 코드 확인(v1.6.0 다음 릴리스부터 기록) |
+| 업데이트 알림이 오지 않음 | `~/.tizen.agent.update.json` 확인. `failed: false`면 확인은 정상이며, 이미 최신이거나 같은 알림을 24시간 안에 이미 보여 준 경우입니다(`notifiedAt`). `failed: true`면 `error` 코드 확인(v1.6.1부터 기록) |
 | 인증서 오류 (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` 등) | 회사 프록시의 재서명. `NODE_USE_SYSTEM_CA=1` 또는 `NODE_EXTRA_CA_CERTS`에 회사 루트 인증서 지정 후 재시작 |
 | `PROXY_NEEDS_NODE_22_21` | `HTTPS_PROXY` 환경에서 Node가 22.21보다 오래됨. Node 업그레이드 |
 | `RERUN_ETIMEDOUT` 반복 | `node -e 0` 실행 시간 측정. 수십 초면 IT 팀에 `node.exe`를 백신 실시간 검사 예외로 등록해 달라고 요청 |

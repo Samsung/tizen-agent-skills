@@ -2,7 +2,7 @@
 
 English | [한국어](quick-guide.ko.md)
 
-Reflects `main` after v1.6.0 (2026-10-26) · one-page summary (see README.md for details)
+As of v1.6.1 · measured 2026-10-26 · one-page summary (see README.md for details)
 
 ## 1. What is tizen-sdk-skills
 
@@ -169,7 +169,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 | Skills are not recognized | Check that you restarted the host and re-run setup (it is idempotent) |
 | The assistant's command is denied by a guard, then retried another way | Expected. The PreToolUse guard hook blocks common wrong command forms (such as a hand-typed `sdb`) and has the assistant retry through the right skill runner |
 | `node` not found | Node.js 20+ must be on `PATH`. Ask "check node" (`check-node`) or run `node --version` |
-| No update notice | Open `~/.tizen.agent.update.json`. `failed: false` means the check works: you are up to date, or the same notice was already shown in the last 24 hours (`notifiedAt`). `failed: true` carries an `error` code (recorded from the release after v1.6.0) |
+| No update notice | Open `~/.tizen.agent.update.json`. `failed: false` means the check works: you are up to date, or the same notice was already shown in the last 24 hours (`notifiedAt`). `failed: true` carries an `error` code (recorded since v1.6.1) |
 | Certificate errors (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, …) | A corporate proxy re-signs HTTPS. Set `NODE_USE_SYSTEM_CA=1` or point `NODE_EXTRA_CA_CERTS` at the corporate root certificate, then restart |
 | `PROXY_NEEDS_NODE_22_21` | `HTTPS_PROXY` is set but Node is older than 22.21. Upgrade Node |
 | `RERUN_ETIMEDOUT` keeps repeating | Time `node -e 0`. If it takes tens of seconds, ask IT to exclude `node.exe` from real-time antivirus scanning |

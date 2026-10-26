@@ -356,7 +356,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-10-25 against v1.6.0. Every row can be re-measured with the
+Measured on 2026-10-26 against v1.6.1. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -370,7 +370,7 @@ or test suite is added.
 | Hooks | 3 PreToolUse guard scripts with 13 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
 | Unit tests (`common/lib/tests/`) | 90 files | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 119 cases in 3 files | `cd vscode && npm test` |
-| Hook tests | 244 cases | `bash common/hooks/hooks.test.sh` |
+| Hook tests | 254 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
 | Documentation | 213 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
