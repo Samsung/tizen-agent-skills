@@ -17,12 +17,13 @@ settings.local.json
 !tizen-sdk-skills/tests/fixtures/certs/test-fixture-author.p12
 
 # AI-assistant working directories and per-user instructions
-# (shared agent skills under .claude/skills/ are tracked)
+# (shared contributor skills are tracked)
 .claude/*
 !.claude/skills/
 .codex/
 .gemini/
-.cline/
+.cline/*
+!.cline/skills/
 .wolf/
 .workspace_rag/
 CLAUDE.md
