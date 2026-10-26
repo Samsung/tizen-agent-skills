@@ -8,6 +8,7 @@ Each top-level directory of the repository is one independently versioned plugin
 
 - [tizen-sdk-skills README](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/README.md): Overview, quick start for every host, the 35 commands, architecture and troubleshooting
 - [tizen-sdk-skills README (Korean)](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/README.ko.md): Korean version of the plugin README
+- [tizen-sdk-skills quick guide](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/quick-guide.md): One-page summary of the architecture, development flow, setup per host, troubleshooting and key locations ([Korean](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/quick-guide.ko.md))
 - [Skills reference](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md): Every skill with its trigger phrases, inputs and outputs
 - [All-in-one guide](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/TIZEN_SDK_SKILLS_ALL_IN_ONE.en.md): Single-document description of the whole plugin
 - [Skills to commands mapping](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/SKILLS_COMMANDS_MAPPING.en.md): How each `tizen-*` skill maps to a `tizen-sdk` CLI command

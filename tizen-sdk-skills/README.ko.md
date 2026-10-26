@@ -8,6 +8,8 @@ AI 코딩 에이전트를 위한 타이젠 앱 개발 자동화 스킬셋입니�
 AI 호스트 없이 쓸 수 있는 독립 실행형 **tizen-sdk** CLI도 함께 제공합니다 — SDK 설치, 프로젝트 생성,
 빌드, 디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서 관리, Playwright 테스트를 자동화합니다.
 
+처음이라면 한 장으로 요약한 [빠른 가이드](quick-guide.ko.md)부터 읽어 보세요.
+
 ## 빠른 시작
 
 ### 사전 요구사항
@@ -350,7 +352,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | VS Code 확장 테스트 | 3 파일, 119 케이스 | `cd vscode && npm test` |
 | 훅 테스트 | 244 케이스 | `bash common/hooks/hooks.test.sh` |
 | 통합 TC (`tests/tc/`) | 296 TC / 289 YAML — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| 문서 | Markdown 211개 (`docs/` 93개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
+| 문서 | Markdown 213개 (`docs/` 93개, en/ko 쌍), SKILL.md 60개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
 
@@ -365,6 +367,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 **시작하기**
 
+- [빠른 가이드](quick-guide.ko.md) — 구조, 개발 흐름, 설치, 문제 해결을 한 장으로 요약
 - [사용 사례 & 시나리오 가이드](usage/usage.md) — 엔드투엔드 시나리오 가이드와 실제 사용 사례
 - [SDK 설치 가이드](docs/sdk-install/INSTALLATION_FLOW.md)
 - [사용자 지정 저장소 설치](docs/sdk-install/CUSTOM_REPOSITORY_INSTALL.md)

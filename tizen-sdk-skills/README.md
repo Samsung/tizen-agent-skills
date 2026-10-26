@@ -9,6 +9,8 @@ and ships a standalone **tizen-sdk** CLI that works without an AI host — autom
 installation, project creation, building, device management, app installation, remote
 debugging (GDB / netcoredbg / CDP), certificate management, and Playwright testing.
 
+New here? Start with the one-page [Quick Guide](quick-guide.md).
+
 ## Quick Start
 
 ### Prerequisites
@@ -369,7 +371,7 @@ or test suite is added.
 | VS Code extension tests | 119 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 244 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 211 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Documentation | 213 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
@@ -384,6 +386,7 @@ before the plugin moved to this repository are not republished here.
 
 **Getting started**
 
+- [Quick Guide](quick-guide.md) — one-page summary of the architecture, development flow, setup and troubleshooting
 - [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) — end-to-end scenario guides and real-world examples
 - [SDK Installation Guide](docs/sdk-install/INSTALLATION_FLOW.en.md)
 - [Custom Repository Install](docs/sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md)
