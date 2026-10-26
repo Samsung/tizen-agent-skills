@@ -11,6 +11,8 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-10-26
+
 ### Changed
 
 - **Updated bundled DLog Analyzer binaries to 0.2.9a0** (`common/tools/tizen-dlog-analyzer/`).

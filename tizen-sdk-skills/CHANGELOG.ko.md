@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [1.6.1] — 2026-10-26
+
 ### 변경
 
 - **번들 DLog Analyzer 바이너리를 0.2.9a0으로 업데이트** (`common/tools/tizen-dlog-analyzer/`).
