@@ -9,6 +9,8 @@ and ships a standalone **tizen-sdk** CLI that works without an AI host — autom
 installation, project creation, building, device management, app installation, remote
 debugging (GDB / netcoredbg / CDP), certificate management, and Playwright testing.
 
+New here? Start with the one-page [Quick Guide](quick-guide.md).
+
 ## Quick Start
 
 ### Prerequisites
@@ -308,7 +310,8 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
   "check node" (`check-node`) or run `node --version`.
 - **No update notice** — the session-start check stays silent on failure; its last result
   is in `~/.tizen.agent.update.json`. `"failed": false` with a `latest` list means the
-  check works and you are up to date. `"failed": true` carries an `error` code:
+  check works: you are up to date, or the same notice was already shown in the last 24
+  hours (`notifiedAt`; it shows again a day later). `"failed": true` carries an `error` code:
   - a certificate code such as `UNABLE_TO_VERIFY_LEAF_SIGNATURE` or
     `SELF_SIGNED_CERT_IN_CHAIN` — a proxy re-signs HTTPS with a root certificate the OS
     trusts but Node's bundled list does not. Behind `HTTPS_PROXY` on Node 22.21+ / 24+
@@ -369,7 +372,7 @@ or test suite is added.
 | VS Code extension tests | 119 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 244 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 211 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Documentation | 213 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
@@ -384,6 +387,7 @@ before the plugin moved to this repository are not republished here.
 
 **Getting started**
 
+- [Quick Guide](quick-guide.md) — one-page summary of the architecture, development flow, setup and troubleshooting
 - [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) — end-to-end scenario guides and real-world examples
 - [SDK Installation Guide](docs/sdk-install/INSTALLATION_FLOW.en.md)
 - [Custom Repository Install](docs/sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md)
