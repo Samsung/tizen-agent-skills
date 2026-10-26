@@ -1902,7 +1902,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.6.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.6.1...HEAD
+[1.6.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.6.0...tizen-sdk-skills-v1.6.1
 [1.6.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...tizen-sdk-skills-v1.6.0
 [1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.5...tizen-sdk-skills-v1.5.0
 [1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...tizen-sdk-skills-v1.4.5
