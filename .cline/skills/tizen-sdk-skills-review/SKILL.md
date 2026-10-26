@@ -17,4 +17,6 @@ from start to finish. Every rule there applies unchanged, including:
 - stop if the pull request does not touch `tizen-sdk-skills/`;
 - stop if `git status --porcelain` is not empty;
 - run only safe-tier checks;
+- end the comment with the model line (`Reviewed with <model name> (<model id>)
+  in Cline`), writing `unknown` for anything the agent was not told;
 - show the draft comment and post it only after the reviewer confirms.

@@ -21,6 +21,15 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
   maintained in one place. `.gitignore` now tracks `.cline/skills/` while still
   ignoring the rest of `.cline/`.
 
+### Changed
+
+- **Review comments name the model that wrote them**
+  (`.claude/skills/tizen-sdk-skills-review/SKILL.md`, plus the Codex and Cline
+  entrypoints). Every review comment, re-reviews included, now ends with a line such as
+  `Reviewed with Opus 5.5 (claude-opus-5-5) in Claude Code`, so readers can tell which
+  model produced each pass. The agent fills it from what it was told about itself and
+  writes `unknown` instead of guessing.
+
 ## [1.3.0] — 2026-10-25
 
 Repository-wide release that ships `tizen-sdk-skills` 1.6.0 and `tizen-action-skills` 1.0.0.
