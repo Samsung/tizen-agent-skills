@@ -144,7 +144,21 @@ Reviewed PR #<N> (HEAD `<short sha>`) against `AGENTS.md`,
 
 ### Verdict
 <"Ready to merge once the blocking findings are fixed" or "No blocking findings">
+
+---
+_Reviewed with <model name> (`<model id>`) in <host>._
 ```
+
+End every comment with that model line, including re-reviews, so readers can
+tell which model produced each pass. Fill it from what the running agent was
+told about itself, for example:
+
+```markdown
+_Reviewed with Opus 5.5 (`claude-opus-5-5`) in Claude Code._
+```
+
+If the agent was not given its model name or ID, write `unknown` for that part
+rather than guessing.
 
 ### 7. Confirm, then post
 
