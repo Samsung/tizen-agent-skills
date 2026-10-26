@@ -6,10 +6,22 @@ All notable changes to **tizen-sdk-skills** are documented here. The format foll
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
 [Semantic Versioning](https://semver.org/).
 
-Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
-[tizen-agent-skills](https://github.com/Samsung/tizen-agent-skills) repository.
+Up to 1.4.2, releases were tagged `tizen-sdk-skills-vX.Y.Z`. Since 1.4.3 each plugin
+version ships in a repository-wide release tagged `tizen-agent-skills-vX.Y.Z` on the
+[tizen-agent-skills](https://github.com/Samsung/tizen-agent-skills) repository; the root
+`CHANGELOG.md` lists which release carries which plugin version, and the compare links
+below use those release tags.
 
 ## [Unreleased]
+
+## [1.6.1] — 2026-10-26
+
+### Added
+
+- **One-page quick guide** (`quick-guide.md`, `quick-guide.ko.md`, linked from `README.md`,
+  `README.ko.md` and `llms.txt`). Summarizes what the plugin does, the development flow with
+  all 36 commands, setup per host, common problems and key locations, with two Mermaid
+  diagrams, so a new user does not have to read the full README first.
 
 ### Changed
 
@@ -1900,12 +1912,13 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.6.0...HEAD
-[1.6.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.5.0...tizen-sdk-skills-v1.6.0
-[1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.5...tizen-sdk-skills-v1.5.0
-[1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.4...tizen-sdk-skills-v1.4.5
-[1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.3...tizen-sdk-skills-v1.4.4
-[1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.2...tizen-sdk-skills-v1.4.3
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.1...HEAD
+[1.6.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.0...tizen-agent-skills-v1.3.1
+[1.6.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.2.0...tizen-agent-skills-v1.3.0
+[1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.1.2...tizen-agent-skills-v1.2.0
+[1.4.5]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.1.1...tizen-agent-skills-v1.1.2
+[1.4.4]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.1.0...tizen-agent-skills-v1.1.1
+[1.4.3]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.0.0...tizen-agent-skills-v1.1.0
 [1.4.2]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.1...tizen-sdk-skills-v1.4.2
 [1.4.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.4.0...tizen-sdk-skills-v1.4.1
 [1.4.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-sdk-skills-v1.3.1...tizen-sdk-skills-v1.4.0

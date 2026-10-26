@@ -12,6 +12,10 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-10-26
+
+Repository-wide release that ships `tizen-sdk-skills` 1.6.1 and `tizen-action-skills` 1.0.0.
+
 ### Added
 
 - **Codex and Cline entrypoints for the pull request review skill**
@@ -29,6 +33,14 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
   `Reviewed with Opus 5.5 (claude-opus-5-5) in Claude Code`, so readers can tell which
   model produced each pass. The agent fills it from what it was told about itself and
   writes `unknown` instead of guessing.
+- `tizen-sdk-skills` plugin advanced from 1.6.0 to 1.6.1 (patch). Highlights: the update
+  check records why a check failed and readable timestamps in `~/.tizen.agent.update.json`,
+  works behind proxies that re-sign HTTPS and on slow machines, and is no longer killed by
+  its own hook timeout; the bundled dlog analyzer moves to 0.2.9a0; a one-page quick guide
+  (EN + KO) is added. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
+  for details. The release assets stamped with the plugin version are therefore
+  `tizen-sdk-v1.6.1.zip` and `tizen-ai-extension-v1.6.1.vsix`.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.6.1.
 
 ## [1.3.0] — 2026-10-25
 
