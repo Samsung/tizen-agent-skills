@@ -129,3 +129,12 @@ To review someone else's `tizen-sdk-skills` pull request, follow
 It runs `check-pr.js` and the matching safe-tier checks, rechecks earlier
 review findings, and posts one English review comment after the reviewer
 confirms the draft. Agents never approve, request changes or merge.
+
+That file is the single copy of the procedure. Codex and Cline load it
+through thin entrypoints that only point back to it:
+
+- Codex: [`.agents/skills/tizen-sdk-skills-review/SKILL.md`](.agents/skills/tizen-sdk-skills-review/SKILL.md)
+- Cline: [`.cline/skills/tizen-sdk-skills-review/SKILL.md`](.cline/skills/tizen-sdk-skills-review/SKILL.md)
+
+Change the procedure in `.claude/skills/` only; do not copy it into the
+entrypoints.

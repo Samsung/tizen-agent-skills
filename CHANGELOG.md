@@ -12,6 +12,15 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+### Added
+
+- **Codex and Cline entrypoints for the pull request review skill**
+  (`.agents/skills/tizen-sdk-skills-review/SKILL.md`,
+  `.cline/skills/tizen-sdk-skills-review/SKILL.md`). Each is a thin file that
+  points to the canonical procedure in `.claude/skills/`, so the procedure is
+  maintained in one place. `.gitignore` now tracks `.cline/skills/` while still
+  ignoring the rest of `.cline/`.
+
 ## [1.3.0] — 2026-10-25
 
 Repository-wide release that ships `tizen-sdk-skills` 1.6.0 and `tizen-action-skills` 1.0.0.
