@@ -54,7 +54,7 @@ _gemini_session_entries() {
   {
     "matcher": "startup",
     "hooks": [{ "name": "$PLUGIN_NAME-update-check", "type": "command",
-      "command": "node \"$dir/check-update.js\" --host gemini --cache-root \"$cache\"", "timeout": 5000 }]
+      "command": "node \"$dir/check-update.js\" --host gemini --cache-root \"$cache\"", "timeout": 15000 }]
   }
 ]
 EOF

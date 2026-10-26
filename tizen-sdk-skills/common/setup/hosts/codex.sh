@@ -53,7 +53,7 @@ _codex_hooks_json() {
     "SessionStart": [
       {
         "matcher": "startup",
-        "hooks": [{ "type": "command", "timeout": 5,
+        "hooks": [{ "type": "command", "timeout": 15,
           "command": "node \"$HOOKS_DIR/check-update.js\" --host codex --cache-root \"$cache\"" }]
       }
     ]
