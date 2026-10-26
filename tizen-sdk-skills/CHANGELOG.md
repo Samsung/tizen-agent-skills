@@ -16,12 +16,13 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 - **Update check killed by its own hook timeout** (`common/hooks/hooks.json`,
   `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). The `SessionStart` entry for
   `check-update.js` was registered with a 5 s timeout. The catalog fetch itself is capped at
-  3 s, but starting `node` alone takes 4–7 s on Windows machines with on-access virus
-  scanning, and behind `HTTPS_PROXY` the script re-runs itself once more, so the hook was
-  killed before it could write `~/.tizen.agent.update.json` — on such machines no cache file
-  ever appeared and no notice could be shown. The timeout is now 15 s on every host
-  (`15000` ms for Gemini CLI). This is a ceiling, not a delay: the hook still exits as soon
-  as it is done. Re-run the setup script to update the registered entry.
+  3 s, but starting `node` alone takes 4–6 s on Windows machines with on-access virus
+  scanning, and behind `HTTPS_PROXY` the script re-runs itself once more — 11–12 s end to
+  end was measured on such a machine — so the hook was killed before it could write
+  `~/.tizen.agent.update.json`; no cache file ever appeared and no notice could be shown.
+  The timeout is now 20 s on every host (`20000` ms for Gemini CLI). This is a ceiling, not
+  a delay: the hook still exits as soon as it is done. Re-run the setup script to update the
+  registered entry.
 
 ## [1.6.0] — 2026-10-25
 
