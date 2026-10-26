@@ -22,10 +22,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   `README.md`, `README.ko.md`, `docs/deployment/HARNESS_SETUP*.md`). A failed check used to
   leave only `"failed": true`, so a user who never saw a notice had no way to tell why. It
   now records an `error` code (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `TIMEOUT`, `HTTP_404`,
-  `PROXY_NEEDS_NODE_22_21`, …), cleared on the next success. When the proxy re-run is
-  killed by its 4 s cap, the parent now writes a `RERUN_ETIMEDOUT` record instead of
-  nothing, which also gives that case the 4-hour retry instead of a re-run every session.
-  A new README troubleshooting entry, _No update notice_, explains each code.
+  `PROXY_NEEDS_NODE_22_21`, …), cleared on the next success. When the proxy re-run does
+  not finish, the parent now writes a `RERUN_ETIMEDOUT`, `RERUN_SIG<NAME>` or
+  `RERUN_EXIT_<n>` record instead of nothing, which also gives that case the 4-hour retry
+  instead of a re-run every session. A new README troubleshooting entry, _No update
+  notice_, explains each code.
 
 ### Fixed
 
@@ -37,6 +38,11 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   so the OS certificate store is trusted for that request only; the user's environment is
   not changed. Without a proxy, `NODE_USE_SYSTEM_CA=1` or `NODE_EXTRA_CA_CERTS` remains the
   user's fix, as the README now explains.
+- **Proxy re-run killed on slow machines** (`common/hooks/check-update.js`). The re-run
+  that adds proxy support was capped at 4 s (fetch timeout + 1 s), but the second `node`
+  alone can take ~5.5 s to start on Windows with on-access virus scanning. The cap is now
+  13 s (fetch timeout + 10 s), which with the parent's own startup still fits the 20 s
+  hook timeout.
 
 - **Update check killed by its own hook timeout** (`common/hooks/hooks.json`,
   `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). The `SessionStart` entry for

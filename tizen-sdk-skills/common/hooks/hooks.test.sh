@@ -614,19 +614,36 @@ if node -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exi
   printf '%s\n' \
     'if (process.env.NODE_USE_ENV_PROXY === "1") {' \
     '  require("fs").writeFileSync(process.env.UC_ARGV_FILE, process.execArgv.join(" "));' \
-    '  if (process.env.UC_SLOW === "1") Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 6000);' \
+    '  if (process.env.UC_DELAY) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Number(process.env.UC_DELAY));' \
+    '  if (process.env.UC_SIGNAL) process.kill(process.pid, process.env.UC_SIGNAL);' \
     '}' > "$uc_tmp/child.js"
   uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
   uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" \
     NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
   uc_contains "proxy re-run passes --use-system-ca" "$(cat "$uc_tmp/argv")" "--use-system-ca"
 
+  # 6 s startup (slow Windows node) was over the old 4 s cap; the re-run must
+  # now finish and record its own fetch result, not RERUN_ETIMEDOUT.
   uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
-  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_SLOW=1 \
+  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_DELAY=6000 \
+    NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+  uc_expect "a re-run slower than 4 s still finishes" \
+    "$(uc_field error | grep -c RERUN_)" "0"
+
+  uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+  uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_DELAY=15000 \
     NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
   uc_expect "a re-run killed by its cap records RERUN_ETIMEDOUT" "$(uc_field error)" '"RERUN_ETIMEDOUT"'
   uc_expect "a killed re-run keeps the last known versions" \
     "$(uc_field latest)" '{"tizen-sdk-skills":"1.4.10"}'
+
+  # Windows has no real signals: process.kill ends the child with an exit code.
+  if [ "$(node -p process.platform)" != "win32" ]; then
+    uc_cache_set 30 false '{"tizen-sdk-skills":"1.4.10"}'
+    uc claude HTTPS_PROXY="$uc_dead_proxy" UC_ARGV_FILE="$uc_tmp/argv" UC_SIGNAL=SIGTERM \
+      NODE_OPTIONS="--require $uc_tmp/child.js" >/dev/null
+    uc_expect "a re-run killed by a signal records it (not EXIT_null)" "$(uc_field error)" '"RERUN_SIGTERM"'
+  fi
 else
   echo "SKIP proxy re-run cases (Node $(node --version) has no NODE_USE_ENV_PROXY)"
 fi

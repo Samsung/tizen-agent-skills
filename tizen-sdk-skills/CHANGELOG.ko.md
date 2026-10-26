@@ -22,9 +22,9 @@
   `README.ko.md`, `docs/deployment/HARNESS_SETUP*.md`). 지금까지는 실패해도 `"failed": true`만
   남아, 알림을 받지 못하는 사용자가 이유를 알 수 없었습니다. 이제 `error` 코드
   (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, `TIMEOUT`, `HTTP_404`, `PROXY_NEEDS_NODE_22_21` 등)를
-  기록하고, 다음에 성공하면 지웁니다. 프록시용 재실행이 4초 제한에 걸려 종료되면 이제 부모
-  프로세스가 아무것도 남기지 않는 대신 `RERUN_ETIMEDOUT` 기록을 남깁니다. 이 경우에도 매 세션
-  재실행하지 않고 4시간 뒤에 다시 시도하게 됩니다. README 문제 해결에 _업데이트 알림이 오지
+  기록하고, 다음에 성공하면 지웁니다. 프록시용 재실행이 끝나지 못하면 이제 부모 프로세스가
+  아무것도 남기지 않는 대신 `RERUN_ETIMEDOUT`, `RERUN_SIG<이름>`, `RERUN_EXIT_<n>` 기록을
+  남깁니다. 이 경우에도 매 세션 재실행하지 않고 4시간 뒤에 다시 시도하게 됩니다. README 문제 해결에 _업데이트 알림이 오지
   않음_ 항목을 추가해 코드별 대처를 설명합니다.
 
 ### 수정
@@ -37,6 +37,10 @@
   넘겨 그 요청에 한해 OS 인증서 저장소를 신뢰합니다. 사용자 환경은 바꾸지 않습니다. 프록시가
   없는 환경에서는 README에 설명한 대로 `NODE_USE_SYSTEM_CA=1`이나 `NODE_EXTRA_CA_CERTS`를
   사용자가 설정해야 합니다.
+- **느린 머신에서 프록시용 재실행이 강제 종료되던 문제** (`common/hooks/check-update.js`).
+  프록시 지원을 켜는 재실행의 제한이 4초(조회 제한 + 1초)였지만, 실시간 백신 검사가 동작하는
+  Windows에서는 두 번째 `node`가 시작되는 데만 약 5.5초가 걸립니다. 이제 제한은 13초(조회 제한 +
+  10초)이며, 부모 프로세스의 시작 시간을 더해도 20초 훅 시간 제한 안에 들어갑니다.
 
 - **업데이트 확인 훅이 자신의 시간 제한에 걸려 종료되던 문제** (`common/hooks/hooks.json`,
   `common/setup/hosts/{claude,codex,gemini}.sh`, `.ps1`). `check-update.js`의 `SessionStart`

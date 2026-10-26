@@ -318,8 +318,12 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
     form, and restart the host. Either setting also applies to every other Node tool.
   - `PROXY_NEEDS_NODE_22_21` — `HTTPS_PROXY` is set but Node is older than 22.21; upgrade
     Node.
-  - `RERUN_ETIMEDOUT` — Node starts too slowly for the 4 s cap on the proxy re-run
-    (on-access virus scanning is the usual cause).
+  - `RERUN_ETIMEDOUT` — the proxy re-run did not finish within 13 s. That leaves room
+    for a `node` startup of several seconds, so it usually means a stalled network; the
+    check retries by itself. If it persists, time `node -e 0`: tens of seconds point to
+    on-access virus scanning of `node.exe`, which your IT team can exclude.
+  - `RERUN_SIG<NAME>`, `RERUN_EXIT_<n>` — the proxy re-run was killed or crashed; run the
+    hook command from the host settings by hand to see its error.
   - `TIMEOUT`, `ECONNREFUSED`, `ENOTFOUND`, `HTTP_<status>` — network or GitHub
     unreachable.
 

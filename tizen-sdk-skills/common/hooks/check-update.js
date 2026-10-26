@@ -56,6 +56,11 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const RETRY_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const NOTIFY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 3000;
+// The proxy re-run starts a second node: on Windows with on-access virus
+// scanning that alone took ~5.5 s, so 1 s over the fetch was not enough. With
+// the parent's own startup this still fits the 20 s hook timeout the setup
+// scripts register.
+const RERUN_TIMEOUT_MS = FETCH_TIMEOUT_MS + 10000;
 const HOSTS = ["claude", "codex", "gemini", "cline"];
 const VERSION_RE = /^\d+\.\d+\.\d+$/;
 
@@ -256,14 +261,19 @@ async function main() {
       {
         env: { ...process.env, NODE_USE_ENV_PROXY: "1" },
         stdio: ["ignore", "inherit", "ignore"],
-        timeout: FETCH_TIMEOUT_MS + 1000,
+        timeout: RERUN_TIMEOUT_MS,
       },
     );
     if (!r.error && r.status === 0) return;
     // Silent by design: a failed re-run prints nothing (Cline still gets
     // its {"cancel": false} below). The re-run never got to write its own
     // record, so write one here: the code tells the user why, and the 4-hour
-    // retry spares the next sessions the same wait.
+    // retry spares the next sessions the same wait. A child killed by a signal
+    // has status null, so the signal names it (RERUN_SIGTERM).
+    let reason;
+    if (r.error) reason = r.error.code || "ERROR";
+    else if (r.signal) reason = r.signal;
+    else reason = `EXIT_${r.status}`;
     const cache = readCache();
     if (!isFresh(cache)) {
       writeCache({
@@ -271,7 +281,7 @@ async function main() {
         checkedAt: Date.now(),
         failed: true,
         latest: cache ? cache.latest : {},
-        error: `RERUN_${r.error ? r.error.code || "ERROR" : `EXIT_${r.status}`}`,
+        error: `RERUN_${reason}`,
       });
     }
     const output = formatOutput(host, "");
