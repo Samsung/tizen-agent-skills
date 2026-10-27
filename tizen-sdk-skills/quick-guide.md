@@ -24,7 +24,7 @@ flowchart LR
         Host["AI host<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
         Skill["29 skills · 24 agents<br/>request → skill routing"]
         Runner["CLI runner (common/lib/cli)<br/>36 commands"]
-        Tools["Tizen SDK tools<br/>tz · sdb · emulator<br/>rootstrap · toolchain · debugger"]
+        Tools["Tizen SDK tools<br/>tz · sdb · em-cli"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
         Runner --> Tools
@@ -56,7 +56,7 @@ You don't need to memorize commands. Describe the task in English or Korean.
 |-------|--------------|
 | Request | Describe the task, for example "Build this project and install it on the emulator". |
 | Routing | The request is routed to the matching skill (`tizen-build-project`, `tizen-install-app`, …). |
-| Execution | The skill finds the installed SDK and runs `tizen` / `sdb` / `em-cli` commands. |
+| Execution | The skill finds the installed SDK and runs `tz` / `sdb` / `em-cli` commands. |
 | Result | The result comes back as a Standard JSON Envelope, and the assistant summarizes it for you. |
 
 Most skills are named `tizen-<command>` (for example `tizen-build-project`), and the CLI runs the same command as `tizen-sdk <command>`. A few commands, such as `list-templates` or `platform-list`, are reached through another skill.
@@ -75,7 +75,7 @@ flowchart LR
     E -.-> K["certificate-manager<br/>Signing profile<br/>for device · TV"]
     F --> G["install-app<br/>Install · run"]
     R --> G
-    K -.-> G
+    K -.->|rebuild| E
     G --> H["gdb-debug · dotnet-debug<br/>webapp-debug"]
     G --> I["dlog-analyzer<br/>Crash · root cause"]
     G --> J["playwright-test<br/>Web app E2E"]
@@ -92,7 +92,7 @@ flowchart LR
 | Test | `playwright-test` |
 | Certificate | `certificate-manager` |
 
-> Dashed arrows are steps you take only when needed. DotNET apps need `dotnet-setup` first and TV apps need `tv-sdk-install`; installing on a real device or TV needs a signing profile (`certificate-manager`) and a device connection (`remote-device`).
+> Dashed arrows are steps you take only when needed. DotNET apps need `dotnet-setup` first and TV apps need `tv-sdk-install`; installing on a real device or TV needs a signing profile (`certificate-manager`) and a device connection (`remote-device`). The profile is applied at build time, so rebuild after creating or changing it.
 
 ## 3. Quick Start — install and make your first request
 
