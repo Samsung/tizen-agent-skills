@@ -138,7 +138,7 @@ Create a web app and install it on the emulator
 
 각 요청은 스킬(예: `tizen-sdk-install`, `tizen-create-project`, `tizen-build-project`,
 `tizen-install-app`, `tizen-gdb-debug`, `tizen-dlog-analyzer`)로 라우팅되며, 스킬이 설치된
-SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standard JSON Envelope로
+SDK를 찾아 `tz` / `sdb` / `em-cli` 명령을 실행하고 결과를 Standard JSON Envelope로
 돌려줍니다. 엔드투엔드 예시는 [사용 사례 & 시나리오 가이드](usage/usage.md), 전체 트리거
 문구 목록은 [스킬 레퍼런스](docs/SKILLS_REFERENCE.md)를 참고하세요.
 

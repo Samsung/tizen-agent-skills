@@ -143,7 +143,7 @@ The app crashed — analyse the dlog
 
 Each request is routed to a skill (for example `tizen-sdk-install`, `tizen-create-project`,
 `tizen-build-project`, `tizen-install-app`, `tizen-gdb-debug`, `tizen-dlog-analyzer`) that
-locates the installed SDK, runs the underlying `tizen` / `sdb` / `em-cli` commands and
+locates the installed SDK, runs the underlying `tz` / `sdb` / `em-cli` commands and
 returns the result as a Standard JSON Envelope. See the
 [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) for end-to-end examples and the
 [Skills Reference](docs/SKILLS_REFERENCE.en.md) for the full list of trigger phrases.

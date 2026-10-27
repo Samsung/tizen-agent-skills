@@ -12,7 +12,7 @@ As of v1.6.1 · measured 2026-10-26 · one-page summary (see README.md for detai
 flowchart LR
     subgraph S1["1. Setup · once"]
         direction TB
-        Clone["Clone repository<br/>tizen-agent-skills"] --> Setup["setup script<br/>claude · cline · codex · gemini"]
+        Clone["Clone repository<br/>tizen-agent-skills"] --> Setup["setup script<br/>claude · cline<br/>codex · gemini"]
         VSIX["VS Code extension<br/>Tizen AI Extension (.vsix)"]
         Setup --> Cache["Plugin cache<br/>~/&lt;dot-dir&gt;/plugins/cache/..."]
         VSIX --> Cache
@@ -21,10 +21,10 @@ flowchart LR
     subgraph S2["2. Request handling · every time"]
         direction TB
         Dev["Developer<br/>① Natural-language request<br/>② Run tizen-sdk CLI directly"]
-        Host["AI host<br/>Claude Code · Cline · Codex CLI · Gemini CLI"]
+        Host["AI host<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
         Skill["29 skills · 24 agents<br/>request → skill routing"]
         Runner["CLI runner (common/lib/cli)<br/>36 commands"]
-        Tools["Tizen SDK tools<br/>tizen · sdb · em-cli · gbs"]
+        Tools["Tizen SDK tools<br/>tz · sdb · em-cli<br/>gbs (Platform builds only)"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
         Runner --> Tools
@@ -33,7 +33,7 @@ flowchart LR
     subgraph S3["3. Result"]
         direction TB
         Target["Device · emulator · TV"]
-        Env["Standard JSON Envelope<br/>one on stdout · diagnostics on stderr"]
+        Env["Standard JSON Envelope<br/>one on stdout<br/>diagnostics on stderr"]
     end
 
     Cache --> Skill
@@ -56,7 +56,7 @@ You don't need to memorize commands. Describe the task in English or Korean.
 |-------|--------------|
 | Request | Describe the task, for example "Build this project and install it on the emulator". |
 | Routing | The request is routed to the matching skill (`tizen-build-project`, `tizen-install-app`, …). |
-| Execution | The skill finds the installed SDK and runs `tizen` / `sdb` / `em-cli` commands. |
+| Execution | The skill finds the installed SDK and runs `tz` / `sdb` / `em-cli` commands. |
 | Result | The result comes back as a Standard JSON Envelope, and the assistant summarizes it for you. |
 
 Most skills are named `tizen-<command>` (for example `tizen-build-project`), and the CLI runs the same command as `tizen-sdk <command>`. A few commands, such as `list-templates` or `platform-list`, are reached through another skill.
@@ -66,16 +66,16 @@ Most skills are named `tizen-<command>` (for example `tizen-build-project`), and
 ```mermaid
 flowchart LR
     A["check-node<br/>Node.js 20+"] --> B["sdk-install<br/>Install SDK"]
-    B --> D["create-project<br/>Native · DotNET · Web · TV · Platform"]
+    B --> D["create-project<br/>Native · DotNET · Web<br/>TV · Platform"]
     B -.-> P["dotnet-setup · tv-sdk-install<br/>DotNET · TV apps only"]
     P -.-> D
     D --> E["build-project<br/>.tpk · .wgt · .rpk · .rpm"]
-    D -.-> K["certificate-manager<br/>Signing profile for device · TV"]
-    K -.-> E
     E --> F["create-emulator<br/>launch-emulator"]
     E --> R["remote-device · device-manager<br/>Connect device · TV"]
+    E -.-> K["certificate-manager<br/>Signing profile<br/>for device · TV"]
     F --> G["install-app<br/>Install · run"]
     R --> G
+    K -.->|rebuild| E
     G --> H["gdb-debug · dotnet-debug<br/>webapp-debug"]
     G --> I["dlog-analyzer<br/>Crash · root cause"]
     G --> J["playwright-test<br/>Web app E2E"]
@@ -92,7 +92,7 @@ flowchart LR
 | Test | `playwright-test` |
 | Certificate | `certificate-manager` |
 
-> Dashed arrows are steps you take only when needed. DotNET apps need `dotnet-setup` first and TV apps need `tv-sdk-install`; installing on a real device or TV needs a signing profile (`certificate-manager`) and a device connection (`remote-device`).
+> Dashed arrows are steps you take only when needed. DotNET apps need `dotnet-setup` first and TV apps need `tv-sdk-install`; installing on a real device or TV needs a signing profile (`certificate-manager`) and a device connection (`remote-device`). The profile is applied at build time, so rebuild after creating or changing it.
 
 ## 3. Quick Start — install and make your first request
 

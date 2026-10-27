@@ -12,7 +12,7 @@ v1.6.1 기준 · 2026-10-26 실측 · 한 장 요약본 (상세 내용은 README
 flowchart LR
     subgraph S1["1. 설치 · 1회"]
         direction TB
-        Clone["저장소 클론<br/>tizen-agent-skills"] --> Setup["setup 스크립트<br/>claude · cline · codex · gemini"]
+        Clone["저장소 클론<br/>tizen-agent-skills"] --> Setup["setup 스크립트<br/>claude · cline<br/>codex · gemini"]
         VSIX["VS Code 확장<br/>Tizen AI Extension (.vsix)"]
         Setup --> Cache["플러그인 캐시<br/>~/&lt;dot-dir&gt;/plugins/cache/..."]
         VSIX --> Cache
@@ -21,10 +21,10 @@ flowchart LR
     subgraph S2["2. 요청 처리 · 매번"]
         direction TB
         Dev["Developer<br/>① 자연어 요청<br/>② tizen-sdk CLI 직접 실행"]
-        Host["AI 호스트<br/>Claude Code · Cline · Codex CLI · Gemini CLI"]
+        Host["AI 호스트<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
         Skill["스킬 29개 · 에이전트 24개<br/>요청 → 스킬 라우팅"]
         Runner["CLI 러너 (common/lib/cli)<br/>명령 36개"]
-        Tools["Tizen SDK 도구<br/>tizen · sdb · em-cli · gbs"]
+        Tools["Tizen SDK 도구<br/>tz · sdb · em-cli<br/>gbs (Platform 빌드만)"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
         Runner --> Tools
@@ -56,7 +56,7 @@ flowchart LR
 |------|------|
 | 요청 | "이 프로젝트 빌드해서 에뮬레이터에 설치해줘"처럼 원하는 작업을 말합니다. |
 | 라우팅 | 요청이 맞는 스킬(`tizen-build-project`, `tizen-install-app` 등)로 연결됩니다. |
-| 실행 | 스킬이 설치된 SDK를 찾아 `tizen` / `sdb` / `em-cli` 명령을 실행합니다. |
+| 실행 | 스킬이 설치된 SDK를 찾아 `tz` / `sdb` / `em-cli` 명령을 실행합니다. |
 | 결과 | Standard JSON Envelope로 결과를 돌려주고, 어시스턴트가 이를 요약해 보여 줍니다. |
 
 대부분의 스킬 이름은 `tizen-<명령어>`(예: `tizen-build-project`)이고, CLI에서는 같은 명령을 `tizen-sdk <명령어>`로 실행합니다. `list-templates`, `platform-list` 같은 일부 명령은 다른 스킬을 통해 실행됩니다.
@@ -66,16 +66,16 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["check-node<br/>Node.js 20+"] --> B["sdk-install<br/>SDK 설치"]
-    B --> D["create-project<br/>Native · DotNET · Web · TV · Platform"]
+    B --> D["create-project<br/>Native · DotNET · Web<br/>TV · Platform"]
     B -.-> P["dotnet-setup · tv-sdk-install<br/>DotNET · TV 앱만 준비"]
     P -.-> D
     D --> E["build-project<br/>.tpk · .wgt · .rpk · .rpm"]
-    D -.-> K["certificate-manager<br/>실기기 · TV용 서명 프로필"]
-    K -.-> E
     E --> F["create-emulator<br/>launch-emulator"]
     E --> R["remote-device · device-manager<br/>실기기 · TV 연결"]
+    E -.-> K["certificate-manager<br/>실기기 · TV용 서명 프로필"]
     F --> G["install-app<br/>설치 · 실행"]
     R --> G
+    K -.->|다시 빌드| E
     G --> H["gdb-debug · dotnet-debug<br/>webapp-debug"]
     G --> I["dlog-analyzer<br/>크래시 · 원인 분석"]
     G --> J["playwright-test<br/>웹앱 E2E"]
@@ -92,7 +92,7 @@ flowchart LR
 | Test | `playwright-test` |
 | Certificate | `certificate-manager` |
 
-> 점선은 필요할 때만 거치는 단계입니다. DotNET 앱은 `dotnet-setup`, TV 앱은 `tv-sdk-install`이 먼저 필요하고, 실기기·TV에 설치하려면 서명 프로필(`certificate-manager`)과 디바이스 연결(`remote-device`)이 필요합니다.
+> 점선은 필요할 때만 거치는 단계입니다. DotNET 앱은 `dotnet-setup`, TV 앱은 `tv-sdk-install`이 먼저 필요하고, 실기기·TV에 설치하려면 서명 프로필(`certificate-manager`)과 디바이스 연결(`remote-device`)이 필요합니다. 서명 프로필은 빌드할 때 적용되므로, 프로필을 새로 만들거나 바꾼 뒤에는 다시 빌드합니다.
 
 ## 3. Quick Start — 설치하고 첫 요청하기
 
