@@ -24,7 +24,7 @@ flowchart LR
         Host["AI host<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
         Skill["29 skills · 24 agents<br/>request → skill routing"]
         Runner["CLI runner (common/lib/cli)<br/>36 commands"]
-        Tools["Tizen SDK tools<br/>tz · sdb · em-cli"]
+        Tools["Tizen SDK tools<br/>tz · sdb · em-cli<br/>gbs (Platform builds only)"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
         Runner --> Tools
