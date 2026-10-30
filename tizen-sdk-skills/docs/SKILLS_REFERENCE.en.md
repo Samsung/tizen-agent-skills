@@ -1393,11 +1393,14 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --ap
 
 A problem report belongs here even when it mentions the emulator or device (`tizen-device-manager` only lists devices / stops emulators — the routing hook redirects such prompts).
 
-1. **First pass** (`investigate --symptoms "<the user's words>" [app-id]`) — device profile → symptom-matched probe bundles (CPU, memory, freeze, media, graphics …) → correlated report. Summarize; not the final report yet.
-2. **Start the collectors before reproduction** — `start start-monitoring`, `kernel collect` (CPU / freeze / memory / graphics / driver symptoms), `app-launch <app-id>` if needed, `dlog-collect <app-id>`
-3. **Stop and ask the user to reproduce — end the turn** — "(1) done, it occurred / (2) nothing happened"
-4. **Stop, then analyze in order** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; escalate only if unexplained (`error-analyze … details` → filtered `app-log` → `probe list` / `probe run <probe-id>`)
+1. **Preliminary pass** (`investigate --symptoms "<the user's words>" [app-id]`) — symptom-matched probes and existing logs suggest hypotheses. Even `confidence: confirmed` does not bypass collection, launch or user reproduction.
+2. **Start fresh collection, then launch** — `start start-monitoring`, `kernel collect` (CPU / freeze / memory / graphics / driver symptoms), then `app-launch <app-id>`; verify success on the same serial. Preserve running state only at the user's request. One dlog collector at a time: `dlog-collect <app-id>` is an alternative app-only session, without the system monitor.
+3. **Ask the user to reproduce — end the turn and wait** — "(1) done, it occurred / (2) nothing happened"; ask which action failed and roughly when. Do not stop, analyze or run more probes before their reply.
+4. **After the reply, stop and analyze** — `stop` (system monitor) or `stop-collect` (app-only), plus `kernel stop` if started; use `error-analyze <app-id> summary` for app-only capture, `check` for the monitor, `kernel analyze` for kernel capture. Correlate with this reproduction window, then re-run `investigate` or targeted probes as needed. If the symptom did not occur, report **not reproduced**. Escalate only if unexplained (details → targeted `search` → filtered `app-log` → probes).
 5. **Report** (template, in the user's language) → next-step prompt → `stop` when done
+
+Only an explicit saved-log-only request or declined live reproduction permits
+analysis without this cycle; state the limitation and keep causal claims provisional.
 
 Kernel logs always go through `kernel collect` → `kernel stop` → `kernel analyze` (never `sdb shell dmesg`); probes through `investigate` / `probe run` (never a hand-typed `sdb shell top / ps / free`).
 

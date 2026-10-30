@@ -1,11 +1,11 @@
 ---
 name: tizen-dlog-analyzer
-description: Tizen dlog analyzer, dlog analysis, show logs, tail the logs, device log, emulator logs, 로그 보기, 로그 저장, 로그 지우기, save logs, clear logs, dlog clear, crash log analysis, exception detection, investigate, root cause, 원인 분석, 조사해줘, high CPU usage, CPU 300%, memory leak, freeze, hang, slow, video not playing, app crashed, 앱이 죽어요, 멈춤, 느려요, 재생 안됨, kernel log, dmesg, probe, log-dump, log-clear, dlog-collect, error-analyze, search logs, find text in logs, 로그 검색, which app logged this. The single owner of Tizen device/emulator logs AND of EVERY problem report about a Tizen app, emulator, or device — crash, error, freeze, high CPU, memory, video/audio playback — even if the user never says "log" or mentions the emulator/device (NOT tizen-device-manager, which only lists devices / stops emulators). Runs investigate, kernel collect/analyze, dlog-collect + error-analyze, start-monitoring, search (text/regex in collected logs); one-shot log-dump / confirmation-gated log-clear. Never a hand-typed sdb dlog / dmesg / top / grep.
+description: Investigate live Tizen app, emulator or device problems — crashes, errors, freezes, high CPU, memory growth, slow performance, video/audio not playing, root cause, 원인 분석, 앱이 죽어요, 멈춤, 느려요, 재생 안됨. Requires fresh log collection, app launch, and a user reproduction reply before the final diagnosis; investigate/probe alone stays preliminary even when confirmed. Also view, tail, save, clear or search dlog and kernel logs (dmesg), detect exceptions, and analyze saved logs — 로그 보기, 로그 저장, 로그 지우기, 로그 검색. Owns problem reports even when the emulator/device is mentioned; device-manager only lists devices or stops emulators. Use the shipped runner for investigate, probe, monitoring, app launch, collection and analysis; never hand-type sdb diagnostics.
 version: 1.4.0
 when_to_use: The user reports ANY problem, crash, freeze, error, high CPU or memory usage, slow or laggy emulator, video/audio not playing, or unexpected behavior of a Tizen app or device — "my app crashed", "the emulator CPU went to 300% and the video does not play", "something's wrong with my app", "why did it stop working", "investigate this issue", 원인 분석해줘 — or asks to monitor/investigate Tizen logs, wants root-cause analysis, wants app-specific log collection filtered by app ID, or runtime-error analysis for a specific app. Route here FIRST even when the sentence mentions the emulator or device (the analyzer's runner detects the device itself; tizen-device-manager is only for "which devices are connected?" / "stop the emulator"). Do not ask the user to run raw sdb/dlog commands themselves. ALSO route here when the user simply wants to see, tail, save/export, or clear the device or emulator logs with no problem reported ("show me the logs", "로그 보기", "save the dlog", "clear logs" / "dlog clear", "로그 지우기") — tizen-sdb-helper returns a handoff for these; run log-dump / log-clear here.
 inputs:
   - name: action
-    description: One of log-dump, log-clear, start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, rules, snapshot, timeline, kernel. 'log-dump' dumps the device dlog buffer once (sdb dlog -d) — the answer to "show/tail/save the logs"; 'log-clear' clears the device dlog buffer (sdb dlog -c) — destructive, requires confirm; 'start' launches monitoring in background, 'stop' kills it, 'check' retrieves analyzed output, 'status' checks if still running, 'app-launch' launches a Tizen app, 'app-terminate' terminates an app, 'dlog-collect' starts background app-specific log collection by PID, 'stop-collect' stops the background app log collection, 'error-analyze' analyzes collected logs for E/F priority errors, 'app-log' prints the full collected log for one app (all priorities, hot + cold files) — escalation only, after error-analyze, 'search' finds plain text or a regex in every collected dlog category at once (each app, _general, _unparsed; kernel excluded) and returns whole entries with their stack-trace lines — the answer to "find this string in the logs" / "which app logged this", 'device-profile' detects and prints the device profile, 'investigate' runs a one-shot first-pass investigation report (symptom-matched probe bundles; pass the app id for app-scoped), 'probe' lists and runs evidence probes, 'rules' lists, shows, validates, and tests analysis rules, 'snapshot' creates/lists/compares/deletes system snapshots, 'timeline' shows probe history across snapshots (show/report/analyze/export), 'kernel' collects (background), stops and analyzes kernel logs.
+    description: One of log-dump, log-clear, start, stop, check, status, app-launch, app-terminate, dlog-collect, stop-collect, error-analyze, app-log, search, device-profile, investigate, probe, rules, snapshot, timeline, kernel. 'log-dump' dumps the device dlog buffer once (sdb dlog -d) — the answer to "show/tail/save the logs"; 'log-clear' clears the device dlog buffer (sdb dlog -c) — destructive, requires confirm; 'start' launches monitoring in background, 'stop' kills it, 'check' retrieves analyzed output, 'status' checks if still running, 'app-launch' launches a Tizen app, 'app-terminate' terminates an app, 'dlog-collect' starts background app-specific log collection by PID, 'stop-collect' stops the background app log collection, 'error-analyze' analyzes collected logs for E/F priority errors, 'app-log' prints the full collected log for one app (all priorities, hot + cold files) — escalation only, after error-analyze, 'search' finds plain text or a regex in every collected dlog category at once (each app, _general, _unparsed; kernel excluded) and returns whole entries with their stack-trace lines — the answer to "find this string in the logs" / "which app logged this", 'device-profile' detects and prints the device profile, 'investigate' runs preliminary symptom-matched probes (pass the app id for app-scoped); it does not launch the app or complete the required collection and user reproduction workflow, 'probe' lists and runs evidence probes, 'rules' lists, shows, validates, and tests analysis rules, 'snapshot' creates/lists/compares/deletes system snapshots, 'timeline' shows probe history across snapshots (show/report/analyze/export), 'kernel' collects (background), stops and analyzes kernel logs.
   - name: subcommand
     description: For 'start' — one of dlog-collect, exception-detect, start-monitoring (recommended). For 'kernel' — collect, stop, analyze. For 'probe' — list, run. For 'rules' — list, show, validate, test.
   - name: app-id
@@ -30,6 +30,21 @@ required_tools: [bash, read]
 ---
 
 # Tizen DLog Analyzer Skill
+
+## Required for a live symptom report
+
+`investigate` is preliminary evidence, even when it returns `confidence: confirmed`.
+For a current app/device problem, complete the investigation workflow below:
+start fresh collection → launch the named app under observation → ask the user
+to reproduce and **end the turn** → wait for their reply → stop and analyze the
+capture. Do not finish with an `investigate`/`probe`-only root-cause report.
+
+An app already running is not a reproduction. Preserve its current state only
+when the user requests it; still collect fresh logs and ask for reproduction.
+If launch or collection fails, report that failure and resolve it before
+claiming collection is ready. If the user explicitly requests saved-log-only
+analysis or declines live reproduction, analyze the available evidence and
+state that the current issue was not reproduced; keep causal claims provisional.
 
 ## Resolving the CLI runner — do this first
 
@@ -148,43 +163,70 @@ Use this for every "my app / the emulator does X" report (crash, freeze, high CP
 
    | Tool output | Agent action |
    | --- | --- |
-   | `conclusions` present, primary `confirmed`, `explains` covers every user symptom | Report; ask next step. **No reproduction needed.** |
-   | Conclusion `suspected` + `verify_hint` present | Run `probe run <hint>` (consent rules apply); re-read conclusions |
+   | `conclusions` present, including primary `confirmed` covering every symptom | Treat as a preliminary hypothesis; continue to fresh collection, app launch and user reproduction (steps 3–5). |
+   | Conclusion `suspected` + `verify_hint` present | Keep the hint for verification after reproduction; do not substitute probes for steps 3–5. |
    | `consent_needed` non-empty (network probe skipped) | Show the probe name and target to the user; on "yes" re-run with `--allow-network-probe` |
-   | Only `unexplained` anomalies, no conclusions | Pick the top anomaly, run the matching `probe run`, then report as "unexplained; evidence X" |
+   | Only `unexplained` anomalies, no conclusions | Use the anomalies to guide fresh collection and reproduction; report what remains unexplained after step 5. |
    | `only_general_matched: true` (no symptom keyword matched) | Ask one clarifying question or proceed with `--profile general`; never guess a family |
    | Device `device_not_found` | Hand off to `tizen-launch-emulator` (unchanged) |
 
-   **Skip reproduction** when ALL of these are true: at least one conclusion has `confidence: confirmed`; the `explains` list of confirmed conclusions covers every user-reported symptom; no `unexplained` anomaly has severity `high` or `critical`. Otherwise, reproduction proceeds as below.
+   `confidence: confirmed` describes a rule match against the evidence available
+   to this call. It does not prove that the named app was launched, the current
+   symptom occurred, or older logs belong to this attempt. No conclusion score,
+   `explains` coverage, or successful follow-up probe bypasses steps 3–5.
 
 3. **Start the collectors, BEFORE reproducing.** In this order:
    ```bash
    node "$CLI" start start-monitoring                 # system-wide dlog + live crash detection
    node "$CLI" kernel collect                         # kernel log — for CPU / freeze / memory / graphics / driver symptoms
    node "$CLI" app-launch com.samsung.fh.youtube      # (re)launch the app under observation
-   node "$CLI" dlog-collect com.samsung.fh.youtube    # app-scoped collection (app must be running)
    ```
-   Skip `app-launch` if the app is already running and the user wants to keep its state; skip `kernel collect` only for purely app-level symptoms (a wrong string, a UI glitch). A short pause (`sleep 2`) between `app-launch` and `dlog-collect` is fine; nothing longer.
+   Check each envelope before proceeding. Run `app-launch <app-id>` for the
+   named app after monitoring starts, even if a previous probe found a PID;
+   skip launch only when the user explicitly wants to preserve its running
+   state. Do not terminate an app just to force a cold start. For a system-wide
+   issue without a target app, omit app launch. Skip `kernel collect` only for
+   purely app-level symptoms (a wrong string, a UI glitch).
 
-   The native binary runs **one dlog collector at a time**. If `dlog-collect` returns `already_running` saying the `start` session holds the collector lock, do **not** stop the monitor in the middle of the reproduction window — it already captures this app's lines. Carry on, and in step 5 analyze with `check` (+ `kernel analyze`) instead of `error-analyze`.
+   Record the target serial, app launch result and capture start time from the
+   returned evidence. Keep the same serial for every device action. If launch
+   fails, keep the startup capture as evidence of that failure and tell the user;
+   do not claim the app opened or diagnose playback from old logs.
+
+   The native binary runs **one dlog collector at a time**. With
+   `start start-monitoring` active, use its system-wide capture and `check`;
+   do not start a competing `dlog-collect`. For an app-only session without a
+   system monitor, run `dlog-collect <app-id>` after launch, then use
+   `stop-collect` / `error-analyze`. If a collector is already running, follow
+   its envelope and establish which capture covers this reproduction; never
+   delete a live collector lock.
 
 4. **STOP — hand the device to the user. End your turn.** Say (in the user's language):
-   > Collection is running in the background. Please browse the app and reproduce the issue now (play the video, trigger the action …). When you are done, tell me:
+   > Collection is running in the background and the app launch succeeded (or its current state was preserved at your request). Please reproduce the issue now (play the video, trigger the action …). When you are done, tell me:
    > 1. **Done — the error/crash/symptom occurred**
    > 2. **Nothing happened**
    >
    > (Korean — use when the user wrote in Korean:)
-   > 백그라운드에서 로그 수집 중입니다. 지금 앱을 사용하면서 이슈를 재현해 주세요 (동영상 재생, 문제 동작 실행 등). 끝나면 알려 주세요:
+   > 백그라운드에서 로그 수집 중이며 앱 실행이 성공했습니다 (또는 요청하신 대로 현재 실행 상태를 유지했습니다). 지금 이슈를 재현해 주세요 (동영상 재생, 문제 동작 실행 등). 끝나면 알려 주세요:
    > 1. **재현 완료 — 에러/크래시/증상이 발생했어요**
    > 2. **아무 일도 없었어요**
 
-   Do **not** run `sleep`, `Start-Sleep`, a polling loop, or `stop-collect` / `check` / `kernel stop` in the same turn. Collection continues while you wait; the user decides when the window closes. (The hooks deny timer waits around these actions.)
+   Adapt the prompt to the actual launch/collection results (omit the app
+   clause for a system-wide issue). Ask which action failed and roughly when,
+   to correlate the symptom with this capture. Do **not** run `sleep`,
+   `Start-Sleep`, a polling loop, more `investigate` / `probe` calls, or
+   `stop-collect` / `stop` / `check` / `kernel stop` / `error-analyze` /
+   `kernel analyze` in the same turn. Collection continues while you wait;
+   the user decides when the window closes. Finish collector setup and app
+   launch before this handoff; starting the first collector is not itself the
+   handoff point.
 
 5. **After the user answers — stop, then analyze in this order.**
    ```bash
-   node "$CLI" stop-collect                                        # app collector
+   node "$CLI" stop                                                # system monitor (if started)
+   node "$CLI" stop-collect                                        # app collector (only if started instead)
    node "$CLI" kernel stop                                         # kernel collector (if started)
-   node "$CLI" error-analyze com.samsung.fh.youtube summary        # (a) E/F errors of the app, deduplicated
+   node "$CLI" error-analyze com.samsung.fh.youtube summary        # (a) only for an app-specific capture
    node "$CLI" check                                               # (b) crash/exception detection from start-monitoring — NEVER skip when it ran
    node "$CLI" kernel analyze                                      # (c) kernel findings (OOM, driver, watchdog …)
    ```
@@ -203,7 +245,15 @@ Use this for every "my app / the emulator does X" report (crash, freeze, high CP
    ```
    See "Crash dumps — `crash-report`" below. `search` is the targeted step between the two: when a finding names a string (an error message, a tag, a URL, a PID) or the user quotes one, search for it across every collected category — it tells you which process logged it and what happened right before (`--context`) without paging through a whole log. `app-log` without filters is the last resort, never the first call — the full log is the largest output and buries the E/F lines `error-analyze` already isolated. If option 2 ("nothing happened") was chosen, still run (a)–(c) once — silent errors are common — then ask whether to keep collecting or stop.
 
-   **Second investigate**: after stopping collectors and running the analysis above, re-run `investigate --symptoms "<same symptoms>"` so the probes reflect the failing state. The second pass may confirm a `suspected` conclusion or match a rule the first pass missed.
+   Correlate the evidence with the app, device and reproduction window. Older
+   entries may remain in collected files; label them historical rather than
+   counting them as this attempt. If option 2 was chosen, say **not reproduced**;
+   silent errors alone do not confirm the cause of the reported symptom.
+
+   **Second investigate**: after the user replies and the capture is analyzed,
+   re-run `investigate --symptoms "<same symptoms>" [app-id]` with the same
+   serial. It can correlate the new logs and verify hypotheses, but a snapshot
+   taken after the failure may no longer show transient CPU/memory conditions.
 
 6. **Report** per Rule 6, then the next-step prompt per Rule 8. Leave `start-monitoring` running only if the user chooses to continue; `stop` it when the investigation is done.
 
@@ -357,7 +407,7 @@ node "$CLI" start start-monitoring
 
 ### 2. Launch the app and reproduce
 
-Install with `tizen-install-app` if needed, then launch with `node "$CLI" app-launch <app-id>` (or `tizen-sdb-helper`). For app-scoped triage, start `node "$CLI" dlog-collect <app-id>` once the app is running.
+Install with `tizen-install-app` if needed, then launch with `node "$CLI" app-launch <app-id>` and verify the envelope. The running system monitor already captures the app; use `dlog-collect <app-id>` only in an app-only session without that monitor.
 
 ### 3. Ask the user: continue, or stop and analyze now — and END YOUR TURN
 
@@ -400,6 +450,14 @@ Run `error-analyze <app-id> summary` (app-specific) and/or `check` (system-wide)
 | `node "$CLI" crash-report [serial] [--process <name> \| --app-id <id>] [--dump-dir <dir>]… [--limit <n>] [--lines <n>] [--output <dir>]` | Finds crash-worker dumps in `/opt/usr/share/crash/dump`, `/run/crash/dump` and every `--dump-dir`, for an app id or any process name (system daemons included), newest first. Returns each dump's crash summary (signal, executable, call stack) and report head, saves the `.info` report and the packed dlog to `result.output_dir`, and gives the `error-analyze --file` call for that dlog in `next_step`. Unreadable (root-only) directories → warning, or `permission_denied` when none is readable. No native binary involved. |
 
 ## Final report — the only accepted shape
+
+For a live symptom, render the report only after the required reproduction
+reply and capture analysis. In the Issue field, state whether it was reproduced
+and the capture window if known. Say **not reproduced** when no symptom occurred.
+For saved-log-only analysis or declined reproduction, state that limitation and
+keep causal claims provisional. Separate historical entries from this attempt;
+connect a cause to the reported symptom only when the captured evidence supports
+that connection.
 
 The report is `REPORT_TEMPLATE.md` (`cat "$TEMPLATE"` — one tool call; the severity guide and the English→Korean label mapping are there). Render **one block only** — the Korean block if the user wrote in Korean, the English block otherwise. Its skeleton, so the shape never has to be improvised even when the template is not in context (the `check` / `error-analyze` / `kernel analyze` envelopes restate it in `result.report_format`):
 
@@ -453,12 +511,12 @@ The first line of the report is `## Analysis Report (English)` or `## 분석 보
 
 1. **Never run `sdb dlog` — or any other `sdb` diagnostic — yourself; every log and evidence operation goes through this runner.** Continuous collection is `dlog-collect` (the native binary's own subcommand) — for a specific app (`dlog-collect <app-id>`) or the whole system (`start dlog-collect` / `start start-monitoring`); the kernel log is `kernel collect`. A one-shot view/save is `log-dump`; clearing the buffer is `log-clear`. Do not shell out to `sdb shell dlog`, `sdb dlog -d`, `sdb dlog -c`, `sdb shell dmesg`, `sdb shell top/ps/free` to do any of these by hand — and do not route them through `tizen-sdb-helper` either.
 2. **Always analyze through `error-analyze` (app-specific), `check` (system-wide monitoring) and `kernel analyze` (kernel) — never by reading the log file directly.** These commands handle deduplication, classification, and formatting that raw log text does not. Do not `Read` the `.hot.log` file or the raw output file as a substitute for running the command, and do not `grep` / `Select-String` / `rg` the collected files — looking for a specific string is `search "<text>"` (whole entries, every category, stack traces intact). (A plain "show me the logs" is not analysis — answer it with `log-dump`, whose `result.output` is meant to be shown.)
-3. **After starting any continuous command** (`start start-monitoring`, `start dlog-collect`, `start exception-detect`, `dlog-collect <app-id>`, `kernel collect`), **end your turn and ask the user** to browse the app / reproduce the issue, then choose:
+3. **After completing collector setup and app launch** (step 3), **end your turn and ask the user** to browse the app / reproduce the issue, then choose:
    - **Done — the error/crash/symptom occurred**, or
    - **Nothing happened**
 
    (or, for an open-ended monitoring session, **Continue** vs **Stop and analyze now**). Do not poll, loop, `sleep`, or `Start-Sleep` waiting for a crash, and do not run `stop-collect` / `stop` / `kernel stop` / `check` / `error-analyze` in the same turn as the start — present the choice and wait for the user's reply. The reproduction window belongs to the user; a timer is not a substitute for their answer.
-4. Prefer `start-monitoring` for general "something's wrong with my app" reports (it self-detects crashes). Use the app-specific `dlog-collect <app-id>` + `error-analyze <app-id>` pair when the user names a specific app and wants non-fatal runtime-error triage — and for a named app with a symptom, run **both** plus `kernel collect` (investigation workflow, step 3).
+4. Prefer `start-monitoring` for symptom reports (it captures app startup and self-detects crashes). Use the app-specific `dlog-collect <app-id>` + `error-analyze <app-id>` pair for an app-only session without a system monitor. One dlog collector at a time; add `kernel collect` for platform-level symptoms (investigation workflow, step 3).
 5. Start monitoring/collection **before** launching or reproducing the issue in the app, so startup and early failures are captured.
 6. **Once the analysis task is fully complete** — the last planned `check`/`error-analyze`/`kernel analyze` call has returned and no further collection/analysis step remains before handing control back to the user — read `REPORT_TEMPLATE.md` (next to this SKILL.md; `cat "$TEMPLATE"` from the runner snippet) and render the report in that exact structure — the skeleton under "Final report — the only accepted shape" above — **once, in the language the user wrote in: Korean (한국어) if the user wrote in Korean, English otherwise (including any third language).** Technical identifiers (app IDs, device serials, dlog tags, quoted log lines, file paths, function names, code) stay verbatim. Do not paste raw tool output or improvise a format (no own title, no emoji headings, no tables). A `check`/`error-analyze` result that is only an intermediate step in a larger in-progress sequence (e.g. still deciding whether to relaunch the app and collect again) does not by itself trigger the report. Re-render the full report (not a diff) on each subsequent analysis pass, e.g. after the user applies a fix and reproduces the issue again. If `REPORT_TEMPLATE.md` cannot be found, use this section order: Summary (Date, Emulator/Device, App, Issue), Root Cause, Additional Findings, Solution Suggestions, Workarounds — or in Korean: 요약 (날짜, 에뮬레이터/디바이스, 앱, 이슈), 근본 원인, 추가 발견 사항, 해결 방안 제안, 임시 해결 방법. A plain one-shot request (`log-dump` / `log-clear`, see "One-shot log actions") is not an analysis task and does not trigger the report.
 7. **Build the report only from the tool result already returned and prior conversation context.** Do not run additional commands (device info, sdb, system diagnostics, etc.) to gather more evidence before rendering — if something isn't already known, say so in the relevant field/section rather than fetching it. Never invent a value (e.g. a device name) that isn't already known.
@@ -492,7 +550,7 @@ The first line of the report is `## Analysis Report (English)` or `## 분석 보
 - **App IDs are validated** (`[A-Za-z0-9._-]` only) before any app command runs; anything else returns `invalid_parameters`.
 - **`error-analyze` requires `dlog-collect <app-id>` (then `stop-collect`) to have run first.** If no logs exist, it returns `no_logs`.
 - **`search` reads the collected files, not the device.** It needs no serial and no running collector, but something must have been collected under `<sdk-data>/dloganalyzer/app/` (`no_logs` otherwise, naming the missing directory). Matching is case-insensitive by default; the kernel log is never searched (`kernel analyze` covers it); `--max-matches` defaults to 100 and `result.truncated` / the stderr note say when it cut the result. Exit code 0 also when nothing matches — the envelope then says `No entry matches …` (`result.total_matches: 0` with `--count` / `--format json`, `result.matched: false` in text mode). Positional patterns may start with a single `-` (`search "-1 returned"`); a pattern that starts with `--` must go through `--pattern`. `--pattern`, `--category` / `--app-id` and `--tag` are repeatable (`--pattern a --pattern b` searches for both; `--category a,b` also works); when several named categories have no logs, `no_logs` lists every missing one in `errors[0].missing_categories`. Values are checked before anything runs: a pattern, tag, time or path with a control character, a tag with whitespace, a priority outside `V D I W E F`, or a non-integer `--context` / `--max-*` returns `invalid_parameters`. Requires the bundled binary v0.2.6 or newer (`Unknown command 'search'` otherwise — update the plugin).
-- **`investigate` is one-shot** — it runs the probe bundles and exits (it does not need a collector running, but it correlates with whatever has been collected). `probe run` needs a device; `probe list` does not. The JSON output contains `conclusions`, `ruled_out`, `unexplained`, `consent_needed`, `redaction_summary`, `playbook_app_type`, `playbook_probes_added`, `fuzzy_matches`, `duplicates_removed`, `dedup_text_saved`. If `conclusions` is absent (older binary), the report is built from `findings` as before. Each conclusion object has: `id`, `title`, `family` (crash, network, performance, memory, audio, peripheral, power, security, hang, service, storage, launch, graphics, time, media), `confidence` (confirmed|suspected), `severity` (low|medium|high|critical), `score`, `rank` (primary|secondary|contributing), `explains` (symptom keywords this conclusion accounts for), `evidence` (quoted probe/log lines), `fix` (actionable fix lines with exact paths/keys), `verify_hint` (a `probe run` command to confirm a `suspected` conclusion; `null` when `confirmed`).
+- **`investigate` is one-shot** — it runs the probe bundles and exits (it does not need a collector running, but it correlates with whatever has been collected). This command does not launch an app, start fresh collection or request user reproduction; for a live symptom its conclusions remain preliminary until the required workflow above completes. `probe run` needs a device; `probe list` does not. The JSON output contains `conclusions`, `ruled_out`, `unexplained`, `consent_needed`, `redaction_summary`, `playbook_app_type`, `playbook_probes_added`, `fuzzy_matches`, `duplicates_removed`, `dedup_text_saved`. If `conclusions` is absent (older binary), the report is built from `findings` as before. Each conclusion object has: `id`, `title`, `family` (crash, network, performance, memory, audio, peripheral, power, security, hang, service, storage, launch, graphics, time, media), `confidence` (confirmed|suspected), `severity` (low|medium|high|critical), `score`, `rank` (primary|secondary|contributing), `explains` (symptom keywords this conclusion accounts for), `evidence` (quoted probe/log lines), `fix` (actionable fix lines with exact paths/keys), `verify_hint` (a `probe run` command to confirm a `suspected` conclusion; `null` when `confirmed`).
 - **`rules` subcommands** — `rules list` shows all 24 built-in rules; `rules show <id>` prints one rule's YAML definition; `rules validate [path]` checks all rule files (or one file/directory); `rules test <fixture.json> [--expect <ids>|none]` runs the rules against a JSON fixture — the positional is a fixture path, not a rule id. `--rules-dir <path>` loads extra user rule YAML. `--format json` is accepted by `list` and `test` only. These are read-only / offline — no device needed.
 - **`log-dump` / `log-clear` need no native binary** — only sdb and a connected device. `log-dump` always writes the complete dump to `result.dump_file`; `result.output` is only the tail. `log-clear` does not stop running collectors; lines they already collected stay in their files.
 - **`--file` mode** lets `error-analyze`, `app-log`, `search`, and `kernel analyze` read one saved local log file directly — no SDK path, no device, no prior collection. Use `--pid` (repeatable) to select records by historical capture PID, `--noise-tag` (repeatable) to exclude tags while reconstructing categories, and `--category` to select a reconstructed routing category. For `error-analyze` and `search`, `--app-id` is a declared label (not a verified identity), used with `--pid`. For `kernel analyze --file`, `--level` sets the minimum level and `--with-dlog --app-id` correlates with collected dlog. `exception-detect --file` is not yet supported through this runner.

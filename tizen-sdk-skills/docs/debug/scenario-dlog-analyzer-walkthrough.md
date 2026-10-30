@@ -16,7 +16,7 @@
 
 1. **항상 `dlog-collect`로 로그를 수집하세요** — 절대 `sdb shell dlog` 같은 원시 명령을 사용하면 안 됩니다. 시스템 전체(`start dlog-collect` / `start start-monitoring`)든 앱별(`dlog-collect <app-id>`)든 `dlog-collect`를 사용해야 합니다.
 2. **항상 `error-analyze` (앱별) 또는 `check` (시스템 모니터링)으로 분석하세요** — 로그 파일을 직접 읽으면 안 됩니다. 이 명령들이 중복 제거, 분류, 포맷팅을 처리합니다.
-3. **연속 명령 후에는 디바이스를 사용자에게 넘기고 턴을 끝내세요** — `start-monitoring`, `dlog-collect <app-id>`, `kernel collect` 등 연속 명령을 시작한 후, 사용자에게 앱을 사용하며 이슈를 재현해 달라고 요청하고 다음 중 하나를 선택하도록 하세요:
+3. **수집기 설정과 앱 실행 후 디바이스를 사용자에게 넘기고 턴을 끝내세요** — 앱 실행과 로그 수집 성공을 확인한 뒤, 사용자에게 앱을 사용하며 이슈를 재현해 달라고 요청하고 다음 중 하나를 선택하도록 하세요:
    - **재현 완료 — 에러/크래시/증상이 발생했어요** (열린 세션이면 **계속 수집**)
    - **아무 일도 없었어요** / **지금 중지하고 분석**: 수집을 중지(`stop`, `stop-collect`, `kernel stop`)하고 `check` / `error-analyze` / `kernel analyze`를 실행
    
@@ -34,13 +34,20 @@
 
 | 단계 | 에이전트 동작 | tizen-cli 명령 |
 |------|---------------|----------------|
-| 1 | 1차 조사: 증상 → 프로브 번들 → 상관 분석 보고서 | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
-| 2 | 재현 **전에** 수집기 시작 | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` · `--action dlog-collect --app-id …` |
+| 1 | 예비 조사; `confirmed` 결론이어도 실시간 재현 필수 | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
+| 2 | 새 로그 수집 후 앱 실행 및 성공 확인 | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` |
 | 3 | **멈추고 질문** — "지금 이슈를 재현해 주세요. (1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요" — 그리고 **턴 종료** | (에이전트 상호작용 — `sleep`·폴링 없음) |
-| 4 | 답변 후: 수집기 중지 | `--action stop-collect` · `--action kernel --subcommand stop` |
-| 5 | 에러부터 분석 | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
+| 4 | 답변 후: 수집기 중지 | `--action stop` · `--action kernel --subcommand stop` |
+| 5 | 이번 재현 시간대 분석; 증상이 없으면 **재현되지 않음**으로 보고 | `--action check` → `--action kernel --subcommand analyze` |
 | 6 | 설명되지 않을 때만 확대 | `--action error-analyze --format details` → `--action search --pattern "<발견된 문자열>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
-| 7 | 2개 언어 보고서, 다음 단계 안내, 정리 | `--action stop` |
+| 7 | 사용자 언어로 보고서, 다음 단계 안내, 정리 | `--action stop` |
+
+dlog 수집기는 하나만 사용합니다. 시스템 모니터가 앱 로그도 수집합니다.
+모니터 없는 앱 전용 세션은 앱 실행 → `dlog-collect <app-id>` → 사용자 재현 및
+응답 → `stop-collect` → `error-analyze <app-id> summary` 순서입니다. 실행 상태
+유지는 사용자가 요청한 경우에만 허용합니다. 저장 로그만 분석하거나 재현을
+거절한 경우에는 잠정 분석임을 밝힙니다. 기존 로그와 다른 호스트의 프로브만으로
+현재 앱 장애를 확정하지 않습니다.
 
 ---
 

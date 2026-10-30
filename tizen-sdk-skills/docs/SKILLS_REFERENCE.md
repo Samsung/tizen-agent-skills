@@ -1372,11 +1372,14 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --ap
 
 문제 보고는 에뮬레이터·디바이스가 언급되어도 이 스킬의 일입니다 (`tizen-device-manager`는 디바이스 목록·에뮬레이터 종료 전용 — 라우팅 훅이 그런 프롬프트를 되돌려 보냄).
 
-1. **1차 조사** (`investigate --symptoms "<사용자 표현>" [app-id]`) — 디바이스 프로필 → 증상에 맞는 프로브 번들(CPU, 메모리, 멈춤, 미디어, 그래픽 …) → 상관 분석 보고서. 요약만 — 최종 보고서는 아님
-2. **재현 전에 수집기 시작** — `start start-monitoring`, `kernel collect`(CPU / 멈춤 / 메모리 / 그래픽 / 드라이버 증상), 필요하면 `app-launch <app-id>`, `dlog-collect <app-id>`
-3. **멈추고 사용자에게 재현 요청 — 턴 종료** — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요"
-4. **중지 후 순서대로 분석** — `stop-collect`, `kernel stop`; `error-analyze <app-id> summary` → `check` → `kernel analyze`; 설명되지 않을 때만 확대 (`error-analyze … details` → 필터를 건 `app-log` → `probe list` / `probe run <probe-id>`)
+1. **예비 조사** (`investigate --symptoms "<사용자 표현>" [app-id]`) — 증상에 맞는 프로브와 기존 로그로 가설을 세웁니다. `confidence: confirmed`여도 수집·앱 실행·사용자 재현을 생략하지 않습니다.
+2. **새 로그 수집 후 앱 실행** — `start start-monitoring`, `kernel collect`(CPU / 멈춤 / 메모리 / 그래픽 / 드라이버 증상), 이어서 `app-launch <app-id>`; 같은 시리얼에서 성공 여부를 확인합니다. 실행 상태 유지는 사용자가 요청한 경우에만 허용합니다. dlog 수집기는 한 번에 하나만 실행: `dlog-collect <app-id>`는 시스템 모니터 없는 앱 전용 세션의 대안입니다.
+3. **재현 요청 — 턴 종료 후 응답 대기** — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요"; 실패한 동작과 대략적인 시각도 요청합니다. 응답 전에는 중지·분석·추가 프로브를 실행하지 않습니다.
+4. **응답 후 중지 및 분석** — 시스템 모니터는 `stop`, 앱 전용은 `stop-collect`, 커널 수집 시 `kernel stop`; 앱 전용 로그는 `error-analyze <app-id> summary`, 모니터는 `check`, 커널은 `kernel analyze`로 분석합니다. 이번 재현 시간대와 상관 분석 후 필요하면 `investigate`나 프로브를 다시 실행합니다. 증상이 없었다면 **재현되지 않음**으로 보고합니다. 설명되지 않을 때만 확대합니다 (details → 특정 문자열 `search` → 필터를 건 `app-log` → 프로브).
 5. **보고서**(사용자 언어 템플릿) → 다음 단계 안내 → 완료 시 `stop`
+
+사용자가 저장 로그만 분석하도록 명시하거나 실시간 재현을 거절한 경우에만
+이 과정을 생략할 수 있습니다. 그 한계를 밝히고 원인 판단은 잠정적으로 유지합니다.
 
 커널 로그는 항상 `kernel collect` → `kernel stop` → `kernel analyze` (`sdb shell dmesg` 금지); 프로브는 `investigate` / `probe run` (`sdb shell top / ps / free` 직접 입력 금지).
 

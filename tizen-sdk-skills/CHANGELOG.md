@@ -39,6 +39,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **Live dlog investigations skipped app launch and user reproduction**
+  (`common/skills/tizen-dlog-analyzer/`, `common/agents/`, guard instructions).
+  Removed the exception that allowed an initial `confirmed` conclusion to end
+  the investigation. Live symptom reports now require fresh collection, verified
+  app launch and a user reproduction reply before capture analysis and the final
+  diagnosis. The workflow uses one dlog collector at a time, distinguishes old
+  logs from the current capture and reports when a symptom was not reproduced.
+  Saved-log-only analysis remains available when explicitly requested.
+
 - **No update notice behind a proxy that re-signs HTTPS** (`common/hooks/check-update.js`).
   Corporate proxies often re-sign HTTPS with a root certificate the OS trusts but Node's
   bundled list does not, so the catalog fetch failed with
