@@ -51,6 +51,21 @@ below use those release tags.
 
 ### Fixed
 
+- **Unit tests could use the host SDK instead of fixtures**
+  (`common/lib/tests/emulator-fallback.test.js`, `sdk-data-path.test.js`).
+  Emulator fallback tests now use a temporary home directory so a saved SDK
+  configuration cannot override the stub tools. SDK-path tests no longer add
+  Node's directory to the child PATH, which could expose a real sdb binary.
+
+- **Live dlog investigations skipped app launch and user reproduction**
+  (`common/skills/tizen-dlog-analyzer/`, `common/agents/`, guard instructions).
+  Removed the exception that allowed an initial `confirmed` conclusion to end
+  the investigation. Live symptom reports now require fresh collection, verified
+  app launch and a user reproduction reply before capture analysis and the final
+  diagnosis. The workflow uses one dlog collector at a time, distinguishes old
+  logs from the current capture and reports when a symptom was not reproduced.
+  Saved-log-only analysis remains available when explicitly requested.
+
 - **No update notice behind a proxy that re-signs HTTPS** (`common/hooks/check-update.js`).
   Corporate proxies often re-sign HTTPS with a root certificate the OS trusts but Node's
   bundled list does not, so the catalog fetch failed with

@@ -16,7 +16,7 @@ When following this workflow, always adhere to these rules:
 
 1. **Always collect logs via `dlog-collect`** — never use raw commands like `sdb shell dlog`. Whether system-wide (`start dlog-collect` / `start start-monitoring`) or app-specific (`dlog-collect <app-id>`), you must use `dlog-collect`.
 2. **Always analyze via `error-analyze` (app-specific) or `check` (system monitoring)** — never read the log file directly. These commands handle deduplication, classification, and formatting.
-3. **After any continuous command, hand the device to the user and end the turn** — after starting `start-monitoring`, `dlog-collect <app-id>`, `kernel collect`, etc., ask the user to browse the app and reproduce the issue, then choose one of:
+3. **After collector setup and app launch, hand the device to the user and end the turn** — verify the launch and capture results, then ask the user to browse the app and reproduce the issue, then choose one of:
    - **Done — the error/crash/symptom occurred** (or **Continue collecting** for an open-ended session)
    - **Nothing happened** / **Stop and analyze now** — stop the collection (`stop`, `stop-collect`, `kernel stop`) and run `check` / `error-analyze` / `kernel analyze`
    
@@ -30,17 +30,24 @@ When following this workflow, always adhere to these rules:
 
 ## Symptom Investigation (CPU / freeze / video not playing) — the short path
 
-When the user reports a symptom rather than a crash — e.g. *"While playing a video in com.samsung.fh.youtube the emulator's CPU went to 300% and the video is not playing. Investigate."* — the agent runs this sequence:
+When the user reports a symptom — e.g. *"While playing a video in com.samsung.fh.youtube the emulator's CPU went to 300% and the video is not playing. Investigate."* — the agent runs this sequence:
 
 | Step | Agent action | tizen-cli command |
 |------|--------------|-------------------|
-| 1 | First pass: symptom → probe bundles → correlated report | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
-| 2 | Start the collectors **before** reproduction | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` · `--action dlog-collect --app-id …` |
+| 1 | Preliminary pass; even a `confirmed` conclusion requires live reproduction | `tizen-cli tizen-sdk dlog-analyzer --action investigate --symptoms "300% cpu, video not playing" --app-id com.samsung.fh.youtube` |
+| 2 | Start fresh collection, then launch the app and verify success | `--action start --subcommand start-monitoring` · `--action kernel --subcommand collect` · `--action app-launch --app-id …` |
 | 3 | **Stop and ask** — "Please reproduce the issue now. (1) Done, it occurred / (2) Nothing happened" — and **end the turn** | (agent interaction — no `sleep`, no polling) |
-| 4 | After the reply: stop the collectors | `--action stop-collect` · `--action kernel --subcommand stop` |
-| 5 | Analyze, errors first | `--action error-analyze --app-id … --format summary` → `--action check` → `--action kernel --subcommand analyze` |
+| 4 | After the reply: stop the collectors | `--action stop` · `--action kernel --subcommand stop` |
+| 5 | Analyze this reproduction window; report **not reproduced** if no symptom occurred | `--action check` → `--action kernel --subcommand analyze` |
 | 6 | Escalate only if still unexplained | `--action error-analyze --format details` → `--action search --pattern "<the string a finding named>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
-| 7 | Bilingual report, next-step prompt, cleanup | `--action stop` |
+| 7 | Report in the user's language, next-step prompt, cleanup | `--action stop` |
+
+Use one dlog collector: the system monitor already captures app logs. For an
+app-only session without it, launch → `dlog-collect <app-id>` → user reproduction
+and reply → `stop-collect` → `error-analyze <app-id> summary`. Preserve running
+state only at the user's request. Saved-log-only analysis or declined reproduction
+must be labeled provisional; existing logs and unrelated-host probes alone do
+not confirm the current app's failure.
 
 ---
 

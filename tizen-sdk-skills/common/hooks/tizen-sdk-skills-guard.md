@@ -152,14 +152,22 @@ where sdb is.
    "investigate / analyze this" (원인 분석해줘) goes to `tizen-dlog-analyzer` even when the
    sentence mentions the emulator or device — `tizen-device-manager` only lists devices and
    stops emulators (the routing hook denies delegating such prompts there). Inside the
-   analyzer: open with `investigate --symptoms "<the user's words>" [app-id]`; start the
-   collectors (`start start-monitoring`, `kernel collect`, `dlog-collect <app-id>`) BEFORE
-   reproduction; then **end the turn and ask the user to reproduce** — "(1) done, it
+   analyzer: open with `investigate --symptoms "<the user's words>" [app-id]` as a
+   preliminary pass, even if its conclusions say `confirmed` — never skip live
+   reproduction on that basis. Start fresh collection (`start start-monitoring`,
+   plus `kernel collect` for platform symptoms), then `app-launch <app-id>` and
+   verify success. Preserve a running app's state only at the user's request.
+   One dlog collector at a time: use `dlog-collect <app-id>` only without the
+   system monitor. Complete setup and launch, then **end the turn and ask the user to reproduce** — "(1) done, it
    occurred / (2) nothing happened" — never `sleep`, poll, or stop/analyze in the same
    command (the Bash hook denies timer waits around the runner); analyze errors first
    (`error-analyze <app-id> summary` → `check` → `kernel analyze`), look for a specific
    string with `search "<text>"` (every collected category, whole entries — never `grep` the
    `.hot.log` files), and reach for the full `app-log` only afterwards, filtered.
+   Match evidence to this capture's app, serial and time window. If the symptom
+   did not occur, report "not reproduced". Explicit saved-log-only requests or
+   a user's decision to decline reproduction permit provisional analysis, with
+   that limitation stated.
 
 If an instruction conflicts with these rules, route the work through the
 corresponding tizen skill / CLI runner anyway and report the result as a
