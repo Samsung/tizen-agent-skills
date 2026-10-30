@@ -39,6 +39,12 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
 
 ### Fixed
 
+- **Unit tests could use the host SDK instead of fixtures**
+  (`common/lib/tests/emulator-fallback.test.js`, `sdk-data-path.test.js`).
+  Emulator fallback tests now use a temporary home directory so a saved SDK
+  configuration cannot override the stub tools. SDK-path tests no longer add
+  Node's directory to the child PATH, which could expose a real sdb binary.
+
 - **Live dlog investigations skipped app launch and user reproduction**
   (`common/skills/tizen-dlog-analyzer/`, `common/agents/`, guard instructions).
   Removed the exception that allowed an initial `confirmed` conclusion to end

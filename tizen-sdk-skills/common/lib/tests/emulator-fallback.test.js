@@ -191,6 +191,10 @@ exit 0
  */
 function makeSdk() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-emulator-test-"));
+  // The persisted SDK config takes precedence over TIZEN_SDK_PATH. Isolate
+  // the home directory too, so the developer's config cannot select real tools.
+  const fixtureHome = path.join(root, "home");
+  fs.mkdirSync(fixtureHome);
   const emcliDir = path.join(root, "sdk", "tools", "emulator", "bin");
   fs.mkdirSync(emcliDir, { recursive: true });
   // get_sdk_path() only accepts a directory that looks like a real SDK.
@@ -203,6 +207,7 @@ function makeSdk() {
   fs.mkdirSync(state);
   return {
     root,
+    fixtureHome,
     sdk: path.join(root, "sdk"),
     state,
     log: path.join(root, "log"),
@@ -227,6 +232,8 @@ function runScript(args, stubEnv = {}) {
     timeout: 60000,
     env: {
       ...process.env,
+      HOME: sdk.fixtureHome,
+      USERPROFILE: sdk.fixtureHome,
       TIZEN_SDK_PATH: sdk.sdk,
       // Keep the polling budget observable but fast: the point is that the loop
       // runs every attempt, not that it takes ten seconds to prove it.

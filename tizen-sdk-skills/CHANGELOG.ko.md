@@ -38,6 +38,12 @@
 
 ### 수정
 
+- **단위 테스트가 픽스처 대신 호스트 SDK를 사용하던 문제**
+  (`common/lib/tests/emulator-fallback.test.js`, `sdk-data-path.test.js`).
+  에뮬레이터 폴백 테스트에 임시 홈 디렉터리를 사용하여 저장된 SDK 설정이
+  스텁 도구를 덮어쓰지 않도록 했습니다. SDK 경로 테스트는 실제 sdb가 노출될 수
+  있던 Node 디렉터리를 자식 프로세스 PATH에서 제외합니다.
+
 - **실시간 dlog 조사에서 앱 실행과 사용자 재현을 생략하던 문제**
   (`common/skills/tizen-dlog-analyzer/`, `common/agents/`, 가드 지침).
   최초 `confirmed` 결론만으로 조사를 끝낼 수 있던 예외를 제거했습니다.
