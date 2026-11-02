@@ -4,13 +4,17 @@
 /**
  * samsung-pwd-store tests.
  *
- * 1. The certificate password must not ride along in an error's `cause`. The
+ * 1. The certificate password must not leave the module inside an error. The
  *    store passes the password to wincrypt.exe / security / secret-tool on the
  *    command line; when one of them cannot be started (ENOENT, EACCES), Node's
  *    error carries `spawnargs` — the argument list, password included — and
- *    `util.inspect` / `console.error` print a cause's own fields.
- * 2. Command output handling: wincrypt's CRLF output, UTF-8 characters split
- *    across output chunks, and the exit code (not stderr) deciding success.
+ *    `util.inspect` / `console.error` print the fields of an error's causes.
+ *    A password spawn() would quote in its own error (NUL byte, non-string) is
+ *    refused up front.
+ * 2. Command output: wincrypt's CRLF output, UTF-8 characters split across
+ *    output chunks, spaces in the secret, and when a store or lookup fails
+ *    (macOS `security`: exit code; the TV SDK's secret-tool: exit code or any
+ *    stderr, and an empty lookup).
  *
  * The store commands are replaced by fake scripts (a fake SDK for secret-tool,
  * PATH for `security`); real ones are never run, so no Keychain or keyring is
@@ -38,11 +42,12 @@ fs.mkdirSync(path.join(fakeSdk, "tools", "certificate-encryptor"), {
 fs.writeFileSync(path.join(sandbox, ".tizen.sdk.path.config"), `${fakeSdk}\n`);
 
 const {
-  withoutSpawnArgs,
+  stripSpawnArgs,
   parseWincryptOutput,
+  encryptPassword,
+  decryptPassword,
   encryptPasswordMacOS,
-  encryptPasswordLinux,
-  decryptPasswordLinux,
+  decryptPasswordMacOS,
 } = require("../core/samsung-pwd-store");
 
 console.log("=== samsung-pwd-store Test ===\n");
@@ -68,17 +73,22 @@ async function settle(promise) {
   }
 }
 
+function messageMatches(result, re) {
+  return Boolean(result.error && re.test(result.error.message));
+}
+
 const SECRET = "TOPSECRET-pwd-store-test";
 const isPosix = process.platform !== "win32";
 
-/** Write an executable bash script. */
-function writeScript(file, body) {
-  fs.writeFileSync(file, `#!/bin/bash\n${body}\n`, { mode: 0o755 });
+/** Write a bash script, executable unless `mode` says otherwise. */
+function writeScript(file, body, mode = 0o755) {
+  fs.writeFileSync(file, `#!/bin/bash\n${body}\n`, { mode });
+  fs.chmodSync(file, mode);
 }
 
 async function main() {
-  // --- withoutSpawnArgs on a real spawn failure -------------------------------
-  console.log("--- withoutSpawnArgs ---");
+  // --- stripSpawnArgs ----------------------------------------------------------
+  console.log("--- stripSpawnArgs ---");
   {
     const spawnError = spawnSync("tizen-no-such-binary-xyz", [
       "-w",
@@ -89,65 +99,77 @@ async function main() {
       util.inspect(spawnError).includes(SECRET),
       true,
     );
-    const safe = withoutSpawnArgs(spawnError);
-    check("spawnargs dropped", "spawnargs" in safe, false);
+    const outer = new Error("outer", {
+      cause: new Error("middle", { cause: spawnError }),
+    });
+    check("returns the same error", stripSpawnArgs(outer) === outer, true);
     check(
-      "code / syscall kept",
-      [safe.code, safe.syscall],
-      [spawnError.code, spawnError.syscall],
-    );
-    check("message kept", safe.message, spawnError.message);
-    check(
-      "wrapped with it as cause → secret not in util.inspect",
-      util.inspect(new Error("x", { cause: safe })).includes(SECRET),
+      "secret gone from the whole cause chain",
+      util.inspect(outer, { depth: 10 }).includes(SECRET),
       false,
     );
-    const plain = new Error("plain");
     check(
-      "error without spawnargs → same object",
-      withoutSpawnArgs(plain) === plain,
-      true,
+      "code / syscall kept",
+      [spawnError.code, spawnError.syscall],
+      ["ENOENT", "spawnSync tizen-no-such-binary-xyz"],
     );
+    const a = new Error("a");
+    const b = new Error("b", { cause: a });
+    a.cause = b; // a cycle must not hang
+    check("cause cycle terminates", stripSpawnArgs(a) === a, true);
     check(
       "non-object passes through",
-      [withoutSpawnArgs(undefined), withoutSpawnArgs("s")],
+      [stripSpawnArgs(undefined), stripSpawnArgs("s")],
       [undefined, "s"],
     );
   }
 
+  // --- a password spawn() would quote is refused up front ----------------------
+  console.log("\n--- encryptPassword: password validation ---");
+  for (const [name, bad] of [
+    ["NUL byte", `${SECRET}\0x`],
+    ["non-string", 12345],
+  ]) {
+    const marker = path.join(sandbox, `invalid-${name}.pwd`);
+    const r = await settle(encryptPassword(bad, marker));
+    check(
+      `${name} → samsung_pwd_store_failed`,
+      messageMatches(
+        r,
+        /^samsung_pwd_store_failed: the certificate password must be a string without NUL characters$/,
+      ),
+      true,
+    );
+    check(
+      `${name} → value not in util.inspect`,
+      util.inspect(r.error, { depth: 10 }).includes(String(bad).slice(0, 10)),
+      false,
+    );
+    check(`${name} → no marker`, fs.existsSync(marker), false);
+  }
+
   // --- wincrypt.exe output -----------------------------------------------------
   console.log("\n--- parseWincryptOutput ---");
-  check("LF", parseWincryptOutput("PASSWORD:secret\n").password, "secret");
-  check(
-    "CRLF with more lines → no trailing \\r",
-    parseWincryptOutput("PASSWORD:secret\r\nDone.\r\n").password,
-    "secret",
-  );
-  check(
-    "single CRLF line",
-    parseWincryptOutput("PASSWORD:secret\r\n").password,
-    "secret",
-  );
-  check(
-    "leading blank line skipped",
-    parseWincryptOutput("\r\nPASSWORD:secret\r\n").password,
-    "secret",
-  );
-  check(
-    "trailing spaces in the password kept",
-    parseWincryptOutput("PASSWORD:pw  \r\n").password,
-    "pw  ",
-  );
+  for (const [name, out, expected] of [
+    ["LF", "PASSWORD:secret\n", "secret"],
+    ["CRLF with more lines", "PASSWORD:secret\r\nDone.\r\n", "secret"],
+    ["text-mode \\r\\r\\n", "PASSWORD:secret\r\r\nDone.\r\r\n", "secret"],
+    ["bare trailing \\r", "PASSWORD:secret\r", "secret"],
+    ["leading blank line", "\r\nPASSWORD:secret\r\n", "secret"],
+    ["trailing spaces kept", "PASSWORD:pw  \r\n", "pw  "],
+  ]) {
+    check(name, parseWincryptOutput(out).password, expected);
+  }
   check(
     "unexpected output → null + the line",
     parseWincryptOutput("ERROR: bad file\r\n"),
     { password: null, line: "ERROR: bad file" },
   );
 
-  // --- `security` (macOS store), faked on PATH ---------------------------------
-  // encryptPasswordMacOS has no platform guard. Never run it where the real
-  // `security` exists (macOS) — it would write to the Keychain.
-  console.log("\n--- encryptPasswordMacOS ---");
+  // --- macOS `security`, faked on PATH -----------------------------------------
+  // encrypt/decryptPasswordMacOS have no platform guard. Never run them where
+  // the real `security` exists (macOS) — they would use the Keychain.
+  console.log("\n--- macOS `security` ---");
   const hasSecurity =
     process.platform === "darwin" ||
     spawnSync(process.platform === "win32" ? "where" : "which", ["security"])
@@ -155,63 +177,49 @@ async function main() {
   if (hasSecurity || !isPosix) {
     console.log("SKIP real `security` available, or not a POSIX host");
   } else {
-    // a) the command cannot be started at all
     const marker = path.join(sandbox, "author.pwd");
-    const r = await settle(encryptPasswordMacOS(SECRET, marker));
+    const missing = await settle(encryptPasswordMacOS(SECRET, marker));
     check(
-      "missing `security` → samsung_pwd_store_failed",
-      Boolean(
-        r.error &&
-        r.error.message.startsWith(
-          "samsung_pwd_store_failed: failed to spawn security",
-        ),
-      ),
-      true,
+      "missing `security` → failed to spawn, cause.code ENOENT",
+      [
+        messageMatches(missing, /failed to spawn security/),
+        missing.error && missing.error.cause && missing.error.cause.code,
+      ],
+      [true, "ENOENT"],
     );
-    check(
-      "missing `security` → cause.code ENOENT",
-      r.error && r.error.cause && r.error.cause.code,
-      "ENOENT",
-    );
-    check(
-      "missing `security` → secret not in util.inspect",
-      util.inspect(r.error, { depth: 10 }).includes(SECRET),
-      false,
-    );
-    check("missing `security` → no marker", fs.existsSync(marker), false);
 
-    // b) a warning on stderr with exit 0 is a success
     const bin = path.join(sandbox, "bin");
     fs.mkdirSync(bin);
-    writeScript(
-      path.join(bin, "security"),
-      'echo "security: SecKeychain warning" >&2\nexit 0',
-    );
+    const security = path.join(bin, "security");
     process.env.PATH = `${bin}${path.delimiter}${savedPath}`;
+
+    // Apple's tool reports failure through its exit code: a warning on stderr
+    // with exit 0 is a successful store.
+    writeScript(security, 'echo "security: SecKeychain warning" >&2\nexit 0');
     const ok = await settle(encryptPasswordMacOS(SECRET, marker));
-    check("stderr warning, exit 0 → resolves", ok.error, null);
+    check("store: stderr warning, exit 0 → resolves", ok.error, null);
+    check("store: marker written", fs.existsSync(marker), true);
+
+    writeScript(security, 'echo "denied" >&2\nexit 51');
+    const bad = await settle(encryptPasswordMacOS(SECRET, marker));
     check(
-      "stderr warning, exit 0 → marker written",
-      fs.existsSync(marker),
+      "store: exit 51 → Keychain encrypt failed: denied",
+      messageMatches(bad, /Keychain encrypt failed: denied/),
       true,
     );
 
-    // c) a non-zero exit is a failure, with stderr in the message
-    writeScript(path.join(bin, "security"), 'echo "denied" >&2\nexit 51');
-    const bad = await settle(encryptPasswordMacOS(SECRET, marker));
-    check(
-      "exit 51 → Keychain encrypt failed: denied",
-      Boolean(
-        bad.error && /Keychain encrypt failed: denied/.test(bad.error.message),
-      ),
-      true,
-    );
+    writeScript(security, "printf ' pw \\n'");
+    const looked = await settle(decryptPasswordMacOS(marker));
+    check("lookup: spaces in the secret kept", looked.value, " pw ");
     process.env.PATH = savedPath;
   }
 
-  // --- secret-tool (Linux store / lookup), faked in the SDK --------------------
+  // --- the TV SDK's secret-tool, faked in the SDK ------------------------------
   // findSecretTool only looks on Linux, under <sdk>/tools/certificate-encryptor.
-  console.log("\n--- secret-tool ---");
+  // These go through the module's entry points, encrypt/decryptPassword.
+  console.log(
+    "\n--- secret-tool (through encryptPassword / decryptPassword) ---",
+  );
   if (process.platform !== "linux") {
     console.log("SKIP not Linux");
   } else {
@@ -223,45 +231,92 @@ async function main() {
     );
     const pwd = path.join(sandbox, "linux.pwd");
 
-    writeScript(tool, 'echo "(secret-tool): GLib-WARNING" >&2\nexit 0');
-    const stored = await settle(encryptPasswordLinux(SECRET, pwd));
-    check("store: stderr warning, exit 0 → resolves", stored.error, null);
-    check("store: marker written", fs.existsSync(pwd), true);
-
-    writeScript(tool, 'echo "no keyring" >&2\nexit 1');
-    const failed = await settle(encryptPasswordLinux(SECRET, pwd));
+    // Present but not executable → spawn fails with EACCES, and its spawnargs
+    // hold `--password=<secret>`.
+    writeScript(tool, "exit 0", 0o644);
+    const denied = await settle(encryptPassword(SECRET, pwd));
     check(
-      "store: exit 1 → secret-tool store failed: no keyring",
-      Boolean(
-        failed.error &&
-        /secret-tool store failed: no keyring/.test(failed.error.message),
+      "store: EACCES → failed to spawn secret-tool",
+      messageMatches(denied, /failed to spawn secret-tool/),
+      true,
+    );
+    check(
+      "store: EACCES → secret not in util.inspect of the error",
+      util.inspect(denied.error, { depth: 10 }).includes(SECRET),
+      false,
+    );
+    check(
+      "store: EACCES → cause.code kept",
+      denied.error && denied.error.cause && denied.error.cause.code,
+      "EACCES",
+    );
+
+    writeScript(tool, "exit 0");
+    const stored = await settle(encryptPassword(SECRET, pwd));
+    check(
+      "store: exit 0, no stderr → resolves + marker",
+      [stored.error, fs.existsSync(pwd)],
+      [null, true],
+    );
+
+    // The SDK's helpers do not report failure through the exit code reliably,
+    // so any stderr output fails a store or lookup.
+    writeScript(tool, 'echo "cannot reach the keyring" >&2\nexit 0');
+    const warned = await settle(encryptPassword(SECRET, pwd));
+    check(
+      "store: stderr with exit 0 → fails",
+      messageMatches(
+        warned,
+        /secret-tool store failed: cannot reach the keyring/,
       ),
       true,
     );
 
-    // "한글" (ED 95 9C EA B8 80) written in two parts that split "한", with a
-    // pause so they arrive as separate chunks.
+    writeScript(tool, 'echo "no keyring" >&2\nexit 1');
+    const failed = await settle(encryptPassword(SECRET, pwd));
+    check(
+      "store: exit 1 → fails with stderr",
+      messageMatches(failed, /secret-tool store failed: no keyring/),
+      true,
+    );
+
+    // "한글" (ED 95 9C EA B8 80) in two writes that split "한", with a pause so
+    // they arrive as separate chunks; a trailing space belongs to the secret.
     writeScript(
       tool,
-      "printf '\\xed\\x95'; sleep 0.3; printf '\\x9c\\xea\\xb8\\x80\\n'\n" +
-        'echo "(secret-tool): GLib-WARNING" >&2\nexit 0',
+      "printf '\\xed\\x95'; sleep 0.3; printf '\\x9c\\xea\\xb8\\x80 \\n'",
     );
-    const looked = await settle(decryptPasswordLinux(pwd));
-    check("lookup: stderr warning, exit 0 → resolves", looked.error, null);
+    const looked = await settle(decryptPassword(pwd));
     check(
-      "lookup: UTF-8 split across chunks stays intact",
+      "lookup: UTF-8 split across chunks intact, spaces kept",
       looked.value,
-      "한글",
+      "한글 ",
+    );
+
+    writeScript(
+      tool,
+      'printf "secret\\n"; echo "No matching secret" >&2\nexit 0',
+    );
+    const noisy = await settle(decryptPassword(pwd));
+    check(
+      "lookup: stderr with exit 0 → fails",
+      messageMatches(noisy, /secret-tool lookup failed: No matching secret/),
+      true,
+    );
+
+    writeScript(tool, "exit 0");
+    const empty = await settle(decryptPassword(pwd));
+    check(
+      "lookup: exit 0 with no output → fails",
+      messageMatches(empty, /secret-tool lookup returned no password/),
+      true,
     );
 
     writeScript(tool, "exit 1");
-    const missing = await settle(decryptPasswordLinux(pwd));
+    const notFound = await settle(decryptPassword(pwd));
     check(
-      "lookup: exit 1 → secret-tool lookup failed: exit code 1",
-      Boolean(
-        missing.error &&
-        /secret-tool lookup failed: exit code 1/.test(missing.error.message),
-      ),
+      "lookup: exit 1 → fails",
+      messageMatches(notFound, /secret-tool lookup failed: exit code 1/),
       true,
     );
   }

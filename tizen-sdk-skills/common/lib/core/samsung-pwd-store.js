@@ -98,22 +98,29 @@ function findSecretTool() {
 }
 
 /**
- * The caught error, safe to keep as `cause`.
+ * Remove `spawnargs` from an error and every error in its `cause` chain, in
+ * place, and return it.
  *
  * A spawn failure (ENOENT, EACCES, ...) carries `spawnargs`, the full argument
  * list. For these commands that list holds the plaintext password
  * (`wincrypt.exe --encrypt <pw>`, `security ... -w <pw>`,
  * `secret-tool store --password=<pw>`), and `util.inspect` / `console.error`
- * print a cause's own fields. So `spawnargs` is dropped; `code`, `errno`,
- * `syscall` and `path` stay.
+ * print the fields of an error and of its causes. encryptPassword() and
+ * decryptPassword(), the module's only entry points, run every error through
+ * this before it leaves, so no reject path can forget it.
  *
  * @param {unknown} err
- * @returns {unknown}
+ * @returns {unknown} the same value
  */
-function withoutSpawnArgs(err) {
-  if (!err || typeof err !== "object" || !("spawnargs" in err)) return err;
-  const { spawnargs: _spawnargs, ...rest } = err;
-  return Object.assign(new Error(err.message), rest);
+function stripSpawnArgs(err) {
+  const seen = new Set();
+  for (let e = err; e && typeof e === "object" && !seen.has(e); e = e.cause) {
+    seen.add(e);
+    if (Object.prototype.hasOwnProperty.call(e, "spawnargs")) {
+      delete e.spawnargs;
+    }
+  }
+  return err;
 }
 
 /**
@@ -126,6 +133,15 @@ function withoutSpawnArgs(err) {
  */
 async function encryptPassword(password, pwdFilePath) {
   const platform = process.platform;
+
+  // spawn() rejects a non-string or NUL-containing argument synchronously,
+  // and Node's message quotes the value — here, the password. Refuse it first,
+  // without echoing it.
+  if (typeof password !== "string" || password.includes("\0")) {
+    throw new Error(
+      "samsung_pwd_store_failed: the certificate password must be a string without NUL characters",
+    );
+  }
 
   try {
     if (platform === "win32") {
@@ -140,10 +156,10 @@ async function encryptPassword(password, pwdFilePath) {
       );
     }
   } catch (err) {
+    // The password must not leave the module inside a spawn error.
+    stripSpawnArgs(err);
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      // err is what the platform helper rejected with; it already holds its
-      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -173,10 +189,10 @@ async function decryptPassword(pwdFilePath) {
       );
     }
   } catch (err) {
+    // The password must not leave the module inside a spawn error.
+    stripSpawnArgs(err);
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      // err is what the platform helper rejected with; it already holds its
-      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -230,7 +246,7 @@ async function encryptPasswordWindows(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: withoutSpawnArgs(err) },
+          { cause: err },
         ),
       );
     });
@@ -240,10 +256,11 @@ async function encryptPasswordWindows(password, pwdFilePath) {
 /**
  * Parse `wincrypt.exe --decrypt` output: the first line is "PASSWORD:<value>".
  *
- * Lines are split on CRLF as well as LF — wincrypt is a Windows program, and
- * splitting on "\n" alone left a trailing "\r" in the password whenever more
- * than one line followed. Only leading whitespace before the first line is
- * dropped, so trailing spaces that belong to the password are kept.
+ * The first line ends at "\n", and every "\r" before it is dropped —
+ * wincrypt is a Windows program (CRLF, or "\r\r\n" from text-mode output).
+ * Splitting on "\n" without that left a trailing "\r" in the password. Only
+ * leading whitespace before the first line is dropped, so trailing spaces
+ * that belong to the password are kept.
  *
  * @private
  * @param {string} stdout
@@ -252,7 +269,7 @@ async function encryptPasswordWindows(password, pwdFilePath) {
  */
 function parseWincryptOutput(stdout) {
   const prefix = "PASSWORD:";
-  const line = String(stdout).trimStart().split(/\r?\n/)[0];
+  const line = String(stdout).trimStart().split("\n")[0].replace(/\r+$/, "");
   return {
     password: line.startsWith(prefix) ? line.slice(prefix.length) : null,
     line,
@@ -322,7 +339,7 @@ async function decryptPasswordWindows(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: withoutSpawnArgs(err) },
+          { cause: err },
         ),
       );
     });
@@ -358,7 +375,7 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: withoutSpawnArgs(proc.error) },
+          { cause: proc.error },
         ),
       );
       return;
@@ -419,7 +436,7 @@ async function decryptPasswordMacOS(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: withoutSpawnArgs(proc.error) },
+          { cause: proc.error },
         ),
       );
       return;
@@ -434,7 +451,9 @@ async function decryptPasswordMacOS(pwdFilePath) {
       return;
     }
 
-    const password = proc.stdout.trim();
+    // `security -w` prints the secret and a line break; only the line break
+    // goes, spaces belong to the password.
+    const password = proc.stdout.replace(/\r?\n$/, "");
     resolve(password);
   });
 }
@@ -488,9 +507,11 @@ async function encryptPasswordLinux(password, pwdFilePath) {
     });
 
     proc.on("close", (code) => {
-      // The exit code decides (a libsecret / GLib warning on stderr does not
-      // mean the store failed); null — killed, e.g. by the timeout — fails.
-      if (code !== 0) {
+      // stderr counts as failure too. This is the TV SDK's own secret-tool,
+      // and the SDK's helpers do not report failure through the exit code
+      // reliably (wincrypt.exe exits 1 even on success); reporting a failed
+      // store as success would leave a marker with no secret behind it.
+      if (code !== 0 || stderr) {
         reject(
           new Error(
             `samsung_pwd_store_failed: secret-tool store failed: ${stderr || `exit code ${code}`}`,
@@ -521,7 +542,7 @@ async function encryptPasswordLinux(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: withoutSpawnArgs(err) },
+          { cause: err },
         ),
       );
     });
@@ -571,8 +592,8 @@ async function decryptPasswordLinux(pwdFilePath) {
     });
 
     proc.on("close", (code) => {
-      // Same rule as store: exit code, not the presence of stderr output.
-      if (code !== 0) {
+      // Same rule as store: a non-zero exit or any stderr output fails.
+      if (code !== 0 || stderr) {
         reject(
           new Error(
             `samsung_pwd_store_failed: secret-tool lookup failed: ${stderr || `exit code ${code}`}`,
@@ -581,7 +602,17 @@ async function decryptPasswordLinux(pwdFilePath) {
         return;
       }
 
-      const password = stdout.trim();
+      // Only the line break after the secret goes; spaces belong to it. An
+      // empty result is a failed lookup, never a password to sign with.
+      const password = stdout.replace(/\r?\n$/, "");
+      if (!password) {
+        reject(
+          new Error(
+            "samsung_pwd_store_failed: secret-tool lookup returned no password",
+          ),
+        );
+        return;
+      }
       resolve(password);
     });
 
@@ -589,7 +620,7 @@ async function decryptPasswordLinux(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: withoutSpawnArgs(err) },
+          { cause: err },
         ),
       );
     });
@@ -600,7 +631,7 @@ module.exports = {
   encryptPassword,
   decryptPassword,
   // Exports for testing
-  withoutSpawnArgs,
+  stripSpawnArgs,
   parseWincryptOutput,
   encryptPasswordWindows,
   decryptPasswordWindows,

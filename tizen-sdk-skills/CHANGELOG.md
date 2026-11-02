@@ -57,14 +57,19 @@ below use those release tags.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):
-  - Linux `secret-tool` and macOS `security`: a warning on stderr no longer
-    fails a store or lookup that exited 0. The exit code decides, and stderr
-    only explains a failure.
-  - Passwords read back from `secret-tool` or `wincrypt.exe` keep non-ASCII
-    characters intact when the output arrives in several chunks; before, a
-    character split across chunks became U+FFFD.
+  - macOS: a warning from `security` on stderr no longer fails a store that
+    exited 0; Apple's tool reports failure through its exit code.
+  - Linux: a `secret-tool` lookup that exits 0 with no output now fails
+    instead of returning an empty password. (The TV SDK's `secret-tool` still
+    fails on any stderr output: the SDK's helpers do not report failure
+    through the exit code reliably.)
+  - Passwords read back keep leading and trailing spaces, and non-ASCII
+    characters stay intact when the output arrives in several chunks (before,
+    a character split across chunks became U+FFFD).
   - Windows: a password read back from `wincrypt.exe` no longer ends in `\r`
-    when the tool prints CRLF and more than one line.
+    when the tool prints CRLF (or `\r\r\n`) and more than one line.
+  - A password containing a NUL character is refused with a message that does
+    not repeat it; before, the spawn error quoted it.
 
 ## [1.6.1] — 2026-10-26
 
