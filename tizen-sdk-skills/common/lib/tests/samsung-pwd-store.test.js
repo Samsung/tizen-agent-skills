@@ -43,6 +43,7 @@ fs.writeFileSync(path.join(sandbox, ".tizen.sdk.path.config"), `${fakeSdk}\n`);
 
 const {
   stripSpawnArgs,
+  withoutSpawnArgs,
   parseWincryptOutput,
   encryptPassword,
   decryptPassword,
@@ -117,6 +118,13 @@ async function main() {
     const b = new Error("b", { cause: a });
     a.cause = b; // a cycle must not hang
     check("cause cycle terminates", stripSpawnArgs(a) === a, true);
+    const fresh = spawnSync("tizen-no-such-binary-xyz", ["-w", SECRET]).error;
+    const copy = withoutSpawnArgs(fresh);
+    check(
+      "withoutSpawnArgs: copy without spawnargs, code kept, original untouched",
+      ["spawnargs" in copy, copy.code, "spawnargs" in fresh],
+      [false, "ENOENT", true],
+    );
     check(
       "non-object passes through",
       [stripSpawnArgs(undefined), stripSpawnArgs("s")],
@@ -157,6 +165,8 @@ async function main() {
     ["bare trailing \\r", "PASSWORD:secret\r", "secret"],
     ["leading blank line", "\r\nPASSWORD:secret\r\n", "secret"],
     ["trailing spaces kept", "PASSWORD:pw  \r\n", "pw  "],
+    // "" is rejected by decryptPasswordWindows as "returned no password"
+    ['empty PASSWORD: line → ""', "PASSWORD:\r\n", ""],
   ]) {
     check(name, parseWincryptOutput(out).password, expected);
   }
@@ -187,6 +197,11 @@ async function main() {
       ],
       [true, "ENOENT"],
     );
+    check(
+      "missing `security` → secret not in util.inspect (helper called directly)",
+      util.inspect(missing.error, { depth: 10 }).includes(SECRET),
+      false,
+    );
 
     const bin = path.join(sandbox, "bin");
     fs.mkdirSync(bin);
@@ -211,6 +226,14 @@ async function main() {
     writeScript(security, "printf ' pw \\n'");
     const looked = await settle(decryptPasswordMacOS(marker));
     check("lookup: spaces in the secret kept", looked.value, " pw ");
+
+    writeScript(security, "printf '\\n'");
+    const empty = await settle(decryptPasswordMacOS(marker));
+    check(
+      "lookup: exit 0 with an empty secret → fails",
+      messageMatches(empty, /Keychain lookup returned no password/),
+      true,
+    );
     process.env.PATH = savedPath;
   }
 
