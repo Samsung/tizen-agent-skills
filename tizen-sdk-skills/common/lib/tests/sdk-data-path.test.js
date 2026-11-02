@@ -67,14 +67,13 @@ function resolveIn({ configured, pathDirs = [] } = {}) {
   if (configured !== undefined) {
     fs.writeFileSync(path.join(home, ".tizen.sdk.path.config"), configured);
   }
-  // node itself must stay reachable for the child; everything else drops off
-  // PATH so `command -v sdb` / `where sdb` only ever finds our fake.
+  // The child uses process.execPath, so Node need not be on PATH. Its directory
+  // can also contain a real sdb (e.g. /usr/bin), which must not leak into tests.
   // On Windows the probe is `where sdb`, and `where.exe` is an external
   // program in System32 (unlike the `command -v` shell builtin) — keep that
   // one directory, or cmd fails with "'where' is not recognized" and the
   // lookup reports "no sdb on PATH" for a reason unrelated to the code under
   // test. System32 ships no sdb, so the fake is still the only match.
-  const nodeDir = path.dirname(process.execPath);
   const systemDirs =
     process.platform === "win32"
       ? [
@@ -84,7 +83,7 @@ function resolveIn({ configured, pathDirs = [] } = {}) {
           ),
         ]
       : [];
-  const childPath = [...pathDirs, nodeDir, ...systemDirs].join(path.delimiter);
+  const childPath = [...pathDirs, ...systemDirs].join(path.delimiter);
   const r = spawnSync(
     process.execPath,
     [
