@@ -93,14 +93,12 @@ Exit code: `0` = success (Node.js installed, v18+), `1` = failure (Node.js not f
 ```
 
 **Success below v22 (e.g. Node 20):** same shape, with a `warnings` entry
-`"Node.js v20.11.0 is older than the required v22+ … Upgrade to Node.js 22 LTS or later … Install command for this host: <command>"`
-(the same host-specific command a failure carries in `suggested_fix`). Report it to the user as an
-upgrade the SDK skills need — do not call that Node version fine — and let the user run the command
-themselves: on Ubuntu/Debian it removes the distribution Node.js packages first, after apt asks.
+`"Node.js v20.11.0 is older than the required v22+ … Upgrade to Node.js 22 LTS or later from https://nodejs.org/en/download."`,
+followed by `" Install command: <command>"` when there is a safe one for the host (see the table
+below). Report it to the user as an upgrade the SDK skills need — do not call that Node version fine.
 
-**Failure (Node.js not installed)** — example from an Ubuntu host. `suggested_fix.command` is
-the install command for the host's OS only (Windows: winget, macOS: brew, Ubuntu/Debian or
-Fedora/RHEL 8+: NodeSource, other Linux: the nodejs.org download page — see the table below):
+**Failure (Node.js not installed)** — example from a Linux host with a system Node (no safe
+one-line command, so `command` is `null` and `guide_url` is the download page):
 ```json
 {
   "command": "tizen-sdk check-node",
@@ -110,29 +108,46 @@ Fedora/RHEL 8+: NodeSource, other Linux: the nodejs.org download page — see th
     "error_category": "node_not_found",
     "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. Please install Node.js LTS from https://nodejs.org/en/download and retry.",
     "suggested_fix": {
-      "command": "sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\\n' nodejs npm 'libnode*' 2>/dev/null | awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs",
+      "command": null,
       "auto_fixable": false,
       "guide_url": "https://nodejs.org/en/download"
     }
   }]
 }
 ```
+On Windows, macOS, or when the runner runs under nvm / fnm / volta, `command` is the matching
+entry of the table below instead.
 
 **Failure (Node.js below v18):** `error_code` `TIZEN_SDK_ENV_E003`, `error_category`
-`node_version_unsupported`, the same OS-specific install command in `suggested_fix`.
+`node_version_unsupported`, the same `suggested_fix` as above.
 
-## Installation Guide (when Node.js is not installed)
+## Installation Guide (when Node.js is missing or below v22)
 
-| OS | Command |
+`suggested_fix.command` and the warning only ever carry a command that changes nothing but Node.js
+itself. Installing Node.js is the user's step — relay the command or the page; do not run it for them.
+
+| Where the runner's Node.js comes from | Command |
 |---|---|
-| **Windows** | `winget install OpenJS.NodeJS.LTS` |
-| **macOS** | `brew install node` |
-| **Linux (Ubuntu/Debian)** | `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null \| awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| **Linux (Fedora/RHEL 8+)** | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
-| **Linux (other distributions)** | Install Node.js 22 LTS from https://nodejs.org/en/download |
-| **All OS (manual)** | Download LTS from https://nodejs.org/ |
+| **nvm** (`~/.nvm/versions/node/…`) | `nvm install 22 && nvm alias default 22` |
+| **fnm** | `fnm install 22 && fnm default 22` |
+| **volta** | `volta install node@22` |
+| **Windows** (system install) | `winget install OpenJS.NodeJS.LTS` |
+| **macOS** (system install) | `brew install node` |
+| **Linux** (system install) | No one-line command — https://nodejs.org/en/download |
 
-> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes whichever of `nodejs`, `npm`, `libnode-dev` and `libnodeNN` (e.g. `libnode72`, `libnode109`) are installed — their files conflict with NodeSource's `nodejs`. apt lists what it will remove (packages that depend on `nodejs` go too) and asks first; answering no stops the command. Fedora/RHEL means Fedora, RHEL-family 8+ and Amazon Linux 2023; RHEL/CentOS 7 and Amazon Linux 2 (yum only, not built by NodeSource) use the download page.
+A version manager gets its own command because a system-wide install would not replace the Node.js
+it puts first on PATH.
+
+**Linux system installs** — what to tell the user:
+- The distribution's own `nodejs` package is below 22 on current LTS releases (Node 18 on Ubuntu
+  24.04 and Debian 12), so `apt install nodejs` does not reach the floor.
+- The simplest route is a version manager from the download page (nvm: no root, no system packages
+  touched); open a new terminal afterwards so it is on PATH.
+- Replacing a distribution install with a vendor repository such as NodeSource: on Debian/Ubuntu
+  the distribution `nodejs`, `npm`, `libnode-dev` and versioned `libnodeNN` packages must be removed
+  first (dpkg otherwise refuses to overwrite their files), and packages that depend on `nodejs` go
+  with them; NodeSource's Node 22 also needs glibc 2.28+ (Ubuntu 20.04+, Debian 10+, RHEL-family 8+).
+  This is for the user to do in their own terminal.
 
 After installing Node.js, **restart the terminal** (to refresh PATH), then retry the Tizen SDK installation.
 

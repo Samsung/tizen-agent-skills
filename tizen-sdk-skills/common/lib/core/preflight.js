@@ -24,7 +24,6 @@ const {
   NODE_MIN_MAJOR,
   NODE_DOWNLOAD_URL,
   nodeFloorCheck,
-  hostNodeInstallCommand,
 } = require("./node-floor");
 
 /** path module for a platform name — win32 paths must parse as win32 even on a Linux host. */
@@ -67,11 +66,9 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // 1. Version: this process is the interpreter. A pkg-compiled binary
     // (tizen-cli) embeds Node too, so the same fields apply. nodeFloorCheck
     // parses the major once; it is reused for every check below.
-    const floor = nodeFloorCheck({ version, isPkg });
-    // Host-specific install command (reads /etc/os-release on Linux), built
-    // only on the paths that show it: not installed, below the floor.
-    const installGuide = () =>
-      hostNodeInstallCommand({ platform, osRelease: deps.osRelease });
+    // The install command (null on a Linux system Node — no safe one-liner
+    // there; the user is pointed at guide_url) comes with the floor check.
+    const floor = nodeFloorCheck({ version, isPkg, platform, execPath });
     if (floor.major === null) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
@@ -80,7 +77,7 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
         "node_not_found",
         `Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js ${NODE_MIN_MAJOR}+. ` +
           `Please install Node.js LTS from ${NODE_DOWNLOAD_URL} and retry.`,
-        installGuide(),
+        floor.installCommand,
         startTime,
       );
     }
@@ -123,18 +120,13 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
         command,
         "node_version_unsupported",
         floor.message,
-        installGuide(),
+        floor.installCommand,
         startTime,
       );
     }
-    if (floor.message) {
-      // v18–v21: still runs, so a warning — with the same host-specific
-      // command a failure would carry (Ubuntu 24.04 / Debian 12 ship Node 18,
-      // and their own nodejs package cannot reach the floor).
-      warnings.push(
-        `${floor.message} Install command for this host: ${installGuide()}`,
-      );
-    }
+    // v18–v21: still runs, so only a warning (it carries the install command
+    // when there is one).
+    if (floor.message) warnings.push(floor.message);
 
     const envelope = new Envelope(command);
     envelope.startTime = startTime;

@@ -247,12 +247,11 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null \| awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| Linux (Fedora/RHEL 8+) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
-| Linux (기타 배포판) | Node.js 22 LTS를 https://nodejs.org/en/download 에서 설치 |
+| nvm / fnm / volta 사용 중 | `nvm install 22 && nvm alias default 22` · `fnm install 22 && fnm default 22` · `volta install node@22` |
+| Linux | 한 줄 명령 없음 — https://nodejs.org/en/download 참고 (아래 설명) |
 | 모든 OS (수동)        | https://nodejs.org/ 에서 LTS 다운로드               |
 
-> 배포판 `nodejs` 패키지는 Ubuntu 24.04·Debian 12에서 Node 18이라 하한(22) 미만이므로 NodeSource 저장소를 씁니다. Ubuntu/Debian 명령은 NodeSource `nodejs`와 파일이 충돌하는 `nodejs`, `npm`, `libnode-dev`, `libnodeNN`(예: `libnode72`, `libnode109`) 중 설치된 것을 먼저 제거합니다. apt가 제거할 패키지(`nodejs`에 의존하는 패키지 포함)를 보여 주고 먼저 확인을 받으며, 거절하면 명령이 멈춥니다. Fedora/RHEL은 Fedora, RHEL 계열 8 이상, Amazon Linux 2023을 뜻합니다. RHEL/CentOS 7과 Amazon Linux 2(yum만 있고 NodeSource가 빌드하지 않음)는 다운로드 페이지를 씁니다.
+> Linux: 배포판 자체 `nodejs`는 현재 LTS 릴리스에서 22 미만입니다(Ubuntu 24.04·Debian 12는 Node 18). 다운로드 페이지의 방법 중 하나로 Node.js 22+를 설치하세요(nvm 같은 버전 관리자는 root 권한도, 시스템 패키지 변경도 필요 없습니다). 배포판 설치를 교체할 때 주의할 점은 `tizen-check-node` 스킬을 참고하세요.
 
 **의존성:** 없음
 

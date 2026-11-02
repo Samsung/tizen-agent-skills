@@ -18,7 +18,6 @@ const pluginCache = require("../../common/lib/core/plugin-cache");
 const {
   NODE_MIN_MAJOR,
   nodeFloorCheck,
-  hostNodeInstallCommand,
 } = require("../../common/lib/core/node-floor");
 // Single source for Java/JNA crash detection — the same constant the emulator
 // domain uses to add its hint, so doctor and launch classify a failure alike.
@@ -216,9 +215,7 @@ export function handleDoctor(): { status: "success" | "failure" } {
       status: nodeFloor.status as "ok" | "warn" | "fail",
       message: nodeFloor.skipped
         ? `Node.js ${process.version} embedded in the packaged tizen-cli binary (version floor not checked)`
-        : nodeFloor.message
-          ? `${nodeFloor.message} Install command for this host: ${hostNodeInstallCommand()}`
-          : `Node.js ${process.version} detected`,
+        : (nodeFloor.message ?? `Node.js ${process.version} detected`),
     },
     {
       name: "Plugin scripts directory",

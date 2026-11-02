@@ -8,11 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const {
-  NODE_MIN_MAJOR,
-  NODE_DOWNLOAD_URL,
-  ALL_OS_NODE_INSTALL,
-} = require("../core/node-floor");
+const { NODE_DOWNLOAD_URL } = require("../core/node-floor");
 
 class Envelope {
   constructor(command) {
@@ -328,27 +324,24 @@ const ERROR_CODES = {
   },
 
   // 환경 사전 점검 (preflight) 관련
-  // node_not_found = SDK CLI 러너 실행에 필요한 Node.js가 없음. 호출자
-  // (preflight.js)가 플랫폼별 설치 명령을 suggestedCommand로 덮어쓰며,
-  // 레지스트리의 guide_url은 그때도 보존된다.
-  // OS별 명령은 node-floor.js (Linux는 배포판 nodejs가 하한 미만이라
-  // NodeSource 저장소; 호스트를 아는 preflight.js는 해당 OS 명령만 준다).
+  // node_not_found = SDK CLI 러너 실행에 필요한 Node.js가 없음.
+  // node_version_unsupported = Node.js는 있으나 러너가 동작하지 않는 메이저
+  // (node-floor.js의 NODE_HARD_MIN_MAJOR 미만). 22 미만 18 이상은 경고만 한다.
+  // 레지스트리에는 command 없이 guide_url만 둔다: 안전한 설치 명령이 있는
+  // 경우(winget / brew / nvm·fnm·volta)에만 preflight.js가 command를 채우고,
+  // Linux 시스템 Node처럼 한 줄 명령이 없는 경우는 다운로드 페이지로 안내한다.
   NODE_NOT_FOUND: {
     error_code: "TIZEN_SDK_ENV_E001",
     error_category: "node_not_found",
     suggested_fix: {
-      command: `Install Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
       guide_url: NODE_DOWNLOAD_URL,
     },
   },
-  // node_version_unsupported = Node.js는 있으나 러너가 동작하지 않는 메이저
-  // (node-floor.js의 NODE_HARD_MIN_MAJOR 미만). 22 미만 18 이상은 경고만 한다.
   NODE_VERSION_UNSUPPORTED: {
     error_code: "TIZEN_SDK_ENV_E003",
     error_category: "node_version_unsupported",
     suggested_fix: {
-      command: `Upgrade to Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
       guide_url: NODE_DOWNLOAD_URL,
     },

@@ -265,12 +265,11 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null \| awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| Linux (Fedora/RHEL 8+) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
-| Linux (other distributions) | Install Node.js 22 LTS from https://nodejs.org/en/download |
+| Running under nvm / fnm / volta | `nvm install 22 && nvm alias default 22` · `fnm install 22 && fnm default 22` · `volta install node@22` |
+| Linux | No one-line command — see https://nodejs.org/en/download (below) |
 | All OS (manual)       | Download LTS from https://nodejs.org/               |
 
-> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes whichever of `nodejs`, `npm`, `libnode-dev` and `libnodeNN` (e.g. `libnode72`, `libnode109`) are installed — their files conflict with NodeSource's `nodejs`. apt lists what it will remove (packages that depend on `nodejs` go too) and asks first; answering no stops the command. Fedora/RHEL means Fedora, RHEL-family 8+ and Amazon Linux 2023; RHEL/CentOS 7 and Amazon Linux 2 (yum only, not built by NodeSource) use the download page.
+> Linux: the distribution's own `nodejs` is below 22 on current LTS releases (Node 18 on Ubuntu 24.04 and Debian 12). Install Node.js 22+ by one of the methods on the download page (a version manager such as nvm needs no root and touches no system packages). See the `tizen-check-node` skill for what to watch for when replacing a distribution install.
 
 **Dependencies:** None
 

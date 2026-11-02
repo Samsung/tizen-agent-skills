@@ -29,7 +29,7 @@ const {
   NODE_MIN_MAJOR,
   nodeVersionStatus,
   nodeFloorCheck,
-  linuxDistroFamily,
+  NODE_DOWNLOAD_URL,
   nodeInstallCommand,
 } = require("../core/node-floor");
 
@@ -350,7 +350,6 @@ function execStub(table) {
       version: "v16.20.0",
       isPkg: false,
       platform: "linux",
-      osRelease: "ID=ubuntu\nID_LIKE=debian\n",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
     // Below NODE_HARD_MIN_MAJOR the runners do not work: check-node fails
@@ -361,10 +360,12 @@ function execStub(table) {
       [r.errors[0].error_category, r.errors[0].error_code],
       ["node_version_unsupported", "TIZEN_SDK_ENV_E003"],
     );
+    // A Linux system Node has no safe one-line install: no command, the
+    // download page instead.
     check(
-      "node 16 → linux install command in suggested_fix",
-      r.errors[0].suggested_fix.command.includes(`setup_${NODE_MIN_MAJOR}.x`),
-      true,
+      "node 16, Linux system Node → no command, guide_url download page",
+      [r.errors[0].suggested_fix.command, r.errors[0].suggested_fix.guide_url],
+      [null, NODE_DOWNLOAD_URL],
     );
   }
   {
@@ -385,7 +386,6 @@ function execStub(table) {
       version: "v20.19.0",
       isPkg: false,
       platform: "linux",
-      osRelease: 'ID=debian\nVERSION_ID="12"\n',
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
     check("node 20 → success", r.status, "success");
@@ -394,36 +394,39 @@ function execStub(table) {
       r.warnings.length === 1 && r.warnings[0].includes("required v22+"),
       true,
     );
-    // Debian 12 / Ubuntu 24.04 ship Node 18: the hosts that most need the
-    // distribution-specific command get it with the warning, not only on failure.
     check(
-      "node 20 on Debian → warning carries the NodeSource command",
+      "node 20, Linux system Node → warning has no install command",
+      r.warnings[0].includes("Install command"),
+      false,
+    );
+  }
+  {
+    // Under nvm a system-wide install would not replace the Node on PATH:
+    // the warning carries nvm's own command.
+    const r = await checkNode("t", {
+      execPath: "/home/user/.nvm/versions/node/v20.19.0/bin/node",
+      version: "v20.19.0",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    check(
+      "node 20 under nvm → warning ends with the nvm command",
       r.warnings[0].endsWith(
-        `Install command for this host: ${nodeInstallCommand("linux", "ID=debian\n")}`,
+        `Install command: nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
       ),
       true,
     );
   }
   {
-    // A supported Node never shows the install command, so /etc/os-release
-    // is not read on that path.
-    let reads = 0;
-    const deps = {
+    const r = await checkNode("t", {
       execPath: "/usr/bin/node",
       version: "v22.0.0",
       isPkg: false,
       platform: "linux",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
-    };
-    Object.defineProperty(deps, "osRelease", {
-      get() {
-        reads++;
-        return "ID=debian\n";
-      },
     });
-    const r = await checkNode("t", deps);
     check("node 22.0.0 → no version warning", r.warnings, []);
-    check("node 22.0.0 → os-release not read", reads, 0);
   }
   {
     const r = await checkNode("t", {
@@ -449,109 +452,58 @@ function execStub(table) {
     check("pkg with embedded node 18 → success", r.status, "success");
     check("pkg with embedded node 18 → no upgrade warning", r.warnings, []);
   }
-  // --- Node.js install command by OS / Linux distribution ---------------------
+  // --- Node.js install command --------------------------------------------------
+  // Only non-destructive commands: a version manager's own install, winget,
+  // Homebrew. A Linux system Node gets none (the download page instead).
   console.log("\n--- Node.js install command ---");
-  check(
-    "os-release: ubuntu → debian",
-    linuxDistroFamily("ID=ubuntu\nID_LIKE=debian\n"),
-    "debian",
-  );
-  check(
-    "os-release: linuxmint (ID_LIKE ubuntu) → debian",
-    linuxDistroFamily('ID=linuxmint\nID_LIKE="ubuntu debian"\n'),
-    "debian",
-  );
-  check("os-release: fedora → rhel", linuxDistroFamily("ID=fedora\n"), "rhel");
-  check(
-    "os-release: rocky 9 (ID_LIKE rhel) → rhel",
-    linuxDistroFamily(
-      'ID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.4"\n',
-    ),
-    "rhel",
-  );
-  // yum-only hosts NodeSource no longer builds for (el7, glibc 2.17): a dnf
-  // command would fail there, so they get the download page instead.
-  check(
-    "os-release: centos 7 → other",
-    linuxDistroFamily('ID="centos"\nID_LIKE="rhel fedora"\nVERSION_ID="7"\n'),
-    "other",
-  );
-  check(
-    "os-release: Amazon Linux 2 → other",
-    linuxDistroFamily(
-      'ID="amzn"\nID_LIKE="centos rhel fedora"\nVERSION_ID="2"\n',
-    ),
-    "other",
-  );
-  check(
-    "os-release: Amazon Linux 2023 → rhel",
-    linuxDistroFamily('ID="amzn"\nID_LIKE="fedora"\nVERSION_ID="2023"\n'),
-    "rhel",
-  );
-  check("os-release: arch → other", linuxDistroFamily("ID=arch\n"), "other");
-  check("os-release: unreadable → other", linuxDistroFamily(""), "other");
   {
-    const deb = nodeInstallCommand("linux", "ID=debian\n");
+    const cmd = (platform, execPath) =>
+      nodeInstallCommand({ platform, execPath });
     check(
-      `debian → NodeSource deb setup_${NODE_MIN_MAJOR}.x`,
-      deb.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
-      true,
-    );
-    // The distro packages NodeSource's nodejs collides with (libnode-dev,
-    // and the versioned libnodeNN runtime) are removed first: only the ones
-    // dpkg reports installed (apt aborts on an unknown name), without -y so
-    // apt asks, and with && so declining stops before the conflicting install.
-    check(
-      "debian → removes installed nodejs/npm/libnode* first",
-      deb.startsWith("sudo apt-get remove $(dpkg-query -W ") &&
-        deb.includes("nodejs npm 'libnode*'") &&
-        deb.includes("awk '/^ii/{print $2}')"),
-      true,
+      "nvm",
+      cmd("linux", "/home/user/.nvm/versions/node/v20.1.0/bin/node"),
+      `nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
     );
     check(
-      "debian → apt asks before removing (no -y on remove)",
-      /apt-get remove -y/.test(deb),
-      false,
+      "fnm (multishell)",
+      cmd("linux", "/run/user/1000/fnm_multishells/123_456/bin/node"),
+      `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`,
     );
     check(
-      "debian → declining the removal stops the install",
-      /\) && curl -fsSL https:\/\/deb\.nodesource\.com/.test(deb),
-      true,
+      "fnm (node-versions)",
+      cmd(
+        "darwin",
+        "/Users/user/.local/share/fnm/node-versions/v20.1.0/installation/bin/node",
+      ),
+      `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`,
     );
     check(
-      "debian → not the distro nodejs npm install",
-      deb.includes("install -y nodejs npm"),
-      false,
-    );
-    const rpm = nodeInstallCommand("linux", "ID=fedora\n");
-    check(
-      `rhel → NodeSource rpm setup_${NODE_MIN_MAJOR}.x + dnf`,
-      rpm.includes(`rpm.nodesource.com/setup_${NODE_MIN_MAJOR}.x`) &&
-        rpm.includes("dnf install -y nodejs"),
-      true,
-    );
-    const other = nodeInstallCommand("linux", "ID=arch\n");
-    check(
-      "other Linux → nodejs.org, no apt/dnf",
-      other.includes("https://nodejs.org/en/download") &&
-        !/apt-get|dnf/.test(other),
-      true,
+      "volta on Windows",
+      cmd(
+        "win32",
+        "C:\\Users\\user\\AppData\\Local\\Volta\\tools\\image\\node\\20.1.0\\node.exe",
+      ),
+      `volta install node@${NODE_MIN_MAJOR}`,
     );
     check(
-      "win32 / darwin unchanged",
-      [nodeInstallCommand("win32"), nodeInstallCommand("darwin")],
-      ["winget install OpenJS.NodeJS.LTS", "brew install node"],
+      "Windows system Node → winget",
+      cmd("win32", "C:\\Program Files\\nodejs\\node.exe"),
+      "winget install OpenJS.NodeJS.LTS",
     );
+    check(
+      "macOS system Node → brew",
+      cmd("darwin", "/opt/homebrew/bin/node"),
+      "brew install node",
+    );
+    check("Linux system Node → none", cmd("linux", "/usr/bin/node"), null);
   }
   {
-    // checkNode puts the host's command (not an all-OS list) in suggested_fix.
     const r = await checkNode("t", {
-      execPath: "/usr/bin/node",
+      execPath: "C:\\Program Files\\nodejs\\node.exe",
       version: "garbage",
       isPkg: false,
-      platform: "linux",
-      osRelease: "ID=fedora\n",
-      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+      platform: "win32",
+      spawnSync: () => ({ status: 0, stdout: "" }),
     });
     check(
       "broken version → node_not_found",
@@ -559,9 +511,9 @@ function execStub(table) {
       "node_not_found",
     );
     check(
-      "fedora host → rpm command only",
-      r.errors[0].suggested_fix.command,
-      nodeInstallCommand("linux", "ID=fedora\n"),
+      "Windows → winget in suggested_fix, guide_url kept",
+      [r.errors[0].suggested_fix.command, r.errors[0].suggested_fix.guide_url],
+      ["winget install OpenJS.NodeJS.LTS", NODE_DOWNLOAD_URL],
     );
   }
   {
@@ -577,15 +529,15 @@ function execStub(table) {
     check("22.1.0 (no v) → major 22", r.result.major_version, 22);
   }
   {
+    // The registry has no command to fall back on — only the download page —
+    // so a host without a safe command never gets a prose "command".
     const { ERROR_CODES } = require("../envelope/envelope");
     for (const key of ["NODE_NOT_FOUND", "NODE_VERSION_UNSUPPORTED"]) {
-      const fallback = ERROR_CODES[key].suggested_fix.command;
+      const fix = ERROR_CODES[key].suggested_fix;
       check(
-        `${key} fallback → debian, rhel and other-Linux commands`,
-        fallback.includes(nodeInstallCommand("linux", "ID=debian\n")) &&
-          fallback.includes(nodeInstallCommand("linux", "ID=fedora\n")) &&
-          fallback.includes("https://nodejs.org/en/download"),
-        true,
+        `${key} registry → guide_url only`,
+        [fix.command, fix.guide_url],
+        [undefined, NODE_DOWNLOAD_URL],
       );
     }
   }

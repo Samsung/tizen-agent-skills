@@ -262,7 +262,7 @@ Verifies that Node.js is installed and on PATH before SDK installation. Reports 
 - Checks if Node.js is installed and accessible on PATH
 - Requires Node.js 22+ (v18–v21: warning only; below v18: fails with `node_version_unsupported`)
 - Returns Standard JSON Envelope with version, path, and major version
-- If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux — Ubuntu/Debian: `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null | awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, Fedora/RHEL 8+: `curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash - && sudo dnf install -y nodejs`, other distributions: https://nodejs.org/en/download)
+- If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, nvm / fnm / volta: that manager's install command, Linux system Node: no command — https://nodejs.org/en/download)
 - Download URL: https://nodejs.org/en/download
 
 #### CLI Runner
