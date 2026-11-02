@@ -98,14 +98,37 @@ function findSecretTool() {
 }
 
 /**
- * The caught error, safe to keep as `cause`.
+ * Remove `spawnargs` from an error and every error in its `cause` chain, in
+ * place, and return it.
  *
  * A spawn failure (ENOENT, EACCES, ...) carries `spawnargs`, the full argument
  * list. For these commands that list holds the plaintext password
  * (`wincrypt.exe --encrypt <pw>`, `security ... -w <pw>`,
  * `secret-tool store --password=<pw>`), and `util.inspect` / `console.error`
- * print a cause's own fields. So `spawnargs` is dropped; `code`, `errno`,
- * `syscall` and `path` stay.
+ * print the fields of an error and of its causes. encryptPassword() and
+ * decryptPassword(), the module's only entry points, run every error through
+ * this before it leaves, so no reject path can forget it (the reject sites
+ * also keep only withoutSpawnArgs() copies).
+ *
+ * @param {unknown} err
+ * @returns {unknown} the same value
+ */
+function stripSpawnArgs(err) {
+  const seen = new Set();
+  for (let e = err; e && typeof e === "object" && !seen.has(e); e = e.cause) {
+    seen.add(e);
+    if (Object.prototype.hasOwnProperty.call(e, "spawnargs")) {
+      delete e.spawnargs;
+    }
+  }
+  return err;
+}
+
+/**
+ * A copy of a spawn error without `spawnargs` (which hold the password), for
+ * use as `cause` where the platform helpers reject. `code`, `errno`,
+ * `syscall` and `path` stay. stripSpawnArgs() at the entry points stays the
+ * guarantee for every path; this keeps the exported helpers safe on their own.
  *
  * @param {unknown} err
  * @returns {unknown}
@@ -127,6 +150,15 @@ function withoutSpawnArgs(err) {
 async function encryptPassword(password, pwdFilePath) {
   const platform = process.platform;
 
+  // spawn() rejects a non-string or NUL-containing argument synchronously,
+  // and Node's message quotes the value — here, the password. Refuse it first,
+  // without echoing it.
+  if (typeof password !== "string" || password.includes("\0")) {
+    throw new Error(
+      "samsung_pwd_store_failed: the certificate password must be a string without NUL characters",
+    );
+  }
+
   try {
     if (platform === "win32") {
       await encryptPasswordWindows(password, pwdFilePath);
@@ -140,10 +172,10 @@ async function encryptPassword(password, pwdFilePath) {
       );
     }
   } catch (err) {
+    // The password must not leave the module inside a spawn error.
+    stripSpawnArgs(err);
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      // err is what the platform helper rejected with; it already holds its
-      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -173,10 +205,10 @@ async function decryptPassword(pwdFilePath) {
       );
     }
   } catch (err) {
+    // The password must not leave the module inside a spawn error.
+    stripSpawnArgs(err);
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      // err is what the platform helper rejected with; it already holds its
-      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -208,8 +240,9 @@ async function encryptPasswordWindows(password, pwdFilePath) {
     });
 
     let stderr = "";
+    proc.stderr.setEncoding("utf8");
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (_code) => {
@@ -237,6 +270,29 @@ async function encryptPasswordWindows(password, pwdFilePath) {
 }
 
 /**
+ * Parse `wincrypt.exe --decrypt` output: the first line is "PASSWORD:<value>".
+ *
+ * The first line ends at "\n", and every "\r" before it is dropped —
+ * wincrypt is a Windows program (CRLF, or "\r\r\n" from text-mode output).
+ * Splitting on "\n" without that left a trailing "\r" in the password. Only
+ * leading whitespace before the first line is dropped, so trailing spaces
+ * that belong to the password are kept.
+ *
+ * @private
+ * @param {string} stdout
+ * @returns {{password: string|null, line: string}} password null when the
+ *   first line is not a PASSWORD: line
+ */
+function parseWincryptOutput(stdout) {
+  const prefix = "PASSWORD:";
+  const line = String(stdout).trimStart().split("\n")[0].replace(/\r+$/, "");
+  return {
+    password: line.startsWith(prefix) ? line.slice(prefix.length) : null,
+    line,
+  };
+}
+
+/**
  * Windows: decrypt password using wincrypt.exe from Tizen SDK.
  *
  * @private
@@ -255,13 +311,16 @@ async function decryptPasswordWindows(pwdFilePath) {
     }
 
     // wincrypt.exe --decrypt <file>  → stdout: PASSWORD:<value>
+    // spawn() has no `encoding` option; setEncoding() decodes each stream with
+    // a StringDecoder, so a character split across chunks stays intact.
     const proc = spawn(wincryptPath, ["--decrypt", pwdFilePath], {
       stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf-8",
     });
 
     let stdout = "";
     let stderr = "";
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
     proc.stdout.on("data", (data) => {
       stdout += data;
     });
@@ -280,16 +339,20 @@ async function decryptPasswordWindows(pwdFilePath) {
         return;
       }
 
-      // Parse stdout: "PASSWORD:<value>"
-      const prefix = "PASSWORD:";
-      const line = stdout.trim().split("\n")[0]; // first line only
-      if (line.startsWith(prefix)) {
-        const password = line.substring(prefix.length);
-        resolve(password);
+      const parsed = parseWincryptOutput(stdout);
+      if (parsed.password === "") {
+        // Same rule as the other platforms: never a password to sign with.
+        reject(
+          new Error(
+            "samsung_pwd_store_failed: wincrypt.exe returned no password",
+          ),
+        );
+      } else if (parsed.password !== null) {
+        resolve(parsed.password);
       } else {
         reject(
           new Error(
-            `samsung_pwd_store_failed: wincrypt.exe returned unexpected output: ${line}`,
+            `samsung_pwd_store_failed: wincrypt.exe returned unexpected output: ${parsed.line}`,
           ),
         );
       }
@@ -341,7 +404,9 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       return;
     }
 
-    if (proc.status !== 0 || proc.stderr) {
+    // The exit code decides: `security` can print a warning on stderr and
+    // still store the item, and treating that as failure skipped the marker.
+    if (proc.status !== 0) {
       reject(
         new Error(
           `samsung_pwd_store_failed: Keychain encrypt failed: ${proc.stderr || `exit code ${proc.status}`}`,
@@ -409,7 +474,18 @@ async function decryptPasswordMacOS(pwdFilePath) {
       return;
     }
 
-    const password = proc.stdout.trim();
+    // `security -w` prints the secret and a line break; only the line break
+    // goes, spaces belong to the password.
+    const password = proc.stdout.replace(/\r?\n$/, "");
+    if (!password) {
+      // Same rule as the other platforms: never a password to sign with.
+      reject(
+        new Error(
+          "samsung_pwd_store_failed: Keychain lookup returned no password",
+        ),
+      );
+      return;
+    }
     resolve(password);
   });
 }
@@ -457,11 +533,16 @@ async function encryptPasswordLinux(password, pwdFilePath) {
     });
 
     let stderr = "";
+    proc.stderr.setEncoding("utf8");
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (code) => {
+      // stderr counts as failure too. This is the TV SDK's own secret-tool,
+      // and the SDK's helpers do not report failure through the exit code
+      // reliably (wincrypt.exe exits 1 even on success); reporting a failed
+      // store as success would leave a marker with no secret behind it.
       if (code !== 0 || stderr) {
         reject(
           new Error(
@@ -533,14 +614,17 @@ async function decryptPasswordLinux(pwdFilePath) {
     let stdout = "";
     let stderr = "";
 
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
     proc.stdout.on("data", (data) => {
-      stdout += data.toString("utf-8");
+      stdout += data;
     });
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (code) => {
+      // Same rule as store: a non-zero exit or any stderr output fails.
       if (code !== 0 || stderr) {
         reject(
           new Error(
@@ -550,7 +634,17 @@ async function decryptPasswordLinux(pwdFilePath) {
         return;
       }
 
-      const password = stdout.trim();
+      // Only the line break after the secret goes; spaces belong to it. An
+      // empty result is a failed lookup, never a password to sign with.
+      const password = stdout.replace(/\r?\n$/, "");
+      if (!password) {
+        reject(
+          new Error(
+            "samsung_pwd_store_failed: secret-tool lookup returned no password",
+          ),
+        );
+        return;
+      }
       resolve(password);
     });
 
@@ -569,7 +663,9 @@ module.exports = {
   encryptPassword,
   decryptPassword,
   // Exports for testing
+  stripSpawnArgs,
   withoutSpawnArgs,
+  parseWincryptOutput,
   encryptPasswordWindows,
   decryptPasswordWindows,
   encryptPasswordMacOS,
