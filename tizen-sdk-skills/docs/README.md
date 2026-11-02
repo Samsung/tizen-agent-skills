@@ -255,8 +255,8 @@ SDK 설치 전 Node.js가 설치되어 있고 PATH에 있는지 확인합니다.
 - Node.js 설치 여부 및 PATH 접근성 확인
 - Node.js 22+ 필요 (v18–v21은 경고만, v18 미만은 `node_version_unsupported`로 실패)
 - 버전, 경로, 메이저 버전을 포함한 Standard JSON Envelope 반환
-- 미설치 시: OS별 설치 가이드와 함께 에러 반환 (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux — Ubuntu/Debian: `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, Fedora/RHEL: `curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash - && sudo dnf install -y nodejs`, 그 외 배포판 https://nodejs.org/en/download)
-- 다운로드 URL: https://nodejs.org/
+- 미설치 시: OS별 설치 가이드와 함께 에러 반환 (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux — Ubuntu/Debian: `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null | awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, Fedora/RHEL 8+: `curl -fsSL https://rpm.nodesource.com/setup_22.x | sudo bash - && sudo dnf install -y nodejs`, 그 외 배포판 https://nodejs.org/en/download)
+- 다운로드 URL: https://nodejs.org/en/download
 
 #### CLI 러너
 

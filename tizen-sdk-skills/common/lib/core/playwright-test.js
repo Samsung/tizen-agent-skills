@@ -24,7 +24,7 @@ const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { setupWebappDebug } = require("./webapp-debug");
 const { summarizeOutput } = require("./output-summary");
-const { NODE_MIN_MAJOR } = require("./node-floor");
+const { NODE_MIN_MAJOR, NODE_DOWNLOAD_URL } = require("./node-floor");
 const {
   renderTestTemplate,
   renderPackageJson,
@@ -170,7 +170,7 @@ function describeNodeRuntimeFailure(rt, executable) {
           `Node.js executable "${exe}" was not found on PATH (${rt.error}). ` +
           "Playwright tests run in an external Node.js process, not in this CLI. " +
           `Install Node.js ${NODE_MIN_MAJOR} or newer, or add its bin directory to PATH, then retry.`,
-        suggestedFix: `Install Node.js ${NODE_MIN_MAJOR} or newer (https://nodejs.org/) and ensure node is on PATH.`,
+        suggestedFix: `Install Node.js ${NODE_MIN_MAJOR} or newer (${NODE_DOWNLOAD_URL}) and ensure node is on PATH.`,
       };
     case "timeout":
       return {

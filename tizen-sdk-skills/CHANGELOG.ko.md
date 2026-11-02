@@ -28,11 +28,15 @@
     실패하므로 `sdk-install`이 그 자리에서 멈춥니다.
   - pkg로 컴파일된 바이너리는 검사하지 않습니다. 내장된 Node는 빌드 시
     고정되어 사용자가 바꿀 수 없기 때문입니다.
-- Node.js 설치 안내가 호스트에 맞게 나옵니다. Linux는 더 이상 배포판 `nodejs`
-  패키지(Ubuntu 24.04·Debian 12에서는 Node 18)를 안내하지 않습니다.
-  Ubuntu/Debian은 충돌하는 배포판 `nodejs` / `npm` / `libnode-dev`를 먼저
-  제거한 뒤 NodeSource 22.x 저장소를, Fedora/RHEL은 NodeSource rpm 저장소를,
-  그 외 배포판은 nodejs.org 다운로드 페이지를 안내합니다.
+- Node.js 설치 안내가 호스트에 맞게 나오며, 실패할 때뿐 아니라 v18–v21 경고에도
+  함께 나옵니다. Linux는 더 이상 배포판 `nodejs` 패키지(Ubuntu 24.04·Debian
+  12에서는 Node 18)를 안내하지 않습니다.
+  - Ubuntu/Debian: NodeSource `nodejs`와 파일이 충돌하는 `nodejs`, `npm`,
+    `libnode-dev`, `libnodeNN` 중 설치된 것을 제거한 뒤 NodeSource 22.x를
+    설치합니다. apt가 제거 전에 확인을 받고, 거절하면 명령이 멈춥니다.
+  - Fedora, RHEL 계열 8 이상, Amazon Linux 2023: NodeSource rpm 저장소.
+  - 그 외 배포판(RHEL/CentOS 7, Amazon Linux 2 포함): nodejs.org 다운로드
+    페이지.
 - 문서의 사전 요구사항, 설치 안내, 오류 메시지, 스킬 문서가 22+로 바뀌었고,
   `node_not_found` 예시는 실제 코드인 `TIZEN_SDK_ENV_E001`을 보여줍니다(기존
   `TIZEN_SDK_CONFIG_E005`).

@@ -785,7 +785,18 @@ async function ensureSdkPathConfig(sdkPath, command) {
  *   - Already installed: success + warnings (exit here)
  *   - Not installed: failure — guide agent to perform background installation
  */
-async function installSdk(
+async function installSdk(...args) {
+  // checkNode's warnings are collected in ctx by the steps and merged into
+  // whichever envelope they return — one place, so a new return path cannot
+  // drop them.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkSteps(ctx, ...args);
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/** installSdk() body; records checkNode's warnings in ctx.nodeWarnings. */
+async function installSdkSteps(
+  ctx,
   version = "",
   _label = "tizen",
   force = false,
@@ -817,14 +828,11 @@ async function installSdk(
     return installSdkFromRepo(repoUrl, version, force, downloadJobs);
   }
 
-  // checkNode's warnings (Node below the floor, node not on the PATH of
-  // spawned shells) are merged into every envelope returned after it.
-  let nodeWarnings = [];
   try {
     // 1. Node.js check (first)
     console.error("[tizen-sdk] Checking Node.js installation...");
     const nodeCheck = await checkNode(command);
-    nodeWarnings = nodeCheck.warnings || [];
+    ctx.nodeWarnings = nodeCheck.warnings || [];
 
     if (nodeCheck.status !== "success") {
       console.error("[tizen-sdk] Node.js check failed. Aborting installation.");
@@ -852,7 +860,7 @@ async function installSdk(
         command,
         startTime,
       );
-      if (missing) return withNodeWarnings(missing, nodeWarnings);
+      if (missing) return missing;
 
       console.error(
         "[tizen-sdk] SDK installation verified (sdk.info found). Returning success status.",
@@ -895,22 +903,16 @@ async function installSdk(
         sdkPath,
         installedVersionLabel(sdkPath, version),
       );
-      return withNodeWarnings(
-        formatSdkInstall(packages, warnings, startTime, command),
-        nodeWarnings,
-      );
+      return formatSdkInstall(packages, warnings, startTime, command);
     }
 
     if (!statusCheck.shouldProceed) {
-      return withNodeWarnings(
-        formatError(
-          command,
-          "build_failed",
-          statusCheck.reason,
-          null,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatError(
+        command,
+        "build_failed",
+        statusCheck.reason,
+        null,
+        startTime,
       );
     }
 
@@ -925,7 +927,7 @@ async function installSdk(
       console.error(
         "[tizen-sdk] Insufficient disk space. Aborting installation.",
       );
-      return withNodeWarnings(diskCheck, nodeWarnings);
+      return diskCheck;
     }
     console.error(
       `[tizen-sdk] Disk space OK (${diskCheck.result.free_gb} GB free). Proceeding to install.`,
@@ -935,15 +937,12 @@ async function installSdk(
     const installer = resolveScript("tizen-sdk-install");
 
     if (!installer.scriptPath) {
-      return withNodeWarnings(
-        formatError(
-          command,
-          "execution_error",
-          `Installer script not found: ${installer.error}`,
-          null,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatError(
+        command,
+        "execution_error",
+        `Installer script not found: ${installer.error}`,
+        null,
+        startTime,
       );
     }
 
@@ -988,7 +987,7 @@ async function installSdk(
             startTime,
             { afterInstall: true },
           );
-          if (missing) return withNodeWarnings(missing, nodeWarnings);
+          if (missing) return missing;
 
           // Auto-init: write SDK path to ~/.tizen.sdk.path.config so that all
           // other skills (build, create, device, debug, etc.) can locate the
@@ -1013,20 +1012,14 @@ async function installSdk(
             sdkPath,
             installedVersionLabel(sdkPath, version),
           );
-          return withNodeWarnings(
-            formatSdkInstall(packages, warnings, startTime, command),
-            nodeWarnings,
-          );
+          return formatSdkInstall(packages, warnings, startTime, command);
         } else {
-          return withNodeWarnings(
-            formatError(
-              command,
-              "execution_error",
-              `Installer completed but sdk.info not found at ${sdkInfoPath}. Installation may have failed.`,
-              null,
-              startTime,
-            ),
-            nodeWarnings,
+          return formatError(
+            command,
+            "execution_error",
+            `Installer completed but sdk.info not found at ${sdkInfoPath}. Installation may have failed.`,
+            null,
+            startTime,
           );
         }
       } catch (installError) {
@@ -1036,16 +1029,13 @@ async function installSdk(
           logGroup: "sdk-install",
           resumes: true,
         });
-        return withNodeWarnings(
-          formatError(
-            command,
-            "execution_error",
-            failure.message,
-            null,
-            startTime,
-            failure.details,
-          ),
-          nodeWarnings,
+        return formatError(
+          command,
+          "execution_error",
+          failure.message,
+          null,
+          startTime,
+          failure.details,
         );
       }
     } else {
@@ -1058,32 +1048,26 @@ async function installSdk(
         unixFlags.join(" "),
       );
 
-      return withNodeWarnings(
-        formatError(
-          command,
-          "execution_error",
-          "SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). " +
-            harnessGuidance("detach") +
-            "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists. " +
-            "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
-            "or node job-cli.js list for a job started via background_command. " +
-            "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
-          installerCommand,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatError(
+        command,
+        "execution_error",
+        "SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). " +
+          harnessGuidance("detach") +
+          "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists. " +
+          "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
+          "or node job-cli.js list for a job started via background_command. " +
+          "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
+        installerCommand,
+        startTime,
       );
     }
   } catch (error) {
-    return withNodeWarnings(
-      formatError(
-        command,
-        "io_error",
-        `Failed to install SDK: ${error.message}`,
-        null,
-        startTime,
-      ),
-      nodeWarnings,
+    return formatError(
+      command,
+      "io_error",
+      `Failed to install SDK: ${error.message}`,
+      null,
+      startTime,
     );
   }
 }
@@ -2422,7 +2406,16 @@ function readInstalledRepository(sdkPath) {
  * @param {boolean} [force] - force reinstall even if already installed
  * @returns {object} Standard JSON Envelope
  */
-async function installSdkFromRepo(
+async function installSdkFromRepo(...args) {
+  // Same as installSdk: checkNode's warnings are merged in one place.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkFromRepoSteps(ctx, ...args);
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/** installSdkFromRepo() body; records checkNode's warnings in ctx.nodeWarnings. */
+async function installSdkFromRepoSteps(
+  ctx,
   repoUrl,
   platformVersion = "",
   force = false,
@@ -2445,13 +2438,11 @@ async function installSdkFromRepo(
   }
   platformVersion = versionCheck.version;
 
-  // Same as installSdk: checkNode's warnings go into every later envelope.
-  let nodeWarnings = [];
   try {
     // 1. Node.js check (first)
     console.error("[tizen-sdk-repo] Checking Node.js installation...");
     const nodeCheck = await checkNode();
-    nodeWarnings = nodeCheck.warnings || [];
+    ctx.nodeWarnings = nodeCheck.warnings || [];
     if (nodeCheck.status !== "success") {
       console.error(
         "[tizen-sdk-repo] Node.js check failed. Aborting installation.",
@@ -2465,7 +2456,7 @@ async function installSdkFromRepo(
     // 2. Repository URL validation — must pass before anything else happens.
     const validation = await validateRepoUrl(repoUrl, command);
     if (validation.status !== "success") {
-      return withNodeWarnings(validation, nodeWarnings);
+      return validation;
     }
     const normalizedUrl = validation.result.repository_url;
     const pkgListFile = validation.result.pkg_list_file;
@@ -2484,7 +2475,7 @@ async function installSdkFromRepo(
         command,
         startTime,
       );
-      if (missing) return withNodeWarnings(missing, nodeWarnings);
+      if (missing) return missing;
 
       console.error(
         "[tizen-sdk-repo] SDK installation verified (sdk.info found). Returning success status.",
@@ -2532,27 +2523,21 @@ async function installSdkFromRepo(
         sdkPath,
         platformVersion || "installed",
       );
-      return withNodeWarnings(
-        formatCustomRepoInstall(
-          packages,
-          installedRepo || normalizedUrl,
-          warnings,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatCustomRepoInstall(
+        packages,
+        installedRepo || normalizedUrl,
+        warnings,
+        startTime,
       );
     }
 
     if (!statusCheck.shouldProceed) {
-      return withNodeWarnings(
-        formatError(
-          command,
-          "build_failed",
-          statusCheck.reason,
-          null,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatError(
+        command,
+        "build_failed",
+        statusCheck.reason,
+        null,
+        startTime,
       );
     }
 
@@ -2565,7 +2550,7 @@ async function installSdkFromRepo(
       console.error(
         "[tizen-sdk-repo] Insufficient disk space. Aborting installation.",
       );
-      return withNodeWarnings(diskCheck, nodeWarnings);
+      return diskCheck;
     }
     console.error(
       `[tizen-sdk-repo] Disk space OK (${diskCheck.result.free_gb} GB free). Proceeding to install.`,
@@ -2574,15 +2559,12 @@ async function installSdkFromRepo(
     // 5. Resolve the custom-repository installer script
     const installer = resolveScript("tizen-sdk-install-custom-repo");
     if (!installer.scriptPath) {
-      return withNodeWarnings(
-        formatError(
-          command,
-          "script_not_found",
-          `Custom-repository installer script not found: ${installer.error}`,
-          null,
-          startTime,
-        ),
-        nodeWarnings,
+      return formatError(
+        command,
+        "script_not_found",
+        `Custom-repository installer script not found: ${installer.error}`,
+        null,
+        startTime,
       );
     }
 
@@ -2619,15 +2601,12 @@ async function installSdkFromRepo(
 
         const sdkInfoPath = path.join(sdkPath, "sdk.info");
         if (!fs.existsSync(sdkInfoPath)) {
-          return withNodeWarnings(
-            formatError(
-              command,
-              "execution_error",
-              `Installer completed but sdk.info not found at ${sdkInfoPath}. Installation may have failed.`,
-              null,
-              startTime,
-            ),
-            nodeWarnings,
+          return formatError(
+            command,
+            "execution_error",
+            `Installer completed but sdk.info not found at ${sdkInfoPath}. Installation may have failed.`,
+            null,
+            startTime,
           );
         }
 
@@ -2639,7 +2618,7 @@ async function installSdkFromRepo(
           startTime,
           { afterInstall: true },
         );
-        if (missing) return withNodeWarnings(missing, nodeWarnings);
+        if (missing) return missing;
 
         const warnings = [
           `SDK installed successfully at ${sdkPath} from ${normalizedUrl}${pkgListFile ? ` (${pkgListFile})` : ""}.`,
@@ -2659,14 +2638,11 @@ async function installSdkFromRepo(
           sdkPath,
           platformVersion || "installed",
         );
-        return withNodeWarnings(
-          formatCustomRepoInstall(
-            packages,
-            readInstalledRepository(sdkPath) || normalizedUrl,
-            warnings,
-            startTime,
-          ),
-          nodeWarnings,
+        return formatCustomRepoInstall(
+          packages,
+          readInstalledRepository(sdkPath) || normalizedUrl,
+          warnings,
+          startTime,
         );
       } catch (installError) {
         const failure = describeInstallerFailure(installError, {
@@ -2675,16 +2651,13 @@ async function installSdkFromRepo(
           logGroup: "sdk-install-custom-repo",
           resumes: true,
         });
-        return withNodeWarnings(
-          formatError(
-            command,
-            "execution_error",
-            failure.message,
-            null,
-            startTime,
-            failure.details,
-          ),
-          nodeWarnings,
+        return formatError(
+          command,
+          "execution_error",
+          failure.message,
+          null,
+          startTime,
+          failure.details,
         );
       }
     }
@@ -2697,31 +2670,25 @@ async function installSdkFromRepo(
       unixFlags.join(" "),
     );
 
-    return withNodeWarnings(
-      formatError(
-        command,
-        "execution_error",
-        `SDK is NOT installed. The repository ${normalizedUrl} is valid` +
-          `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
-          harnessGuidance("detach") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists and that " +
-          "<sdk-path>/.package/repository.info records the custom repository. " +
-          "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
-        installerCommand,
-        startTime,
-      ),
-      nodeWarnings,
+    return formatError(
+      command,
+      "execution_error",
+      `SDK is NOT installed. The repository ${normalizedUrl} is valid` +
+        `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
+        harnessGuidance("detach") +
+        "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists and that " +
+        "<sdk-path>/.package/repository.info records the custom repository. " +
+        "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
+      installerCommand,
+      startTime,
     );
   } catch (error) {
-    return withNodeWarnings(
-      formatError(
-        command,
-        "io_error",
-        `Failed to install SDK from custom repository: ${error.message}`,
-        null,
-        startTime,
-      ),
-      nodeWarnings,
+    return formatError(
+      command,
+      "io_error",
+      `Failed to install SDK from custom repository: ${error.message}`,
+      null,
+      startTime,
     );
   }
 }

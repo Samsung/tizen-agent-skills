@@ -385,6 +385,7 @@ function execStub(table) {
       version: "v20.19.0",
       isPkg: false,
       platform: "linux",
+      osRelease: 'ID=debian\nVERSION_ID="12"\n',
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
     check("node 20 → success", r.status, "success");
@@ -393,16 +394,36 @@ function execStub(table) {
       r.warnings.length === 1 && r.warnings[0].includes("required v22+"),
       true,
     );
+    // Debian 12 / Ubuntu 24.04 ship Node 18: the hosts that most need the
+    // distribution-specific command get it with the warning, not only on failure.
+    check(
+      "node 20 on Debian → warning carries the NodeSource command",
+      r.warnings[0].endsWith(
+        `Install command for this host: ${nodeInstallCommand("linux", "ID=debian\n")}`,
+      ),
+      true,
+    );
   }
   {
-    const r = await checkNode("t", {
+    // A supported Node never shows the install command, so /etc/os-release
+    // is not read on that path.
+    let reads = 0;
+    const deps = {
       execPath: "/usr/bin/node",
       version: "v22.0.0",
       isPkg: false,
       platform: "linux",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    };
+    Object.defineProperty(deps, "osRelease", {
+      get() {
+        reads++;
+        return "ID=debian\n";
+      },
     });
+    const r = await checkNode("t", deps);
     check("node 22.0.0 → no version warning", r.warnings, []);
+    check("node 22.0.0 → os-release not read", reads, 0);
   }
   {
     const r = await checkNode("t", {
@@ -442,8 +463,29 @@ function execStub(table) {
   );
   check("os-release: fedora → rhel", linuxDistroFamily("ID=fedora\n"), "rhel");
   check(
-    "os-release: rocky (ID_LIKE rhel) → rhel",
-    linuxDistroFamily('ID="rocky"\nID_LIKE="rhel centos fedora"\n'),
+    "os-release: rocky 9 (ID_LIKE rhel) → rhel",
+    linuxDistroFamily(
+      'ID="rocky"\nID_LIKE="rhel centos fedora"\nVERSION_ID="9.4"\n',
+    ),
+    "rhel",
+  );
+  // yum-only hosts NodeSource no longer builds for (el7, glibc 2.17): a dnf
+  // command would fail there, so they get the download page instead.
+  check(
+    "os-release: centos 7 → other",
+    linuxDistroFamily('ID="centos"\nID_LIKE="rhel fedora"\nVERSION_ID="7"\n'),
+    "other",
+  );
+  check(
+    "os-release: Amazon Linux 2 → other",
+    linuxDistroFamily(
+      'ID="amzn"\nID_LIKE="centos rhel fedora"\nVERSION_ID="2"\n',
+    ),
+    "other",
+  );
+  check(
+    "os-release: Amazon Linux 2023 → rhel",
+    linuxDistroFamily('ID="amzn"\nID_LIKE="fedora"\nVERSION_ID="2023"\n'),
     "rhel",
   );
   check("os-release: arch → other", linuxDistroFamily("ID=arch\n"), "other");
@@ -455,12 +497,25 @@ function execStub(table) {
       deb.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
       true,
     );
-    // The old hint's packages conflict with NodeSource's nodejs (dpkg
-    // file-overwrite on libnode-dev): removed first, and with ";" so a
-    // package that is absent does not stop the install.
+    // The distro packages NodeSource's nodejs collides with (libnode-dev,
+    // and the versioned libnodeNN runtime) are removed first: only the ones
+    // dpkg reports installed (apt aborts on an unknown name), without -y so
+    // apt asks, and with && so declining stops before the conflicting install.
     check(
-      "debian → removes distro nodejs/npm/libnode-dev first",
-      deb.startsWith("sudo apt-get remove -y nodejs npm libnode-dev; "),
+      "debian → removes installed nodejs/npm/libnode* first",
+      deb.startsWith("sudo apt-get remove $(dpkg-query -W ") &&
+        deb.includes("nodejs npm 'libnode*'") &&
+        deb.includes("awk '/^ii/{print $2}')"),
+      true,
+    );
+    check(
+      "debian → apt asks before removing (no -y on remove)",
+      /apt-get remove -y/.test(deb),
+      false,
+    );
+    check(
+      "debian → declining the removal stops the install",
+      /\) && curl -fsSL https:\/\/deb\.nodesource\.com/.test(deb),
       true,
     );
     check(

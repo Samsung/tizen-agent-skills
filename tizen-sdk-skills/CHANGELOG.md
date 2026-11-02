@@ -30,12 +30,16 @@ below use those release tags.
     (`TIZEN_SDK_ENV_E003`), so `sdk-install` stops there.
   - A pkg-compiled binary is not checked: its Node is embedded at build time
     and the user cannot change it.
-- The Node.js install hint is chosen for the host. Linux no longer gets the
+- The Node.js install hint is chosen for the host and is shown with the
+  v18–v21 warning as well as on failure. Linux no longer gets the
   distribution `nodejs` package (Node 18 on Ubuntu 24.04 and Debian 12):
-  Ubuntu/Debian gets the NodeSource 22.x repository, after removing the
-  distribution `nodejs` / `npm` / `libnode-dev` packages that conflict with it;
-  Fedora/RHEL gets NodeSource's rpm repository; other distributions get the
-  nodejs.org download page.
+  - Ubuntu/Debian: NodeSource 22.x, after removing whichever of `nodejs`,
+    `npm`, `libnode-dev` and `libnodeNN` are installed (their files conflict
+    with NodeSource's `nodejs`). apt asks before removing; answering no stops
+    the command.
+  - Fedora, RHEL-family 8+ and Amazon Linux 2023: NodeSource's rpm repository.
+  - Other distributions, including RHEL/CentOS 7 and Amazon Linux 2: the
+    nodejs.org download page.
 - The documented prerequisites, install guides, error messages and skill docs
   say 22+, and the `node_not_found` examples show its real code,
   `TIZEN_SDK_ENV_E001` (they said `TIZEN_SDK_CONFIG_E005`).

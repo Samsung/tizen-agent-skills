@@ -265,12 +265,12 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| Linux (Fedora/RHEL) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
+| Linux (Ubuntu/Debian) | `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null \| awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Fedora/RHEL 8+) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
 | Linux (other distributions) | Install Node.js 22 LTS from https://nodejs.org/en/download |
 | All OS (manual)       | Download LTS from https://nodejs.org/               |
 
-> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes the distribution `nodejs` / `npm` / `libnode-dev` packages, whose files conflict with NodeSource's `nodejs`.
+> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes whichever of `nodejs`, `npm`, `libnode-dev` and `libnodeNN` (e.g. `libnode72`, `libnode109`) are installed — their files conflict with NodeSource's `nodejs`. apt lists what it will remove (packages that depend on `nodejs` go too) and asks first; answering no stops the command. Fedora/RHEL means Fedora, RHEL-family 8+ and Amazon Linux 2023; RHEL/CentOS 7 and Amazon Linux 2 (yum only, not built by NodeSource) use the download page.
 
 **Dependencies:** None
 

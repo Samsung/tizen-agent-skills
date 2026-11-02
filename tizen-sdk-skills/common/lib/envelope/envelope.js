@@ -8,7 +8,11 @@
 
 const fs = require("fs");
 const path = require("path");
-const { NODE_MIN_MAJOR, ALL_OS_NODE_INSTALL } = require("../core/node-floor");
+const {
+  NODE_MIN_MAJOR,
+  NODE_DOWNLOAD_URL,
+  ALL_OS_NODE_INSTALL,
+} = require("../core/node-floor");
 
 class Envelope {
   constructor(command) {
@@ -335,7 +339,7 @@ const ERROR_CODES = {
     suggested_fix: {
       command: `Install Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
-      guide_url: "https://nodejs.org/en/download",
+      guide_url: NODE_DOWNLOAD_URL,
     },
   },
   // node_version_unsupported = Node.js는 있으나 러너가 동작하지 않는 메이저
@@ -346,7 +350,7 @@ const ERROR_CODES = {
     suggested_fix: {
       command: `Upgrade to Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
-      guide_url: "https://nodejs.org/en/download",
+      guide_url: NODE_DOWNLOAD_URL,
     },
   },
   // insufficient_disk_space = 설치 대상 드라이브의 여유 공간 부족. 필요한

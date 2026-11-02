@@ -227,12 +227,12 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| Linux (Fedora/RHEL) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
+| Linux (Ubuntu/Debian) | `sudo apt-get remove $(dpkg-query -W -f='${db:Status-Abbrev}${Package}\n' nodejs npm 'libnode*' 2>/dev/null \| awk '/^ii/{print $2}') && curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Fedora/RHEL 8+) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
 | Linux (기타 배포판) | Node.js 22 LTS를 https://nodejs.org/en/download 에서 설치 |
 | 모든 OS (수동)        | https://nodejs.org/ 에서 LTS 다운로드               |
 
-> 배포판 `nodejs` 패키지는 Ubuntu 24.04·Debian 12에서 Node 18이라 하한(22) 미만이므로 NodeSource 저장소를 씁니다. Ubuntu/Debian 명령은 NodeSource `nodejs`와 파일이 충돌하는 배포판 `nodejs`/`npm`/`libnode-dev`를 먼저 제거합니다.
+> 배포판 `nodejs` 패키지는 Ubuntu 24.04·Debian 12에서 Node 18이라 하한(22) 미만이므로 NodeSource 저장소를 씁니다. Ubuntu/Debian 명령은 NodeSource `nodejs`와 파일이 충돌하는 `nodejs`, `npm`, `libnode-dev`, `libnodeNN`(예: `libnode72`, `libnode109`) 중 설치된 것을 먼저 제거합니다. apt가 제거할 패키지(`nodejs`에 의존하는 패키지 포함)를 보여 주고 먼저 확인을 받으며, 거절하면 명령이 멈춥니다. Fedora/RHEL은 Fedora, RHEL 계열 8 이상, Amazon Linux 2023을 뜻합니다. RHEL/CentOS 7과 Amazon Linux 2(yum만 있고 NodeSource가 빌드하지 않음)는 다운로드 페이지를 씁니다.
 
 **의존성:** 없음
 
