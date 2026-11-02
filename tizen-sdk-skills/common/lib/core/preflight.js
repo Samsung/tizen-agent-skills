@@ -84,11 +84,14 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     if (!versionMatch) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
+      // Linux: the distribution "nodejs" package is below the floor on
+      // current LTS releases (Ubuntu 24.04 and Debian 12 ship Node 18), so
+      // point at the NodeSource 22.x repository instead.
       const installGuide = isWin
         ? "winget install OpenJS.NodeJS.LTS"
         : platform === "darwin"
           ? "brew install node"
-          : "sudo apt update && sudo apt install -y nodejs npm";
+          : "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs";
       return formatError(
         command,
         "node_not_found",
@@ -129,8 +132,11 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     }
 
     // 3. Validate version (v22+ required; older majors only warn, the runner
-    // may still work, but they are past end-of-life and untested)
-    if (majorVersion > 0 && majorVersion < NODE_MIN_MAJOR) {
+    // may still work, but they are past end-of-life and untested).
+    // Skipped for a pkg-compiled binary: its Node is embedded at build time,
+    // so the user cannot upgrade it and an "upgrade Node.js" warning would
+    // point at the wrong thing (the system Node is not what is running).
+    if (!isPkg && majorVersion > 0 && majorVersion < NODE_MIN_MAJOR) {
       warnings.push(
         `Node.js ${version} is older than the required v22+ (older majors are end-of-life and untested). Upgrade to Node.js 22 LTS or later from https://nodejs.org/`,
       );

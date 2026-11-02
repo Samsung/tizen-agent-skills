@@ -361,6 +361,52 @@ function execStub(table) {
     check("pkg binary → source pkg, no spawn", r.result.source, "pkg");
     check("pkg → no on_path field", "on_path" in r.result, false);
   }
+  {
+    // The Node embedded in a pkg binary cannot be upgraded by the user, so a
+    // below-floor version there must not produce an "upgrade Node.js" warning.
+    const r = await checkNode("t", {
+      execPath: "/opt/tizen-cli",
+      version: "v18.20.0",
+      isPkg: true,
+      platform: "linux",
+      spawnSync: throwing("pkg must not spawn"),
+    });
+    check("pkg with embedded node 18 → success", r.status, "success");
+    check("pkg with embedded node 18 → no upgrade warning", r.warnings, []);
+  }
+  {
+    // Linux install hint must not be the distribution nodejs package
+    // (Node 18 on Ubuntu 24.04 / Debian 12 — below the floor).
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "garbage",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    const cmd = JSON.stringify(r.error || r);
+    check("linux install hint → failure", r.status, "failure");
+    check(
+      `linux install hint → NodeSource setup_${NODE_MIN_MAJOR}.x`,
+      cmd.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
+      true,
+    );
+    check(
+      "linux install hint → no distro nodejs npm",
+      cmd.includes("install -y nodejs npm"),
+      false,
+    );
+  }
+  {
+    const { ERROR_CODES } = require("../envelope/envelope");
+    const fallback = ERROR_CODES.NODE_NOT_FOUND.suggested_fix.command;
+    check(
+      `NODE_NOT_FOUND fallback → NodeSource setup_${NODE_MIN_MAJOR}.x`,
+      fallback.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`) &&
+        !fallback.includes("install -y nodejs npm"),
+      true,
+    );
+  }
 
   // --- real runner with an empty PATH (the #71 reproduction) --------------------
   console.log("\n--- check-node-cli.js with empty PATH ---");

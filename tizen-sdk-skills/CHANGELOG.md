@@ -21,6 +21,12 @@ below use those release tags.
   `check-node` / preflight warn below v22 (they still do not abort), and
   `tizen-sdk doctor` reports Node 18–21 as a warning instead of OK. The
   documented prerequisites, install guides and error messages now say 22+.
+- The Linux Node.js install hint (`check-node` error, `node_not_found`
+  suggested fix, docs) now uses the NodeSource 22.x repository instead of the
+  distribution `nodejs` package, which is Node 18 on Ubuntu 24.04 and Debian 12.
+- A pkg-compiled binary no longer gets the "upgrade Node.js" warning from
+  `check-node` or `doctor`: its Node is embedded at build time and the user
+  cannot change it.
 
 ## [1.6.1] — 2026-10-26
 

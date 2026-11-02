@@ -227,7 +227,7 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt update && sudo apt install -y nodejs npm` |
+| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
 | 모든 OS (수동)        | https://nodejs.org/ 에서 LTS 다운로드               |
 
 **의존성:** 없음

@@ -326,12 +326,14 @@ const ERROR_CODES = {
   // node_not_found = SDK CLI 러너 실행에 필요한 Node.js가 없음. 호출자
   // (preflight.js)가 플랫폼별 설치 명령을 suggestedCommand로 덮어쓰며,
   // 레지스트리의 guide_url은 그때도 보존된다.
+  // Linux는 배포판 nodejs 패키지가 하한(22) 미만이므로(Ubuntu 24.04 /
+  // Debian 12 = Node 18) NodeSource 22.x 저장소로 안내한다.
   NODE_NOT_FOUND: {
     error_code: "TIZEN_SDK_ENV_E001",
     error_category: "node_not_found",
     suggested_fix: {
       command:
-        "Install Node.js 22+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: sudo apt install -y nodejs npm / macOS: brew install node",
+        "Install Node.js 22+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs / macOS: brew install node",
       auto_fixable: false,
       guide_url: "https://nodejs.org/en/download",
     },

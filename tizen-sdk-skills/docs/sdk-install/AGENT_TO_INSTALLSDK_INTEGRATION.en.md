@@ -93,7 +93,7 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
 - Requires Node.js 22+ (warns if older, but does not abort)
 - If not installed: returns `node_not_found` error with:
   - Clear message: "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+."
-  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `sudo apt install -y nodejs npm`)
+  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
   - Download URL: https://nodejs.org/
 - If installed: proceeds to SDK installation check
 

@@ -255,7 +255,7 @@ SDK 설치 전 Node.js가 설치되어 있고 PATH에 있는지 확인합니다.
 - Node.js 설치 여부 및 PATH 접근성 확인
 - Node.js 22+ 필요 (미만이면 경고, 중단하지는 않음)
 - 버전, 경로, 메이저 버전을 포함한 Standard JSON Envelope 반환
-- 미설치 시: OS별 설치 가이드와 함께 에러 반환 (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `sudo apt install -y nodejs npm`)
+- 미설치 시: OS별 설치 가이드와 함께 에러 반환 (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
 - 다운로드 URL: https://nodejs.org/
 
 #### CLI 러너

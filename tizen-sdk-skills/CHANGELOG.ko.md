@@ -20,6 +20,12 @@
   `>=22`입니다. `check-node`/사전 점검은 v22 미만이면 경고하며(중단하지는 않음),
   `tizen-sdk doctor`는 Node 18–21을 OK 대신 경고로 표시합니다. 문서의 사전
   요구사항, 설치 안내와 오류 메시지도 22+로 바꿨습니다.
+- Linux Node.js 설치 안내(`check-node` 오류, `node_not_found` 해결 명령,
+  문서)가 배포판 `nodejs` 패키지(Ubuntu 24.04·Debian 12에서는 Node 18) 대신
+  NodeSource 22.x 저장소를 사용합니다.
+- pkg로 컴파일된 바이너리는 `check-node`/`doctor`에서 "Node.js 업그레이드"
+  경고를 받지 않습니다. 내장된 Node는 빌드 시 고정되어 사용자가 바꿀 수 없기
+  때문입니다.
 
 ## [1.6.1] — 2026-10-26
 

@@ -98,7 +98,7 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
     "error_category": "node_not_found",
     "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. Please install Node.js LTS from https://nodejs.org/ and retry.",
     "suggested_fix": {
-      "command": "winget install OpenJS.NodeJS.LTS (Windows) | brew install node (macOS) | sudo apt install -y nodejs npm (Linux)",
+      "command": "winget install OpenJS.NodeJS.LTS (Windows) / brew install node (macOS) / curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs (Linux)",
       "auto_fixable": false,
       "guide_url": "https://nodejs.org/"
     }
@@ -112,7 +112,7 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
 |---|---|
 | **Windows** | `winget install OpenJS.NodeJS.LTS` |
 | **macOS** | `brew install node` |
-| **Linux (Ubuntu/Debian)** | `sudo apt update && sudo apt install -y nodejs npm` |
+| **Linux (Ubuntu/Debian)** | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
 | **All OS (manual)** | Download LTS from https://nodejs.org/ |
 
 After installing Node.js, **restart the terminal** (to refresh PATH), then retry the Tizen SDK installation.

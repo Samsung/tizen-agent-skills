@@ -37,7 +37,7 @@ When the SDK is not installed, `sdk-install-cli.js` **first** checks if Node.js 
 - **Node.js installed** → proceeds to the next step (disk space check)
 - **Node.js NOT installed** → installation **aborted** with an error envelope showing:
   - Clear message: "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+."
-  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `sudo apt install -y nodejs npm`)
+  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
   - Download URL: https://nodejs.org/
 
 ### Automatic Disk Space Check (15 GB, built into sdk-install-cli.js)
