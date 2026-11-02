@@ -183,6 +183,7 @@ function runOpenSsl(openssl, args, extraEnv) {
     const detail = (error.stderr || error.stdout || "").toString().trim();
     throw new Error(
       detail ? `openssl ${args[0]} failed: ${detail}` : error.message,
+      { cause: error },
     );
   }
 }

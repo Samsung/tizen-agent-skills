@@ -823,7 +823,7 @@ function buildCommand(intentId, serial, request) {
  */
 function runWithFallbacks(sdbPath, primary, fallbacks = [], accept = null) {
   const triedCommands = [`sdb ${primary}`];
-  let lastError = null;
+  let lastError;
   const attempt = (args) => {
     const output = runSdb(sdbPath, args);
     if (accept && !accept(output)) {
@@ -1314,7 +1314,9 @@ async function runSdbArgs(serial, args, opts = {}) {
     const detail = (error.stderr || error.stdout || error.message || "")
       .toString()
       .trim();
-    throw new Error(`sdb -s ${serial} ${args.join(" ")} failed: ${detail}`);
+    throw new Error(`sdb -s ${serial} ${args.join(" ")} failed: ${detail}`, {
+      cause: error,
+    });
   }
 }
 

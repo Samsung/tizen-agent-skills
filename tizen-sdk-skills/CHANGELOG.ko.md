@@ -40,6 +40,12 @@
 - 문서의 사전 요구사항, 설치 안내, 오류 메시지, 스킬 문서가 22+로 바뀌었고,
   `node_not_found` 예시는 실제 코드인 `TIZEN_SDK_ENV_E001`을 보여줍니다(기존
   `TIZEN_SDK_CONFIG_E005`).
+- 유지보수: ESLint 10 업그레이드에 앞서 코드가 ESLint 10의 새 추천 규칙
+  (`preserve-caught-error`, `no-useless-assignment`)을 통과하도록 했습니다. 다시
+  던지는 오류는 원래 오류를 `cause`로 보존합니다. `cause`는 열거되지 않아 JSON
+  응답에는 나타나지 않지만 `util.inspect` / `console.error`에는 출력되므로,
+  인증서 비밀번호 저장소는 실행에 실패한 명령의 오류를 비밀번호가 담긴 인자
+  목록(`spawnargs`) 없이 보존합니다. 동작 변화는 없습니다.
 
 ## [1.6.1] — 2026-10-26
 

@@ -387,7 +387,7 @@ function isPlatformInstalled(sdkPath, version) {
   return platformProfiles(sdkPath, version)
     .filter((p) => !PLATFORM_SHARED_DIRS.includes(p))
     .some((p) => {
-      let entries = [];
+      let entries;
       try {
         entries = fs.readdirSync(path.join(dir, p));
       } catch (_e) {
@@ -648,7 +648,7 @@ function describeInstallerFailure(error, o) {
   const tail = outputTailLines(combined, tailLines);
   const messageTail = outputTailLines(combined, tailLines, 200);
 
-  let logFile = null;
+  let logFile;
   try {
     const dir = installerLogsDir();
     fs.mkdirSync(dir, { recursive: true });
@@ -690,7 +690,7 @@ function describeInstallerFailure(error, o) {
     }
     const marker = path.join(o.sdkPath, ".install-result");
     if (fs.existsSync(marker)) {
-      let recorded = "";
+      let recorded;
       try {
         recorded = fs.readFileSync(marker, "utf-8").trim();
       } catch (_e) {

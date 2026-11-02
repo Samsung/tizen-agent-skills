@@ -432,7 +432,7 @@ function resolveLogBaseDir(opts = {}) {
   // Path(sdk_install_path).is_dir() — a BOM-prefixed path fails this check in
   // the binary exactly like a removed directory does; say why when it is
   // the BOM, because the path itself will look fine to the reader.
-  let isDir = false;
+  let isDir;
   try {
     isDir = fs.statSync(sdkRoot).isDirectory();
   } catch (_error) {

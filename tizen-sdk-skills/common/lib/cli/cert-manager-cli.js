@@ -252,14 +252,18 @@ function applyPasswordSources(target) {
       try {
         target[passwordKey] = promptHiddenPassword(label);
       } catch (error) {
-        throw new Error(`Failed to prompt for password: ${error.message}`);
+        throw new Error(`Failed to prompt for password: ${error.message}`, {
+          cause: error,
+        });
       }
     }
     if (target[fileKey]) {
       try {
         target[passwordKey] = readPasswordFile(target[fileKey], variableName);
       } catch (error) {
-        throw new Error(`Failed to read password file: ${error.message}`);
+        throw new Error(`Failed to read password file: ${error.message}`, {
+          cause: error,
+        });
       }
     }
   }

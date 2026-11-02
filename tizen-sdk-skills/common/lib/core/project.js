@@ -441,7 +441,7 @@ function hasTvExtensionDir(sdkPath, version) {
 
 /** "X.Y" versions with a TV extension directory, oldest first (no tz needed). */
 function tvVersionsOnDisk(sdkPath) {
-  let names = [];
+  let names;
   try {
     names = fs.readdirSync(path.join(sdkPath, "platforms"));
   } catch (_e) {

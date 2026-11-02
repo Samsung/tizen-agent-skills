@@ -2571,7 +2571,7 @@ function resolveModifySize(ctx, scriptPath) {
     }
   }
 
-  let details = [];
+  let details;
   try {
     details = parseTemplateDetails(
       runEmulatorScript(scriptPath, {

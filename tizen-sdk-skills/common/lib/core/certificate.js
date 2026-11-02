@@ -748,7 +748,7 @@ function preflightSigningProfile(input = {}) {
     !profile.author.has_password
   ) {
     const pwdPath = authorKey.replace(/\.p12$/i, ".pwd");
-    let readable = false;
+    let readable;
     try {
       fs.accessSync(pwdPath, fs.constants.R_OK);
       readable = fs.statSync(pwdPath).isFile();

@@ -92,7 +92,7 @@ function emCliCheck(sdkOk: boolean): DoctorCheck {
     };
   }
 
-  let sdkPath = "";
+  let sdkPath: string;
   try {
     sdkPath = String(sdkCommands.readSdkPath() || "");
   } catch {

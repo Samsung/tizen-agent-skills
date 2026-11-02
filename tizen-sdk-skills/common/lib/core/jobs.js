@@ -615,7 +615,7 @@ async function jobWait(
 async function jobList(limit = 20, command = "tizen-sdk job list") {
   const startTime = Date.now();
   const dir = jobsDir();
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
   } catch (_e) {
@@ -632,7 +632,7 @@ async function jobList(limit = 20, command = "tizen-sdk job list") {
     if (now - startedMs > PRUNE_AFTER_MS) {
       // Everything the job left behind: meta, stdout/stderr, script log(s),
       // and a stray .json.<pid>.tmp from an interrupted writeJsonAtomic.
-      let leftovers = [];
+      let leftovers;
       try {
         leftovers = fs
           .readdirSync(dir)
@@ -755,7 +755,7 @@ function validateScriptJob(group, args, command, startTime) {
  * on the same SDK dir only get in each other's way.
  */
 function findRunningScriptJob(group, args) {
-  let entries = [];
+  let entries;
   try {
     entries = fs.readdirSync(jobsDir()).filter((f) => f.endsWith(".json"));
   } catch (_e) {
