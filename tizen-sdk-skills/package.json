@@ -15,7 +15,7 @@
   },
   "homepage": "https://github.com/Samsung/tizen-agent-skills/tree/main/tizen-sdk-skills",
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "lint": "eslint .",

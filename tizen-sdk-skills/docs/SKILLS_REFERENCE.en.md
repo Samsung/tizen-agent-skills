@@ -141,7 +141,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 **Pre-check Flow:**
 
 ```
-1. Node.js check (18+ required) → if not installed, abort with OS-specific guide
+1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
 2. SDK already installed? → if yes, return success
 3. Disk space check (15 GB, home drive) → if insufficient, abort with details
 4. Return installer command for Phase 2 (background install)
@@ -194,7 +194,7 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
     {
       "error_code": "TIZEN_SDK_CONFIG_E005",
       "error_category": "node_not_found",
-      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+.",
+      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
@@ -214,7 +214,7 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
 
 **Description:** Verify Node.js is installed and on PATH before SDK installation.
 
-**Use Case:** Pre-install Node.js verification (18+ required).
+**Use Case:** Pre-install Node.js verification (22+ required).
 
 **Parameters:** None
 
@@ -245,7 +245,7 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `sudo apt update && sudo apt install -y nodejs npm` |
+| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
 | All OS (manual)       | Download LTS from https://nodejs.org/               |
 
 **Dependencies:** None
@@ -1096,7 +1096,7 @@ A Tizen package repository serves the package index at its root:
 **Pre-check Flow:**
 
 ```
-1. Node.js check (18+ required) → if not installed, abort with OS-specific guide
+1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
 2. Repository URL validation (pkg_list_{OS}-{64,32}) → if invalid, ABORT (nothing downloaded)
 3. SDK already installed? → success + warning that --force is needed to switch repositories
 4. Disk space check (15 GB, home drive) → if insufficient, abort with details
@@ -1440,7 +1440,7 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 │                        SDK Installation Phase                        │
 │                                                                     │
 │  tizen-check-node ──→ tizen-check-disk-space ──→ tizen-sdk-install  │
-│  (Node.js 18+?)        (15 GB free?)            (10-15 min install) │
+│  (Node.js 22+?)        (15 GB free?)            (10-15 min install) │
 └──────────────────────────────────┬──────────────────────────────────┘
                                    │
                                    ▼
@@ -1497,7 +1497,7 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 | 1   | `tizen-sdk-init`         | `initSdk()`           | `sdk-init-cli.js`         | Configure SDK path (`~/.tizen.sdk.path.config`)           |
 | 2   | `tizen-sdk-install`      | `installSdk()`        | `sdk-install-cli.js`      | Install Tizen SDK (with Node.js + disk space pre-checks)  |
 | 2a  | `tizen-sdk-install` (repo-info) | `getRepoInfo()` | `sdk-repo-info-cli.js`    | Query SDK package repository info (official CDN + regional mirrors, configured URL; private mirrors via `--repo-url`) |
-| 3   | `tizen-check-node`       | `checkNode()`         | `check-node-cli.js`       | Verify Node.js is installed (18+ required)                |
+| 3   | `tizen-check-node`       | `checkNode()`         | `check-node-cli.js`       | Verify Node.js is installed (22+ required)                |
 | 4   | `tizen-check-disk-space` | `checkDiskSpace()`    | `check-disk-space-cli.js` | Verify disk space (15 GB, home drive)                     |
 | 5   | `tizen-dotnet-setup`     | `setupDotnet()`       | `dotnet-setup-cli.js`     | Install .NET Tizen workload                               |
 | 6   | `tizen-create-project`   | `createProject()`     | `project-manager-cli.js`  | Create project from template                              |

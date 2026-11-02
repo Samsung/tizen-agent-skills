@@ -65,7 +65,7 @@ Most skills are named `tizen-<command>` (for example `tizen-build-project`), and
 
 ```mermaid
 flowchart LR
-    A["check-node<br/>Node.js 20+"] --> B["sdk-install<br/>Install SDK"]
+    A["check-node<br/>Node.js 22+"] --> B["sdk-install<br/>Install SDK"]
     B --> D["create-project<br/>Native · DotNET · Web<br/>TV · Platform"]
     B -.-> P["dotnet-setup · tv-sdk-install<br/>DotNET · TV apps only"]
     P -.-> D
@@ -97,7 +97,7 @@ flowchart LR
 ## 3. Quick Start — install and make your first request
 
 1. Prepare the prerequisites. You don't need to install the Tizen SDK beforehand.
-   - Node.js 20+ (on `PATH`) and Git
+   - Node.js 22+ (on `PATH`) and Git
    - OS: Windows, Linux or macOS. The emulator also works under WSL.
    - pnpm, only if you build the tizen-sdk CLI yourself
 2. Clone the repository.
@@ -168,7 +168,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 |---------|---------------|
 | Skills are not recognized | Check that you restarted the host and re-run setup (it is idempotent) |
 | The assistant's command is denied by a guard, then retried another way | Expected. The PreToolUse guard hook blocks common wrong command forms (such as a hand-typed `sdb`) and has the assistant retry through the right skill runner |
-| `node` not found | Node.js 20+ must be on `PATH`. Ask "check node" (`check-node`) or run `node --version` |
+| `node` not found | Node.js 22+ must be on `PATH`. Ask "check node" (`check-node`) or run `node --version` |
 | No update notice | Open `~/.tizen.agent.update.json`. `failed: false` means the check works: you are up to date, or the same notice was already shown in the last 24 hours (`notifiedAt`). `failed: true` carries an `error` code (recorded since v1.6.1) |
 | Certificate errors (`UNABLE_TO_VERIFY_LEAF_SIGNATURE`, …) | A corporate proxy re-signs HTTPS. Set `NODE_USE_SYSTEM_CA=1` or point `NODE_EXTRA_CA_CERTS` at the corporate root certificate, then restart |
 | `PROXY_NEEDS_NODE_22_21` | `HTTPS_PROXY` is set but Node is older than 22.21. Upgrade Node |

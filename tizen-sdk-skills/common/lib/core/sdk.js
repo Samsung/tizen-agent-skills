@@ -55,6 +55,7 @@ const {
 const { resolveScript, execPluginScript } = require("./plugin-cache");
 const { checkShellSafe } = require("./shell-safety");
 const { checkNode, checkDiskSpace } = require("./preflight");
+const { nodeFloorCheck } = require("./node-floor");
 
 const CONFIG_FILE = path.join(os.homedir(), ".tizen.sdk.path.config");
 const DEFAULT_SDK_PATH = path.join(os.homedir(), "tizen-sdk");
@@ -800,7 +801,7 @@ async function installSdk(
     const nodeCheck = await checkNode(command);
 
     if (nodeCheck.status !== "success") {
-      console.error("[tizen-sdk] Node.js not found. Aborting installation.");
+      console.error("[tizen-sdk] Node.js check failed. Aborting installation.");
       return nodeCheck;
     }
     console.error(
@@ -2400,7 +2401,7 @@ async function installSdkFromRepo(
     const nodeCheck = await checkNode();
     if (nodeCheck.status !== "success") {
       console.error(
-        "[tizen-sdk-repo] Node.js not found. Aborting installation.",
+        "[tizen-sdk-repo] Node.js check failed. Aborting installation.",
       );
       return nodeCheck;
     }
@@ -4003,6 +4004,33 @@ async function installTvSdkFromZip(
   }
 }
 
+/**
+ * Carry checkNode's below-floor warning into an install envelope.
+ *
+ * installSdk / installSdkFromRepo run checkNode first but return envelopes
+ * from many later steps, none of which would otherwise mention that the
+ * running Node.js is end-of-life. Wrapping the exports adds that warning
+ * (from the same nodeFloorCheck checkNode uses) to whatever comes back, once.
+ *
+ * @param {Function} fn - async function returning a Standard JSON Envelope
+ * @returns {Function}
+ */
+function withNodeFloorWarning(fn) {
+  return async function (...args) {
+    const env = await fn.apply(this, args);
+    const floor = nodeFloorCheck();
+    if (floor.status !== "warn" || !env || typeof env !== "object") return env;
+    // Failure envelopes carry no warnings array of their own; the "not yet
+    // installed, run the installer" answer is one, and it is where a user on
+    // an old Node most needs to see this (same pattern as jobs.js).
+    if (!Array.isArray(env.warnings)) env.warnings = [];
+    if (!env.warnings.includes(floor.message)) {
+      env.warnings.unshift(floor.message);
+    }
+    return env;
+  };
+}
+
 module.exports = {
   CONFIG_FILE,
   runsInstallerInline,
@@ -4026,8 +4054,8 @@ module.exports = {
   outputTailLines,
   sdkInstallerFlags,
   downloadJobsFlags,
-  installSdk,
-  installSdkFromRepo,
+  installSdk: withNodeFloorWarning(installSdk),
+  installSdkFromRepo: withNodeFloorWarning(installSdkFromRepo),
   validateRepoUrl,
   normalizeRepoUrl,
   checkRepoUrlSyntax,

@@ -15,7 +15,7 @@ The TV SDK is an **extension** that requires the base Tizen SDK to be installed 
 
 ## Prerequisites
 
-- **Node.js 18+** must be installed and on PATH
+- **Node.js 22+** must be installed and on PATH
 - **15 GB** of free disk space (on the home directory drive)
 - **Linux/macOS/Windows** operating system
 

@@ -9,7 +9,7 @@ contribution; roles, approval rules and decision-making are in
 ## 1. Before you start
 
 - Read [GOVERNANCE.md](GOVERNANCE.md) — in particular 2.2 (code review).
-- Prerequisites: Node.js 20 or later; `pnpm` at the repository root; `npm` in
+- Prerequisites: Node.js 22 or later; `pnpm` at the repository root; `npm` in
   `tizen-cli/` and `tests/`. Running cli-lane test cases additionally needs
   tizen-cli with the built plugin installed.
 - To use the plugin rather than develop it, follow

@@ -90,7 +90,7 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
 
 **Node.js check details:**
 - Uses the interpreter running the runner (`process.version` / `process.execPath`) as proof that Node.js is installed; `where node` / `which node` only adds a PATH warning (issue #71: a sandboxed child PATH must not report node_not_found)
-- Requires Node.js 18+ (warns if older)
+- Requires Node.js 22+ (warns if older)
 - If not installed: returns error with OS-specific install guide (winget/brew/apt)
 - If installed: proceeds to SDK installation check
 

@@ -15,7 +15,7 @@ TV SDK는 기본 Tizen SDK가 먼저 설치되어야 하는 **확장 패키지**
 
 ## 사전 요구 사항
 
-- **Node.js 18+** 설치 및 PATH 등록 필요
+- **Node.js 22+** 설치 및 PATH 등록 필요
 - 홈 디렉토리 드라이브에 **15 GB** 이상의 여유 공간
 - **Linux/macOS/Windows** 운영체제
 

@@ -33,7 +33,9 @@ No options.
 
 ## Output
 - Success `result`: `installed`, `version` (e.g. `v24.15.0`), `path`, `major_version`.
-- Failure (`node_not_found`): Node.js is missing or not on PATH — the user must install Node.js (≥ 18) manually before SDK installation; do not attempt to install it automatically.
+- A `warnings` entry "older than the required v22+" means Node.js 18–21: it still runs, but tell the user to upgrade to Node.js 22 LTS or later.
+- Failure (`node_not_found`): Node.js is missing or not on PATH — the user must install Node.js (22+) manually before SDK installation; do not attempt to install it automatically.
+- Failure (`node_version_unsupported`): Node.js is below v18 and the runners do not work — same handling: the user upgrades to Node.js 22+ manually.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
 

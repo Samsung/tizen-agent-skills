@@ -20,6 +20,12 @@ const {
   formatDiskSpace,
 } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
+const {
+  NODE_MIN_MAJOR,
+  LINUX_NODE_INSTALL,
+  nodeVersionStatus,
+  nodeFloorCheck,
+} = require("./node-floor");
 
 /** path module for a platform name — win32 paths must parse as win32 even on a Linux host. */
 function pathFor(platform) {
@@ -62,18 +68,18 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // (tizen-cli) embeds Node too, so the same fields apply.
     const versionMatch = String(version).match(/^v(\d+)/);
     const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+    const installGuide = isWin
+      ? "winget install OpenJS.NodeJS.LTS"
+      : platform === "darwin"
+        ? "brew install node"
+        : LINUX_NODE_INSTALL;
     if (!versionMatch) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
-      const installGuide = isWin
-        ? "winget install OpenJS.NodeJS.LTS"
-        : platform === "darwin"
-          ? "brew install node"
-          : "sudo apt update && sudo apt install -y nodejs npm";
       return formatError(
         command,
         "node_not_found",
-        "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+. " +
+        `Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js ${NODE_MIN_MAJOR}+. ` +
           "Please install Node.js LTS from https://nodejs.org/ and retry.",
         installGuide,
         startTime,
@@ -109,12 +115,21 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
       }
     }
 
-    // 3. Validate version (v18+ recommended)
-    if (majorVersion > 0 && majorVersion < 18) {
-      warnings.push(
-        `Node.js ${version} is older than the recommended v18+. Consider upgrading to Node.js 18 LTS or later from https://nodejs.org/`,
+    // 3. Validate version against the floor (node-floor.js): end-of-life
+    // majors only warn, the runner may still work; below the hard minimum
+    // the runners do not work, so that is a failure. Skipped for a
+    // pkg-compiled binary, whose embedded Node the user cannot upgrade.
+    const floor = nodeFloorCheck({ version, isPkg });
+    if (floor.status === "fail") {
+      return formatError(
+        command,
+        "node_version_unsupported",
+        floor.message,
+        installGuide,
+        startTime,
       );
     }
+    if (floor.message) warnings.push(floor.message);
 
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
@@ -410,6 +425,9 @@ function _getDiskSpaceViaCommand(checkPath, deps = {}) {
 }
 
 module.exports = {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
+  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   measureDiskSpace,

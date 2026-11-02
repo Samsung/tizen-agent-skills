@@ -120,7 +120,7 @@ powershell -File scripts\tizen-sdk-install-custom-repo\tizen-sdk-install-custom-
 ```
 installSdkFromRepo(repoUrl, platformVersion, force)
   │
-  ├─ 1. Node.js check (18+)                     ── fail → abort with OS-specific guide
+  ├─ 1. Node.js check (22+)                     ── fail → abort with OS-specific guide
   │
   ├─ 2. Repository URL validation               ── fail → abort, NOTHING downloaded
   │       ├─ syntax (in JS: non-empty, http(s), not the pkg_list file itself)

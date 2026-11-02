@@ -14,6 +14,26 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Node.js 22 or later is now required** (Node.js 20 reached end-of-life on
+  2026-04-30). CI and releases run on Node 22 (`.nvmrc`), `engines` is `>=22`,
+  `check-node` / preflight warn below v22 (they still do not abort), and
+  `tizen-sdk doctor` reports Node 18–21 as a warning instead of OK. The
+  documented prerequisites, install guides and error messages now say 22+.
+- The Linux Node.js install hint (`check-node` error, `node_not_found`
+  suggested fix, docs) now uses the NodeSource 22.x repository instead of the
+  distribution `nodejs` package, which is Node 18 on Ubuntu 24.04 and Debian 12.
+- A pkg-compiled binary no longer gets the "upgrade Node.js" warning from
+  `check-node` or `doctor`: its Node is embedded at build time and the user
+  cannot change it.
+- `check-node` now fails with `node_version_unsupported` (`TIZEN_SDK_ENV_E003`)
+  below Node 18, as `doctor` already did, so `sdk-install` stops there instead
+  of continuing on a runtime the runners do not support. The Node 18–21
+  upgrade warning is now carried into the `sdk-install` /
+  `sdk-install-custom-repo` result instead of being dropped. check-node,
+  sdk-install and `doctor` share one floor check (`common/lib/core/node-floor.js`).
+
 ## [1.6.1] — 2026-10-26
 
 ### Added

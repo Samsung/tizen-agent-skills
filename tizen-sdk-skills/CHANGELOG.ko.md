@@ -13,6 +13,26 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **Node.js 22 이상이 필요합니다** (Node.js 20은 2026-04-30에 지원이
+  종료되었습니다). CI와 릴리스는 Node 22(`.nvmrc`)로 실행되고 `engines`는
+  `>=22`입니다. `check-node`/사전 점검은 v22 미만이면 경고하며(중단하지는 않음),
+  `tizen-sdk doctor`는 Node 18–21을 OK 대신 경고로 표시합니다. 문서의 사전
+  요구사항, 설치 안내와 오류 메시지도 22+로 바꿨습니다.
+- Linux Node.js 설치 안내(`check-node` 오류, `node_not_found` 해결 명령,
+  문서)가 배포판 `nodejs` 패키지(Ubuntu 24.04·Debian 12에서는 Node 18) 대신
+  NodeSource 22.x 저장소를 사용합니다.
+- pkg로 컴파일된 바이너리는 `check-node`/`doctor`에서 "Node.js 업그레이드"
+  경고를 받지 않습니다. 내장된 Node는 빌드 시 고정되어 사용자가 바꿀 수 없기
+  때문입니다.
+- `check-node`가 Node 18 미만에서 `node_version_unsupported`
+  (`TIZEN_SDK_ENV_E003`)로 실패합니다(`doctor`는 이미 실패로 표시). 그래서
+  `sdk-install`이 러너가 동작하지 않는 런타임에서 진행하지 않고 멈춥니다. Node
+  18–21 업그레이드 경고는 버려지지 않고 `sdk-install` /
+  `sdk-install-custom-repo` 결과에 포함됩니다. check-node, sdk-install, `doctor`가
+  하나의 하한 검사(`common/lib/core/node-floor.js`)를 공유합니다.
+
 ## [1.6.1] — 2026-10-26
 
 ### 추가

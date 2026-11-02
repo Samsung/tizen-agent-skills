@@ -23,7 +23,7 @@ updates:
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
       # @types/node majors must not run ahead of the runtime this code targets
-      # (Node 20 per .nvmrc / engines); bump by hand when that floor moves.
+      # (Node 22 per .nvmrc / engines); bump by hand when that floor moves.
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
   - package-ecosystem: npm

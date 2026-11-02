@@ -36,7 +36,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 | **tizen-sdk-init** | Configure Tizen SDK installation path | Register manually installed SDK or non-default path |
 | **tizen-sdk-install** | Auto-install Tizen SDK (with automatic Node.js + 15 GB disk space check) | Initial development environment setup |
 | **tizen-sdk-install-custom-repo** | Install the SDK from a custom package repository URL (validated against `pkg_list_{OS}-{64,32}`) | Installing from an internal/team mirror or a specific SDK build |
-| **tizen-check-node** | Verify Node.js is installed and on PATH | Pre-install Node.js verification (18+ required) |
+| **tizen-check-node** | Verify Node.js is installed and on PATH | Pre-install Node.js verification (22+ required) |
 | **tizen-check-disk-space** | Verify disk space before SDK installation | Pre-install disk space verification (15 GB threshold, home drive only) |
 | **tizen-dotnet-setup** | .NET development environment setup | Verify .NET SDK and install Tizen workload |
 | **tizen-create-project** | Interactive project creation tool | Create Native/DotNET/WebApp/Platform projects |
@@ -196,7 +196,7 @@ Configures the Tizen SDK installation path by writing it to `~/.tizen.sdk.path.c
 - Recursively installs all dependencies
 - Supports Linux/macOS/Windows (WSL2/PowerShell)
 - Automatic PATH configuration
-- **Automatic Node.js check** (18+ required) as the very first step — aborts with OS-specific install guide if not installed
+- **Automatic Node.js check** (22+ required) as the very first step — aborts with OS-specific install guide if not installed
 - **Automatic 15 GB disk space check** on the user's home drive before installation — aborts with a clear error if insufficient
 
 
@@ -260,9 +260,9 @@ Verifies that Node.js is installed and on PATH before SDK installation. Reports 
 #### Key Features
 
 - Checks if Node.js is installed and accessible on PATH
-- Requires Node.js 18+ (warns if older, but does not abort)
+- Requires Node.js 22+ (warns if older, but does not abort)
 - Returns Standard JSON Envelope with version, path, and major version
-- If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `sudo apt install -y nodejs npm`)
+- If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
 - Download URL: https://nodejs.org/
 
 #### CLI Runner

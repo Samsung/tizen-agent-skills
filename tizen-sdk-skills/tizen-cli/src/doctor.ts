@@ -15,6 +15,10 @@ import { COMMAND_SPECS } from "./command-specs";
 const sdkCommands = require("../../common/lib/core/sdk-commands");
 
 const pluginCache = require("../../common/lib/core/plugin-cache");
+const {
+  NODE_MIN_MAJOR,
+  nodeFloorCheck,
+} = require("../../common/lib/core/node-floor");
 // Single source for Java/JNA crash detection — the same constant the emulator
 // domain uses to add its hint, so doctor and launch classify a failure alike.
 
@@ -190,7 +194,10 @@ function emCliCheck(sdkOk: boolean): DoctorCheck {
 }
 
 export function handleDoctor(): { status: "success" | "failure" } {
-  const nodeMajor = parseInt(process.version.slice(1).split(".")[0], 10);
+  // Same check as check-node / sdk-install (node-floor.js). A pkg-compiled
+  // tizen-cli embeds its own Node, which the user cannot upgrade, so the
+  // floor is skipped there.
+  const nodeFloor = nodeFloorCheck();
   const scriptsRoot = pluginCache.findLatestVersionDir();
   const installerResolved = scriptsRoot
     ? !("error" in pluginCache.resolveScript("tizen-sdk-install"))
@@ -202,9 +209,13 @@ export function handleDoctor(): { status: "success" | "failure" } {
 
   const checks = [
     {
-      name: "Node.js version (18+)",
-      status: nodeMajor >= 18 ? ("ok" as const) : ("fail" as const),
-      message: `Node.js ${process.version} detected`,
+      name: `Node.js version (${NODE_MIN_MAJOR}+)`,
+      // Below the floor the runners may still work, but those majors are
+      // end-of-life and untested: warn, and fail only when far too old.
+      status: nodeFloor.status as "ok" | "warn" | "fail",
+      message: nodeFloor.skipped
+        ? `Node.js ${process.version} embedded in the packaged tizen-cli binary (version floor not checked)`
+        : (nodeFloor.message ?? `Node.js ${process.version} detected`),
     },
     {
       name: "Plugin scripts directory",

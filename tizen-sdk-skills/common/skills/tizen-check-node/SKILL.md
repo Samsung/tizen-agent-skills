@@ -60,7 +60,7 @@ node "<found-path>"
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
-Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found or error).
+Exit code: `0` = success (Node.js installed, v18+), `1` = failure (Node.js not found, below v18, or error).
 
 ## What checkNode() handles internally
 
@@ -69,7 +69,10 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
    (issue #71: under a sandboxed host the child PATH may lack `node` while the runner runs fine)
 2. Best-effort: run `where node` (Windows) or `which node` (Linux/macOS) to report `on_path`; a miss is
    only a warning, never a failure
-3. Parse major version and warn if < 18 (recommended minimum)
+3. Check the major version against the floor: v22+ is OK; v18–v21 still succeeds but with a
+   warning (end-of-life, untested — tell the user to upgrade to Node.js 22 LTS or later); below v18
+   is a `node_version_unsupported` failure. A pkg-compiled binary (`source: "pkg"`) embeds its own
+   Node, which the user cannot upgrade, so the floor is not checked there
 4. Return Standard JSON Envelope with version, path, major_version, source (`process` | `pkg`), on_path
 
 ## Response
@@ -81,12 +84,17 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
   "status": "success",
   "result": {
     "installed": true,
-    "version": "v20.11.0",
+    "version": "v22.11.0",
     "path": "C:\\Program Files\\nodejs\\node.exe",
-    "major_version": 20
-  }
+    "major_version": 22
+  },
+  "warnings": []
 }
 ```
+
+**Success below v22 (e.g. Node 20):** same shape, with a `warnings` entry
+`"Node.js v20.11.0 is older than the required v22+ … Upgrade to Node.js 22 LTS or later …"`.
+Report it to the user as an upgrade the SDK skills need — do not call that Node version fine.
 
 **Failure (Node.js not installed):**
 ```json
@@ -94,11 +102,11 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
   "command": "tizen-sdk check-node",
   "status": "failure",
   "errors": [{
-    "error_code": "TIZEN_SDK_CONFIG_E005",
+    "error_code": "TIZEN_SDK_ENV_E001",
     "error_category": "node_not_found",
-    "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+. Please install Node.js LTS from https://nodejs.org/ and retry.",
+    "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. Please install Node.js LTS from https://nodejs.org/ and retry.",
     "suggested_fix": {
-      "command": "winget install OpenJS.NodeJS.LTS (Windows) | brew install node (macOS) | sudo apt install -y nodejs npm (Linux)",
+      "command": "winget install OpenJS.NodeJS.LTS (Windows) / brew install node (macOS) / curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs (Linux)",
       "auto_fixable": false,
       "guide_url": "https://nodejs.org/"
     }
@@ -106,13 +114,16 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
 }
 ```
 
+**Failure (Node.js below v18):** `error_code` `TIZEN_SDK_ENV_E003`, `error_category`
+`node_version_unsupported`, the same OS-specific install command in `suggested_fix`.
+
 ## Installation Guide (when Node.js is not installed)
 
 | OS | Command |
 |---|---|
 | **Windows** | `winget install OpenJS.NodeJS.LTS` |
 | **macOS** | `brew install node` |
-| **Linux (Ubuntu/Debian)** | `sudo apt update && sudo apt install -y nodejs npm` |
+| **Linux (Ubuntu/Debian)** | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
 | **All OS (manual)** | Download LTS from https://nodejs.org/ |
 
 After installing Node.js, **restart the terminal** (to refresh PATH), then retry the Tizen SDK installation.

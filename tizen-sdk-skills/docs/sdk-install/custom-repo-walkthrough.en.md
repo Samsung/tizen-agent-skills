@@ -18,7 +18,7 @@ Each step runs automatically when you **tell Claude in natural language** — no
 ## 0. Before You Start
 
 - **Plugin installed**: the `tizen-sdk-skills` plugin must be installed. (If not, see "Cline plugin install" in [README.en.md](../README.en.md))
-- **Node.js installed**: Node.js 18+ must be installed on your system (required for the SDK installer)
+- **Node.js installed**: Node.js 22+ must be installed on your system (required for the SDK installer)
 - **Disk space**: at least 15 GB of free space on your home drive (the SDK is large)
 - **Network access**: your machine must be able to reach the custom repository URL (VPN/proxy may be required for internal mirrors)
 - **Repository URL**: you must have a valid repository URL that serves `pkg_list_{OS}-{64,32}` files

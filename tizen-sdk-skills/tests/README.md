@@ -585,7 +585,7 @@ See `skills/run-test-suite.md` for instructions on how Cline or Claude agents ex
 
 ## Prerequisites
 
-- Node.js >= 20
+- Node.js >= 22
 - A built plugin bundle: `cd tizen-cli && pnpm install && pnpm build` → `tizen-cli/dist/tizen-sdk.js`
   (gitignored; every cli-lane executor below loads it)
 - For cli-lane execution (`resolveExecutor()` in `runner.mjs`), the same on every platform:

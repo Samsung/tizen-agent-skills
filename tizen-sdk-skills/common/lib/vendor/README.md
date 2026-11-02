@@ -54,8 +54,8 @@ Part 0 and Part 6 for the full rationale.
 - **Used by**: `common/lib/core/rds/fs-walk.js` (`walkFiles()`), which
   replaces the `glob` package entirely — see its module doc comment and
   docs/rds/RDS_FAST_DEPLOY_PLAN.en.md Part 6 for why `glob` itself isn't vendored
-  (it drags in `minimatch`/`path-scurry`/`lru-cache`, and Node 20 has no
-  `fs.glob`).
+  (it drags in `minimatch`/`path-scurry`/`lru-cache`, and `fs.glob` is still
+  experimental in early Node 22 releases).
 - **Upgrade steps**:
   1. `npm pack picomatch@<version>` in a scratch directory, extract the
      tarball.

@@ -14,7 +14,7 @@ At each step, **just tell Claude in natural language** and the corresponding age
 
 - **Plugin installed**: the `tizen-sdk-skills` plugin must be installed. (If not, see "Installing the Cline plugin" in [README.en.md](../README.en.md).)
 - **OS**: Windows / Ubuntu (Linux) / macOS are all supported. Claude detects the current OS and runs things the right way.
-- **Node.js 20+ required**: needed to run Playwright (the test executes via `node <test-file>`).
+- **Node.js 22+ required**: needed to run Playwright (the test executes via `node <test-file>`).
 - **Playwright is installed into the TEST PROJECT**: never into the plugin — one `npm install playwright` in the test project directory is all it takes (Step 7).
 - **Goal for this walkthrough (example)**:
   - App type: **WebApp**

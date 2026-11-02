@@ -65,7 +65,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["check-node<br/>Node.js 20+"] --> B["sdk-install<br/>SDK 설치"]
+    A["check-node<br/>Node.js 22+"] --> B["sdk-install<br/>SDK 설치"]
     B --> D["create-project<br/>Native · DotNET · Web<br/>TV · Platform"]
     B -.-> P["dotnet-setup · tv-sdk-install<br/>DotNET · TV 앱만 준비"]
     P -.-> D
@@ -97,7 +97,7 @@ flowchart LR
 ## 3. Quick Start — 설치하고 첫 요청하기
 
 1. 사전 요구사항을 준비합니다. Tizen SDK는 미리 설치하지 않아도 됩니다.
-   - Node.js 20+ (`PATH`에 있어야 함), Git
+   - Node.js 22+ (`PATH`에 있어야 함), Git
    - OS: Windows, Linux, macOS. 에뮬레이터는 WSL에서도 동작합니다.
    - tizen-sdk CLI를 직접 빌드할 때만 pnpm
 2. 저장소를 클론합니다.
@@ -168,7 +168,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 |------|-------------|
 | 스킬이 인식되지 않음 | 호스트를 재시작했는지 확인하고 setup을 다시 실행 (멱등 동작) |
 | 어시스턴트의 명령이 가드에 거부된 뒤 다른 방법으로 다시 실행됨 | 정상 동작. PreToolUse 가드 훅이 자주 틀리는 명령 형태(직접 입력한 `sdb` 등)를 막고 올바른 스킬 러너로 다시 실행하게 합니다 |
-| `node`를 찾을 수 없음 | `PATH`에 Node.js 20+ 필요. "node 확인해줘"(`check-node`) 또는 `node --version` |
+| `node`를 찾을 수 없음 | `PATH`에 Node.js 22+ 필요. "node 확인해줘"(`check-node`) 또는 `node --version` |
 | 업데이트 알림이 오지 않음 | `~/.tizen.agent.update.json` 확인. `failed: false`면 확인은 정상이며, 이미 최신이거나 같은 알림을 24시간 안에 이미 보여 준 경우입니다(`notifiedAt`). `failed: true`면 `error` 코드 확인(v1.6.1부터 기록) |
 | 인증서 오류 (`UNABLE_TO_VERIFY_LEAF_SIGNATURE` 등) | 회사 프록시의 재서명. `NODE_USE_SYSTEM_CA=1` 또는 `NODE_EXTRA_CA_CERTS`에 회사 루트 인증서 지정 후 재시작 |
 | `PROXY_NEEDS_NODE_22_21` | `HTTPS_PROXY` 환경에서 Node가 22.21보다 오래됨. Node 업그레이드 |

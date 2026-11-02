@@ -314,6 +314,6 @@ safe TC를 `approved`로 승격하기 전에는 위 게이트 명령을 빈 `HOM
 
 ## 사전 요구 사항
 
-- Node.js >= 20 (`.nvmrc`)
+- Node.js >= 22 (`.nvmrc`)
 - cli lane 실행: `tizen-sdk` 런처가 PATH에 있거나, 소스 체크아웃의 빌드 산출물 또는 `TC_LAUNCHER_JS`로 런처 지정 (빌드 방법은 README.md "Prerequisites")
 - `--dry-run`: Node.js + `npm install`로 받은 의존성(yaml, ajv)만 필요
