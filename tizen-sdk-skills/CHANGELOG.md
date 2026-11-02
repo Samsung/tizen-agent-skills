@@ -45,14 +45,10 @@ below use those release tags.
 - The documented prerequisites, install guides, error messages and skill docs
   say 22+, and the `node_not_found` examples show its real code,
   `TIZEN_SDK_ENV_E001` (they said `TIZEN_SDK_CONFIG_E005`).
-
-### Fixed
-
-- Code now passes ESLint 10's new recommended rules, so the ESLint 10 upgrade
-  (#107) can land. Errors rethrown from a `catch` keep the original as
-  `cause` (`preserve-caught-error`), which is not enumerable and does not
-  appear in JSON envelopes. Initial values that every path overwrote before
-  reading them are dropped (`no-useless-assignment`). No behaviour change.
+- Maintenance: the code passes ESLint 10's new recommended rules
+  (`preserve-caught-error`, `no-useless-assignment`) ahead of the ESLint 10
+  upgrade. Rethrown errors keep the original as `cause`, which is not
+  enumerable and does not appear in JSON envelopes. No behaviour change.
 
 ## [1.6.1] — 2026-10-26
 

@@ -206,6 +206,7 @@ async function encryptPasswordWindows(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
+          { cause: err },
         ),
       );
     });
@@ -275,6 +276,7 @@ async function decryptPasswordWindows(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
+          { cause: err },
         ),
       );
     });
@@ -310,6 +312,7 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
+          { cause: proc.error },
         ),
       );
       return;
@@ -336,6 +339,7 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to write marker file: ${err.message}`,
+          { cause: err },
         ),
       );
     }
@@ -367,6 +371,7 @@ async function decryptPasswordMacOS(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
+          { cause: proc.error },
         ),
       );
       return;
@@ -455,6 +460,7 @@ async function encryptPasswordLinux(password, pwdFilePath) {
         reject(
           new Error(
             `samsung_pwd_store_failed: failed to write marker file: ${err.message}`,
+            { cause: err },
           ),
         );
       }
@@ -464,6 +470,7 @@ async function encryptPasswordLinux(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
+          { cause: err },
         ),
       );
     });
@@ -528,6 +535,7 @@ async function decryptPasswordLinux(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
+          { cause: err },
         ),
       );
     });
