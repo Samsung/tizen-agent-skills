@@ -15,6 +15,10 @@ import { COMMAND_SPECS } from "./command-specs";
 const sdkCommands = require("../../common/lib/core/sdk-commands");
 
 const pluginCache = require("../../common/lib/core/plugin-cache");
+const {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
+} = require("../../common/lib/core/preflight");
 // Single source for Java/JNA crash detection — the same constant the emulator
 // domain uses to add its hint, so doctor and launch classify a failure alike.
 
@@ -202,19 +206,14 @@ export function handleDoctor(): { status: "success" | "failure" } {
 
   const checks = [
     {
-      name: "Node.js version (22+)",
-      // Below 22 the runners may still work, but those majors are
-      // end-of-life and untested: warn, and fail only below 18.
-      status:
-        nodeMajor >= 22
-          ? ("ok" as const)
-          : nodeMajor >= 18
-            ? ("warn" as const)
-            : ("fail" as const),
+      name: `Node.js version (${NODE_MIN_MAJOR}+)`,
+      // Below the floor the runners may still work, but those majors are
+      // end-of-life and untested: warn, and fail only when far too old.
+      status: nodeVersionStatus(nodeMajor) as "ok" | "warn" | "fail",
       message:
-        nodeMajor >= 22
+        nodeVersionStatus(nodeMajor) === "ok"
           ? `Node.js ${process.version} detected`
-          : `Node.js ${process.version} detected — Node.js 22+ is required; upgrade from https://nodejs.org/`,
+          : `Node.js ${process.version} detected — Node.js ${NODE_MIN_MAJOR}+ is required; upgrade from https://nodejs.org/`,
     },
     {
       name: "Plugin scripts directory",

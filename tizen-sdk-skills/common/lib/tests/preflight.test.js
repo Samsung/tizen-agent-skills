@@ -17,9 +17,12 @@
  * check-node-cli.js with an empty PATH to prove the runner still succeeds.
  */
 
+const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
   checkNode,
   checkDiskSpace,
   _getDiskSpaceViaCommand,
@@ -236,6 +239,24 @@ function execStub(table) {
       platform: "linux",
     });
     check("df missing → unknown success", r.result.source, "unknown");
+  }
+
+  // --- nodeVersionStatus (shared by check-node and tizen-sdk --doctor) ---------
+  console.log("\n--- nodeVersionStatus ---");
+  check("floor is 22", NODE_MIN_MAJOR, 22);
+  check("node 24 → ok", nodeVersionStatus(24), "ok");
+  check("node 22 → ok", nodeVersionStatus(22), "ok");
+  check("node 21 → warn", nodeVersionStatus(21), "warn");
+  check("node 20 → warn", nodeVersionStatus(20), "warn");
+  check("node 18 → warn", nodeVersionStatus(18), "warn");
+  check("node 17 → fail", nodeVersionStatus(17), "fail");
+  check("NaN → fail", nodeVersionStatus(NaN), "fail");
+  {
+    // .nvmrc is what CI and releases run; it must not drift below the floor.
+    const nvmrc = fs
+      .readFileSync(path.join(__dirname, "../../../.nvmrc"), "utf-8")
+      .trim();
+    check(".nvmrc matches NODE_MIN_MAJOR", Number(nvmrc), NODE_MIN_MAJOR);
   }
 
   // --- checkNode (#71) ----------------------------------------------------------

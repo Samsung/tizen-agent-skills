@@ -21,6 +21,25 @@ const {
 } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 
+/** Lowest Node.js major the runners support and CI tests (`.nvmrc`). */
+const NODE_MIN_MAJOR = 22;
+/** Below this major the runners are known not to work at all. */
+const NODE_HARD_MIN_MAJOR = 18;
+
+/**
+ * Classify a Node.js major version against the supported floor.
+ * Shared by check-node (preflight) and `tizen-sdk --doctor`.
+ *
+ * @param {number} major - Node.js major version (e.g. 22)
+ * @returns {"ok"|"warn"|"fail"} ok at or above NODE_MIN_MAJOR; warn for
+ *   end-of-life majors that may still run; fail below NODE_HARD_MIN_MAJOR
+ *   or for an unparseable value
+ */
+function nodeVersionStatus(major) {
+  if (!Number.isFinite(major) || major < NODE_HARD_MIN_MAJOR) return "fail";
+  return major >= NODE_MIN_MAJOR ? "ok" : "warn";
+}
+
 /** path module for a platform name — win32 paths must parse as win32 even on a Linux host. */
 function pathFor(platform) {
   return platform === "win32" ? path.win32 : path.posix;
@@ -111,7 +130,7 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
 
     // 3. Validate version (v22+ required; older majors only warn, the runner
     // may still work, but they are past end-of-life and untested)
-    if (majorVersion > 0 && majorVersion < 22) {
+    if (majorVersion > 0 && majorVersion < NODE_MIN_MAJOR) {
       warnings.push(
         `Node.js ${version} is older than the required v22+ (older majors are end-of-life and untested). Upgrade to Node.js 22 LTS or later from https://nodejs.org/`,
       );
@@ -411,6 +430,8 @@ function _getDiskSpaceViaCommand(checkPath, deps = {}) {
 }
 
 module.exports = {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
   checkNode,
   checkDiskSpace,
   measureDiskSpace,

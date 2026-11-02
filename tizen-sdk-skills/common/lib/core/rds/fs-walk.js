@@ -5,8 +5,9 @@
 /**
  * Recursive directory walk, replacing the `glob` package.
  *
- * `glob` drags in `minimatch`/`path-scurry`/`lru-cache` and Node 20 (this
- * repo's floor — see .nvmrc) has no `fs.glob`. The extension's own ignore
+ * `glob` drags in `minimatch`/`path-scurry`/`lru-cache`, and `fs.glob` is
+ * still experimental in early Node 22 releases (this repo's floor — see
+ * .nvmrc), so it cannot be relied on either. The extension's own ignore
  * checks already run through `picomatch`, so a plain recursive
  * `fs.readdirSync(dir, { withFileTypes: true })` walk filtered through the
  * vendored picomatch reproduces the same matching semantics without the

@@ -117,7 +117,7 @@ powershell -File scripts\tizen-sdk-install-custom-repo\tizen-sdk-install-custom-
 ```
 installSdkFromRepo(repoUrl, platformVersion, force)
   │
-  ├─ 1. Node.js 체크 (18+)                      ── 실패 → OS별 가이드와 함께 중단
+  ├─ 1. Node.js 체크 (22+)                      ── 실패 → OS별 가이드와 함께 중단
   │
   ├─ 2. 저장소 URL 검증                          ── 실패 → 중단, 다운로드 없음
   │       ├─ 형식 (JS: 비어 있지 않음, http(s), pkg_list 파일 자체가 아님)

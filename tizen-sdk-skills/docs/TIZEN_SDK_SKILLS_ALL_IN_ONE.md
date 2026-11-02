@@ -160,7 +160,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 **사전 체크 흐름:**
 
 ```
-1. Node.js 체크 (18+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
+1. Node.js 체크 (22+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
 2. SDK 이미 설치됨? → 설치된 경우 success 반환
 3. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단
 4. Phase 2(백그라운드 설치)용 설치 명령 반환
@@ -216,7 +216,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 
 **설명:** SDK 설치 전 Node.js 설치 여부 및 PATH 등록 확인.
 
-**사용 시점:** 설치 전 Node.js 사전 확인 (18+ 필요).
+**사용 시점:** 설치 전 Node.js 사전 확인 (22+ 필요).
 
 **파라미터:** 없음
 
@@ -1051,7 +1051,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 **사전 체크 흐름:**
 
 ```
-1. Node.js 체크 (18+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
+1. Node.js 체크 (22+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
 2. 저장소 URL 검증 (pkg_list_{OS}-{64,32}) → 유효하지 않으면 중단 (다운로드 없음)
 3. SDK 이미 설치됨? → success + "저장소를 바꾸려면 --force 필요" 경고
 4. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단
@@ -1428,7 +1428,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 | 1   | `tizen-sdk-init`         | `initSdk()`           | `sdk-init-cli.js`         | SDK 경로 설정 (`~/.tizen.sdk.path.config`)            |
 | 2   | `tizen-sdk-install`      | `installSdk()`        | `sdk-install-cli.js`      | Tizen SDK 설치 (Node.js + 디스크 공간 사전 체크 포함) |
 | 2a  | `tizen-sdk-install` (repo-info) | `getRepoInfo()` | `sdk-repo-info-cli.js`    | SDK 패키지 저장소 정보 조회 (공식 CDN·지역 미러, 현재 설정 URL; 사설 미러는 `--repo-url`로 지정) |
-| 3   | `tizen-check-node`       | `checkNode()`         | `check-node-cli.js`       | Node.js 설치 확인 (18+ 필요)                          |
+| 3   | `tizen-check-node`       | `checkNode()`         | `check-node-cli.js`       | Node.js 설치 확인 (22+ 필요)                          |
 | 4   | `tizen-check-disk-space` | `checkDiskSpace()`    | `check-disk-space-cli.js` | 디스크 공간 확인 (15 GB, 홈 드라이브)                 |
 | 5   | `tizen-dotnet-setup`     | `setupDotnet()`       | `dotnet-setup-cli.js`     | .NET Tizen 워크로드 설치                              |
 | 6   | `tizen-create-project`   | `createProject()`     | `project-manager-cli.js`  | 템플릿에서 프로젝트 생성                              |

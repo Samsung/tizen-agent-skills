@@ -37,7 +37,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-sdk-init** | Tizen SDK 설치 경로 설정 | 수동 설치 SDK 또는 비기본 경로 등록 |
 | **tizen-sdk-install** | Tizen SDK 자동 설치 (Node.js + 15GB 디스크 공간 자동 확인) | 초기 개발 환경 구성 |
 | **tizen-sdk-install-custom-repo** | 사용자 지정 패키지 저장소 URL에서 SDK 설치 (`pkg_list_{OS}-{64,32}` 검증) | 사내/팀 미러 또는 특정 SDK 빌드에서 설치 |
-| **tizen-check-node** | Node.js 설치 및 PATH 확인 | SDK 설치 전 Node.js 확인 (18+ 필요) |
+| **tizen-check-node** | Node.js 설치 및 PATH 확인 | SDK 설치 전 Node.js 확인 (22+ 필요) |
 | **tizen-check-disk-space** | SDK 설치 전 디스크 공간 확인 | 설치 전 디스크 공간 검증 (15GB 임계값, 홈 드라이브만) |
 | **tizen-dotnet-setup** | .NET 개발 환경 구성 | .NET SDK 확인 및 Tizen 워크로드 설치 |
 | **tizen-create-project** | 대화형 프로젝트 생성 도구 | Native/DotNET/WebApp/Platform 프로젝트 생성 |
@@ -196,7 +196,7 @@ Tizen SDK를 **완전 자동으로** 다운로드하고 설치합니다.
 - 재귀적으로 모든 의존성 설치
 - Linux/macOS/Windows(WSL2/PowerShell) 지원
 - PATH 자동 설정
-- **자동 Node.js 확인** (18+ 필요) — 첫 단계로 실행, 미설치 시 OS별 설치 가이드와 함께 중단
+- **자동 Node.js 확인** (22+ 필요) — 첫 단계로 실행, 미설치 시 OS별 설치 가이드와 함께 중단
 - **자동 15GB 디스크 공간 확인** — 설치 전 사용자 홈 드라이브 확인, 부족 시 명확한 에러와 함께 중단
 
 #### CLI 러너
