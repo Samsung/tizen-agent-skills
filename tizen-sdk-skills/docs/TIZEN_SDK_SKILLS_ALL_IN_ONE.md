@@ -160,7 +160,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 **사전 체크 흐름:**
 
 ```
-1. Node.js 체크 (22+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
+1. Node.js 체크 → 미설치(`node_not_found`) 또는 v18 미만(`node_version_unsupported`)이면 OS별 설치 가이드와 함께 중단, v18–v21은 결과의 `warnings`에 22+ 업그레이드 경고를 담고 계속, v22+는 계속
 2. SDK 이미 설치됨? → 설치된 경우 success 반환
 3. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단
 4. Phase 2(백그라운드 설치)용 설치 명령 반환
@@ -194,13 +194,13 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
   "status": "failure",
   "errors": [
     {
-      "error_code": "TIZEN_SDK_CONFIG_E005",
+      "error_code": "TIZEN_SDK_ENV_E001",
       "error_category": "node_not_found",
       "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
-        "guide_url": "https://nodejs.org/"
+        "guide_url": "https://nodejs.org/en/download"
       }
     }
   ],
@@ -247,8 +247,12 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Ubuntu/Debian) | `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Fedora/RHEL) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
+| Linux (기타 배포판) | Node.js 22 LTS를 https://nodejs.org/en/download 에서 설치 |
 | 모든 OS (수동)        | https://nodejs.org/ 에서 LTS 다운로드               |
+
+> 배포판 `nodejs` 패키지는 Ubuntu 24.04·Debian 12에서 Node 18이라 하한(22) 미만이므로 NodeSource 저장소를 씁니다. Ubuntu/Debian 명령은 NodeSource `nodejs`와 파일이 충돌하는 배포판 `nodejs`/`npm`/`libnode-dev`를 먼저 제거합니다.
 
 **의존성:** 없음
 
@@ -1051,7 +1055,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 **사전 체크 흐름:**
 
 ```
-1. Node.js 체크 (22+ 필요) → 미설치 시 OS별 설치 가이드와 함께 중단
+1. Node.js 체크 → 미설치(`node_not_found`) 또는 v18 미만(`node_version_unsupported`)이면 OS별 설치 가이드와 함께 중단, v18–v21은 결과의 `warnings`에 22+ 업그레이드 경고를 담고 계속, v22+는 계속
 2. 저장소 URL 검증 (pkg_list_{OS}-{64,32}) → 유효하지 않으면 중단 (다운로드 없음)
 3. SDK 이미 설치됨? → success + "저장소를 바꾸려면 --force 필요" 경고
 4. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단

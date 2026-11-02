@@ -171,7 +171,7 @@ Exit code: `0` = success (SDK already installed — **read the warnings**, see b
 ### installSdkFromRepo() Flow
 
 ```
-1. Node.js check ← if not installed, abort with OS-specific guide
+1. Node.js check ← missing or below v18: abort with OS-specific guide; v18–v21: continue with an upgrade warning
 2. Repository URL validation (pkg_list_{OS}-{64,32}) ← if invalid, ABORT (nothing downloaded)
 3. SDK already installed? ← if yes, success + warning that --force is needed to switch repos
 4. Disk space check (15 GB, home drive) ← if insufficient, abort with details

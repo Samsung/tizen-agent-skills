@@ -161,7 +161,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 **Pre-check Flow:**
 
 ```
-1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
+1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. SDK already installed? → if yes, return success
 3. Disk space check (15 GB, home drive) → if insufficient, abort with details
 4. Return installer command for Phase 2 (background install)
@@ -212,13 +212,13 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
   "status": "failure",
   "errors": [
     {
-      "error_code": "TIZEN_SDK_CONFIG_E005",
+      "error_code": "TIZEN_SDK_ENV_E001",
       "error_category": "node_not_found",
       "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
-        "guide_url": "https://nodejs.org/"
+        "guide_url": "https://nodejs.org/en/download"
       }
     }
   ],
@@ -265,8 +265,12 @@ node <plugin>/lib/cli/check-node-cli.js
 | --------------------- | --------------------------------------------------- |
 | Windows               | `winget install OpenJS.NodeJS.LTS`                  |
 | macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Ubuntu/Debian) | `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| Linux (Fedora/RHEL) | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
+| Linux (other distributions) | Install Node.js 22 LTS from https://nodejs.org/en/download |
 | All OS (manual)       | Download LTS from https://nodejs.org/               |
+
+> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes the distribution `nodejs` / `npm` / `libnode-dev` packages, whose files conflict with NodeSource's `nodejs`.
 
 **Dependencies:** None
 
@@ -1075,7 +1079,7 @@ A Tizen package repository serves the package index at its root:
 **Pre-check Flow:**
 
 ```
-1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
+1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. Repository URL validation (pkg_list_{OS}-{64,32}) → if invalid, ABORT (nothing downloaded)
 3. SDK already installed? → success + warning that --force is needed to switch repositories
 4. Disk space check (15 GB, home drive) → if insufficient, abort with details
