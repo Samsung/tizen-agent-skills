@@ -98,6 +98,25 @@ function findSecretTool() {
 }
 
 /**
+ * The caught error, safe to keep as `cause`.
+ *
+ * A spawn failure (ENOENT, EACCES, ...) carries `spawnargs`, the full argument
+ * list. For these commands that list holds the plaintext password
+ * (`wincrypt.exe --encrypt <pw>`, `security ... -w <pw>`,
+ * `secret-tool store --password=<pw>`), and `util.inspect` / `console.error`
+ * print a cause's own fields. So `spawnargs` is dropped; `code`, `errno`,
+ * `syscall` and `path` stay.
+ *
+ * @param {unknown} err
+ * @returns {unknown}
+ */
+function withoutSpawnArgs(err) {
+  if (!err || typeof err !== "object" || !("spawnargs" in err)) return err;
+  const { spawnargs: _spawnargs, ...rest } = err;
+  return Object.assign(new Error(err.message), rest);
+}
+
+/**
  * Encrypt password using platform-specific secure storage.
  *
  * @param {string} password - the certificate password to encrypt
@@ -123,6 +142,8 @@ async function encryptPassword(password, pwdFilePath) {
   } catch (err) {
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
+      // err is what the platform helper rejected with; it already holds its
+      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -154,6 +175,8 @@ async function decryptPassword(pwdFilePath) {
   } catch (err) {
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
+      // err is what the platform helper rejected with; it already holds its
+      // spawn failure through withoutSpawnArgs().
       throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
@@ -206,7 +229,7 @@ async function encryptPasswordWindows(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -276,7 +299,7 @@ async function decryptPasswordWindows(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -312,7 +335,7 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: proc.error },
+          { cause: withoutSpawnArgs(proc.error) },
         ),
       );
       return;
@@ -371,7 +394,7 @@ async function decryptPasswordMacOS(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: proc.error },
+          { cause: withoutSpawnArgs(proc.error) },
         ),
       );
       return;
@@ -470,7 +493,7 @@ async function encryptPasswordLinux(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -535,7 +558,7 @@ async function decryptPasswordLinux(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -546,6 +569,7 @@ module.exports = {
   encryptPassword,
   decryptPassword,
   // Exports for testing
+  withoutSpawnArgs,
   encryptPasswordWindows,
   decryptPasswordWindows,
   encryptPasswordMacOS,

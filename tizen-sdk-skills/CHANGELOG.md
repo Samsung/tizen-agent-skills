@@ -48,7 +48,10 @@ below use those release tags.
 - Maintenance: the code passes ESLint 10's new recommended rules
   (`preserve-caught-error`, `no-useless-assignment`) ahead of the ESLint 10
   upgrade. Rethrown errors keep the original as `cause`, which is not
-  enumerable and does not appear in JSON envelopes. No behaviour change.
+  enumerable and so not in JSON envelopes, but which `util.inspect` /
+  `console.error` print. The certificate-password store therefore keeps a
+  failed command's error without its argument list (`spawnargs`), which holds
+  the password. No behaviour change.
 
 ## [1.6.1] — 2026-10-26
 
