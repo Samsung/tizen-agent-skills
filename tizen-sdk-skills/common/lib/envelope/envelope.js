@@ -8,7 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
-const { NODE_MIN_MAJOR, LINUX_NODE_INSTALL } = require("../core/node-floor");
+const { NODE_MIN_MAJOR, ALL_OS_NODE_INSTALL } = require("../core/node-floor");
 
 class Envelope {
   constructor(command) {
@@ -327,13 +327,13 @@ const ERROR_CODES = {
   // node_not_found = SDK CLI 러너 실행에 필요한 Node.js가 없음. 호출자
   // (preflight.js)가 플랫폼별 설치 명령을 suggestedCommand로 덮어쓰며,
   // 레지스트리의 guide_url은 그때도 보존된다.
-  // Linux 명령은 node-floor.js의 LINUX_NODE_INSTALL (배포판 nodejs 패키지는
-  // 하한 미만이라 NodeSource 저장소를 쓴다).
+  // OS별 명령은 node-floor.js (Linux는 배포판 nodejs가 하한 미만이라
+  // NodeSource 저장소; 호스트를 아는 preflight.js는 해당 OS 명령만 준다).
   NODE_NOT_FOUND: {
     error_code: "TIZEN_SDK_ENV_E001",
     error_category: "node_not_found",
     suggested_fix: {
-      command: `Install Node.js ${NODE_MIN_MAJOR}+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: ${LINUX_NODE_INSTALL} / macOS: brew install node`,
+      command: `Install Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
       guide_url: "https://nodejs.org/en/download",
     },
@@ -344,7 +344,7 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_ENV_E003",
     error_category: "node_version_unsupported",
     suggested_fix: {
-      command: `Upgrade to Node.js ${NODE_MIN_MAJOR}+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: ${LINUX_NODE_INSTALL} / macOS: brew install node`,
+      command: `Upgrade to Node.js ${NODE_MIN_MAJOR}+ — ${ALL_OS_NODE_INSTALL}`,
       auto_fixable: false,
       guide_url: "https://nodejs.org/en/download",
     },

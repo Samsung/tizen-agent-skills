@@ -21,13 +21,17 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
-  NODE_MIN_MAJOR,
-  nodeVersionStatus,
-  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   _getDiskSpaceViaCommand,
 } = require("../core/preflight");
+const {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
+  nodeFloorCheck,
+  linuxDistroFamily,
+  nodeInstallCommand,
+} = require("../core/node-floor");
 
 console.log("=== Pre-flight check tests (#69 disk, #71 node) ===\n");
 
@@ -281,7 +285,13 @@ function execStub(table) {
     const nvmrc = fs
       .readFileSync(path.join(__dirname, "../../../.nvmrc"), "utf-8")
       .trim();
-    check(".nvmrc matches NODE_MIN_MAJOR", Number(nvmrc), NODE_MIN_MAJOR);
+    // Leading major only: "22", "v22" and "22.11.0" are all valid pins.
+    const m = nvmrc.match(/^v?(\d+)/);
+    check(
+      ".nvmrc major matches NODE_MIN_MAJOR",
+      m ? parseInt(m[1], 10) : null,
+      NODE_MIN_MAJOR,
+    );
   }
 
   // --- checkNode (#71) ----------------------------------------------------------
@@ -340,6 +350,7 @@ function execStub(table) {
       version: "v16.20.0",
       isPkg: false,
       platform: "linux",
+      osRelease: "ID=ubuntu\nID_LIKE=debian\n",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
     // Below NODE_HARD_MIN_MAJOR the runners do not work: check-node fails
@@ -417,38 +428,111 @@ function execStub(table) {
     check("pkg with embedded node 18 → success", r.status, "success");
     check("pkg with embedded node 18 → no upgrade warning", r.warnings, []);
   }
+  // --- Node.js install command by OS / Linux distribution ---------------------
+  console.log("\n--- Node.js install command ---");
+  check(
+    "os-release: ubuntu → debian",
+    linuxDistroFamily("ID=ubuntu\nID_LIKE=debian\n"),
+    "debian",
+  );
+  check(
+    "os-release: linuxmint (ID_LIKE ubuntu) → debian",
+    linuxDistroFamily('ID=linuxmint\nID_LIKE="ubuntu debian"\n'),
+    "debian",
+  );
+  check("os-release: fedora → rhel", linuxDistroFamily("ID=fedora\n"), "rhel");
+  check(
+    "os-release: rocky (ID_LIKE rhel) → rhel",
+    linuxDistroFamily('ID="rocky"\nID_LIKE="rhel centos fedora"\n'),
+    "rhel",
+  );
+  check("os-release: arch → other", linuxDistroFamily("ID=arch\n"), "other");
+  check("os-release: unreadable → other", linuxDistroFamily(""), "other");
   {
-    // Linux install hint must not be the distribution nodejs package
-    // (Node 18 on Ubuntu 24.04 / Debian 12 — below the floor).
+    const deb = nodeInstallCommand("linux", "ID=debian\n");
+    check(
+      `debian → NodeSource deb setup_${NODE_MIN_MAJOR}.x`,
+      deb.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
+      true,
+    );
+    // The old hint's packages conflict with NodeSource's nodejs (dpkg
+    // file-overwrite on libnode-dev): removed first, and with ";" so a
+    // package that is absent does not stop the install.
+    check(
+      "debian → removes distro nodejs/npm/libnode-dev first",
+      deb.startsWith("sudo apt-get remove -y nodejs npm libnode-dev; "),
+      true,
+    );
+    check(
+      "debian → not the distro nodejs npm install",
+      deb.includes("install -y nodejs npm"),
+      false,
+    );
+    const rpm = nodeInstallCommand("linux", "ID=fedora\n");
+    check(
+      `rhel → NodeSource rpm setup_${NODE_MIN_MAJOR}.x + dnf`,
+      rpm.includes(`rpm.nodesource.com/setup_${NODE_MIN_MAJOR}.x`) &&
+        rpm.includes("dnf install -y nodejs"),
+      true,
+    );
+    const other = nodeInstallCommand("linux", "ID=arch\n");
+    check(
+      "other Linux → nodejs.org, no apt/dnf",
+      other.includes("https://nodejs.org/en/download") &&
+        !/apt-get|dnf/.test(other),
+      true,
+    );
+    check(
+      "win32 / darwin unchanged",
+      [nodeInstallCommand("win32"), nodeInstallCommand("darwin")],
+      ["winget install OpenJS.NodeJS.LTS", "brew install node"],
+    );
+  }
+  {
+    // checkNode puts the host's command (not an all-OS list) in suggested_fix.
     const r = await checkNode("t", {
       execPath: "/usr/bin/node",
       version: "garbage",
       isPkg: false,
       platform: "linux",
+      osRelease: "ID=fedora\n",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
-    const cmd = JSON.stringify(r.error || r);
-    check("linux install hint → failure", r.status, "failure");
     check(
-      `linux install hint → NodeSource setup_${NODE_MIN_MAJOR}.x`,
-      cmd.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
-      true,
+      "broken version → node_not_found",
+      r.errors[0].error_category,
+      "node_not_found",
     );
     check(
-      "linux install hint → no distro nodejs npm",
-      cmd.includes("install -y nodejs npm"),
-      false,
+      "fedora host → rpm command only",
+      r.errors[0].suggested_fix.command,
+      nodeInstallCommand("linux", "ID=fedora\n"),
     );
   }
   {
+    // A version without the "v" prefix is parsed the same way as by doctor.
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "22.1.0",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    check("22.1.0 (no v) → success", r.status, "success");
+    check("22.1.0 (no v) → major 22", r.result.major_version, 22);
+  }
+  {
     const { ERROR_CODES } = require("../envelope/envelope");
-    const fallback = ERROR_CODES.NODE_NOT_FOUND.suggested_fix.command;
-    check(
-      `NODE_NOT_FOUND fallback → NodeSource setup_${NODE_MIN_MAJOR}.x`,
-      fallback.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`) &&
-        !fallback.includes("install -y nodejs npm"),
-      true,
-    );
+    for (const key of ["NODE_NOT_FOUND", "NODE_VERSION_UNSUPPORTED"]) {
+      const fallback = ERROR_CODES[key].suggested_fix.command;
+      check(
+        `${key} fallback → debian, rhel and other-Linux commands`,
+        fallback.includes(nodeInstallCommand("linux", "ID=debian\n")) &&
+          fallback.includes(nodeInstallCommand("linux", "ID=fedora\n")) &&
+          fallback.includes("https://nodejs.org/en/download"),
+        true,
+      );
+    }
   }
 
   // --- real runner with an empty PATH (the #71 reproduction) --------------------

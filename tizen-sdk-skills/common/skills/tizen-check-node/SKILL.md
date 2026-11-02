@@ -96,7 +96,9 @@ Exit code: `0` = success (Node.js installed, v18+), `1` = failure (Node.js not f
 `"Node.js v20.11.0 is older than the required v22+ … Upgrade to Node.js 22 LTS or later …"`.
 Report it to the user as an upgrade the SDK skills need — do not call that Node version fine.
 
-**Failure (Node.js not installed):**
+**Failure (Node.js not installed)** — example from an Ubuntu host. `suggested_fix.command` is
+the install command for the host's OS only (Windows: winget, macOS: brew, Ubuntu/Debian or
+Fedora/RHEL: NodeSource, other Linux: the nodejs.org download page — see the table below):
 ```json
 {
   "command": "tizen-sdk check-node",
@@ -106,9 +108,9 @@ Report it to the user as an upgrade the SDK skills need — do not call that Nod
     "error_category": "node_not_found",
     "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. Please install Node.js LTS from https://nodejs.org/ and retry.",
     "suggested_fix": {
-      "command": "winget install OpenJS.NodeJS.LTS (Windows) / brew install node (macOS) / curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs (Linux)",
+      "command": "sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs",
       "auto_fixable": false,
-      "guide_url": "https://nodejs.org/"
+      "guide_url": "https://nodejs.org/en/download"
     }
   }]
 }
@@ -123,8 +125,12 @@ Report it to the user as an upgrade the SDK skills need — do not call that Nod
 |---|---|
 | **Windows** | `winget install OpenJS.NodeJS.LTS` |
 | **macOS** | `brew install node` |
-| **Linux (Ubuntu/Debian)** | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| **Linux (Ubuntu/Debian)** | `sudo apt-get remove -y nodejs npm libnode-dev; curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
+| **Linux (Fedora/RHEL)** | `curl -fsSL https://rpm.nodesource.com/setup_22.x \| sudo bash - && sudo dnf install -y nodejs` |
+| **Linux (other distributions)** | Install Node.js 22 LTS from https://nodejs.org/en/download |
 | **All OS (manual)** | Download LTS from https://nodejs.org/ |
+
+> The distribution `nodejs` package is Node 18 on Ubuntu 24.04 and Debian 12 (below the floor), so these use the NodeSource repository. The Ubuntu/Debian command first removes the distribution `nodejs` / `npm` / `libnode-dev` packages, whose files conflict with NodeSource's `nodejs`.
 
 After installing Node.js, **restart the terminal** (to refresh PATH), then retry the Tizen SDK installation.
 

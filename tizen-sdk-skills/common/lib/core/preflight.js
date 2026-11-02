@@ -22,14 +22,30 @@ const {
 const { Envelope } = require("../envelope/envelope");
 const {
   NODE_MIN_MAJOR,
-  LINUX_NODE_INSTALL,
-  nodeVersionStatus,
   nodeFloorCheck,
+  nodeInstallCommand,
 } = require("./node-floor");
 
 /** path module for a platform name — win32 paths must parse as win32 even on a Linux host. */
 function pathFor(platform) {
   return platform === "win32" ? path.win32 : path.posix;
+}
+
+/**
+ * /etc/os-release contents, or "" when unreadable / not Linux. Only used to
+ * pick the Linux distribution's Node.js install command.
+ *
+ * @param {object} [deps] - test seams: osRelease (string), platform
+ * @returns {string}
+ */
+function readOsRelease(deps = {}) {
+  if (deps.osRelease !== undefined) return deps.osRelease;
+  if ((deps.platform || process.platform) !== "linux") return "";
+  try {
+    return fs.readFileSync("/etc/os-release", "utf-8");
+  } catch (_e) {
+    return "";
+  }
 }
 
 /**
@@ -47,7 +63,7 @@ function pathFor(platform) {
  * a warning, never a failure.
  *
  * @param {string} [command]
- * @param {object} [deps] - test seams: execPath, version, isPkg, platform, spawnSync
+ * @param {object} [deps] - test seams: execPath, version, isPkg, platform, spawnSync, osRelease
  * @returns {object} Standard JSON Envelope
  *   - installed: success + version/path info
  *   - not installed: failure + node_not_found error + OS-specific guide
@@ -65,15 +81,11 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     const warnings = [];
 
     // 1. Version: this process is the interpreter. A pkg-compiled binary
-    // (tizen-cli) embeds Node too, so the same fields apply.
-    const versionMatch = String(version).match(/^v(\d+)/);
-    const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
-    const installGuide = isWin
-      ? "winget install OpenJS.NodeJS.LTS"
-      : platform === "darwin"
-        ? "brew install node"
-        : LINUX_NODE_INSTALL;
-    if (!versionMatch) {
+    // (tizen-cli) embeds Node too, so the same fields apply. nodeFloorCheck
+    // parses the major once; it is reused for every check below.
+    const floor = nodeFloorCheck({ version, isPkg });
+    const installGuide = nodeInstallCommand(platform, readOsRelease(deps));
+    if (floor.major === null) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
       return formatError(
@@ -119,7 +131,6 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // majors only warn, the runner may still work; below the hard minimum
     // the runners do not work, so that is a failure. Skipped for a
     // pkg-compiled binary, whose embedded Node the user cannot upgrade.
-    const floor = nodeFloorCheck({ version, isPkg });
     if (floor.status === "fail") {
       return formatError(
         command,
@@ -138,7 +149,7 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
         installed: true,
         version,
         path: execPath,
-        major_version: majorVersion > 0 ? majorVersion : null,
+        major_version: floor.major,
         source: isPkg ? "pkg" : "process",
         ...(onPath !== null ? { on_path: onPath } : {}),
         ...(pathResolved && pathResolved !== execPath
@@ -425,9 +436,6 @@ function _getDiskSpaceViaCommand(checkPath, deps = {}) {
 }
 
 module.exports = {
-  NODE_MIN_MAJOR,
-  nodeVersionStatus,
-  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   measureDiskSpace,

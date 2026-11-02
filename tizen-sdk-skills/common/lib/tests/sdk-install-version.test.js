@@ -234,49 +234,6 @@ console.error = () => {};
     );
     check("empty path → []", listInstalledPlatformVersions(""), []);
 
-    // --- install envelopes carry the below-floor Node warning ------------------
-    // checkNode's v18–v21 warning used to be dropped by sdk-install. The
-    // exported installSdk / installSdkFromRepo now add it to whatever they
-    // return — failures included — once, even when one delegates to the other.
-    console.log("\n--- install envelopes: Node below the floor ---");
-    {
-      const desc = Object.getOwnPropertyDescriptor(process, "version");
-      Object.defineProperty(process, "version", {
-        ...desc,
-        value: "v20.19.0",
-      });
-      try {
-        const env = await installSdk("99.99.99");
-        const nodeWarnings = (env.warnings || []).filter((w) =>
-          w.includes("older than the required v22+"),
-        );
-        check(
-          "installSdk on Node 20 → one floor warning",
-          nodeWarnings.length,
-          1,
-        );
-        const repoEnv = await installSdkFromRepo(
-          "https://example.invalid/repo",
-          "99.99.99",
-        );
-        check(
-          "installSdkFromRepo on Node 20 → one floor warning",
-          (repoEnv.warnings || []).filter((w) =>
-            w.includes("older than the required v22+"),
-          ).length,
-          1,
-        );
-      } finally {
-        Object.defineProperty(process, "version", desc);
-      }
-      const env22 = await installSdk("99.99.99");
-      check(
-        "installSdk on a supported Node → no floor warning",
-        (env22.warnings || []).some((w) => w.includes("older than")),
-        false,
-      );
-    }
-
     // --- installSdk: malformed version -------------------------------------------
     console.log("\n--- installSdk: malformed version ---");
     {
@@ -312,6 +269,58 @@ console.error = () => {};
       path.join(sdkPath, "sdk.info"),
       `TIZEN_SDK_INSTALLED_PATH=${sdkPath}\nTIZEN_SDK_DATA_PATH=${sdkPath}-data\n`,
     );
+
+    // --- install envelopes carry checkNode's warnings ---------------------------
+    // installSdk / installSdkFromRepo used to drop checkNode's warnings. Every
+    // envelope returned after the Node check now carries them — failures
+    // included — and those returned before it (a version typo) do not.
+    console.log("\n--- install envelopes: checkNode warnings ---");
+    {
+      const isFloorWarning = (w) => w.includes("older than the required v22+");
+      const floorWarnings = (env) =>
+        (env.warnings || []).filter(isFloorWarning);
+      const desc = Object.getOwnPropertyDescriptor(process, "version");
+      Object.defineProperty(process, "version", {
+        ...desc,
+        value: "v20.19.0",
+      });
+      try {
+        // Past the Node check: the installed SDK lacks platform 99.0.
+        const env = await installSdk("99.0");
+        check(
+          "installSdk on Node 20, past check-node → failure",
+          env.status,
+          "failure",
+        );
+        check(
+          "installSdk on Node 20, past check-node → one floor warning",
+          floorWarnings(env).length,
+          1,
+        );
+        // Past the Node check: a non-http URL fails syntax validation, no network.
+        const repoEnv = await installSdkFromRepo("ftp://example.invalid/repo");
+        check(
+          "installSdkFromRepo on Node 20, bad URL → one floor warning",
+          floorWarnings(repoEnv).length,
+          1,
+        );
+        // Before the Node check: a version typo has nothing from check-node.
+        const typoEnv = await installSdk("99.99.99");
+        check(
+          "installSdk on Node 20, version typo → no floor warning",
+          floorWarnings(typoEnv).length,
+          0,
+        );
+      } finally {
+        Object.defineProperty(process, "version", desc);
+      }
+      const env22 = await installSdk("99.0");
+      check(
+        "installSdk on a supported Node → no floor warning",
+        floorWarnings(env22).length,
+        0,
+      );
+    }
     {
       const env = await installSdk("99.0");
       check(

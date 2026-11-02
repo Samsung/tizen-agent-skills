@@ -24,6 +24,7 @@ const { formatError } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
 const { setupWebappDebug } = require("./webapp-debug");
 const { summarizeOutput } = require("./output-summary");
+const { NODE_MIN_MAJOR } = require("./node-floor");
 const {
   renderTestTemplate,
   renderPackageJson,
@@ -168,9 +169,8 @@ function describeNodeRuntimeFailure(rt, executable) {
         message:
           `Node.js executable "${exe}" was not found on PATH (${rt.error}). ` +
           "Playwright tests run in an external Node.js process, not in this CLI. " +
-          "Install Node.js 22 or newer, or add its bin directory to PATH, then retry.",
-        suggestedFix:
-          "Install Node.js 22 or newer (https://nodejs.org/) and ensure node is on PATH.",
+          `Install Node.js ${NODE_MIN_MAJOR} or newer, or add its bin directory to PATH, then retry.`,
+        suggestedFix: `Install Node.js ${NODE_MIN_MAJOR} or newer (https://nodejs.org/) and ensure node is on PATH.`,
       };
     case "timeout":
       return {
@@ -178,7 +178,7 @@ function describeNodeRuntimeFailure(rt, executable) {
         message:
           `Node.js executable "${exe}" is on PATH but "${exe} --version" did not answer within ${NODE_PROBE_TIMEOUT_MS / 1000} s (${rt.error}).${detail} ` +
           "The runtime is present but hangs on start — check for a stuck antivirus/EDR scan, a broken PATH shim, or a corrupted installation, then retry.",
-        suggestedFix: `Run "${exe} --version" in a terminal; if it hangs there too, reinstall Node.js 22 or newer.`,
+        suggestedFix: `Run "${exe} --version" in a terminal; if it hangs there too, reinstall Node.js ${NODE_MIN_MAJOR} or newer.`,
       };
     case "exited":
       return {
@@ -186,8 +186,8 @@ function describeNodeRuntimeFailure(rt, executable) {
         message:
           `Node.js executable "${exe}" is on PATH but "${exe} --version" exited abnormally (${rt.error}).${detail} ` +
           "Node.js is installed but this installation does not run — typically a missing DLL/shared library, an architecture mismatch (x64 vs arm64), or corrupted files. " +
-          "Repair or reinstall Node.js 22 or newer, then retry. Do not install a second copy first.",
-        suggestedFix: `Run "${exe} --version" in a terminal to see the error, then repair/reinstall Node.js 22 or newer.`,
+          `Repair or reinstall Node.js ${NODE_MIN_MAJOR} or newer, then retry. Do not install a second copy first.`,
+        suggestedFix: `Run "${exe} --version" in a terminal to see the error, then repair/reinstall Node.js ${NODE_MIN_MAJOR} or newer.`,
       };
     default:
       return {
