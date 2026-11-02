@@ -169,10 +169,14 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     for (const v of ["9.0", "11.0"]) {
       const env = await installPlatform(v);
       check(`${v} → failure (install needed)`, env.status, "failure");
+      // The installer command is OS-specific: PowerShell flags on win32,
+      // long options elsewhere (installPlatform builds both lists).
       check(
         `${v} → suggested_fix installs that version`,
         String(env.errors[0].suggested_fix.command).includes(
-          `--platform-version="${v}"`,
+          process.platform === "win32"
+            ? `-PlatformVersion "${v}"`
+            : `--platform-version="${v}"`,
         ),
         true,
       );
@@ -182,7 +186,9 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       check("--force on 10.0 → install command", env.status, "failure");
       check(
         "--force reaches the installer",
-        String(env.errors[0].suggested_fix.command).includes("--force"),
+        String(env.errors[0].suggested_fix.command).includes(
+          process.platform === "win32" ? "-Force" : "--force",
+        ),
         true,
       );
     }
