@@ -17,22 +17,34 @@ below use those release tags.
 ### Changed
 
 - **Node.js 22 or later is now required** (Node.js 20 reached end-of-life on
-  2026-04-30). CI and releases run on Node 22 (`.nvmrc`), `engines` is `>=22`,
-  `check-node` / preflight warn below v22 (they still do not abort), and
-  `tizen-sdk doctor` reports Node 18–21 as a warning instead of OK. The
-  documented prerequisites, install guides and error messages now say 22+.
-- The Linux Node.js install hint (`check-node` error, `node_not_found`
-  suggested fix, docs) now uses the NodeSource 22.x repository instead of the
-  distribution `nodejs` package, which is Node 18 on Ubuntu 24.04 and Debian 12.
-- A pkg-compiled binary no longer gets the "upgrade Node.js" warning from
-  `check-node` or `doctor`: its Node is embedded at build time and the user
-  cannot change it.
-- `check-node` now fails with `node_version_unsupported` (`TIZEN_SDK_ENV_E003`)
-  below Node 18, as `doctor` already did, so `sdk-install` stops there instead
-  of continuing on a runtime the runners do not support. The Node 18–21
-  upgrade warning is now carried into the `sdk-install` /
-  `sdk-install-custom-repo` result instead of being dropped. check-node,
-  sdk-install and `doctor` share one floor check (`common/lib/core/node-floor.js`).
+  2026-04-30). CI and releases run on Node 22 (`.nvmrc`) and `engines` is
+  `>=22`. `check-node`, the `sdk-install` / `sdk-install-custom-repo`
+  preflight and `tizen-sdk doctor` share one check
+  (`common/lib/core/node-floor.js`):
+  - v22+ passes.
+  - v18–v21 still runs, with an upgrade warning (`doctor`: warn instead of OK).
+    `sdk-install` / `sdk-install-custom-repo` now carry check-node's warnings
+    (this one and the "node not on the PATH of spawned shells" one) into their
+    result instead of dropping them.
+  - Below v18 fails with the new `node_version_unsupported`
+    (`TIZEN_SDK_ENV_E003`), so `sdk-install` stops there.
+  - A pkg-compiled binary is not checked: its Node is embedded at build time
+    and the user cannot change it.
+- The Node.js install hint only ever carries a command that changes nothing
+  but Node.js, only when the source of the running Node.js is known, and
+  comes with the v18–v21 warning as well as with failures: the version
+  manager's own command under nvm, nvm-windows, fnm or volta (recognised by
+  their environment variables or standard layout); `winget` for the Windows
+  installer in `C:\Program Files\nodejs` when nvm-windows is absent;
+  `brew upgrade node` for Homebrew's `node` formula. Everything else —
+  including a Linux system Node (the old `apt install nodejs npm` hint
+  installed Node 18 on Ubuntu 24.04 and Debian 12) — gets no command, and
+  `suggested_fix.guide_url` points to the nodejs.org download page. The
+  `tizen-check-node` skill explains what replacing a distribution install
+  involves, as a step for the user.
+- The documented prerequisites, install guides, error messages and skill docs
+  say 22+, and the `node_not_found` examples show its real code,
+  `TIZEN_SDK_ENV_E001` (they said `TIZEN_SDK_CONFIG_E005`).
 
 ## [1.6.1] — 2026-10-26
 

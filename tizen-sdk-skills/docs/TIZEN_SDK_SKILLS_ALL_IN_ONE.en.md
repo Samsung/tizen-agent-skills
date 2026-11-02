@@ -161,7 +161,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 **Pre-check Flow:**
 
 ```
-1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
+1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. SDK already installed? → if yes, return success
 3. Disk space check (15 GB, home drive) → if insufficient, abort with details
 4. Return installer command for Phase 2 (background install)
@@ -212,13 +212,13 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
   "status": "failure",
   "errors": [
     {
-      "error_code": "TIZEN_SDK_CONFIG_E005",
+      "error_code": "TIZEN_SDK_ENV_E001",
       "error_category": "node_not_found",
       "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
-        "guide_url": "https://nodejs.org/"
+        "guide_url": "https://nodejs.org/en/download"
       }
     }
   ],
@@ -261,12 +261,14 @@ node <plugin>/lib/cli/check-node-cli.js
 
 **Installation Guide (when Node.js is not installed):**
 
-| OS                    | Command                                             |
-| --------------------- | --------------------------------------------------- |
-| Windows               | `winget install OpenJS.NodeJS.LTS`                  |
-| macOS                 | `brew install node`                                 |
-| Linux (Ubuntu/Debian) | `curl -fsSL https://deb.nodesource.com/setup_22.x \| sudo -E bash - && sudo apt-get install -y nodejs` |
-| All OS (manual)       | Download LTS from https://nodejs.org/               |
+| Where the running Node.js comes from | Install command (the user runs it) |
+| --- | --- |
+| Windows installer (`C:\Program Files\nodejs`), no nvm-windows | `winget install OpenJS.NodeJS.LTS` |
+| macOS, Homebrew's `node` formula | `brew upgrade node` |
+| nvm / nvm-windows / fnm / volta | that manager's own command (see `tizen-check-node`) |
+| Anything else (Linux system Node, asdf, mise, scoop, nodejs.org `.pkg`, …) | none — https://nodejs.org/en/download |
+
+> Linux: the distribution's own `nodejs` is below 22 on current LTS releases (Node 18 on Ubuntu 24.04 and Debian 12). Install Node.js 22+ by one of the methods on the download page (a version manager such as nvm needs no root and touches no system packages). See the `tizen-check-node` skill for what to watch for when replacing a distribution install.
 
 **Dependencies:** None
 
@@ -1075,7 +1077,7 @@ A Tizen package repository serves the package index at its root:
 **Pre-check Flow:**
 
 ```
-1. Node.js check (22+ required) → if not installed, abort with OS-specific guide
+1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. Repository URL validation (pkg_list_{OS}-{64,32}) → if invalid, ABORT (nothing downloaded)
 3. SDK already installed? → success + warning that --force is needed to switch repositories
 4. Disk space check (15 GB, home drive) → if insufficient, abort with details

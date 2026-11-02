@@ -21,13 +21,17 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const {
-  NODE_MIN_MAJOR,
-  nodeVersionStatus,
-  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   _getDiskSpaceViaCommand,
 } = require("../core/preflight");
+const {
+  NODE_MIN_MAJOR,
+  nodeVersionStatus,
+  nodeFloorCheck,
+  NODE_DOWNLOAD_URL,
+  nodeInstallCommand,
+} = require("../core/node-floor");
 
 console.log("=== Pre-flight check tests (#69 disk, #71 node) ===\n");
 
@@ -281,7 +285,13 @@ function execStub(table) {
     const nvmrc = fs
       .readFileSync(path.join(__dirname, "../../../.nvmrc"), "utf-8")
       .trim();
-    check(".nvmrc matches NODE_MIN_MAJOR", Number(nvmrc), NODE_MIN_MAJOR);
+    // Leading major only: "22", "v22" and "22.11.0" are all valid pins.
+    const m = nvmrc.match(/^v?(\d+)/);
+    check(
+      ".nvmrc major matches NODE_MIN_MAJOR",
+      m ? parseInt(m[1], 10) : null,
+      NODE_MIN_MAJOR,
+    );
   }
 
   // --- checkNode (#71) ----------------------------------------------------------
@@ -350,10 +360,12 @@ function execStub(table) {
       [r.errors[0].error_category, r.errors[0].error_code],
       ["node_version_unsupported", "TIZEN_SDK_ENV_E003"],
     );
+    // A Linux system Node has no safe one-line install: no command, the
+    // download page instead.
     check(
-      "node 16 → linux install command in suggested_fix",
-      r.errors[0].suggested_fix.command.includes(`setup_${NODE_MIN_MAJOR}.x`),
-      true,
+      "node 16, Linux system Node → no command, guide_url download page",
+      [r.errors[0].suggested_fix.command, r.errors[0].suggested_fix.guide_url],
+      [null, NODE_DOWNLOAD_URL],
     );
   }
   {
@@ -380,6 +392,29 @@ function execStub(table) {
     check(
       "node 20 → v22+ upgrade warning",
       r.warnings.length === 1 && r.warnings[0].includes("required v22+"),
+      true,
+    );
+    check(
+      "node 20, Linux system Node → warning has no install command",
+      r.warnings[0].includes("Install command"),
+      false,
+    );
+  }
+  {
+    // Under nvm a system-wide install would not replace the Node on PATH:
+    // the warning carries nvm's own command.
+    const r = await checkNode("t", {
+      execPath: "/home/user/.nvm/versions/node/v20.19.0/bin/node",
+      version: "v20.19.0",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    check(
+      "node 20 under nvm → warning ends with the nvm command",
+      r.warnings[0].endsWith(
+        `Install command (run it yourself in a terminal): nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
+      ),
       true,
     );
   }
@@ -417,38 +452,183 @@ function execStub(table) {
     check("pkg with embedded node 18 → success", r.status, "success");
     check("pkg with embedded node 18 → no upgrade warning", r.warnings, []);
   }
+  // --- Node.js install command --------------------------------------------------
+  // Only non-destructive commands: a version manager's own install, winget,
+  // Homebrew. A Linux system Node gets none (the download page instead).
+  console.log("\n--- Node.js install command ---");
   {
-    // Linux install hint must not be the distribution nodejs package
-    // (Node 18 on Ubuntu 24.04 / Debian 12 — below the floor).
+    // env is explicit so the host's own NVM_DIR / ProgramFiles do not leak in.
+    const cmd = (platform, execPath, env = {}) =>
+      nodeInstallCommand({ platform, execPath, env });
+    const NVM = `nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`;
+    const FNM = `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`;
+    const VOLTA = `volta install node@${NODE_MIN_MAJOR}`;
+    const WINGET = "winget install OpenJS.NodeJS.LTS";
+    const msi = "C:\\Program Files\\nodejs\\node.exe";
+
+    // version managers: standard layout, or the directory their env names
+    check(
+      "nvm (~/.nvm)",
+      cmd("linux", "/home/user/.nvm/versions/node/v20.1.0/bin/node"),
+      NVM,
+    );
+    check(
+      "nvm ($XDG_CONFIG_HOME/nvm)",
+      cmd("darwin", "/Users/user/.config/nvm/versions/node/v20.1.0/bin/node"),
+      NVM,
+    );
+    check(
+      "nvm (custom NVM_DIR)",
+      cmd("linux", "/opt/tools/nodes/versions/node/v20.1.0/bin/node", {
+        NVM_DIR: "/opt/tools/nodes",
+      }),
+      NVM,
+    );
+    check(
+      "fnm (multishell)",
+      cmd("linux", "/run/user/1000/fnm_multishells/123_456/bin/node"),
+      FNM,
+    );
+    check(
+      "fnm (node-versions)",
+      cmd(
+        "darwin",
+        "/Users/user/.local/share/fnm/node-versions/v20.1.0/installation/bin/node",
+      ),
+      FNM,
+    );
+    check(
+      "volta on Windows",
+      cmd(
+        "win32",
+        "C:\\Users\\user\\AppData\\Local\\Volta\\tools\\image\\node\\20.1.0\\node.exe",
+      ),
+      VOLTA,
+    );
+    check(
+      "a folder merely named volta is not Volta",
+      cmd("linux", "/opt/volta/node-20/bin/node"),
+      null,
+    );
+
+    // nvm-windows runs node through its symlink, by default the MSI folder
+    const nvmWin = {
+      NVM_HOME: "C:\\Users\\user\\AppData\\Roaming\\nvm",
+      NVM_SYMLINK: "C:\\Program Files\\nodejs",
+    };
+    check(
+      "nvm-windows (node via NVM_SYMLINK)",
+      cmd("win32", msi, nvmWin),
+      `nvm install ${NODE_MIN_MAJOR} && nvm use ${NODE_MIN_MAJOR}`,
+    );
+    check(
+      "nvm-windows installed, other node → none (winget would hit its symlink)",
+      cmd("win32", "D:\\tools\\node\\node.exe", nvmWin),
+      null,
+    );
+
+    // system installs: only where the command is certain to replace this node
+    check(
+      "Windows MSI node → winget",
+      cmd("win32", msi, { ProgramFiles: "C:\\Program Files" }),
+      WINGET,
+    );
+    check(
+      "Windows MSI node, case and slashes differ → winget",
+      cmd("win32", "c:/program files/NodeJS/node.exe", {}),
+      WINGET,
+    );
+    check(
+      "Windows scoop node → none",
+      cmd("win32", "C:\\Users\\user\\scoop\\apps\\nodejs\\current\\node.exe", {
+        ProgramFiles: "C:\\Program Files",
+      }),
+      null,
+    );
+    check(
+      "macOS Homebrew node formula → brew",
+      cmd("darwin", "/opt/homebrew/Cellar/node/25.1.0/bin/node"),
+      "brew upgrade node",
+    );
+    check(
+      "macOS keg-only node@20 → none",
+      cmd("darwin", "/opt/homebrew/Cellar/node@20/20.19.0/bin/node"),
+      null,
+    );
+    check(
+      "macOS nodejs.org .pkg (/usr/local/bin) → none",
+      cmd("darwin", "/usr/local/bin/node"),
+      null,
+    );
+    check(
+      "asdf → none",
+      cmd("darwin", "/Users/user/.asdf/installs/nodejs/20.1.0/bin/node"),
+      null,
+    );
+    check("Linux system Node → none", cmd("linux", "/usr/bin/node"), null);
+  }
+  {
+    // A failure keeps the warnings already found (node not on the PATH of
+    // spawned shells), which sdk-install then carries too.
     const r = await checkNode("t", {
       execPath: "/usr/bin/node",
+      version: "v16.20.0",
+      isPkg: false,
+      platform: "linux",
+      env: {},
+      spawnSync: () => ({ status: 1, stdout: "" }),
+    });
+    check("node 16, not on PATH → failure", r.status, "failure");
+    check(
+      "node 16, not on PATH → PATH warning kept",
+      (r.warnings || []).some((w) => w.includes("does not resolve")),
+      true,
+    );
+  }
+  {
+    const r = await checkNode("t", {
+      execPath: "C:\\Program Files\\nodejs\\node.exe",
       version: "garbage",
+      isPkg: false,
+      platform: "win32",
+      env: { ProgramFiles: "C:\\Program Files" },
+      spawnSync: () => ({ status: 0, stdout: "" }),
+    });
+    check(
+      "broken version → node_not_found",
+      r.errors[0].error_category,
+      "node_not_found",
+    );
+    check(
+      "Windows → winget in suggested_fix, guide_url kept",
+      [r.errors[0].suggested_fix.command, r.errors[0].suggested_fix.guide_url],
+      ["winget install OpenJS.NodeJS.LTS", NODE_DOWNLOAD_URL],
+    );
+  }
+  {
+    // A version without the "v" prefix is parsed the same way as by doctor.
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "22.1.0",
       isPkg: false,
       platform: "linux",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
-    const cmd = JSON.stringify(r.error || r);
-    check("linux install hint → failure", r.status, "failure");
-    check(
-      `linux install hint → NodeSource setup_${NODE_MIN_MAJOR}.x`,
-      cmd.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`),
-      true,
-    );
-    check(
-      "linux install hint → no distro nodejs npm",
-      cmd.includes("install -y nodejs npm"),
-      false,
-    );
+    check("22.1.0 (no v) → success", r.status, "success");
+    check("22.1.0 (no v) → major 22", r.result.major_version, 22);
   }
   {
+    // The registry has no command to fall back on — only the download page —
+    // so a host without a safe command never gets a prose "command".
     const { ERROR_CODES } = require("../envelope/envelope");
-    const fallback = ERROR_CODES.NODE_NOT_FOUND.suggested_fix.command;
-    check(
-      `NODE_NOT_FOUND fallback → NodeSource setup_${NODE_MIN_MAJOR}.x`,
-      fallback.includes(`deb.nodesource.com/setup_${NODE_MIN_MAJOR}.x`) &&
-        !fallback.includes("install -y nodejs npm"),
-      true,
-    );
+    for (const key of ["NODE_NOT_FOUND", "NODE_VERSION_UNSUPPORTED"]) {
+      const fix = ERROR_CODES[key].suggested_fix;
+      check(
+        `${key} registry → guide_url only`,
+        [fix.command, fix.guide_url],
+        [undefined, NODE_DOWNLOAD_URL],
+      );
+    }
   }
 
   // --- real runner with an empty PATH (the #71 reproduction) --------------------

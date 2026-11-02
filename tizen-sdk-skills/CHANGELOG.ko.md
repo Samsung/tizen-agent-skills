@@ -17,21 +17,29 @@
 
 - **Node.js 22 이상이 필요합니다** (Node.js 20은 2026-04-30에 지원이
   종료되었습니다). CI와 릴리스는 Node 22(`.nvmrc`)로 실행되고 `engines`는
-  `>=22`입니다. `check-node`/사전 점검은 v22 미만이면 경고하며(중단하지는 않음),
-  `tizen-sdk doctor`는 Node 18–21을 OK 대신 경고로 표시합니다. 문서의 사전
-  요구사항, 설치 안내와 오류 메시지도 22+로 바꿨습니다.
-- Linux Node.js 설치 안내(`check-node` 오류, `node_not_found` 해결 명령,
-  문서)가 배포판 `nodejs` 패키지(Ubuntu 24.04·Debian 12에서는 Node 18) 대신
-  NodeSource 22.x 저장소를 사용합니다.
-- pkg로 컴파일된 바이너리는 `check-node`/`doctor`에서 "Node.js 업그레이드"
-  경고를 받지 않습니다. 내장된 Node는 빌드 시 고정되어 사용자가 바꿀 수 없기
-  때문입니다.
-- `check-node`가 Node 18 미만에서 `node_version_unsupported`
-  (`TIZEN_SDK_ENV_E003`)로 실패합니다(`doctor`는 이미 실패로 표시). 그래서
-  `sdk-install`이 러너가 동작하지 않는 런타임에서 진행하지 않고 멈춥니다. Node
-  18–21 업그레이드 경고는 버려지지 않고 `sdk-install` /
-  `sdk-install-custom-repo` 결과에 포함됩니다. check-node, sdk-install, `doctor`가
-  하나의 하한 검사(`common/lib/core/node-floor.js`)를 공유합니다.
+  `>=22`입니다. `check-node`, `sdk-install` / `sdk-install-custom-repo` 사전
+  점검, `tizen-sdk doctor`가 하나의 검사(`common/lib/core/node-floor.js`)를
+  공유합니다.
+  - v22 이상은 통과합니다.
+  - v18–v21은 실행되지만 업그레이드 경고를 냅니다(`doctor`는 OK 대신 경고).
+    `sdk-install` / `sdk-install-custom-repo`는 check-node의 경고(이 경고와
+    "spawn된 셸의 PATH에 node 없음" 경고)를 버리지 않고 결과에 담습니다.
+  - v18 미만은 새 오류 `node_version_unsupported`(`TIZEN_SDK_ENV_E003`)로
+    실패하므로 `sdk-install`이 그 자리에서 멈춥니다.
+  - pkg로 컴파일된 바이너리는 검사하지 않습니다. 내장된 Node는 빌드 시
+    고정되어 사용자가 바꿀 수 없기 때문입니다.
+- Node.js 설치 안내에는 Node.js 외에 아무것도 바꾸지 않는 명령만, 실행 중인
+  Node.js의 출처를 알 때만 들어가며, 실패할 때뿐 아니라 v18–v21 경고에도 함께
+  나옵니다. nvm, nvm-windows, fnm, volta(환경변수 또는 표준 위치로 인식)는 해당
+  도구의 명령, nvm-windows가 없는 Windows 설치 프로그램(`C:\Program Files\nodejs`)은
+  `winget`, Homebrew `node` 포뮬러는 `brew upgrade node`입니다. 그 외(Linux 시스템
+  Node 포함 — 기존 `apt install nodejs npm` 안내는 Ubuntu 24.04·Debian 12에서
+  Node 18을 설치했습니다)에는 명령을 주지 않고 `suggested_fix.guide_url`로
+  nodejs.org 다운로드 페이지를 안내합니다. 배포판 설치를 교체할 때의 주의점은
+  `tizen-check-node` 스킬에 사용자가 할 단계로 적었습니다.
+- 문서의 사전 요구사항, 설치 안내, 오류 메시지, 스킬 문서가 22+로 바뀌었고,
+  `node_not_found` 예시는 실제 코드인 `TIZEN_SDK_ENV_E001`을 보여줍니다(기존
+  `TIZEN_SDK_CONFIG_E005`).
 
 ## [1.6.1] — 2026-10-26
 

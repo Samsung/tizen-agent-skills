@@ -55,7 +55,29 @@ const {
 const { resolveScript, execPluginScript } = require("./plugin-cache");
 const { checkShellSafe } = require("./shell-safety");
 const { checkNode, checkDiskSpace } = require("./preflight");
-const { nodeFloorCheck } = require("./node-floor");
+
+/**
+ * Add checkNode's warnings to an install envelope.
+ *
+ * installSdk / installSdkFromRepo run checkNode first and then return
+ * envelopes from many later steps; without this its warnings (Node below the
+ * supported floor, `node` not on the PATH of spawned shells) never reach the
+ * user. Failure envelopes carry no warnings array of their own, so one is
+ * created (same pattern as jobs.js). Duplicates are skipped.
+ *
+ * @param {object} env - Standard JSON Envelope
+ * @param {string[]} warnings - checkNode(...).warnings
+ * @returns {object} the same envelope
+ */
+function withNodeWarnings(env, warnings) {
+  if (!env || typeof env !== "object" || !warnings || !warnings.length) {
+    return env;
+  }
+  if (!Array.isArray(env.warnings)) env.warnings = [];
+  const fresh = warnings.filter((w) => !env.warnings.includes(w));
+  env.warnings.unshift(...fresh);
+  return env;
+}
 
 const CONFIG_FILE = path.join(os.homedir(), ".tizen.sdk.path.config");
 const DEFAULT_SDK_PATH = path.join(os.homedir(), "tizen-sdk");
@@ -771,6 +793,35 @@ async function installSdk(
   command = "tizen-sdk sdk-install",
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
 ) {
+  // checkNode's warnings are collected in ctx by the steps and merged into
+  // whichever envelope they return — one place, so a new return path cannot
+  // drop them.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkSteps(
+    ctx,
+    version,
+    _label,
+    force,
+    repoUrl,
+    command,
+    downloadJobs,
+  );
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * installSdk() body; records checkNode's warnings in ctx.nodeWarnings.
+ * Call installSdk(), not this: only installSdk() merges those warnings.
+ */
+async function installSdkSteps(
+  ctx,
+  version,
+  _label,
+  force,
+  repoUrl,
+  command,
+  downloadJobs,
+) {
   // Start time: pass to formatSdkInstall so duration_ms reflects actual work time
   const startTime = Date.now();
 
@@ -799,6 +850,7 @@ async function installSdk(
     // 1. Node.js check (first)
     console.error("[tizen-sdk] Checking Node.js installation...");
     const nodeCheck = await checkNode(command);
+    ctx.nodeWarnings = nodeCheck.warnings || [];
 
     if (nodeCheck.status !== "success") {
       console.error("[tizen-sdk] Node.js check failed. Aborting installation.");
@@ -2378,6 +2430,29 @@ async function installSdkFromRepo(
   force = false,
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
 ) {
+  // Same as installSdk: checkNode's warnings are merged in one place.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkFromRepoSteps(
+    ctx,
+    repoUrl,
+    platformVersion,
+    force,
+    downloadJobs,
+  );
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * installSdkFromRepo() body; records checkNode's warnings in ctx.nodeWarnings.
+ * Call installSdkFromRepo(), not this: only it merges those warnings.
+ */
+async function installSdkFromRepoSteps(
+  ctx,
+  repoUrl,
+  platformVersion,
+  force,
+  downloadJobs,
+) {
   const startTime = Date.now();
   const command = "tizen-sdk sdk-install-custom-repo";
 
@@ -2399,6 +2474,7 @@ async function installSdkFromRepo(
     // 1. Node.js check (first)
     console.error("[tizen-sdk-repo] Checking Node.js installation...");
     const nodeCheck = await checkNode();
+    ctx.nodeWarnings = nodeCheck.warnings || [];
     if (nodeCheck.status !== "success") {
       console.error(
         "[tizen-sdk-repo] Node.js check failed. Aborting installation.",
@@ -4004,33 +4080,6 @@ async function installTvSdkFromZip(
   }
 }
 
-/**
- * Carry checkNode's below-floor warning into an install envelope.
- *
- * installSdk / installSdkFromRepo run checkNode first but return envelopes
- * from many later steps, none of which would otherwise mention that the
- * running Node.js is end-of-life. Wrapping the exports adds that warning
- * (from the same nodeFloorCheck checkNode uses) to whatever comes back, once.
- *
- * @param {Function} fn - async function returning a Standard JSON Envelope
- * @returns {Function}
- */
-function withNodeFloorWarning(fn) {
-  return async function (...args) {
-    const env = await fn.apply(this, args);
-    const floor = nodeFloorCheck();
-    if (floor.status !== "warn" || !env || typeof env !== "object") return env;
-    // Failure envelopes carry no warnings array of their own; the "not yet
-    // installed, run the installer" answer is one, and it is where a user on
-    // an old Node most needs to see this (same pattern as jobs.js).
-    if (!Array.isArray(env.warnings)) env.warnings = [];
-    if (!env.warnings.includes(floor.message)) {
-      env.warnings.unshift(floor.message);
-    }
-    return env;
-  };
-}
-
 module.exports = {
   CONFIG_FILE,
   runsInstallerInline,
@@ -4054,8 +4103,8 @@ module.exports = {
   outputTailLines,
   sdkInstallerFlags,
   downloadJobsFlags,
-  installSdk: withNodeFloorWarning(installSdk),
-  installSdkFromRepo: withNodeFloorWarning(installSdkFromRepo),
+  installSdk,
+  installSdkFromRepo,
   validateRepoUrl,
   normalizeRepoUrl,
   checkRepoUrlSyntax,

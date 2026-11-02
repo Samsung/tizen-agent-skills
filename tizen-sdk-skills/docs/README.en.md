@@ -196,7 +196,7 @@ Configures the Tizen SDK installation path by writing it to `~/.tizen.sdk.path.c
 - Recursively installs all dependencies
 - Supports Linux/macOS/Windows (WSL2/PowerShell)
 - Automatic PATH configuration
-- **Automatic Node.js check** (22+ required) as the very first step — aborts with OS-specific install guide if not installed
+- **Automatic Node.js check** (22+ required) as the very first step — aborts with an OS-specific install guide if Node.js is missing or below v18; v18–v21 continues with an upgrade warning
 - **Automatic 15 GB disk space check** on the user's home drive before installation — aborts with a clear error if insufficient
 
 
@@ -260,10 +260,10 @@ Verifies that Node.js is installed and on PATH before SDK installation. Reports 
 #### Key Features
 
 - Checks if Node.js is installed and accessible on PATH
-- Requires Node.js 22+ (warns if older, but does not abort)
+- Requires Node.js 22+ (v18–v21: warning only; below v18: fails with `node_version_unsupported`)
 - Returns Standard JSON Envelope with version, path, and major version
-- If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
-- Download URL: https://nodejs.org/
+- If not installed: returns error with an install command only when the source of the running Node.js is known (winget for the Windows installer, `brew upgrade node` for Homebrew's node, the version manager's own command under nvm / nvm-windows / fnm / volta); otherwise `suggested_fix.command` is null and `guide_url` is https://nodejs.org/en/download
+- Download URL: https://nodejs.org/en/download
 
 #### CLI Runner
 

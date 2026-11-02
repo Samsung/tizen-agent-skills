@@ -34,11 +34,16 @@ metadata:
 
 When the SDK is not installed, `sdk-install-cli.js` **first** checks if Node.js is installed and on PATH. This is the very first step before anything else.
 
-- **Node.js installed** → proceeds to the next step (disk space check)
+- **Node.js 22+** → proceeds to the next step (disk space check)
+- **Node.js 18–21** → proceeds as well, and every envelope returned afterwards carries a
+  `warnings` entry "… older than the required v22+ …" — relay it as an upgrade the user should make
+- **Node.js below 18** → installation **aborted** with `node_version_unsupported`
+  (`TIZEN_SDK_ENV_E003`) and the same `suggested_fix` as below — a command only when one is
+  known, otherwise `null` plus `guide_url`; never make up an apt / dnf / curl command
 - **Node.js NOT installed** → installation **aborted** with an error envelope showing:
   - Clear message: "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+."
-  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
-  - Download URL: https://nodejs.org/
+  - an install command only when the source of the running Node.js is known (winget for the Windows installer, `brew upgrade node` for Homebrew's node, the version manager's own command under nvm / nvm-windows / fnm / volta); otherwise `suggested_fix.command` is null and `guide_url` is https://nodejs.org/en/download
+  - Download URL: https://nodejs.org/en/download
 
 ### Automatic Disk Space Check (15 GB, built into sdk-install-cli.js)
 
@@ -56,7 +61,7 @@ The check targets the **user's home directory drive** only (e.g., `C:\` on Windo
 
 ```
 0. Version syntax ← a requested version must be X.Y (10.0, 11.0); else invalid_argument
-1. Node.js check ← if not installed, abort with guide
+1. Node.js check ← missing or below v18: abort with guide; v18–v21: continue with an upgrade warning
 2. SDK already installed? ← if yes, return success (auto sdk-init: writes ~/.tizen.sdk.path.config)
    A requested version must be one of the installed platforms/tizen-X.Y,
    else platform_version_not_found (suggested_fix: platform-install --platform-version X.Y)

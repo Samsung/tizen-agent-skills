@@ -90,11 +90,11 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
 
 **Node.js check behavior:**
 - Uses the interpreter running the runner (`process.version` / `process.execPath`) as proof that Node.js is installed; `where node` / `which node` only adds a PATH warning (issue #71: a sandboxed child PATH must not report node_not_found)
-- Requires Node.js 22+ (warns if older, but does not abort)
+- Requires Node.js 22+ (v18–v21: warning only; below v18: fails with `node_version_unsupported`)
 - If not installed: returns `node_not_found` error with:
   - Clear message: "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+."
-  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`)
-  - Download URL: https://nodejs.org/
+  - an install command only when the source of the running Node.js is known (winget for the Windows installer, `brew upgrade node` for Homebrew's node, the version manager's own command under nvm / nvm-windows / fnm / volta); otherwise `suggested_fix.command` is null and `guide_url` is https://nodejs.org/en/download
+  - Download URL: https://nodejs.org/en/download
 - If installed: proceeds to SDK installation check
 
 **Disk space check behavior:**
