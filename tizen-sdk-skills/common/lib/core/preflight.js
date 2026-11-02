@@ -20,25 +20,12 @@ const {
   formatDiskSpace,
 } = require("../envelope/response-formatter");
 const { Envelope } = require("../envelope/envelope");
-
-/** Lowest Node.js major the runners support and CI tests (`.nvmrc`). */
-const NODE_MIN_MAJOR = 22;
-/** Below this major the runners are known not to work at all. */
-const NODE_HARD_MIN_MAJOR = 18;
-
-/**
- * Classify a Node.js major version against the supported floor.
- * Shared by check-node (preflight) and `tizen-sdk --doctor`.
- *
- * @param {number} major - Node.js major version (e.g. 22)
- * @returns {"ok"|"warn"|"fail"} ok at or above NODE_MIN_MAJOR; warn for
- *   end-of-life majors that may still run; fail below NODE_HARD_MIN_MAJOR
- *   or for an unparseable value
- */
-function nodeVersionStatus(major) {
-  if (!Number.isFinite(major) || major < NODE_HARD_MIN_MAJOR) return "fail";
-  return major >= NODE_MIN_MAJOR ? "ok" : "warn";
-}
+const {
+  NODE_MIN_MAJOR,
+  LINUX_NODE_INSTALL,
+  nodeVersionStatus,
+  nodeFloorCheck,
+} = require("./node-floor");
 
 /** path module for a platform name — win32 paths must parse as win32 even on a Linux host. */
 function pathFor(platform) {
@@ -81,21 +68,18 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // (tizen-cli) embeds Node too, so the same fields apply.
     const versionMatch = String(version).match(/^v(\d+)/);
     const majorVersion = versionMatch ? parseInt(versionMatch[1], 10) : 0;
+    const installGuide = isWin
+      ? "winget install OpenJS.NodeJS.LTS"
+      : platform === "darwin"
+        ? "brew install node"
+        : LINUX_NODE_INSTALL;
     if (!versionMatch) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
-      // Linux: the distribution "nodejs" package is below the floor on
-      // current LTS releases (Ubuntu 24.04 and Debian 12 ship Node 18), so
-      // point at the NodeSource 22.x repository instead.
-      const installGuide = isWin
-        ? "winget install OpenJS.NodeJS.LTS"
-        : platform === "darwin"
-          ? "brew install node"
-          : "curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs";
       return formatError(
         command,
         "node_not_found",
-        "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. " +
+        `Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js ${NODE_MIN_MAJOR}+. ` +
           "Please install Node.js LTS from https://nodejs.org/ and retry.",
         installGuide,
         startTime,
@@ -131,16 +115,21 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
       }
     }
 
-    // 3. Validate version (v22+ required; older majors only warn, the runner
-    // may still work, but they are past end-of-life and untested).
-    // Skipped for a pkg-compiled binary: its Node is embedded at build time,
-    // so the user cannot upgrade it and an "upgrade Node.js" warning would
-    // point at the wrong thing (the system Node is not what is running).
-    if (!isPkg && majorVersion > 0 && majorVersion < NODE_MIN_MAJOR) {
-      warnings.push(
-        `Node.js ${version} is older than the required v22+ (older majors are end-of-life and untested). Upgrade to Node.js 22 LTS or later from https://nodejs.org/`,
+    // 3. Validate version against the floor (node-floor.js): end-of-life
+    // majors only warn, the runner may still work; below the hard minimum
+    // the runners do not work, so that is a failure. Skipped for a
+    // pkg-compiled binary, whose embedded Node the user cannot upgrade.
+    const floor = nodeFloorCheck({ version, isPkg });
+    if (floor.status === "fail") {
+      return formatError(
+        command,
+        "node_version_unsupported",
+        floor.message,
+        installGuide,
+        startTime,
       );
     }
+    if (floor.message) warnings.push(floor.message);
 
     const envelope = new Envelope(command);
     envelope.startTime = startTime;
@@ -438,6 +427,7 @@ function _getDiskSpaceViaCommand(checkPath, deps = {}) {
 module.exports = {
   NODE_MIN_MAJOR,
   nodeVersionStatus,
+  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   measureDiskSpace,

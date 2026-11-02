@@ -132,6 +132,7 @@ console.log("\n=== the eight formerly-degraded categories ===");
 const EXPECTED = {
   node_not_found: "TIZEN_SDK_ENV_E001",
   insufficient_disk_space: "TIZEN_SDK_ENV_E002",
+  node_version_unsupported: "TIZEN_SDK_ENV_E003",
   sandbox_blocked: "TIZEN_SDK_SANDBOX_E001",
   sandbox_job_lost: "TIZEN_SDK_SANDBOX_E002",
   permission_denied: "TIZEN_SDK_IO_E002",

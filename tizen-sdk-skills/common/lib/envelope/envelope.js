@@ -8,6 +8,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { NODE_MIN_MAJOR, LINUX_NODE_INSTALL } = require("../core/node-floor");
 
 class Envelope {
   constructor(command) {
@@ -326,14 +327,24 @@ const ERROR_CODES = {
   // node_not_found = SDK CLI 러너 실행에 필요한 Node.js가 없음. 호출자
   // (preflight.js)가 플랫폼별 설치 명령을 suggestedCommand로 덮어쓰며,
   // 레지스트리의 guide_url은 그때도 보존된다.
-  // Linux는 배포판 nodejs 패키지가 하한(22) 미만이므로(Ubuntu 24.04 /
-  // Debian 12 = Node 18) NodeSource 22.x 저장소로 안내한다.
+  // Linux 명령은 node-floor.js의 LINUX_NODE_INSTALL (배포판 nodejs 패키지는
+  // 하한 미만이라 NodeSource 저장소를 쓴다).
   NODE_NOT_FOUND: {
     error_code: "TIZEN_SDK_ENV_E001",
     error_category: "node_not_found",
     suggested_fix: {
-      command:
-        "Install Node.js 22+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs / macOS: brew install node",
+      command: `Install Node.js ${NODE_MIN_MAJOR}+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: ${LINUX_NODE_INSTALL} / macOS: brew install node`,
+      auto_fixable: false,
+      guide_url: "https://nodejs.org/en/download",
+    },
+  },
+  // node_version_unsupported = Node.js는 있으나 러너가 동작하지 않는 메이저
+  // (node-floor.js의 NODE_HARD_MIN_MAJOR 미만). 22 미만 18 이상은 경고만 한다.
+  NODE_VERSION_UNSUPPORTED: {
+    error_code: "TIZEN_SDK_ENV_E003",
+    error_category: "node_version_unsupported",
+    suggested_fix: {
+      command: `Upgrade to Node.js ${NODE_MIN_MAJOR}+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: ${LINUX_NODE_INSTALL} / macOS: brew install node`,
       auto_fixable: false,
       guide_url: "https://nodejs.org/en/download",
     },

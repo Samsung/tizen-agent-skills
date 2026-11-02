@@ -26,6 +26,12 @@
 - pkg로 컴파일된 바이너리는 `check-node`/`doctor`에서 "Node.js 업그레이드"
   경고를 받지 않습니다. 내장된 Node는 빌드 시 고정되어 사용자가 바꿀 수 없기
   때문입니다.
+- `check-node`가 Node 18 미만에서 `node_version_unsupported`
+  (`TIZEN_SDK_ENV_E003`)로 실패합니다(`doctor`는 이미 실패로 표시). 그래서
+  `sdk-install`이 러너가 동작하지 않는 런타임에서 진행하지 않고 멈춥니다. Node
+  18–21 업그레이드 경고는 버려지지 않고 `sdk-install` /
+  `sdk-install-custom-repo` 결과에 포함됩니다. check-node, sdk-install, `doctor`가
+  하나의 하한 검사(`common/lib/core/node-floor.js`)를 공유합니다.
 
 ## [1.6.1] — 2026-10-26
 

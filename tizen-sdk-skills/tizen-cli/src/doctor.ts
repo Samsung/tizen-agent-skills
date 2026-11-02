@@ -17,8 +17,8 @@ const sdkCommands = require("../../common/lib/core/sdk-commands");
 const pluginCache = require("../../common/lib/core/plugin-cache");
 const {
   NODE_MIN_MAJOR,
-  nodeVersionStatus,
-} = require("../../common/lib/core/preflight");
+  nodeFloorCheck,
+} = require("../../common/lib/core/node-floor");
 // Single source for Java/JNA crash detection — the same constant the emulator
 // domain uses to add its hint, so doctor and launch classify a failure alike.
 
@@ -194,12 +194,10 @@ function emCliCheck(sdkOk: boolean): DoctorCheck {
 }
 
 export function handleDoctor(): { status: "success" | "failure" } {
-  const nodeMajor = parseInt(process.version.slice(1).split(".")[0], 10);
-  // A pkg-compiled tizen-cli embeds its own Node: process.version is that
-  // build-time runtime, which the user cannot upgrade, so the floor is not
-  // checked there (see checkNode in preflight.js).
-  const isPkg = !!(process as NodeJS.Process & { pkg?: unknown }).pkg;
-  const nodeStatus = isPkg ? "ok" : nodeVersionStatus(nodeMajor);
+  // Same check as check-node / sdk-install (node-floor.js). A pkg-compiled
+  // tizen-cli embeds its own Node, which the user cannot upgrade, so the
+  // floor is skipped there.
+  const nodeFloor = nodeFloorCheck();
   const scriptsRoot = pluginCache.findLatestVersionDir();
   const installerResolved = scriptsRoot
     ? !("error" in pluginCache.resolveScript("tizen-sdk-install"))
@@ -214,12 +212,10 @@ export function handleDoctor(): { status: "success" | "failure" } {
       name: `Node.js version (${NODE_MIN_MAJOR}+)`,
       // Below the floor the runners may still work, but those majors are
       // end-of-life and untested: warn, and fail only when far too old.
-      status: nodeStatus as "ok" | "warn" | "fail",
-      message: isPkg
+      status: nodeFloor.status as "ok" | "warn" | "fail",
+      message: nodeFloor.skipped
         ? `Node.js ${process.version} embedded in the packaged tizen-cli binary (version floor not checked)`
-        : nodeStatus === "ok"
-          ? `Node.js ${process.version} detected`
-          : `Node.js ${process.version} detected — Node.js ${NODE_MIN_MAJOR}+ is required; upgrade from https://nodejs.org/`,
+        : (nodeFloor.message ?? `Node.js ${process.version} detected`),
     },
     {
       name: "Plugin scripts directory",

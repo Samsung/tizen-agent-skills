@@ -23,6 +23,7 @@ const { spawnSync } = require("child_process");
 const {
   NODE_MIN_MAJOR,
   nodeVersionStatus,
+  nodeFloorCheck,
   checkNode,
   checkDiskSpace,
   _getDiskSpaceViaCommand,
@@ -251,6 +252,30 @@ function execStub(table) {
   check("node 18 → warn", nodeVersionStatus(18), "warn");
   check("node 17 → fail", nodeVersionStatus(17), "fail");
   check("NaN → fail", nodeVersionStatus(NaN), "fail");
+
+  // --- nodeFloorCheck (check-node, sdk-install and doctor all use it) --------
+  console.log("\n--- nodeFloorCheck ---");
+  {
+    const ok = nodeFloorCheck({ version: "v22.3.0", isPkg: false });
+    check("v22 → ok, no message", [ok.status, ok.message], ["ok", null]);
+    const warn = nodeFloorCheck({ version: "v20.19.0", isPkg: false });
+    check("v20 → warn", warn.status, "warn");
+    check(
+      "warn message names the floor",
+      warn.message.includes(`required v${NODE_MIN_MAJOR}+`) &&
+        warn.message.includes(`Node.js ${NODE_MIN_MAJOR} LTS`),
+      true,
+    );
+    const fail = nodeFloorCheck({ version: "v16.20.0", isPkg: false });
+    check(
+      "v16 → fail with message",
+      [fail.status, !!fail.message],
+      ["fail", true],
+    );
+    const pkg = nodeFloorCheck({ version: "v16.20.0", isPkg: true });
+    check("pkg → ok, skipped", [pkg.status, pkg.skipped], ["ok", true]);
+    check("major parsed", nodeFloorCheck({ version: "v20.1.0" }).major, 20);
+  }
   {
     // .nvmrc is what CI and releases run; it must not drift below the floor.
     const nvmrc = fs
@@ -317,12 +342,30 @@ function execStub(table) {
       platform: "linux",
       spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
     });
-    check("old node → success with upgrade warning", r.status, "success");
+    // Below NODE_HARD_MIN_MAJOR the runners do not work: check-node fails
+    // (and so does the sdk-install preflight), matching tizen-sdk --doctor.
+    check("node 16 → failure", r.status, "failure");
     check(
-      "upgrade warning",
-      r.warnings.length === 1 && r.warnings[0].includes("older than"),
+      "node 16 → node_version_unsupported / TIZEN_SDK_ENV_E003",
+      [r.errors[0].error_category, r.errors[0].error_code],
+      ["node_version_unsupported", "TIZEN_SDK_ENV_E003"],
+    );
+    check(
+      "node 16 → linux install command in suggested_fix",
+      r.errors[0].suggested_fix.command.includes(`setup_${NODE_MIN_MAJOR}.x`),
       true,
     );
+  }
+  {
+    // A pkg binary embedding Node 16 is not the user's to upgrade either.
+    const r = await checkNode("t", {
+      execPath: "/opt/tizen-cli",
+      version: "v16.20.0",
+      isPkg: true,
+      platform: "linux",
+      spawnSync: throwing("pkg must not spawn"),
+    });
+    check("pkg with embedded node 16 → success", r.status, "success");
   }
   {
     // Node 20 is end-of-life: below the v22 floor it still runs, with a warning.

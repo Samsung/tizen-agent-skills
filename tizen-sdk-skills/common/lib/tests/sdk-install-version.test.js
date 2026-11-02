@@ -234,6 +234,49 @@ console.error = () => {};
     );
     check("empty path → []", listInstalledPlatformVersions(""), []);
 
+    // --- install envelopes carry the below-floor Node warning ------------------
+    // checkNode's v18–v21 warning used to be dropped by sdk-install. The
+    // exported installSdk / installSdkFromRepo now add it to whatever they
+    // return — failures included — once, even when one delegates to the other.
+    console.log("\n--- install envelopes: Node below the floor ---");
+    {
+      const desc = Object.getOwnPropertyDescriptor(process, "version");
+      Object.defineProperty(process, "version", {
+        ...desc,
+        value: "v20.19.0",
+      });
+      try {
+        const env = await installSdk("99.99.99");
+        const nodeWarnings = (env.warnings || []).filter((w) =>
+          w.includes("older than the required v22+"),
+        );
+        check(
+          "installSdk on Node 20 → one floor warning",
+          nodeWarnings.length,
+          1,
+        );
+        const repoEnv = await installSdkFromRepo(
+          "https://example.invalid/repo",
+          "99.99.99",
+        );
+        check(
+          "installSdkFromRepo on Node 20 → one floor warning",
+          (repoEnv.warnings || []).filter((w) =>
+            w.includes("older than the required v22+"),
+          ).length,
+          1,
+        );
+      } finally {
+        Object.defineProperty(process, "version", desc);
+      }
+      const env22 = await installSdk("99.99.99");
+      check(
+        "installSdk on a supported Node → no floor warning",
+        (env22.warnings || []).some((w) => w.includes("older than")),
+        false,
+      );
+    }
+
     // --- installSdk: malformed version -------------------------------------------
     console.log("\n--- installSdk: malformed version ---");
     {

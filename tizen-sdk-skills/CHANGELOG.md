@@ -27,6 +27,12 @@ below use those release tags.
 - A pkg-compiled binary no longer gets the "upgrade Node.js" warning from
   `check-node` or `doctor`: its Node is embedded at build time and the user
   cannot change it.
+- `check-node` now fails with `node_version_unsupported` (`TIZEN_SDK_ENV_E003`)
+  below Node 18, as `doctor` already did, so `sdk-install` stops there instead
+  of continuing on a runtime the runners do not support. The Node 18–21
+  upgrade warning is now carried into the `sdk-install` /
+  `sdk-install-custom-repo` result instead of being dropped. check-node,
+  sdk-install and `doctor` share one floor check (`common/lib/core/node-floor.js`).
 
 ## [1.6.1] — 2026-10-26
 
