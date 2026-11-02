@@ -46,12 +46,15 @@ Releases are tagged `tizen-sdk-skills-vX.Y.Z` on the
   Node's directory to the child PATH, which could expose a real sdb binary.
 
 - **Live dlog investigations skipped app launch and user reproduction**
-  (`common/skills/tizen-dlog-analyzer/`, `common/agents/`, guard instructions).
+  (`common/skills/tizen-dlog-analyzer/`, `tizen-cli/skills/tizen-dlog-analyzer/`,
+  `common/agents/`, guard instructions including the Cline guard).
   Removed the exception that allowed an initial `confirmed` conclusion to end
   the investigation. Live symptom reports now require fresh collection, verified
   app launch and a user reproduction reply before capture analysis and the final
   diagnosis. The workflow uses one dlog collector at a time, distinguishes old
   logs from the current capture and reports when a symptom was not reproduced.
+  After a system-monitor capture the analysis uses `check` and `search`;
+  `error-analyze` and `app-log` are kept for app-only `dlog-collect` sessions.
   Saved-log-only analysis remains available when explicitly requested.
 
 - **No update notice behind a proxy that re-signs HTTPS** (`common/hooks/check-update.js`).

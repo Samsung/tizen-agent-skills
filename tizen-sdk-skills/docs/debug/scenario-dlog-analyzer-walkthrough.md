@@ -39,7 +39,7 @@
 | 3 | **멈추고 질문** — "지금 이슈를 재현해 주세요. (1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요" — 그리고 **턴 종료** | (에이전트 상호작용 — `sleep`·폴링 없음) |
 | 4 | 답변 후: 수집기 중지 | `--action stop` · `--action kernel --subcommand stop` |
 | 5 | 이번 재현 시간대 분석; 증상이 없으면 **재현되지 않음**으로 보고 | `--action check` → `--action kernel --subcommand analyze` |
-| 6 | 설명되지 않을 때만 확대 | `--action error-analyze --format details` → `--action search --pattern "<발견된 문자열>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 6 | 설명되지 않을 때만 확대 (`error-analyze` / `app-log`는 앱 전용 수집 필요) | `--action search --pattern "<발견된 문자열>" --context 1 --priority W` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
 | 7 | 사용자 언어로 보고서, 다음 단계 안내, 정리 | `--action stop` |
 
 dlog 수집기는 하나만 사용합니다. 시스템 모니터가 앱 로그도 수집합니다.

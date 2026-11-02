@@ -39,7 +39,7 @@ When the user reports a symptom — e.g. *"While playing a video in com.samsung.
 | 3 | **Stop and ask** — "Please reproduce the issue now. (1) Done, it occurred / (2) Nothing happened" — and **end the turn** | (agent interaction — no `sleep`, no polling) |
 | 4 | After the reply: stop the collectors | `--action stop` · `--action kernel --subcommand stop` |
 | 5 | Analyze this reproduction window; report **not reproduced** if no symptom occurred | `--action check` → `--action kernel --subcommand analyze` |
-| 6 | Escalate only if still unexplained | `--action error-analyze --format details` → `--action search --pattern "<the string a finding named>" --context 1 --priority W` → `--action app-log --app-id … --priority W --since 10m --max-lines 300` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
+| 6 | Escalate only if still unexplained (`error-analyze` / `app-log` need an app-only capture) | `--action search --pattern "<the string a finding named>" --context 1 --priority W` → `--action probe --subcommand list` / `--subcommand run --app-id <probe-id>` |
 | 7 | Report in the user's language, next-step prompt, cleanup | `--action stop` |
 
 Use one dlog collector: the system monitor already captures app logs. For an
