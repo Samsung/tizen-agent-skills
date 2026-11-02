@@ -359,7 +359,7 @@ function listOnlineDevices(sdbPath) {
   try {
     output = runSdb(sdbPath, "devices", { viaTempFile: true });
   } catch (err) {
-    throw new Error(`Failed to list devices: ${err.message}`);
+    throw new Error(`Failed to list devices: ${err.message}`, { cause: err });
   }
   return onlineDevices(parseDevices(output)).filter((d) =>
     isValidSerial(d.serial),
@@ -419,6 +419,7 @@ function acquireDuidFromDevice(serial) {
   } catch (err) {
     throw new Error(
       `Failed to get device capability for ${targetSerial}: ${err.message}`,
+      { cause: err },
     );
   }
 
@@ -433,6 +434,7 @@ function acquireDuidFromDevice(serial) {
   } catch (err) {
     throw new Error(
       `Failed to execute DUID command "${duidCommand}" on device ${targetSerial}: ${err.message}`,
+      { cause: err },
     );
   }
 

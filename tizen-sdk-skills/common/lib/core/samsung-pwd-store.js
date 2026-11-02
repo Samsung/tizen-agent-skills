@@ -123,7 +123,7 @@ async function encryptPassword(password, pwdFilePath) {
   } catch (err) {
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      throw new Error(`samsung_pwd_store_failed: ${msg}`);
+      throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
   }
@@ -154,7 +154,7 @@ async function decryptPassword(pwdFilePath) {
   } catch (err) {
     const msg = err.message || String(err);
     if (!msg.includes("samsung_pwd_store_failed")) {
-      throw new Error(`samsung_pwd_store_failed: ${msg}`);
+      throw new Error(`samsung_pwd_store_failed: ${msg}`, { cause: err });
     }
     throw err;
   }

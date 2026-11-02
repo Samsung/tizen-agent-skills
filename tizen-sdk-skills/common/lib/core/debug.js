@@ -909,7 +909,7 @@ function resolveDotnetProjectPath(opts, command) {
     return { projectPath: "" };
   }
   const projectPath = path.resolve(String(opts.projectPath).trim());
-  let isDir = false;
+  let isDir;
   try {
     isDir = fs.statSync(projectPath).isDirectory();
   } catch {

@@ -19,6 +19,7 @@ function readPasswordFile(filePath, variableName) {
   } catch (error) {
     throw new Error(
       `Cannot read password file "${resolvedPath}": ${error.message}`,
+      { cause: error },
     );
   }
   if (!stat.isFile())
@@ -38,6 +39,7 @@ function readPasswordFile(filePath, variableName) {
   } catch (error) {
     throw new Error(
       `Cannot read password file "${resolvedPath}": ${error.message}`,
+      { cause: error },
     );
   }
 

@@ -736,7 +736,7 @@ test("Cline upgrades prune stale skills and old caches too", async () => {
   const v1 = makeAssets(fx, "cv1", ["tizen-a", "tizen-dropped"], []);
   const v2 = makeAssets(fx, "cv2", ["tizen-a"], []);
 
-  let r = await installCline(v1, fx.home, "1.0.0");
+  const r = await installCline(v1, fx.home, "1.0.0");
   writeManifest(path.join(fx.home, ".cline"), {
     version: "1.0.0",
     installedAt: "",
@@ -747,7 +747,7 @@ test("Cline upgrades prune stale skills and old caches too", async () => {
     fs.existsSync(path.join(fx.home, ".cline", "skills", "tizen-dropped")),
   );
 
-  r = await installCline(v2, fx.home, "2.0.0");
+  await installCline(v2, fx.home, "2.0.0");
   assert.strictEqual(
     fs.existsSync(path.join(fx.home, ".cline", "skills", "tizen-dropped")),
     false,

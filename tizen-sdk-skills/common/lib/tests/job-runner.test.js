@@ -166,7 +166,7 @@ console.log("\n--- status while the job runs ---");
 // line; on a loaded box that can exceed the ~100 ms between the receipt and
 // this status call, leaving progress_tail empty (flaky FAIL). The job sleeps
 // 4 s, so re-poll for up to 2.5 s — well before it can have finished.
-let running = null;
+let running;
 for (const deadline = Date.now() + 2500; ;) {
   running = run(JOB_CLI, ["status", "--id", jobId]);
   const r = running.json && running.json.result;

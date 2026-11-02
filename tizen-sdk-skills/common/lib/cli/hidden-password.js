@@ -53,6 +53,7 @@ function promptHiddenPassword(label) {
         `  1. Pass the password directly: --password "your_password"\n` +
         `  2. Use a password file: --password-file /path/to/file\n` +
         `  3. Set an environment variable: ${getEnvVarForLabel(label)}`,
+      { cause: rawModeError },
     );
   }
 

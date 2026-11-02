@@ -46,6 +46,14 @@ below use those release tags.
   say 22+, and the `node_not_found` examples show its real code,
   `TIZEN_SDK_ENV_E001` (they said `TIZEN_SDK_CONFIG_E005`).
 
+### Fixed
+
+- Code now passes ESLint 10's new recommended rules, so the ESLint 10 upgrade
+  (#107) can land. Errors rethrown from a `catch` keep the original as
+  `cause` (`preserve-caught-error`), which is not enumerable and does not
+  appear in JSON envelopes. Initial values that every path overwrote before
+  reading them are dropped (`no-useless-assignment`). No behaviour change.
+
 ## [1.6.1] — 2026-10-26
 
 ### Added
