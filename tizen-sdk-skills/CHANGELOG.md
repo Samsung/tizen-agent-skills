@@ -31,13 +31,17 @@ below use those release tags.
   - A pkg-compiled binary is not checked: its Node is embedded at build time
     and the user cannot change it.
 - The Node.js install hint only ever carries a command that changes nothing
-  but Node.js, and comes with the v18–v21 warning as well as with failures:
-  the version manager's own command when the runner runs under nvm, fnm or
-  volta; `winget` on Windows; `brew` on macOS. A Linux system Node gets no
-  command (the old `apt install nodejs npm` hint installed Node 18 on Ubuntu
-  24.04 and Debian 12) — `suggested_fix.guide_url` points to the nodejs.org
-  download page, and the `tizen-check-node` skill explains what replacing a
-  distribution install involves.
+  but Node.js, only when the source of the running Node.js is known, and
+  comes with the v18–v21 warning as well as with failures: the version
+  manager's own command under nvm, nvm-windows, fnm or volta (recognised by
+  their environment variables or standard layout); `winget` for the Windows
+  installer in `C:\Program Files\nodejs` when nvm-windows is absent;
+  `brew upgrade node` for Homebrew's `node` formula. Everything else —
+  including a Linux system Node (the old `apt install nodejs npm` hint
+  installed Node 18 on Ubuntu 24.04 and Debian 12) — gets no command, and
+  `suggested_fix.guide_url` points to the nodejs.org download page. The
+  `tizen-check-node` skill explains what replacing a distribution install
+  involves, as a step for the user.
 - The documented prerequisites, install guides, error messages and skill docs
   say 22+, and the `node_not_found` examples show its real code,
   `TIZEN_SDK_ENV_E001` (they said `TIZEN_SDK_CONFIG_E005`).

@@ -28,13 +28,15 @@
     실패하므로 `sdk-install`이 그 자리에서 멈춥니다.
   - pkg로 컴파일된 바이너리는 검사하지 않습니다. 내장된 Node는 빌드 시
     고정되어 사용자가 바꿀 수 없기 때문입니다.
-- Node.js 설치 안내에는 Node.js 외에 아무것도 바꾸지 않는 명령만 들어가며,
-  실패할 때뿐 아니라 v18–v21 경고에도 함께 나옵니다. 러너가 nvm, fnm, volta로
-  실행 중이면 해당 도구의 명령, Windows는 `winget`, macOS는 `brew`입니다.
-  Linux 시스템 Node에는 명령을 주지 않고(기존 `apt install nodejs npm` 안내는
-  Ubuntu 24.04·Debian 12에서 Node 18을 설치했습니다) `suggested_fix.guide_url`로
-  nodejs.org 다운로드 페이지를 안내하며, 배포판 설치를 교체할 때의 주의점은
-  `tizen-check-node` 스킬에 적었습니다.
+- Node.js 설치 안내에는 Node.js 외에 아무것도 바꾸지 않는 명령만, 실행 중인
+  Node.js의 출처를 알 때만 들어가며, 실패할 때뿐 아니라 v18–v21 경고에도 함께
+  나옵니다. nvm, nvm-windows, fnm, volta(환경변수 또는 표준 위치로 인식)는 해당
+  도구의 명령, nvm-windows가 없는 Windows 설치 프로그램(`C:\Program Files\nodejs`)은
+  `winget`, Homebrew `node` 포뮬러는 `brew upgrade node`입니다. 그 외(Linux 시스템
+  Node 포함 — 기존 `apt install nodejs npm` 안내는 Ubuntu 24.04·Debian 12에서
+  Node 18을 설치했습니다)에는 명령을 주지 않고 `suggested_fix.guide_url`로
+  nodejs.org 다운로드 페이지를 안내합니다. 배포판 설치를 교체할 때의 주의점은
+  `tizen-check-node` 스킬에 사용자가 할 단계로 적었습니다.
 - 문서의 사전 요구사항, 설치 안내, 오류 메시지, 스킬 문서가 22+로 바뀌었고,
   `node_not_found` 예시는 실제 코드인 `TIZEN_SDK_ENV_E001`을 보여줍니다(기존
   `TIZEN_SDK_CONFIG_E005`).

@@ -38,10 +38,11 @@ When the SDK is not installed, `sdk-install-cli.js` **first** checks if Node.js 
 - **Node.js 18–21** → proceeds as well, and every envelope returned afterwards carries a
   `warnings` entry "… older than the required v22+ …" — relay it as an upgrade the user should make
 - **Node.js below 18** → installation **aborted** with `node_version_unsupported`
-  (`TIZEN_SDK_ENV_E003`) and the same OS-specific install command as below
+  (`TIZEN_SDK_ENV_E003`) and the same `suggested_fix` as below — a command only when one is
+  known, otherwise `null` plus `guide_url`; never make up an apt / dnf / curl command
 - **Node.js NOT installed** → installation **aborted** with an error envelope showing:
   - Clear message: "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+."
-  - OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, nvm / fnm / volta: that manager's install command, Linux system Node: no command — https://nodejs.org/en/download)
+  - an install command only when the source of the running Node.js is known (winget for the Windows installer, `brew upgrade node` for Homebrew's node, the version manager's own command under nvm / nvm-windows / fnm / volta); otherwise `suggested_fix.command` is null and `guide_url` is https://nodejs.org/en/download
   - Download URL: https://nodejs.org/en/download
 
 ### Automatic Disk Space Check (15 GB, built into sdk-install-cli.js)

@@ -255,7 +255,7 @@ SDK 설치 전 Node.js가 설치되어 있고 PATH에 있는지 확인합니다.
 - Node.js 설치 여부 및 PATH 접근성 확인
 - Node.js 22+ 필요 (v18–v21은 경고만, v18 미만은 `node_version_unsupported`로 실패)
 - 버전, 경로, 메이저 버전을 포함한 Standard JSON Envelope 반환
-- 미설치 시: OS별 설치 가이드와 함께 에러 반환 (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, nvm / fnm / volta 사용 중이면 해당 도구의 설치 명령, Linux 시스템 Node는 명령 없이 https://nodejs.org/en/download)
+- 미설치 시: 에러 반환 — 실행 중인 Node.js의 출처를 알 때만 설치 명령(Windows 설치 프로그램은 winget, Homebrew node는 `brew upgrade node`, nvm / nvm-windows / fnm / volta는 해당 도구의 명령)을 주고, 그 외에는 `suggested_fix.command`가 null이며 `guide_url`이 https://nodejs.org/en/download
 - 다운로드 URL: https://nodejs.org/en/download
 
 #### CLI 러너

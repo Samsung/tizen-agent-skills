@@ -20,57 +20,123 @@ const NODE_HARD_MIN_MAJOR = 18;
 /** Node.js download page (guide_url, and the only hint where no safe command fits). */
 const NODE_DOWNLOAD_URL = "https://nodejs.org/en/download";
 
+/** Normalise a path for prefix tests: forward slashes, no trailing slash, lower case on Windows. */
+function normPath(p, win) {
+  const n = String(p || "")
+    .replace(/\\/g, "/")
+    .replace(/\/+$/, "");
+  return win ? n.toLowerCase() : n;
+}
+
+/** True when `file` lies under directory `dir` (both raw paths). */
+function isUnder(file, dir, win) {
+  if (!dir) return false;
+  const d = normPath(dir, win);
+  return d !== "" && normPath(file, win).startsWith(`${d}/`);
+}
+
 /**
- * Node version managers recognised from the running interpreter's path, and
- * the command that installs the floor with each. When the runners run under
- * one, a system-wide install would not replace the Node on PATH, so the hint
- * must be the manager's own command. (nvm-windows is not listed: it runs node
- * through a symlink, so its execPath does not show the manager.)
+ * Node version managers. A manager is recognised when the running
+ * interpreter lies under a directory its environment variables name, or —
+ * when they are not visible (sandboxed / minimal env) — matches its standard
+ * layout. Under a manager a system-wide install would not replace the Node
+ * it puts first on PATH, so the hint must be the manager's own command.
  */
 const VERSION_MANAGERS = [
   {
     name: "nvm",
-    match: /[\\/]\.nvm[\\/]versions[\\/]node[\\/]/,
+    platforms: ["linux", "darwin"],
+    dirs: (env) => [env.NVM_DIR && `${env.NVM_DIR}/versions/node`],
+    // ~/.nvm or $XDG_CONFIG_HOME/nvm
+    layout: /\/\.?nvm\/versions\/node\//,
     command: `nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
   },
   {
+    // nvm-windows runs node through NVM_SYMLINK (by default the same folder
+    // as a system install), so the path alone looks like a system install.
+    name: "nvm-windows",
+    platforms: ["win32"],
+    dirs: (env) => [env.NVM_SYMLINK, env.NVM_HOME],
+    layout: null,
+    command: `nvm install ${NODE_MIN_MAJOR} && nvm use ${NODE_MIN_MAJOR}`,
+  },
+  {
     name: "fnm",
-    match: /[\\/]fnm(_multishells)?[\\/]|[\\/]\.?fnm[\\/]node-versions[\\/]/,
+    platforms: null,
+    dirs: (env) => [
+      env.FNM_DIR,
+      env.FNM_MULTISHELL_PATH &&
+        env.FNM_MULTISHELL_PATH.replace(/[\\/]+[^\\/]+[\\/]*$/, ""),
+    ],
+    layout: /\/fnm_multishells\/|\/\.?fnm\/node-versions\//i,
     command: `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`,
   },
   {
     name: "volta",
-    match: /[\\/]\.?volta[\\/]/i,
+    platforms: null,
+    dirs: (env) => [env.VOLTA_HOME && `${env.VOLTA_HOME}/tools/image/node`],
+    layout: /\/\.?volta\/tools\/image\/node\//i,
     command: `volta install node@${NODE_MIN_MAJOR}`,
   },
 ];
 
 /**
- * The Node.js install command to suggest, or null when there is no command
- * that is both safe and right for the host — then the caller points at
- * NODE_DOWNLOAD_URL instead.
+ * Homebrew's own node formula (not a keg-only node@NN, not the nodejs.org
+ * .pkg in /usr/local/bin). process.execPath is normally the resolved Cellar
+ * path; the opt/ link and /opt/homebrew/bin (Homebrew's alone on Apple
+ * Silicon) are accepted for an unresolved path.
+ */
+const HOMEBREW_NODE =
+  /^(\/opt\/homebrew|\/usr\/local)\/(Cellar\/node\/|opt\/node\/)|^\/opt\/homebrew\/bin\/node$/;
+
+/**
+ * The Node.js install command to suggest, or null when there is none that is
+ * both safe and certain to replace the running Node — then the caller points
+ * at NODE_DOWNLOAD_URL instead.
  *
- * Only non-destructive commands: a version manager's own install (when the
- * runner runs under one), winget on Windows, Homebrew on macOS. Linux system
- * installs get none: the distribution's nodejs is below the floor on current
- * LTS releases (Ubuntu 24.04 / Debian 12 ship Node 18), and replacing it
- * (NodeSource and the like) means removing packages, distribution- and
- * release-specific steps and an interactive confirmation — not something to
- * hand an agent as a one-line command. tizen-check-node's SKILL.md describes
- * it for the user.
+ * Only commands that change nothing but Node.js, and only when the source of
+ * the running interpreter is known:
+ * - under nvm / nvm-windows / fnm / volta: that manager's command;
+ * - Windows, interpreter at %ProgramFiles%\nodejs\node.exe (the MSI that
+ *   winget's OpenJS.NodeJS.LTS manages) and no nvm-windows: winget;
+ * - macOS, interpreter from Homebrew's node formula: brew.
+ * Everything else gets null: a Linux system Node (its distribution package is
+ * below the floor on current LTS releases, and replacing it is not a
+ * one-liner), asdf, mise, n, nodenv, a keg-only brew node@NN, the nodejs.org
+ * .pkg. The commands are for the user's own terminal (nvm is a shell
+ * function, loaded only in interactive shells).
  *
  * @param {object} [opts]
  * @param {string} [opts.platform] - default process.platform
  * @param {string} [opts.execPath] - default process.execPath
+ * @param {object} [opts.env] - default process.env
  * @returns {string|null}
  */
 function nodeInstallCommand(opts = {}) {
   const platform = opts.platform || process.platform;
   const execPath = String(opts.execPath || process.execPath || "");
-  const manager = VERSION_MANAGERS.find((m) => m.match.test(execPath));
-  if (manager) return manager.command;
-  if (platform === "win32") return "winget install OpenJS.NodeJS.LTS";
-  if (platform === "darwin") return "brew install node";
+  const env = opts.env || process.env;
+  const win = platform === "win32";
+  const exe = normPath(execPath, win);
+
+  for (const m of VERSION_MANAGERS) {
+    if (m.platforms && !m.platforms.includes(platform)) continue;
+    if (m.dirs(env).some((d) => isUnder(execPath, d, win))) return m.command;
+    if (m.layout && m.layout.test(exe)) return m.command;
+  }
+
+  if (win) {
+    // nvm-windows is installed but not running this node: its symlink is
+    // usually %ProgramFiles%\nodejs, so winget would write into it.
+    if (env.NVM_HOME || env.NVM_SYMLINK) return null;
+    const programFiles = env.ProgramFiles || "C:/Program Files";
+    return exe === normPath(`${programFiles}/nodejs/node.exe`, true)
+      ? "winget install OpenJS.NodeJS.LTS"
+      : null;
+  }
+  if (platform === "darwin" && HOMEBREW_NODE.test(exe)) {
+    return "brew upgrade node";
+  }
   return null;
 }
 
@@ -134,7 +200,7 @@ function nodeFloorCheck(opts = {}) {
       `and require v${NODE_MIN_MAJOR}+. Upgrade to Node.js ${NODE_MIN_MAJOR} LTS or later from ${NODE_DOWNLOAD_URL}.`;
   }
   if (message && installCommand) {
-    message += ` Install command: ${installCommand}`;
+    message += ` Install command (run it yourself in a terminal): ${installCommand}`;
   }
   return { major, status, skipped: false, message, installCommand };
 }

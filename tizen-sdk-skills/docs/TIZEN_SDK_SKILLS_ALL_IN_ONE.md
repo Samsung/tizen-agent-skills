@@ -243,13 +243,12 @@ node <plugin>/lib/cli/check-node-cli.js
 
 **설치 가이드 (Node.js 미설치 시):**
 
-| OS                    | 명령어                                              |
-| --------------------- | --------------------------------------------------- |
-| Windows               | `winget install OpenJS.NodeJS.LTS`                  |
-| macOS                 | `brew install node`                                 |
-| nvm / fnm / volta 사용 중 | `nvm install 22 && nvm alias default 22` · `fnm install 22 && fnm default 22` · `volta install node@22` |
-| Linux | 한 줄 명령 없음 — https://nodejs.org/en/download 참고 (아래 설명) |
-| 모든 OS (수동)        | https://nodejs.org/ 에서 LTS 다운로드               |
+| 실행 중인 Node.js 출처 | 설치 명령 (사용자가 직접 실행) |
+| --- | --- |
+| Windows 설치 프로그램(`C:\Program Files\nodejs`), nvm-windows 없음 | `winget install OpenJS.NodeJS.LTS` |
+| macOS, Homebrew `node` 포뮬러 | `brew upgrade node` |
+| nvm / nvm-windows / fnm / volta | 해당 도구의 명령 (`tizen-check-node` 참고) |
+| 그 외 (Linux 시스템 Node, asdf, mise, scoop, nodejs.org `.pkg` 등) | 없음 — https://nodejs.org/en/download |
 
 > Linux: 배포판 자체 `nodejs`는 현재 LTS 릴리스에서 22 미만입니다(Ubuntu 24.04·Debian 12는 Node 18). 다운로드 페이지의 방법 중 하나로 Node.js 22+를 설치하세요(nvm 같은 버전 관리자는 root 권한도, 시스템 패키지 변경도 필요 없습니다). 배포판 설치를 교체할 때 주의할 점은 `tizen-check-node` 스킬을 참고하세요.
 

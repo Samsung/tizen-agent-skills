@@ -413,7 +413,7 @@ function execStub(table) {
     check(
       "node 20 under nvm → warning ends with the nvm command",
       r.warnings[0].endsWith(
-        `Install command: nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
+        `Install command (run it yourself in a terminal): nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
       ),
       true,
     );
@@ -457,17 +457,37 @@ function execStub(table) {
   // Homebrew. A Linux system Node gets none (the download page instead).
   console.log("\n--- Node.js install command ---");
   {
-    const cmd = (platform, execPath) =>
-      nodeInstallCommand({ platform, execPath });
+    // env is explicit so the host's own NVM_DIR / ProgramFiles do not leak in.
+    const cmd = (platform, execPath, env = {}) =>
+      nodeInstallCommand({ platform, execPath, env });
+    const NVM = `nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`;
+    const FNM = `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`;
+    const VOLTA = `volta install node@${NODE_MIN_MAJOR}`;
+    const WINGET = "winget install OpenJS.NodeJS.LTS";
+    const msi = "C:\\Program Files\\nodejs\\node.exe";
+
+    // version managers: standard layout, or the directory their env names
     check(
-      "nvm",
+      "nvm (~/.nvm)",
       cmd("linux", "/home/user/.nvm/versions/node/v20.1.0/bin/node"),
-      `nvm install ${NODE_MIN_MAJOR} && nvm alias default ${NODE_MIN_MAJOR}`,
+      NVM,
+    );
+    check(
+      "nvm ($XDG_CONFIG_HOME/nvm)",
+      cmd("darwin", "/Users/user/.config/nvm/versions/node/v20.1.0/bin/node"),
+      NVM,
+    );
+    check(
+      "nvm (custom NVM_DIR)",
+      cmd("linux", "/opt/tools/nodes/versions/node/v20.1.0/bin/node", {
+        NVM_DIR: "/opt/tools/nodes",
+      }),
+      NVM,
     );
     check(
       "fnm (multishell)",
       cmd("linux", "/run/user/1000/fnm_multishells/123_456/bin/node"),
-      `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`,
+      FNM,
     );
     check(
       "fnm (node-versions)",
@@ -475,7 +495,7 @@ function execStub(table) {
         "darwin",
         "/Users/user/.local/share/fnm/node-versions/v20.1.0/installation/bin/node",
       ),
-      `fnm install ${NODE_MIN_MAJOR} && fnm default ${NODE_MIN_MAJOR}`,
+      FNM,
     );
     check(
       "volta on Windows",
@@ -483,19 +503,87 @@ function execStub(table) {
         "win32",
         "C:\\Users\\user\\AppData\\Local\\Volta\\tools\\image\\node\\20.1.0\\node.exe",
       ),
-      `volta install node@${NODE_MIN_MAJOR}`,
+      VOLTA,
     );
     check(
-      "Windows system Node → winget",
-      cmd("win32", "C:\\Program Files\\nodejs\\node.exe"),
-      "winget install OpenJS.NodeJS.LTS",
+      "a folder merely named volta is not Volta",
+      cmd("linux", "/opt/volta/node-20/bin/node"),
+      null,
+    );
+
+    // nvm-windows runs node through its symlink, by default the MSI folder
+    const nvmWin = {
+      NVM_HOME: "C:\\Users\\user\\AppData\\Roaming\\nvm",
+      NVM_SYMLINK: "C:\\Program Files\\nodejs",
+    };
+    check(
+      "nvm-windows (node via NVM_SYMLINK)",
+      cmd("win32", msi, nvmWin),
+      `nvm install ${NODE_MIN_MAJOR} && nvm use ${NODE_MIN_MAJOR}`,
     );
     check(
-      "macOS system Node → brew",
-      cmd("darwin", "/opt/homebrew/bin/node"),
-      "brew install node",
+      "nvm-windows installed, other node → none (winget would hit its symlink)",
+      cmd("win32", "D:\\tools\\node\\node.exe", nvmWin),
+      null,
+    );
+
+    // system installs: only where the command is certain to replace this node
+    check(
+      "Windows MSI node → winget",
+      cmd("win32", msi, { ProgramFiles: "C:\\Program Files" }),
+      WINGET,
+    );
+    check(
+      "Windows MSI node, case and slashes differ → winget",
+      cmd("win32", "c:/program files/NodeJS/node.exe", {}),
+      WINGET,
+    );
+    check(
+      "Windows scoop node → none",
+      cmd("win32", "C:\\Users\\user\\scoop\\apps\\nodejs\\current\\node.exe", {
+        ProgramFiles: "C:\\Program Files",
+      }),
+      null,
+    );
+    check(
+      "macOS Homebrew node formula → brew",
+      cmd("darwin", "/opt/homebrew/Cellar/node/25.1.0/bin/node"),
+      "brew upgrade node",
+    );
+    check(
+      "macOS keg-only node@20 → none",
+      cmd("darwin", "/opt/homebrew/Cellar/node@20/20.19.0/bin/node"),
+      null,
+    );
+    check(
+      "macOS nodejs.org .pkg (/usr/local/bin) → none",
+      cmd("darwin", "/usr/local/bin/node"),
+      null,
+    );
+    check(
+      "asdf → none",
+      cmd("darwin", "/Users/user/.asdf/installs/nodejs/20.1.0/bin/node"),
+      null,
     );
     check("Linux system Node → none", cmd("linux", "/usr/bin/node"), null);
+  }
+  {
+    // A failure keeps the warnings already found (node not on the PATH of
+    // spawned shells), which sdk-install then carries too.
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "v16.20.0",
+      isPkg: false,
+      platform: "linux",
+      env: {},
+      spawnSync: () => ({ status: 1, stdout: "" }),
+    });
+    check("node 16, not on PATH → failure", r.status, "failure");
+    check(
+      "node 16, not on PATH → PATH warning kept",
+      (r.warnings || []).some((w) => w.includes("does not resolve")),
+      true,
+    );
   }
   {
     const r = await checkNode("t", {
@@ -503,6 +591,7 @@ function execStub(table) {
       version: "garbage",
       isPkg: false,
       platform: "win32",
+      env: { ProgramFiles: "C:\\Program Files" },
       spawnSync: () => ({ status: 0, stdout: "" }),
     });
     check(

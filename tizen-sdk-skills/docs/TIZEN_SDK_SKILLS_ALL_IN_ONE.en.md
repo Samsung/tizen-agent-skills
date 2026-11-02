@@ -261,13 +261,12 @@ node <plugin>/lib/cli/check-node-cli.js
 
 **Installation Guide (when Node.js is not installed):**
 
-| OS                    | Command                                             |
-| --------------------- | --------------------------------------------------- |
-| Windows               | `winget install OpenJS.NodeJS.LTS`                  |
-| macOS                 | `brew install node`                                 |
-| Running under nvm / fnm / volta | `nvm install 22 && nvm alias default 22` · `fnm install 22 && fnm default 22` · `volta install node@22` |
-| Linux | No one-line command — see https://nodejs.org/en/download (below) |
-| All OS (manual)       | Download LTS from https://nodejs.org/               |
+| Where the running Node.js comes from | Install command (the user runs it) |
+| --- | --- |
+| Windows installer (`C:\Program Files\nodejs`), no nvm-windows | `winget install OpenJS.NodeJS.LTS` |
+| macOS, Homebrew's `node` formula | `brew upgrade node` |
+| nvm / nvm-windows / fnm / volta | that manager's own command (see `tizen-check-node`) |
+| Anything else (Linux system Node, asdf, mise, scoop, nodejs.org `.pkg`, …) | none — https://nodejs.org/en/download |
 
 > Linux: the distribution's own `nodejs` is below 22 on current LTS releases (Node 18 on Ubuntu 24.04 and Debian 12). Install Node.js 22+ by one of the methods on the download page (a version manager such as nvm needs no root and touches no system packages). See the `tizen-check-node` skill for what to watch for when replacing a distribution install.
 

@@ -46,7 +46,7 @@ function pathFor(platform) {
  * a warning, never a failure.
  *
  * @param {string} [command]
- * @param {object} [deps] - test seams: execPath, version, isPkg, platform, spawnSync, osRelease
+ * @param {object} [deps] - test seams: execPath, version, isPkg, platform, spawnSync, env
  * @returns {object} Standard JSON Envelope
  *   - installed: success + version/path info
  *   - not installed: failure + node_not_found error + OS-specific guide
@@ -68,7 +68,13 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // parses the major once; it is reused for every check below.
     // The install command (null on a Linux system Node — no safe one-liner
     // there; the user is pointed at guide_url) comes with the floor check.
-    const floor = nodeFloorCheck({ version, isPkg, platform, execPath });
+    const floor = nodeFloorCheck({
+      version,
+      isPkg,
+      platform,
+      execPath,
+      env: deps.env,
+    });
     if (floor.major === null) {
       // Only reachable when a caller injected a broken version string —
       // process.version is always "vN.N.N".
@@ -116,13 +122,17 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
     // the runners do not work, so that is a failure. Skipped for a
     // pkg-compiled binary, whose embedded Node the user cannot upgrade.
     if (floor.status === "fail") {
-      return formatError(
+      const failure = formatError(
         command,
         "node_version_unsupported",
         floor.message,
         floor.installCommand,
         startTime,
       );
+      // Keep what was already found (e.g. node not on the PATH of spawned
+      // shells); a failure envelope has no warnings of its own.
+      if (warnings.length) failure.warnings = warnings;
+      return failure;
     }
     // v18–v21: still runs, so only a warning (it carries the install command
     // when there is one).

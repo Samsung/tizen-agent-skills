@@ -94,8 +94,9 @@ Exit code: `0` = success (Node.js installed, v18+), `1` = failure (Node.js not f
 
 **Success below v22 (e.g. Node 20):** same shape, with a `warnings` entry
 `"Node.js v20.11.0 is older than the required v22+ … Upgrade to Node.js 22 LTS or later from https://nodejs.org/en/download."`,
-followed by `" Install command: <command>"` when there is a safe one for the host (see the table
-below). Report it to the user as an upgrade the SDK skills need — do not call that Node version fine.
+followed by `" Install command (run it yourself in a terminal): <command>"` when the source of the
+running Node.js is known (see the table below). Report it to the user as an upgrade the SDK skills
+need — do not call that Node version fine.
 
 **Failure (Node.js not installed)** — example from a Linux host with a system Node (no safe
 one-line command, so `command` is `null` and `guide_url` is the download page):
@@ -115,8 +116,9 @@ one-line command, so `command` is `null` and `guide_url` is the download page):
   }]
 }
 ```
-On Windows, macOS, or when the runner runs under nvm / fnm / volta, `command` is the matching
-entry of the table below instead.
+When the source of the running Node.js is known, `command` is the matching entry of the table
+below instead. A `null` command means none is known: point the user at `guide_url` — never make up an
+apt / dnf / curl command.
 
 **Failure (Node.js below v18):** `error_code` `TIZEN_SDK_ENV_E003`, `error_category`
 `node_version_unsupported`, the same `suggested_fix` as above.
@@ -124,19 +126,24 @@ entry of the table below instead.
 ## Installation Guide (when Node.js is missing or below v22)
 
 `suggested_fix.command` and the warning only ever carry a command that changes nothing but Node.js
-itself. Installing Node.js is the user's step — relay the command or the page; do not run it for them.
+itself, and only when the runner can tell where the running Node.js comes from (its `execPath`,
+and the version managers' environment variables). These are commands for the **user to run in their
+own terminal** — relay the command or the page; do not run it for them (nvm, for one, is a shell
+function that only exists in an interactive shell).
 
-| Where the runner's Node.js comes from | Command |
+| Where the running Node.js comes from | Command |
 |---|---|
-| **nvm** (`~/.nvm/versions/node/…`) | `nvm install 22 && nvm alias default 22` |
+| **nvm** (`$NVM_DIR`, `~/.nvm` or `~/.config/nvm`) | `nvm install 22 && nvm alias default 22` |
+| **nvm-windows** (`%NVM_HOME%` / `%NVM_SYMLINK%`) | `nvm install 22 && nvm use 22` |
 | **fnm** | `fnm install 22 && fnm default 22` |
-| **volta** | `volta install node@22` |
-| **Windows** (system install) | `winget install OpenJS.NodeJS.LTS` |
-| **macOS** (system install) | `brew install node` |
-| **Linux** (system install) | No one-line command — https://nodejs.org/en/download |
+| **volta** (`…/volta/tools/image/node/…`) | `volta install node@22` |
+| **Windows installer** (`C:\Program Files\nodejs\node.exe`, no nvm-windows) | `winget install OpenJS.NodeJS.LTS` |
+| **macOS, Homebrew's `node` formula** | `brew upgrade node` |
+| **Anything else** — Linux system Node, asdf, mise, n, nodenv, scoop, keg-only `node@NN`, the nodejs.org `.pkg` | none (`null`) — https://nodejs.org/en/download |
 
 A version manager gets its own command because a system-wide install would not replace the Node.js
-it puts first on PATH.
+it puts first on PATH. With nvm-windows installed but not running this Node.js there is no command
+either: its symlink is usually `C:\Program Files\nodejs`, where winget would install.
 
 **Linux system installs** — what to tell the user:
 - The distribution's own `nodejs` package is below 22 on current LTS releases (Node 18 on Ubuntu

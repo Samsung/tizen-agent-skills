@@ -785,24 +785,42 @@ async function ensureSdkPathConfig(sdkPath, command) {
  *   - Already installed: success + warnings (exit here)
  *   - Not installed: failure — guide agent to perform background installation
  */
-async function installSdk(...args) {
-  // checkNode's warnings are collected in ctx by the steps and merged into
-  // whichever envelope they return — one place, so a new return path cannot
-  // drop them.
-  const ctx = { nodeWarnings: [] };
-  const env = await installSdkSteps(ctx, ...args);
-  return withNodeWarnings(env, ctx.nodeWarnings);
-}
-
-/** installSdk() body; records checkNode's warnings in ctx.nodeWarnings. */
-async function installSdkSteps(
-  ctx,
+async function installSdk(
   version = "",
   _label = "tizen",
   force = false,
   repoUrl = "",
   command = "tizen-sdk sdk-install",
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+) {
+  // checkNode's warnings are collected in ctx by the steps and merged into
+  // whichever envelope they return — one place, so a new return path cannot
+  // drop them.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkSteps(
+    ctx,
+    version,
+    _label,
+    force,
+    repoUrl,
+    command,
+    downloadJobs,
+  );
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * installSdk() body; records checkNode's warnings in ctx.nodeWarnings.
+ * Call installSdk(), not this: only installSdk() merges those warnings.
+ */
+async function installSdkSteps(
+  ctx,
+  version,
+  _label,
+  force,
+  repoUrl,
+  command,
+  downloadJobs,
 ) {
   // Start time: pass to formatSdkInstall so duration_ms reflects actual work time
   const startTime = Date.now();
@@ -2406,20 +2424,34 @@ function readInstalledRepository(sdkPath) {
  * @param {boolean} [force] - force reinstall even if already installed
  * @returns {object} Standard JSON Envelope
  */
-async function installSdkFromRepo(...args) {
-  // Same as installSdk: checkNode's warnings are merged in one place.
-  const ctx = { nodeWarnings: [] };
-  const env = await installSdkFromRepoSteps(ctx, ...args);
-  return withNodeWarnings(env, ctx.nodeWarnings);
-}
-
-/** installSdkFromRepo() body; records checkNode's warnings in ctx.nodeWarnings. */
-async function installSdkFromRepoSteps(
-  ctx,
+async function installSdkFromRepo(
   repoUrl,
   platformVersion = "",
   force = false,
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+) {
+  // Same as installSdk: checkNode's warnings are merged in one place.
+  const ctx = { nodeWarnings: [] };
+  const env = await installSdkFromRepoSteps(
+    ctx,
+    repoUrl,
+    platformVersion,
+    force,
+    downloadJobs,
+  );
+  return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * installSdkFromRepo() body; records checkNode's warnings in ctx.nodeWarnings.
+ * Call installSdkFromRepo(), not this: only it merges those warnings.
+ */
+async function installSdkFromRepoSteps(
+  ctx,
+  repoUrl,
+  platformVersion,
+  force,
+  downloadJobs,
 ) {
   const startTime = Date.now();
   const command = "tizen-sdk sdk-install-custom-repo";
