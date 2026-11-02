@@ -107,7 +107,8 @@ function findSecretTool() {
  * `secret-tool store --password=<pw>`), and `util.inspect` / `console.error`
  * print the fields of an error and of its causes. encryptPassword() and
  * decryptPassword(), the module's only entry points, run every error through
- * this before it leaves, so no reject path can forget it.
+ * this before it leaves, so no reject path can forget it (the reject sites
+ * also keep only withoutSpawnArgs() copies).
  *
  * @param {unknown} err
  * @returns {unknown} the same value
@@ -121,6 +122,21 @@ function stripSpawnArgs(err) {
     }
   }
   return err;
+}
+
+/**
+ * A copy of a spawn error without `spawnargs` (which hold the password), for
+ * use as `cause` where the platform helpers reject. `code`, `errno`,
+ * `syscall` and `path` stay. stripSpawnArgs() at the entry points stays the
+ * guarantee for every path; this keeps the exported helpers safe on their own.
+ *
+ * @param {unknown} err
+ * @returns {unknown}
+ */
+function withoutSpawnArgs(err) {
+  if (!err || typeof err !== "object" || !("spawnargs" in err)) return err;
+  const { spawnargs: _spawnargs, ...rest } = err;
+  return Object.assign(new Error(err.message), rest);
 }
 
 /**
@@ -246,7 +262,7 @@ async function encryptPasswordWindows(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -324,7 +340,14 @@ async function decryptPasswordWindows(pwdFilePath) {
       }
 
       const parsed = parseWincryptOutput(stdout);
-      if (parsed.password !== null) {
+      if (parsed.password === "") {
+        // Same rule as the other platforms: never a password to sign with.
+        reject(
+          new Error(
+            "samsung_pwd_store_failed: wincrypt.exe returned no password",
+          ),
+        );
+      } else if (parsed.password !== null) {
         resolve(parsed.password);
       } else {
         reject(
@@ -339,7 +362,7 @@ async function decryptPasswordWindows(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn wincrypt.exe: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -375,7 +398,7 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: proc.error },
+          { cause: withoutSpawnArgs(proc.error) },
         ),
       );
       return;
@@ -436,7 +459,7 @@ async function decryptPasswordMacOS(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn security: ${proc.error.message}`,
-          { cause: proc.error },
+          { cause: withoutSpawnArgs(proc.error) },
         ),
       );
       return;
@@ -454,6 +477,15 @@ async function decryptPasswordMacOS(pwdFilePath) {
     // `security -w` prints the secret and a line break; only the line break
     // goes, spaces belong to the password.
     const password = proc.stdout.replace(/\r?\n$/, "");
+    if (!password) {
+      // Same rule as the other platforms: never a password to sign with.
+      reject(
+        new Error(
+          "samsung_pwd_store_failed: Keychain lookup returned no password",
+        ),
+      );
+      return;
+    }
     resolve(password);
   });
 }
@@ -542,7 +574,7 @@ async function encryptPasswordLinux(password, pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -620,7 +652,7 @@ async function decryptPasswordLinux(pwdFilePath) {
       reject(
         new Error(
           `samsung_pwd_store_failed: failed to spawn secret-tool: ${err.message}`,
-          { cause: err },
+          { cause: withoutSpawnArgs(err) },
         ),
       );
     });
@@ -632,6 +664,7 @@ module.exports = {
   decryptPassword,
   // Exports for testing
   stripSpawnArgs,
+  withoutSpawnArgs,
   parseWincryptOutput,
   encryptPasswordWindows,
   decryptPasswordWindows,
