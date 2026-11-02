@@ -108,12 +108,19 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
     CPU 사용량 급증, 메모리 증가, 동영상/오디오 재생 안 됨, 에뮬레이터 느림, "원인 분석/
     조사해줘"는 문장에 에뮬레이터·디바이스가 언급되어도 `tizen-dlog-analyzer`로 보냅니다
     (`tizen-device-manager`는 디바이스 목록·에뮬레이터 종료만 담당). 분석기 안에서는
-    `investigate --symptoms "<사용자 표현>" [app-id]`로 시작하고, 재현 **전에** 수집기를
-    켠 뒤(`start start-monitoring`, `kernel collect`, `dlog-collect <app-id>`), **턴을 끝내고
-    사용자에게 재현을 요청**합니다 — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요".
-    `sleep`·폴링·같은 명령에서의 stop/analyze는 금지. 분석은 에러부터(`error-analyze
-    <app-id> summary` → `check` → `kernel analyze`), 특정 문자열 찾기는 `search "<문자열>"`(수집된
-    모든 카테고리, 엔트리 단위 — `.hot.log`를 `grep`하지 않음), 전체 `app-log`는 그 뒤에 필터를 걸어서만.
+    `investigate --symptoms "<사용자 표현>" [app-id]`로 예비 조사를 시작합니다 — 결론이
+    `confirmed`여도 실시간 재현을 생략하지 않습니다. 새 로그 수집(`start start-monitoring`,
+    플랫폼 증상이면 `kernel collect`)을 켠 뒤 `app-launch <app-id>`로 앱을 실행하고 성공을
+    확인합니다. 실행 중인 앱의 상태 유지는 사용자가 요청한 경우에만 허용합니다. dlog 수집기는
+    한 번에 하나만: `dlog-collect <app-id>`는 시스템 모니터 없이만 사용합니다. 설정과 앱 실행을
+    마친 뒤 **턴을 끝내고 사용자에게 재현을 요청**합니다 — "(1) 재현 완료, 발생했어요 / (2) 아무
+    일 없었어요". `sleep`·폴링·같은 명령에서의 stop/analyze는 금지. 분석은 수집 방식에 맞춰
+    (시스템 모니터는 `check`, 앱 전용 `dlog-collect` 세션은 `error-analyze <app-id> summary`,
+    이어서 `kernel analyze`), 특정 문자열 찾기는 `search "<문자열>"`(수집된 모든 카테고리,
+    엔트리 단위 — `.hot.log`를 `grep`하지 않음), 전체 `app-log`는 그 뒤에 앱 전용 수집에서만
+    필터를 걸어서 (모니터만 켠 경우 `no_logs`). 증거는 이번 수집의 앱·시리얼·시간대와
+    대조하고, 증상이 없었다면 "재현되지 않음"으로 보고합니다. 저장 로그만 분석하라는 명시적
+    요청이나 사용자가 재현을 거절한 경우에만 그 한계를 밝히고 잠정 분석을 허용합니다.
     커널 로그는 `sdb shell dmesg`가 아니라 `kernel collect` → `kernel stop` → `kernel analyze`,
     `top`/`ps`/`free`/`/proc/meminfo` 같은 진단은 `investigate` / `probe run <id>`로.
 
