@@ -208,8 +208,9 @@ async function encryptPasswordWindows(password, pwdFilePath) {
     });
 
     let stderr = "";
+    proc.stderr.setEncoding("utf8");
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (_code) => {
@@ -237,6 +238,28 @@ async function encryptPasswordWindows(password, pwdFilePath) {
 }
 
 /**
+ * Parse `wincrypt.exe --decrypt` output: the first line is "PASSWORD:<value>".
+ *
+ * Lines are split on CRLF as well as LF — wincrypt is a Windows program, and
+ * splitting on "\n" alone left a trailing "\r" in the password whenever more
+ * than one line followed. Only leading whitespace before the first line is
+ * dropped, so trailing spaces that belong to the password are kept.
+ *
+ * @private
+ * @param {string} stdout
+ * @returns {{password: string|null, line: string}} password null when the
+ *   first line is not a PASSWORD: line
+ */
+function parseWincryptOutput(stdout) {
+  const prefix = "PASSWORD:";
+  const line = String(stdout).trimStart().split(/\r?\n/)[0];
+  return {
+    password: line.startsWith(prefix) ? line.slice(prefix.length) : null,
+    line,
+  };
+}
+
+/**
  * Windows: decrypt password using wincrypt.exe from Tizen SDK.
  *
  * @private
@@ -255,13 +278,16 @@ async function decryptPasswordWindows(pwdFilePath) {
     }
 
     // wincrypt.exe --decrypt <file>  → stdout: PASSWORD:<value>
+    // spawn() has no `encoding` option; setEncoding() decodes each stream with
+    // a StringDecoder, so a character split across chunks stays intact.
     const proc = spawn(wincryptPath, ["--decrypt", pwdFilePath], {
       stdio: ["ignore", "pipe", "pipe"],
-      encoding: "utf-8",
     });
 
     let stdout = "";
     let stderr = "";
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
     proc.stdout.on("data", (data) => {
       stdout += data;
     });
@@ -280,16 +306,13 @@ async function decryptPasswordWindows(pwdFilePath) {
         return;
       }
 
-      // Parse stdout: "PASSWORD:<value>"
-      const prefix = "PASSWORD:";
-      const line = stdout.trim().split("\n")[0]; // first line only
-      if (line.startsWith(prefix)) {
-        const password = line.substring(prefix.length);
-        resolve(password);
+      const parsed = parseWincryptOutput(stdout);
+      if (parsed.password !== null) {
+        resolve(parsed.password);
       } else {
         reject(
           new Error(
-            `samsung_pwd_store_failed: wincrypt.exe returned unexpected output: ${line}`,
+            `samsung_pwd_store_failed: wincrypt.exe returned unexpected output: ${parsed.line}`,
           ),
         );
       }
@@ -341,7 +364,9 @@ async function encryptPasswordMacOS(password, pwdFilePath) {
       return;
     }
 
-    if (proc.status !== 0 || proc.stderr) {
+    // The exit code decides: `security` can print a warning on stderr and
+    // still store the item, and treating that as failure skipped the marker.
+    if (proc.status !== 0) {
       reject(
         new Error(
           `samsung_pwd_store_failed: Keychain encrypt failed: ${proc.stderr || `exit code ${proc.status}`}`,
@@ -457,12 +482,15 @@ async function encryptPasswordLinux(password, pwdFilePath) {
     });
 
     let stderr = "";
+    proc.stderr.setEncoding("utf8");
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (code) => {
-      if (code !== 0 || stderr) {
+      // The exit code decides (a libsecret / GLib warning on stderr does not
+      // mean the store failed); null — killed, e.g. by the timeout — fails.
+      if (code !== 0) {
         reject(
           new Error(
             `samsung_pwd_store_failed: secret-tool store failed: ${stderr || `exit code ${code}`}`,
@@ -533,15 +561,18 @@ async function decryptPasswordLinux(pwdFilePath) {
     let stdout = "";
     let stderr = "";
 
+    proc.stdout.setEncoding("utf8");
+    proc.stderr.setEncoding("utf8");
     proc.stdout.on("data", (data) => {
-      stdout += data.toString("utf-8");
+      stdout += data;
     });
     proc.stderr.on("data", (data) => {
-      stderr += data.toString("utf-8");
+      stderr += data;
     });
 
     proc.on("close", (code) => {
-      if (code !== 0 || stderr) {
+      // Same rule as store: exit code, not the presence of stderr output.
+      if (code !== 0) {
         reject(
           new Error(
             `samsung_pwd_store_failed: secret-tool lookup failed: ${stderr || `exit code ${code}`}`,
@@ -570,6 +601,7 @@ module.exports = {
   decryptPassword,
   // Exports for testing
   withoutSpawnArgs,
+  parseWincryptOutput,
   encryptPasswordWindows,
   decryptPasswordWindows,
   encryptPasswordMacOS,

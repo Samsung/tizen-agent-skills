@@ -53,6 +53,19 @@ below use those release tags.
   failed command's error without its argument list (`spawnargs`), which holds
   the password. No behaviour change.
 
+### Fixed
+
+- Samsung certificate password store (`generate-samsung-author` and the
+  commands that read its password back):
+  - Linux `secret-tool` and macOS `security`: a warning on stderr no longer
+    fails a store or lookup that exited 0. The exit code decides, and stderr
+    only explains a failure.
+  - Passwords read back from `secret-tool` or `wincrypt.exe` keep non-ASCII
+    characters intact when the output arrives in several chunks; before, a
+    character split across chunks became U+FFFD.
+  - Windows: a password read back from `wincrypt.exe` no longer ends in `\r`
+    when the tool prints CRLF and more than one line.
+
 ## [1.6.1] — 2026-10-26
 
 ### Added
