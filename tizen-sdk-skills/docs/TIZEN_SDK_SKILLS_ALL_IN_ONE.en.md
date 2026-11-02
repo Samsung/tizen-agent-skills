@@ -214,7 +214,7 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
     {
       "error_code": "TIZEN_SDK_CONFIG_E005",
       "error_category": "node_not_found",
-      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+.",
+      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
@@ -1378,7 +1378,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 │                        SDK Installation Phase                        │
 │                                                                     │
 │  tizen-check-node ──→ tizen-check-disk-space ──→ tizen-sdk-install  │
-│  (Node.js 18+?)        (15 GB free?)            (10-15 min install) │
+│  (Node.js 22+?)        (15 GB free?)            (10-15 min install) │
 └──────────────────────────────────┬──────────────────────────────────┘
                                    │
                                    ▼

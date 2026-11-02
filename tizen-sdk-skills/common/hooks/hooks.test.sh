@@ -474,7 +474,7 @@ fi
 echo
 echo "--- check-update.js: new-release notice (no network) ---"
 # GitHub is never contacted: a fresh cache answers without a fetch, and a due
-# fetch goes through HTTPS_PROXY on a closed local port. Node 20 (CI) skips the
+# fetch goes through HTTPS_PROXY on a closed local port. Node < 22.21 skips the
 # fetch outright behind a proxy; Node 22.21+/24 re-runs with NODE_USE_ENV_PROXY
 # and the closed port fails at once. Either way the fetch fails.
 uc_tmp="$(mktemp -d)"
@@ -594,7 +594,7 @@ printf 'not json' > "$uc_cache"
 out="$(uc claude HTTPS_PROXY="$uc_dead_proxy")"
 uc_expect "corrupt cache: nothing printed" "$out" ""
 uc_expect "corrupt cache: replaced by a failed record" "$(uc_field failed)" "true"
-# Node 20 cannot use the proxy (PROXY_NEEDS_NODE_22_21); 22.21+ re-runs and
+# Node < 22.21 cannot use the proxy (PROXY_NEEDS_NODE_22_21); 22.21+ re-runs and
 # the closed port refuses (ECONNREFUSED). Either way a code is recorded.
 uc_expect "a failed fetch records an error code" \
   "$(uc_field error | grep -cE '^"[A-Z0-9_]+"$')" "1"

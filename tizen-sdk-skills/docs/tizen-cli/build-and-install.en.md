@@ -6,7 +6,7 @@ This document describes how to build the tizen-sdk plugin (tizen-cli harness) fr
 
 ## Prerequisites
 
-- **Node.js 18+** — Download from [https://nodejs.org](https://nodejs.org)
+- **Node.js 22+** — Download from [https://nodejs.org](https://nodejs.org)
 - **pnpm** — If not installed: `npm install -g pnpm`
 - **tizen-cli** (optional) — the separately distributed tizen-cli host CLI (see its own installation guide). Without it, run the plugin through the standalone launcher described in step 5.
 

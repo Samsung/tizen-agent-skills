@@ -244,20 +244,20 @@ function execStub(table) {
     // PATH lookup fails (sandboxed child PATH) — the runner still succeeds
     // because the running interpreter is the proof.
     const r = await checkNode("t", {
-      execPath: "/home/u/.nvm/versions/node/v20.11.0/bin/node",
-      version: "v20.11.0",
+      execPath: "/opt/nvm/versions/node/v22.11.0/bin/node",
+      version: "v22.11.0",
       isPkg: false,
       platform: "linux",
       spawnSync: () => ({ error: new Error("spawn which ENOENT"), status: 1 }),
     });
     check("node not on child PATH → still success", r.status, "success");
-    check("version from process", r.result.version, "v20.11.0");
+    check("version from process", r.result.version, "v22.11.0");
     check(
       "path is execPath",
       r.result.path,
-      "/home/u/.nvm/versions/node/v20.11.0/bin/node",
+      "/opt/nvm/versions/node/v22.11.0/bin/node",
     );
-    check("major 20", r.result.major_version, 20);
+    check("major 22", r.result.major_version, 22);
     check("source process", r.result.source, "process");
     check("on_path false", r.result.on_path, false);
     check(
@@ -304,9 +304,35 @@ function execStub(table) {
     );
   }
   {
+    // Node 20 is end-of-life: below the v22 floor it still runs, with a warning.
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "v20.19.0",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    check("node 20 → success", r.status, "success");
+    check(
+      "node 20 → v22+ upgrade warning",
+      r.warnings.length === 1 && r.warnings[0].includes("required v22+"),
+      true,
+    );
+  }
+  {
+    const r = await checkNode("t", {
+      execPath: "/usr/bin/node",
+      version: "v22.0.0",
+      isPkg: false,
+      platform: "linux",
+      spawnSync: () => ({ status: 0, stdout: "/usr/bin/node\n" }),
+    });
+    check("node 22.0.0 → no version warning", r.warnings, []);
+  }
+  {
     const r = await checkNode("t", {
       execPath: "/opt/tizen-cli",
-      version: "v20.0.0",
+      version: "v22.0.0",
       isPkg: true,
       platform: "linux",
       spawnSync: throwing("pkg must not spawn"),

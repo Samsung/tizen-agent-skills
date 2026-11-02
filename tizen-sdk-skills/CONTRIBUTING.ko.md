@@ -8,7 +8,7 @@
 ## 1. 시작하기 전에
 
 - [GOVERNANCE.ko.md](GOVERNANCE.ko.md)를 읽어 주세요 — 특히 2.2(코드 리뷰).
-- 사전 요구사항: Node.js 20 이상, 저장소 루트에서는 `pnpm`, `tizen-cli/`와
+- 사전 요구사항: Node.js 22 이상, 저장소 루트에서는 `pnpm`, `tizen-cli/`와
   `tests/`에서는 `npm`. cli 레인 테스트 케이스를 실행하려면 빌드된 플러그인이
   설치된 tizen-cli가 추가로 필요합니다.
 - 개발이 아니라 사용이 목적이라면 [빠른 시작](README.ko.md#빠른-시작)을

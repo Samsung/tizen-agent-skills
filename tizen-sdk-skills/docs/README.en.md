@@ -260,7 +260,7 @@ Verifies that Node.js is installed and on PATH before SDK installation. Reports 
 #### Key Features
 
 - Checks if Node.js is installed and accessible on PATH
-- Requires Node.js 18+ (warns if older, but does not abort)
+- Requires Node.js 22+ (warns if older, but does not abort)
 - Returns Standard JSON Envelope with version, path, and major version
 - If not installed: returns error with OS-specific install guide (Windows: `winget install OpenJS.NodeJS.LTS`, macOS: `brew install node`, Linux: `sudo apt install -y nodejs npm`)
 - Download URL: https://nodejs.org/

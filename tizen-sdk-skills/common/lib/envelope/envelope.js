@@ -331,7 +331,7 @@ const ERROR_CODES = {
     error_category: "node_not_found",
     suggested_fix: {
       command:
-        "Install Node.js 18+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: sudo apt install -y nodejs npm / macOS: brew install node",
+        "Install Node.js 22+ — Windows: winget install OpenJS.NodeJS.LTS / Ubuntu: sudo apt install -y nodejs npm / macOS: brew install node",
       auto_fixable: false,
       guide_url: "https://nodejs.org/en/download",
     },

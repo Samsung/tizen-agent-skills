@@ -30,7 +30,7 @@ and release tags (`<plugin>-vX.Y.Z`). More plugins for the Tizen platform will b
 
 ## Quick Start
 
-Prerequisites: **Node.js 20+** and **Git**.
+Prerequisites: **Node.js 22+** and **Git**.
 
 1. Clone the repository.
 

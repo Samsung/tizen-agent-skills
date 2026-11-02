@@ -96,7 +96,7 @@ Exit code: `0` = success (Node.js installed), `1` = failure (Node.js not found o
   "errors": [{
     "error_code": "TIZEN_SDK_CONFIG_E005",
     "error_category": "node_not_found",
-    "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+. Please install Node.js LTS from https://nodejs.org/ and retry.",
+    "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. Please install Node.js LTS from https://nodejs.org/ and retry.",
     "suggested_fix": {
       "command": "winget install OpenJS.NodeJS.LTS (Windows) | brew install node (macOS) | sudo apt install -y nodejs npm (Linux)",
       "auto_fixable": false,

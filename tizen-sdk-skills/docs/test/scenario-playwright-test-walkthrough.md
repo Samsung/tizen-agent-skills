@@ -14,7 +14,7 @@
 
 - **플러그인 설치 확인**: `tizen-sdk-skills` 플러그인이 설치되어 있어야 합니다. (미설치 시 [README.md](../README.md)의 "Cline 플러그인 설치" 참고)
 - **OS**: Windows / Ubuntu(Linux) / macOS 모두 지원합니다. Claude가 현재 OS를 감지해 알맞은 방식으로 실행합니다.
-- **Node.js 20+ 필요**: Playwright 실행에 필요합니다 (테스트는 `node <테스트파일>`로 실행됨).
+- **Node.js 22+ 필요**: Playwright 실행에 필요합니다 (테스트는 `node <테스트파일>`로 실행됨).
 - **Playwright는 테스트 프로젝트에 설치됩니다**: 플러그인에는 절대 설치되지 않습니다 — 테스트 프로젝트 디렉터리에서 `npm install playwright` 한 번이면 됩니다 (7단계).
 - **체험 목표(예시)**:
   - 앱 타입: **WebApp**

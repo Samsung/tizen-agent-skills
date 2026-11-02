@@ -14,6 +14,14 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Node.js 22 or later is now required** (Node.js 20 reached end-of-life on
+  2026-04-30). CI and releases run on Node 22 (`.nvmrc`), `engines` is `>=22`,
+  `check-node` / preflight warn below v22 (they still do not abort), and
+  `tizen-sdk doctor` reports Node 18–21 as a warning instead of OK. The
+  documented prerequisites, install guides and error messages now say 22+.
+
 ## [1.6.1] — 2026-10-26
 
 ### Added

@@ -6,7 +6,7 @@
 
 ## 사전 요구사항
 
-- **Node.js 18 이상** — [https://nodejs.org](https://nodejs.org)에서 다운로드
+- **Node.js 22 이상** — [https://nodejs.org](https://nodejs.org)에서 다운로드
 - **pnpm** — 설치되어 있지 않은 경우: `npm install -g pnpm`
 - **tizen-cli** (선택) — 별도 배포되는 tizen-cli 호스트 CLI (설치 방법은 tizen-cli 배포 안내 참조). 없는 경우 5단계의 독립 런처로 플러그인을 실행할 수 있습니다.
 

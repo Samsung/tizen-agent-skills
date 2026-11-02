@@ -14,7 +14,7 @@ AI 호스트 없이 쓸 수 있는 독립 실행형 **tizen-sdk** CLI도 함께 
 
 ### 사전 요구사항
 
-- **Node.js 20+** 가 `PATH`에 있어야 합니다 — 모든 스킬 뒤에서 동작하는 CLI 러너가
+- **Node.js 22+** 가 `PATH`에 있어야 합니다 — 모든 스킬 뒤에서 동작하는 CLI 러너가
   사용합니다 (`check-node`로 확인 가능).
 - **Git** — 저장소 클론용.
 - 지원 호스트 중 하나: Claude Code, Cline, Codex CLI, Gemini CLI, VS Code.
@@ -289,7 +289,7 @@ tizen-sdk-skills/
 - **스킬이 인식되지 않음** — setup 후 호스트를 재시작했는지 확인하고 setup 스크립트를 다시
   실행하세요. setup은 멱등(idempotent)합니다: 캐시는 깨끗한 미러로 다시 만들어지고, 개인
   스킬·에이전트 파일은 그 자리에서 교체됩니다.
-- **`node`를 찾을 수 없음** — 러너는 `PATH`의 Node.js 20+가 필요합니다. 어시스턴트에
+- **`node`를 찾을 수 없음** — 러너는 `PATH`의 Node.js 22+가 필요합니다. 어시스턴트에
   "node 확인해줘"(`check-node`)라고 요청하거나 `node --version`을 실행해 보세요.
 - **업데이트 알림이 오지 않음** — 세션 시작 확인은 실패해도 아무것도 출력하지 않으며, 마지막
   결과는 `~/.tizen.agent.update.json`에 남습니다. `"failed": false`이고 `latest` 목록이 있으면

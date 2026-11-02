@@ -176,7 +176,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
     {
       "error_code": "TIZEN_SDK_CONFIG_E005",
       "error_category": "node_not_found",
-      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+.",
+      "message": "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+.",
       "suggested_fix": {
         "command": "winget install OpenJS.NodeJS.LTS",
         "auto_fixable": false,
@@ -1422,7 +1422,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --ap
 │                        SDK 설치 단계                                 │
 │                                                                     │
 │  tizen-check-node ──→ tizen-check-disk-space ──→ tizen-sdk-install  │
-│  (Node.js 18+?)        (15 GB 여유?)            (10-15분 설치)       │
+│  (Node.js 22+?)        (15 GB 여유?)            (10-15분 설치)       │
 └──────────────────────────────────┬──────────────────────────────────┘
                                    │
                                    ▼

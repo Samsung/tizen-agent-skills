@@ -15,7 +15,7 @@ New here? Start with the one-page [Quick Guide](quick-guide.md).
 
 ### Prerequisites
 
-- **Node.js 20+** on `PATH` — the CLI runners behind every skill need it
+- **Node.js 22+** on `PATH` — the CLI runners behind every skill need it
   (`check-node` verifies this).
 - **Git** to clone the repository.
 - One of the supported hosts: Claude Code, Cline, Codex CLI, Gemini CLI or VS Code —
@@ -306,7 +306,7 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
 - **A skill is not picked up** — make sure the host was restarted after setup, then
   re-run the setup script. The setup is idempotent: the cache is a clean mirror and
   personal skill/agent files are replaced in place.
-- **`node` not found** — the runners need Node.js 20+ on `PATH`; ask the assistant to
+- **`node` not found** — the runners need Node.js 22+ on `PATH`; ask the assistant to
   "check node" (`check-node`) or run `node --version`.
 - **No update notice** — the session-start check stays silent on failure; its last result
   is in `~/.tizen.agent.update.json`. `"failed": false` with a `latest` list means the

@@ -202,9 +202,19 @@ export function handleDoctor(): { status: "success" | "failure" } {
 
   const checks = [
     {
-      name: "Node.js version (18+)",
-      status: nodeMajor >= 18 ? ("ok" as const) : ("fail" as const),
-      message: `Node.js ${process.version} detected`,
+      name: "Node.js version (22+)",
+      // Below 22 the runners may still work, but those majors are
+      // end-of-life and untested: warn, and fail only below 18.
+      status:
+        nodeMajor >= 22
+          ? ("ok" as const)
+          : nodeMajor >= 18
+            ? ("warn" as const)
+            : ("fail" as const),
+      message:
+        nodeMajor >= 22
+          ? `Node.js ${process.version} detected`
+          : `Node.js ${process.version} detected — Node.js 22+ is required; upgrade from https://nodejs.org/`,
     },
     {
       name: "Plugin scripts directory",

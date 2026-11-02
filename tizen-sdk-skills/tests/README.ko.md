@@ -545,7 +545,7 @@ Cline이나 Claude 에이전트가 TC YAML을 읽고 사용자 프롬프트를 �
 
 ## 사전 요구 사항
 
-- Node.js >= 20
+- Node.js >= 22
 - 빌드된 플러그인 번들: `cd tizen-cli && pnpm install && pnpm build` → `tizen-cli/dist/tizen-sdk.js`
   (gitignored; 아래 모든 cli 레인 실행기가 이를 로드)
 - cli 레인 실행(`runner.mjs`의 `resolveExecutor()`), 모든 플랫폼 동일: PATH를 참조하지 않습니다 — 전역 설치된

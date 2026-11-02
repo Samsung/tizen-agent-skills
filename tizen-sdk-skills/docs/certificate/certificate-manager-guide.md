@@ -45,7 +45,7 @@ CLI 러너 (스킬/에이전트 경로)와 `tizen-cli` 명령 인터페이스의
 ## 사전 조건
 
 - **Tizen SDK** 설치 및 초기화 (`tizen-sdk-install` → `tizen-sdk-init`)
-- **Node.js 18+** (CLI 러너용)
+- **Node.js 22+** (CLI 러너용)
 - Samsung 인증서의 경우: **Samsung 계정** 및 연결된 **TV 에뮬레이터 또는 Samsung TV** (DUID용) — Samsung 인증서는 TV 대상 전용입니다 (아래 [Samsung 온라인 CA 인증서](#samsung-온라인-ca-인증서) 참조)
 - 로컬 인증서의 경우: 네트워크 또는 Samsung 계정 불필요
 - 프록시 환경에서 Samsung 인증서 사용 시: `HTTPS_PROXY` / `HTTP_PROXY` / `NO_PROXY` 환경변수 설정 — Samsung API 클라이언트는 표준 프록시 규칙을 따릅니다

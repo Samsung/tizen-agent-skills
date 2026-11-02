@@ -73,7 +73,7 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
       return formatError(
         command,
         "node_not_found",
-        "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 18+. " +
+        "Node.js is not installed or not on PATH. Tizen SDK CLI runners require Node.js 22+. " +
           "Please install Node.js LTS from https://nodejs.org/ and retry.",
         installGuide,
         startTime,
@@ -109,10 +109,11 @@ async function checkNode(command = "tizen-sdk check-node", deps = {}) {
       }
     }
 
-    // 3. Validate version (v18+ recommended)
-    if (majorVersion > 0 && majorVersion < 18) {
+    // 3. Validate version (v22+ required; older majors only warn, the runner
+    // may still work, but they are past end-of-life and untested)
+    if (majorVersion > 0 && majorVersion < 22) {
       warnings.push(
-        `Node.js ${version} is older than the recommended v18+. Consider upgrading to Node.js 18 LTS or later from https://nodejs.org/`,
+        `Node.js ${version} is older than the required v22+ (older majors are end-of-life and untested). Upgrade to Node.js 22 LTS or later from https://nodejs.org/`,
       );
     }
 

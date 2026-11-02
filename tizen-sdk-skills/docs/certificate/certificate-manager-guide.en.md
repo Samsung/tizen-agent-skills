@@ -46,7 +46,7 @@ This document describes the complete certificate management capabilities of the
 ## Prerequisites
 
 - **Tizen SDK** installed and initialized (`tizen-sdk-install` → `tizen-sdk-init`)
-- **Node.js 18+** (for the CLI runner)
+- **Node.js 22+** (for the CLI runner)
 - For Samsung certificates: a **Samsung Account** and a connected **TV emulator or Samsung TV**
   (for DUIDs) — Samsung certificates are for TV targets only (see
   [Samsung Online-CA Certificates](#samsung-online-ca-certificates))
