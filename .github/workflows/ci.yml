@@ -148,6 +148,14 @@ jobs:
         working-directory: tizen-sdk-skills/vscode
         run: pnpm run build
 
+      # Package the VSIX the way release.yml does. Typecheck and build never
+      # run vsce, so a vsce upgrade (a higher Node floor, new manifest or
+      # secret checks) would otherwise first fail on a release tag. The VSIX
+      # goes to the runner's temp directory and is discarded.
+      - name: Package (vscode extension)
+        working-directory: tizen-sdk-skills/vscode
+        run: pnpm exec vsce package --out "${RUNNER_TEMP}/tizen-ai-extension-ci.vsix"
+
   test:
     name: Test
     runs-on: ubuntu-latest
