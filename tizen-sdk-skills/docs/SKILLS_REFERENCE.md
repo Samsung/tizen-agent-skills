@@ -1112,7 +1112,11 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 {
   "status": "success",
   "result": {
-    "packages": [{ "name": "Tizen Platforms (10)", "status": "installed", "version": "11.0" }],
+    "packages": [
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["common", "tizen"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["common", "tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+    ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
     "installation_status": "completed"
   },

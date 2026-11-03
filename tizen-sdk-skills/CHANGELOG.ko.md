@@ -49,6 +49,17 @@
 
 ### 수정
 
+- `sdk-install` / `sdk-install-custom-repo`가 `platforms/` 아래 항목을 모두 묶어
+  버전 하나만 붙인 `Tizen Platforms (N)` 패키지 한 줄로 보고하지 않습니다. 이
+  개수에는 `common`과 플랫폼 내용이 없는 버전까지 들어갔고, 버전은 설치된 것 중
+  가장 높은 버전 하나뿐이어서, 10.0과 11.0만 완전히 설치된 SDK에서
+  `Tizen Platforms (13) / installed / 11.0`이 "11.0 플랫폼 13개 설치됨"으로
+  읽혔습니다. 이제 `result.packages`에는 버전마다 `Tizen Platform X.Y` 항목이
+  하나씩 있고, `platform-install --list`와 같은 `status`(`installed`,
+  `incomplete`, `not_installed`)와 `profiles`를 갖습니다. 스킬에도 이 항목을 그대로
+  전하고, "설치된 버전이 뭐야?" 같은 후속 질문에는 `platform-install --list`로
+  답하라는 규칙을 추가했습니다.
+
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):
   - macOS: 종료 코드 0으로 끝난 저장이 `security`의 stderr 경고 때문에 실패로

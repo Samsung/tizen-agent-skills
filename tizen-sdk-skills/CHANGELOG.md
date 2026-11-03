@@ -55,6 +55,18 @@ below use those release tags.
 
 ### Fixed
 
+- `sdk-install` / `sdk-install-custom-repo` no longer report every
+  `platforms/` entry as one `Tizen Platforms (N)` package with a single
+  version. The count included `common` and versions that hold no platform
+  payload, and the version was only the newest installed one, so
+  `Tizen Platforms (13) / installed / 11.0` read as thirteen installed 11.0
+  platforms on an SDK where only 10.0 and 11.0 were complete.
+  `result.packages` now has one `Tizen Platform X.Y` entry per version, with
+  the same `status` as `platform-install --list` (`installed`, `incomplete`
+  or `not_installed`) and its `profiles`. The skills also tell the agent to
+  report those entries as they are and to answer a follow-up "which versions
+  are installed?" with `platform-install --list`.
+
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):
   - macOS: a warning from `security` on stderr no longer fails a store that

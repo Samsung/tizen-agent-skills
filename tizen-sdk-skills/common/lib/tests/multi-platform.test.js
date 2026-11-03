@@ -14,6 +14,8 @@
  *   - isPlatformInstalled / listFullyInstalledPlatformVersions: a profile
  *     besides "common", and no .platform-installing-X.Y marker
  *   - listPlatforms (platform-install-cli.js --list, tizen-cli platform-list)
+ *   - collectInstalledPackages (sdk-install result.packages): one entry per
+ *     version with the same status as listPlatforms
  *   - installPlatform pre-check per version (other versions do not matter)
  *   - create-project / list-templates --platform-version validation and the
  *     --tz-profile / -TzProfile hand-off to the scripts
@@ -38,6 +40,7 @@ process.env.USERPROFILE = sandboxHome;
 // Must come AFTER the env redirect: CONFIG_FILE is computed at require time.
 const {
   CONFIG_FILE,
+  collectInstalledPackages,
   isPlatformInstalled,
   listFullyInstalledPlatformVersions,
   listPlatforms,
@@ -159,6 +162,33 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "sdk_path_invalid",
       );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+    }
+
+    console.log("--- collectInstalledPackages (sdk-install result) ---");
+    {
+      fs.mkdirSync(path.join(sdkPath, "tools"), { recursive: true });
+      const pkgs = collectInstalledPackages(sdkPath, "10.0");
+      check(
+        "one entry per platform version with its own status, then the tools",
+        pkgs.map((p) => [p.name, p.status, p.version]),
+        [
+          ["Tizen Platform 9.0", "not_installed", "9.0"],
+          ["Tizen Platform 10.0", "installed", "10.0"],
+          ["Tizen Platform 11.0", "incomplete", "11.0"],
+          ["Tizen SDK Tools", "installed", "10.0"],
+        ],
+      );
+      check("platform entries carry their profiles", pkgs[1].profiles, [
+        "common",
+        "tizen",
+        "tv-samsung",
+      ]);
+      check(
+        "statuses match platform-install --list",
+        pkgs.slice(0, 3).map((p) => p.status),
+        (await listPlatforms()).result.platforms.map((p) => p.status),
+      );
+      fs.rmSync(path.join(sdkPath, "tools"), { recursive: true });
     }
 
     console.log("--- installPlatform pre-check ---");

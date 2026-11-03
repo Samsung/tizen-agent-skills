@@ -350,24 +350,46 @@ console.error = () => {};
         "tizen-sdk platform-install --platform-version 99.0",
       );
     }
+    // Each platform entry carries its own version and status; only the
+    // tools entry takes the requested / newest-installed label. A single
+    // "Tizen Platforms (N)" row stamped with that label read as N installed
+    // platforms of that one version.
+    fs.mkdirSync(path.join(sdkPath, "tools"), { recursive: true });
+    const platformRows = (env) =>
+      env.result.packages
+        .filter((p) => p.name.startsWith("Tizen Platform "))
+        .map((p) => [p.version, p.status]);
+    const toolsVersion = (env) =>
+      env.result.packages.find((p) => p.name === "Tizen SDK Tools")?.version;
     {
       const env = await installSdk("10.0");
       check("10.0 (installed) → success", env.status, "success");
       check(
-        "10.0 → packages report the requested version",
-        env.result.packages.every((p) => p.version === "10.0"),
-        true,
+        "10.0 → one entry per installed platform, each with its own version",
+        platformRows(env),
+        [
+          ["5.5", "installed"],
+          ["9.0", "installed"],
+          ["10.0", "installed"],
+          ["11.0", "installed"],
+        ],
+      );
+      check(
+        "10.0 → tools entry reports the requested version",
+        toolsVersion(env),
+        "10.0",
       );
     }
     {
       const env = await installSdk("");
       check("no version → success", env.status, "success");
       check(
-        "no version → packages report the newest installed platform",
-        env.result.packages.every((p) => p.version === "11.0"),
-        true,
+        "no version → tools entry reports the newest installed platform",
+        toolsVersion(env),
+        "11.0",
       );
     }
+    fs.rmSync(path.join(sdkPath, "tools"), { recursive: true });
     {
       const env = await installSdk();
       check("omitted version → success (auto)", env.status, "success");

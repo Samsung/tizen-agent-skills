@@ -401,6 +401,14 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
   말고 JSON 안의 것을 그대로 보이게 한다.
 - `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- `result.packages`의 플랫폼 항목은 `platforms/tizen-X.Y`마다 하나씩이며, 버전별
+  `status`(`installed` / `incomplete` / `not_installed`)와 `profiles`를 갖는다. 요약 줄은
+  이 값을 항목별로 그대로 전한다 — 디렉터리가 있다고 "설치됨"이라 하지 말고, 가장 높은
+  버전 하나를 SDK 전체의 버전처럼 요약하지 않는다. `installed`여도 `profiles`에 `tizen`이
+  없으면 그 버전은 나열된 프로필(예: `tv-samsung`)용으로만 설치된 것이다.
+- "설치된 SDK/플랫폼 버전이 뭐야?" 같은 **후속 질문**에는 이 Envelope를 다시 해석하거나
+  디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 러너를 `--list`로 실행해 그
+  Envelope로 답한다.
 
 ## Handoff
 
