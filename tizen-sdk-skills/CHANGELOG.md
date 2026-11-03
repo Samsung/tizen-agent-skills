@@ -98,6 +98,15 @@ below use those release tags.
 
 ### Fixed
 
+- The bash readers of `.platform-installed` (`platform_records`, the
+  base-platform migration and `tizen-tv-sdk-install.sh`'s already-installed
+  check) took fields written before the first `Platform package installed
+at` line for a record, while the JS and PowerShell readers ignored them:
+  on such a file a bash installer could skip a version the report did not
+  list. They now share one parser, `platform_record_blocks`, that sees the
+  blocks `readPlatformRecords` sees; the PowerShell base-platform migration
+  reads through `Get-PlatformRecords` too.
+
 - `sdk-install --tizen-version 9.0` and `platform-install --platform-version
 9.0` no longer answer "already installed" when `platforms/tizen-9.0` holds
   only the `tv` / `tv-samsung` folders the TV extension bundles: the

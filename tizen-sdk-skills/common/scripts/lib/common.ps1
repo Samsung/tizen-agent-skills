@@ -286,12 +286,10 @@ function Add-PlatformRecord {
 # before the run changes platforms\.
 function Convert-BasePlatformToRecord {
     param([string]$SdkPath)
-    $file = Join-Path $SdkPath ".platform-installed"
-    if ((Test-Path -LiteralPath $file) -and
-        @([System.IO.File]::ReadAllLines($file) | Where-Object { $_.Trim() -eq 'Installed by: sdk-install' }).Count -gt 0) {
-        return
-    }
+    # Through Get-PlatformRecords, like every reader: a line outside a block,
+    # or a block without a valid X.Y version, does not count.
     $records = @(Get-PlatformRecords -SdkPath $SdkPath)
+    if (@($records | Where-Object { $_.InstalledBy -eq 'sdk-install' }).Count -gt 0) { return }
     $base = $null
     foreach ($d in (Get-ChildItem -Path (Join-Path $SdkPath "platforms") -Directory -ErrorAction SilentlyContinue)) {
         if ($d.Name -notmatch '^tizen-([0-9]+\.[0-9]+)$') { continue }

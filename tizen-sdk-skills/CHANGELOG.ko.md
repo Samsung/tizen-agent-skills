@@ -87,6 +87,13 @@
 
 ### 수정
 
+- `.platform-installed`를 읽는 bash 쪽(`platform_records`, 기본 플랫폼 기록 이전,
+  `tizen-tv-sdk-install.sh`의 이미 설치됨 확인)이 첫 `Platform package installed at`
+  줄 앞에 적힌 필드도 기록으로 셌습니다. JS와 PowerShell은 이런 필드를 무시하므로,
+  그런 파일에서는 bash 설치기가 보고에 없는 버전을 건너뛸 수 있었습니다. 이제 셋이
+  `readPlatformRecords`와 같은 블록을 보는 파서 `platform_record_blocks` 하나를 함께
+  씁니다. PowerShell의 기본 플랫폼 기록 이전도 `Get-PlatformRecords`로 읽습니다.
+
 - `platforms/tizen-9.0`에 TV 확장이 함께 깐 `tv` / `tv-samsung` 폴더만 있을 때
   `sdk-install --tizen-version 9.0`과 `platform-install --platform-version 9.0`이
   "이미 설치됨"으로 답하지 않습니다. 설치기의 확인(`isTizenPlatformInstalled`,

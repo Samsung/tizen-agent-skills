@@ -354,6 +354,85 @@ function makeReportedSdk(root) {
         );
       }
       {
+        // Malformed files: the bash parser (platform_record_blocks) must see
+        // the blocks readPlatformRecords sees. Fields before the first
+        // "Platform package installed at" belong to no block — bash used to
+        // count them, so an installer could skip a version JS did not report.
+        const H = "Platform package installed at 2026-11-03T10:00:00+0900";
+        const cases = {
+          "fields before the first block": `Platform version: 9.0\nProfile: tizen\nInstalled by: sdk-install\n${H}\nTarget: TIZEN-10.0\nPlatform version: 10.0\n`,
+          "a block without a version": `${H}\nTarget: TIZEN-10.0\n${H}\nPlatform version: 11.0\n`,
+          "bad versions": `${H}\nPlatform version: 10\n${H}\nPlatform version: 10.0.1\n${H}\nPlatform version: 9.0\n`,
+          "an empty Profile line": `${H}\nTarget: TV-SAMSUNG ZIP\nPlatform version: 9.0\nProfile:\n`,
+          "spaces and tabs": `  ${H}  \n\tTarget:   TIZEN-10.0  \n Platform version:\t10.0 \n Profile:  tizen ,  tv-samsung ,, \n`,
+          "duplicate keys (last wins)": `${H}\nPlatform version: 9.0\nPlatform version: 10.0\nProfile: tv-samsung\nProfile: tizen\n`,
+          "no trailing newline": `${H}\nPlatform version: 10.0\nProfile: tizen`,
+          "junk lines": `garbage\n${H}\nFoo: bar\nPlatform version: 10.0\nrandom text\n`,
+        };
+        const sdk = path.join(sandboxHome, "malformed-sdk");
+        fs.mkdirSync(sdk, { recursive: true });
+        const results = Object.entries(cases).map(([name, text]) => {
+          fs.writeFileSync(path.join(sdk, ".platform-installed"), text);
+          const js = readPlatformRecords(sdk).flatMap((r) =>
+            r.profiles.map((p) => `${r.version} ${p}`),
+          );
+          const out = sh('platform_records "$1"', sdk).stdout;
+          return [
+            name,
+            JSON.stringify(out.split("\n").filter(Boolean)) ===
+              JSON.stringify(js),
+          ];
+        });
+        check(
+          "platform_records matches readPlatformRecords on malformed files",
+          results.filter(([, same]) => !same).map(([name]) => name),
+          [],
+        );
+      }
+      {
+        // An "Installed by: sdk-install" outside any block is not a record:
+        // the base platform is still migrated, as JS still infers it.
+        const sdk = path.join(sandboxHome, "stray-sdk");
+        makeReportedSdk(sdk);
+        const record = path.join(sdk, ".platform-installed");
+        fs.writeFileSync(
+          record,
+          "Installed by: sdk-install\n" + fs.readFileSync(record, "utf8"),
+        );
+        sh('migrate_base_platform_record "$1"', sdk);
+        check(
+          "a stray Installed by: sdk-install line does not stop the base-platform migration",
+          readPlatformRecords(sdk)
+            .filter((r) => r.installedBy === "sdk-install")
+            .map((r) => r.version),
+          ["11.0"],
+        );
+        // The same for the online TV installer's "already installed" check.
+        fs.writeFileSync(
+          record,
+          "Platform version: 10.0\nProfile: tv-samsung\nInstalled by: tv-sdk-install\n",
+        );
+        fs.rmSync(path.join(sdk, ".tv-sdk-installed"));
+        const check1 = spawnSync(
+          "bash",
+          [
+            path.join(
+              scriptsDir,
+              "tizen-tv-sdk-install",
+              "tizen-tv-sdk-install.sh",
+            ),
+            `--sdk-path=${sdk}`,
+            "--check",
+          ],
+          { encoding: "utf8" },
+        );
+        check(
+          "tv-sdk-install --check does not take fields outside a block for a TV install",
+          check1.status,
+          1,
+        );
+      }
+      {
         const sdk = path.join(sandboxHome, "record-sdk");
         fs.mkdirSync(
           path.join(sdk, "platforms", "tizen-11.0", "tizen", "rootstraps"),
@@ -642,6 +721,19 @@ function makeReportedSdk(root) {
         "tizen-tv-sdk-install-from-zip",
         "tizen-tv-sdk-install-from-zip.ps1",
       );
+      {
+        const commonPs1 = read("lib", "common.ps1");
+        const fn = commonPs1.slice(
+          commonPs1.indexOf("function Convert-BasePlatformToRecord"),
+          commonPs1.indexOf("function Convert-TvSdkMarkerToRecord"),
+        );
+        check(
+          "ps1: Convert-BasePlatformToRecord reads the record through Get-PlatformRecords only",
+          /\$_\.InstalledBy -eq 'sdk-install'/.test(fn) &&
+            !/ReadAllLines/.test(fn),
+          true,
+        );
+      }
       check(
         "ps1: the base platform is migrated before Install-PlatformPackages, only after a completed install",
         [
