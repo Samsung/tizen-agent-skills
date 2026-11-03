@@ -98,7 +98,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
 
 ## Output
 
-- Success `result`: `packages[]`, `repository_url`, `installation_status`.
+- Success `result`: `packages[]` (name/status/version, plus `profiles` on platform entries), `repository_url`, `installation_status`.
 - Validation success `result`: `repository_url`, `valid`, `pkg_list_file`, `pkg_list_url`.
 - Failure: `error_code` (`TIZEN_SDK_REPO_E001` / `E002`), `message`, `details[]` (every
   probed URL), `suggested_fix.command`.

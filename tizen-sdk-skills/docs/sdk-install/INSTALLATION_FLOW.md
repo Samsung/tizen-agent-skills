@@ -122,7 +122,10 @@ function formatSdkInstall(packages, warnings = []) {
     ],
     "installation_status": "completed"
   },
-  "warnings": [],
+  "warnings": [
+    "SDK installed successfully at /home/user/tizen-sdk.",
+    "SDK path configured automatically: /home/user/tizen-sdk → /home/user/.tizen.sdk.path.config"
+  ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
   "duration_ms": 185000
