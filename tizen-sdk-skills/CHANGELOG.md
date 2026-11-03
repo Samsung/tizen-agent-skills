@@ -71,6 +71,16 @@ below use those release tags.
   platform payload. `common` and a `tizen` folder holding nothing but the
   template `samples` that `tizen-create-project` syncs are left out; before,
   a TV-only version looked installed for the `tizen` profile too.
+- A platform or profile directory that is a symbolic link (or a Windows
+  junction) — e.g. `platforms/tizen-10.0` or its `tizen` profile moved to
+  another disk and linked back — counts as installed in `sdk-install`,
+  `platform-install --list`, `create-project` and `list-templates`, as it
+  already did in `tizen-platform-install.sh` / `.ps1`. The JS layer skipped
+  such links, so the version read as `not_installed`, or was not listed at
+  all, while the scripts reported it installed. In the other direction,
+  `tizen-platform-install.sh` and `tizen-sdk-install.sh` now find a
+  mixed-case `Tizen-X.Y` directory on a case-sensitive file system, as the
+  JS layer and the PowerShell scripts already did.
 - `sdk-install-custom-repo` without a version labels `Tizen SDK Tools` with
   the newest installed platform, as `sdk-install` does, instead of
   `"installed"`.

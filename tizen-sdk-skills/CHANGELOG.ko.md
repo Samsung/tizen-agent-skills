@@ -64,6 +64,16 @@
   나옵니다. `common`과, `tizen-create-project`가 동기화한 템플릿 `samples`만 있는
   `tizen` 폴더는 빠집니다. 이전에는 TV 전용 버전도 `tizen` 프로필까지 설치된 것처럼
   보였습니다.
+- 심볼릭 링크(또는 Windows 정션)인 플랫폼·프로필 디렉터리도 설치된 것으로
+  봅니다. 예를 들어 `platforms/tizen-10.0`이나 그 아래 `tizen` 프로필을 다른
+  디스크로 옮기고 링크로 연결한 경우입니다. `sdk-install`,
+  `platform-install --list`, `create-project`, `list-templates`가 이제
+  `tizen-platform-install.sh` / `.ps1`처럼 판단합니다. 이전에는 JS 쪽이 링크를
+  건너뛰어, 스크립트는 설치됨으로 보는 버전을 `not_installed`로 보고하거나
+  아예 목록에서 빠뜨렸습니다. 반대로 `tizen-platform-install.sh`와
+  `tizen-sdk-install.sh`는 대소문자를 구분하는 파일 시스템에서도 `Tizen-X.Y`처럼
+  대소문자가 섞인 디렉터리를 찾습니다. JS 쪽과 PowerShell 스크립트는 이미 그렇게
+  찾았습니다.
 - 버전을 지정하지 않은 `sdk-install-custom-repo`도 `sdk-install`처럼
   `Tizen SDK Tools`에 설치된 최신 플랫폼 버전을 붙입니다(이전에는 `"installed"`).
 - `sdk-install` 결과 보고 규칙이 1~2줄 요약 제한과 맞도록, 플랫폼을 상태별로 묶어

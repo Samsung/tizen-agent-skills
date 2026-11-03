@@ -312,12 +312,30 @@ function comparePlatformVersions(a, b) {
   return aMajor - bMajor || aMinor - bMinor;
 }
 
-/** Names of the sub-directories of `dir`; [] when it is missing or unreadable. */
+/**
+ * Names of the sub-directories of `dir`; [] when it is missing or unreadable.
+ *
+ * A symbolic link (or Windows junction) to a directory counts as one. Moving a
+ * large platform or profile directory (rootstraps, emulator-images) to another
+ * disk and linking it back is common, and the script mirrors (the directory
+ * glob in platform_installed, Get-ChildItem -Directory in
+ * Test-PlatformInstalled) already follow such links. Dirent.isDirectory() alone is false for a link,
+ * so that platform read as not installed here while the scripts saw it
+ * installed. A dangling link is skipped.
+ */
 function listSubdirectories(dir) {
   try {
     return fs
       .readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
+      .filter((entry) => {
+        if (entry.isDirectory()) return true;
+        if (!entry.isSymbolicLink()) return false;
+        try {
+          return fs.statSync(path.join(dir, entry.name)).isDirectory();
+        } catch (_e) {
+          return false;
+        }
+      })
       .map((entry) => entry.name);
   } catch (_e) {
     return [];

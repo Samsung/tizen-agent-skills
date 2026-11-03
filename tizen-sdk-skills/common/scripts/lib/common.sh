@@ -692,18 +692,28 @@ installer_running() {
 # versions too) with content besides "samples" (which tizen-create-project
 # syncs templates into) — and no tizen-platform-install run of that version may
 # still be marked in progress (.platform-installing-X.Y).
+#
+# The version directory is matched case-insensitively ("Tizen-12.0" counts),
+# as platformDirPath does, so a case-sensitive file system gives the same
+# answer as the JS layer. The lowercasing uses tr, not ${var,,}: macOS ships
+# bash 3.2.
 # ----------------------------------------------------------------------------
 platform_installed() {
-  local sdk="$1" version="$2" d e
+  local sdk="$1" version="$2" p d e name
   [[ -n "$sdk" && -n "$version" ]] || return 1
   [[ -e "$sdk/.platform-installing-$version" ]] && return 1
-  for d in "$sdk/platforms/tizen-$version"/*/; do
-    [[ -d "$d" ]] || continue
-    [[ "$(basename "$d")" == "common" ]] && continue
-    for e in "$d"* "$d".[!.]*; do
-      [[ -e "$e" ]] || continue
-      [[ "$(basename "$e")" == "samples" ]] && continue
-      return 0
+  for p in "$sdk/platforms"/*/; do
+    [[ -d "$p" ]] || continue
+    name="$(basename "$p" | tr '[:upper:]' '[:lower:]')"
+    [[ "$name" == "tizen-$version" ]] || continue
+    for d in "$p"*/; do
+      [[ -d "$d" ]] || continue
+      [[ "$(basename "$d")" == "common" ]] && continue
+      for e in "$d"* "$d".[!.]*; do
+        [[ -e "$e" ]] || continue
+        [[ "$(basename "$e")" == "samples" ]] && continue
+        return 0
+      done
     done
   done
   return 1
