@@ -16,6 +16,14 @@ below use those release tags.
 
 ### Changed
 
+- **Cline in a mode that cannot run commands (Ask or Plan) asks for Act mode** instead of
+  handing the runner commands to the user (rule 12 of
+  `cline/hooks/tizen-sdk-skills-guard.md`). Asked to install the SDK in Ask mode, Cline read
+  the skill and printed the runner-lookup commands for the user to run; its copy dropped the
+  `\` before `.cline` in `%USERPROFILE%\.cline`, so the cmd.exe line could not find the
+  runner, and no envelope came back. It now says in one line that the task needs Act mode
+  and ends the turn, and shows a SKILL.md block only when the user asks to run it, verbatim.
+
 - **`sdk-install` / `sdk-install-custom-repo` result.packages and
   `platform-install --list` report the platforms the user installed**, read
   from `<sdk>/.platform-installed`, instead of every `platforms/tizen-X.Y`.
