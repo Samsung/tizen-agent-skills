@@ -104,6 +104,8 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6: Standard JSON Envelope 생성
 
+Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같은 `installSdk('10.0', 'tizen')` 사전 점검을 다시 실행합니다. 이번에는 이미 설치된 경우의 분기(Step 4)를 타고 성공 Envelope를 돌려줍니다. SDK는 기본 경로 `~/tizen-sdk`에 설치되었고, `Tizen SDK Tools`에는 요청한 버전 `10.0`이 붙습니다:
+
 ```json
 {
   "status": "success",
@@ -112,17 +114,16 @@ function formatSdkInstall(packages, warnings = []) {
       { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
       { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
       { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
     ],
     "installation_status": "completed"
   },
   "warnings": [
-    "SDK installed successfully at /home/user/tizen-sdk.",
-    "SDK path configured automatically: /home/user/tizen-sdk → /home/user/.tizen.sdk.path.config"
+    "SDK installation verified at /home/user/tizen-sdk (sdk.info found). To force a reinstall, run with --force (script flag: -Force)."
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 185000
+  "duration_ms": 1900
 }
 ```
 
@@ -195,7 +196,7 @@ SDK 설치 완료 (installation_status: completed).
         │ {                         │
         │   "command": "...",       │
         │   "status": "success",    │
-        │   "duration_ms": 185000,  │
+        │   "duration_ms": 1900,    │
         │   "result": {...},        │
         │   "warnings": [...],      │
         │   "errors": []            │
@@ -271,7 +272,7 @@ installSdk()는 내부에서 formatSdkInstall()을 호출하므로,
 {
   "command": "tizen-sdk sdk-install",
   "status": "success",
-  "duration_ms": 185000,
+  "duration_ms": 1900,
   "result": { "packages": [...] },
   "warnings": [...],
   "errors": []

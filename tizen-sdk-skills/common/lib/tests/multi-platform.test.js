@@ -254,6 +254,10 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       // The URL probe runs the PowerShell installer there; this check drives
       // the bash one (CI runs on Linux).
       console.log("SKIP custom-repo run (win32)");
+    } else if (spawnSync("curl", ["--version"]).status !== 0) {
+      // The bash probe (url_exists) uses curl; without it the probe fails
+      // for reasons unrelated to the code under test.
+      console.log("SKIP custom-repo run (curl not found)");
     } else {
       // Run the real installSdkFromRepo pre-check on an installed SDK: the
       // installer's --validate-repo-url probe fetches pkg_list_<os>-64 from a
@@ -297,6 +301,13 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         stub.once("exit", (code) =>
           reject(new Error(`stub repository exited (${code})`)),
         );
+        setTimeout(
+          () => reject(new Error("stub repository did not start in 10 s")),
+          10000,
+        ).unref();
+      }).catch((error) => {
+        stub.kill();
+        throw error;
       });
 
       // Neither a proxy from the environment nor a curl config file may

@@ -132,6 +132,8 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6: Standard JSON Envelope Generated
 
+After Phase 2 installs the SDK in the background, the agent re-runs the same `installSdk('10.0', 'tizen')` pre-check. It now takes the already-installed branch (Step 4) and returns the success envelope. The SDK went to the default path `~/tizen-sdk`, and `Tizen SDK Tools` carries the requested version `10.0`:
+
 ```json
 {
   "status": "success",
@@ -140,17 +142,16 @@ function formatSdkInstall(packages, warnings = []) {
       { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
       { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
       { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
     ],
     "installation_status": "completed"
   },
   "warnings": [
-    "SDK installed successfully at /home/user/tizen-sdk.",
-    "SDK path configured automatically: /home/user/tizen-sdk → /home/user/.tizen.sdk.path.config"
+    "SDK installation verified at /home/user/tizen-sdk (sdk.info found). To force a reinstall, run with --force (script flag: -Force)."
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 185000
+  "duration_ms": 1900
 }
 ```
 
