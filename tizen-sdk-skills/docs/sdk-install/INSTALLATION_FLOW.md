@@ -13,8 +13,10 @@
 ### Step 1️⃣: 사용자 자연어 입력
 
 ```
-사용자: "Tizen SDK 설치해줄 수 있어?"
+사용자: "Tizen SDK 10.0 설치해줄 수 있어?"
 ```
+
+요청에 10.0이 들어 있으므로 에이전트는 이 버전을 러너에 넘깁니다(`node sdk-install-cli.js 10.0`). 버전이 없으면 러너는 `""`를 받고, 설치 스크립트는 저장소가 제공하는 최신 플랫폼을 설치하며 `Tizen SDK Tools`에도 그 버전이 붙습니다.
 
 Cline가 이 요청을 인식합니다.
 
@@ -82,8 +84,9 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   return formatError(
     'tizen-sdk sdk-install',
     'execution_error',
-    'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
-    installerCommand,
+    'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+      harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
+    installerCommand,   // suggested_fix: { command, background_command }
     startTime
   );
 }
@@ -179,7 +182,7 @@ SDK 설치 완료 (installation_status: completed).
 ## 🔄 완전한 흐름도
 
 ```
-사용자: "Tizen SDK 설치해줄 수 있어?"
+사용자: "Tizen SDK 10.0 설치해줄 수 있어?"
   │
   ▼
 tizen-sdk-install 에이전트 (Cline / Claude Code가 선택)
@@ -190,8 +193,11 @@ tizen-sdk-install 에이전트 (Cline / Claude Code가 선택)
   │    ← 실패 Envelope (execution_error), suggested_fix.command에 설치 명령
   │
   ├─ Phase 2 — 백그라운드 설치 (10–15분, 약 121개 패키지)
-  │    tizen-sdk-install.sh / .ps1 --platform 10.0 …
-  │      sdk.info와 ~/.tizen.sdk.path.config 기록
+  │    하네스가 suggested_fix 실행 (tizen-sdk-install.sh / .ps1 --platform 10.0 …):
+  │      Claude Code: command를 run_in_background로, 작업 완료 알림에서 재개
+  │      Cline: command에 --detach / -Detach, --status / -Status로 확인
+  │      Codex: background_command (job-cli.js 작업), job-cli.js wait로 확인
+  │    설치 스크립트가 sdk.info와 ~/.tizen.sdk.path.config 기록
   │
   └─ Phase 3 — 같은 사전 점검을 다시 실행
        node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
@@ -307,7 +313,7 @@ success(result, options) {
 
 | 단계 | 항목 | 설명 |
 |------|------|------|
-| 1 | 사용자 입력 | "SDK 설치해줄래?" (자연어) |
+| 1 | 사용자 입력 | "Tizen SDK 10.0 설치해줄 수 있어?" (자연어) |
 | 2 | 에이전트 선택 | tizen-sdk-install |
 | 3 | **installSdk() 호출** (Phase 1) | 사전 점검, 설치 명령 반환 |
 | 4 | 설치 (Phase 2) | 백그라운드 설치 스크립트 (10–15분) |

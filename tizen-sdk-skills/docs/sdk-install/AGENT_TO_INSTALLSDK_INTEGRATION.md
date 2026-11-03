@@ -13,8 +13,10 @@
 ### Step 1: 사용자 자연어 입력
 
 ```
-사용자: "Tizen SDK를 설치해줄래?"
+사용자: "Tizen SDK 10.0을 설치해줄래?"
 ```
+
+요청에 10.0이 들어 있으므로 에이전트는 이 버전을 러너에 넘깁니다(`node sdk-install-cli.js 10.0`). 버전이 없으면 러너는 `""`를 받고, 설치 스크립트는 저장소가 제공하는 최신 플랫폼을 설치하며 `Tizen SDK Tools`에도 그 버전이 붙습니다.
 
 ---
 
@@ -79,8 +81,9 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   return formatError(
     'tizen-sdk sdk-install',
     'execution_error',
-    'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
-    installerCommand,
+    'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+      harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
+    installerCommand,   // suggested_fix: { command, background_command }
     startTime
   );
 }
@@ -173,7 +176,7 @@ SDK 설치 완료 (installation_status: completed).
 ## 📊 완전한 호출 체인
 
 ```
-사용자: "Tizen SDK를 설치해줄래?"
+사용자: "Tizen SDK 10.0을 설치해줄래?"
   │
   ▼
 tizen-sdk-install 에이전트
@@ -183,7 +186,9 @@ tizen-sdk-install 에이전트
   │      Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간
   │    ← execution_error Envelope, suggested_fix.command = 설치 명령
   │
-  ├─ Phase 2: 백그라운드 설치 (10–15분)
+  ├─ Phase 2: 백그라운드 설치 (10–15분) — Claude Code는 suggested_fix.command를
+  │    run_in_background로, Cline은 --detach로 실행하고 --status로 확인,
+  │    Codex는 suggested_fix.background_command(job-cli.js) 실행
   │
   └─ Phase 3: node sdk-install-cli.js 10.0 재실행
        installSdk('10.0', 'tizen')

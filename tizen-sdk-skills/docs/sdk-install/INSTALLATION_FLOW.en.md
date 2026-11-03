@@ -13,8 +13,10 @@ A **complete flow** where the user requests SDK installation via natural languag
 ### Step 1️⃣: User Natural Language Input
 
 ```
-User: "Can you install the Tizen SDK?"
+User: "Can you install Tizen SDK 10.0?"
 ```
+
+The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
 Cline recognizes this request.
 
@@ -82,8 +84,9 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   return formatError(
     'tizen-sdk sdk-install',
     'execution_error',
-    'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
-    installerCommand,
+    'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+      harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
+    installerCommand,   // suggested_fix: { command, background_command }
     startTime
   );
 }
@@ -208,7 +211,7 @@ Platforms — installed: 10.0 · not_installed: 9.0
 ## 🔄 Complete Flow Diagram
 
 ```
-User: "Can you install the Tizen SDK?"
+User: "Can you install Tizen SDK 10.0?"
   │
   ▼
 tizen-sdk-install agent (picked by Cline / Claude Code)
@@ -219,8 +222,11 @@ tizen-sdk-install agent (picked by Cline / Claude Code)
   │    ← failure envelope (execution_error) with the installer in suggested_fix.command
   │
   ├─ Phase 2 — install, in the background (10–15 min, ~121 packages)
-  │    tizen-sdk-install.sh / .ps1 --platform 10.0 …
-  │      writes sdk.info and ~/.tizen.sdk.path.config
+  │    the harness runs suggested_fix (tizen-sdk-install.sh / .ps1 --platform 10.0 …):
+  │      Claude Code: command with run_in_background, resumes on the task notification
+  │      Cline: command with --detach / -Detach, polls --status / -Status
+  │      Codex: background_command (a job-cli.js job), polls job-cli.js wait
+  │    the installer writes sdk.info and ~/.tizen.sdk.path.config
   │
   └─ Phase 3 — the same pre-check again
        node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
@@ -322,7 +328,7 @@ success(result, options) {
 
 | Step | Item | Description |
 |------|------|-------------|
-| 1 | User input | "Can you install the SDK?" (natural language) |
+| 1 | User input | "Can you install Tizen SDK 10.0?" (natural language) |
 | 2 | Agent selection | tizen-sdk-install |
 | 3 | **Call installSdk()** (Phase 1) | Pre-check; returns the installer command |
 | 4 | Install (Phase 2) | Installer in the background (10–15 min) |

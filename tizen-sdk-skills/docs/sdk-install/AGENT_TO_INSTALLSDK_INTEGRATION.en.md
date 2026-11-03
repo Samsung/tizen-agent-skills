@@ -13,8 +13,10 @@ This document explains how the `tizen-sdk-install` agent **calls the `installSdk
 ### Step 1: User Natural Language Input
 
 ```
-User: "Can you install the Tizen SDK?"
+User: "Can you install Tizen SDK 10.0?"
 ```
+
+The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
 ---
 
@@ -79,8 +81,9 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
     return formatError(
       'tizen-sdk sdk-install',
       'execution_error',
-      'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
-      installerCommand,
+      'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+        harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
+      installerCommand,   // suggested_fix: { command, background_command }
       startTime
     );
   } catch (error) {
@@ -189,7 +192,7 @@ Platforms — installed: 10.0 · not_installed: 9.0
 ## 📊 Complete Call Chain
 
 ```
-User: "Can you install the Tizen SDK?"
+User: "Can you install Tizen SDK 10.0?"
   │
   ▼
 tizen-sdk-install agent
@@ -199,7 +202,9 @@ tizen-sdk-install agent
   │      Node.js check → already installed? (no) → disk space
   │    ← execution_error envelope; suggested_fix.command = installer
   │
-  ├─ Phase 2: installer in the background (10–15 min)
+  ├─ Phase 2: installer in the background (10–15 min) — Claude Code runs
+  │    suggested_fix.command with run_in_background, Cline adds --detach and
+  │    polls --status, Codex runs suggested_fix.background_command (job-cli.js)
   │
   └─ Phase 3: node sdk-install-cli.js 10.0 again
        installSdk('10.0', 'tizen')
