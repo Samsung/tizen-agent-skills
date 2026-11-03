@@ -108,6 +108,10 @@ function ConvertTo-QuotedArgument {
 # for older API versions too) with content besides "samples" (which
 # tizen-create-project syncs templates into) - and no tizen-platform-install
 # run of that version may still be marked in progress (.platform-installing-X.Y).
+#
+# Like the JS layer it matches "Tizen-12.0" (NTFS is case-insensitive) and
+# follows a junction or symbolic link to a profile directory (-Directory keeps
+# such entries); platform_installed in common.sh lowercases the name itself.
 # ----------------------------------------------------------------------------
 function Test-PlatformInstalled {
     param([string]$SdkPath, [string]$Version)

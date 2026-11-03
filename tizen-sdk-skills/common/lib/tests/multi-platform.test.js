@@ -25,6 +25,8 @@
  *   - tizen-platform-install.{sh,ps1}: in-progress marker, history append,
  *     no wholesale marker removal on --force; platform_installed in bash
  *     (bash behaviour skipped on win32)
+ *   - a linked profile or version directory, a mixed-case "Tizen-X.Y" and a
+ *     dangling link: isPlatformInstalled and platform_installed agree
  */
 
 const fs = require("fs");
@@ -49,7 +51,9 @@ const {
   installedPackageSummary,
   isPlatformInstalled,
   listFullyInstalledPlatformVersions,
+  listInstalledPlatformVersions,
   listPlatforms,
+  platformPayloadProfiles,
   installPlatform,
 } = require("../core/sdk");
 const {
@@ -98,6 +102,42 @@ fs.writeFileSync(
 );
 fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
 
+// A second SDK for layouts the scripts already handled: a profile (12.0) or a
+// whole version directory (13.0) moved to another disk and linked back, a
+// mixed-case "Tizen-14.0", and a dangling profile link (15.0). Kept apart so
+// the expectations on sdkPath above stay as they are. Junctions on win32 need
+// no privilege; linked stays false when the file system refuses links.
+const linkSdk = path.join(sandboxHome, "link-sdk");
+const elsewhere = path.join(sandboxHome, "other-disk");
+const mkAt = (root, ...p) =>
+  fs.mkdirSync(path.join(root, ...p), { recursive: true });
+mkAt(elsewhere, "profile-12.0", "rootstraps");
+mkAt(elsewhere, "tizen-13.0", "tizen", "rootstraps");
+mkAt(linkSdk, "platforms", "tizen-12.0");
+mkAt(linkSdk, "platforms", "Tizen-14.0", "tizen", "rootstraps");
+mkAt(linkSdk, "platforms", "tizen-15.0");
+let linked = true;
+try {
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  fs.symlinkSync(
+    path.join(elsewhere, "profile-12.0"),
+    path.join(linkSdk, "platforms", "tizen-12.0", "tizen"),
+    linkType,
+  );
+  fs.symlinkSync(
+    path.join(elsewhere, "tizen-13.0"),
+    path.join(linkSdk, "platforms", "tizen-13.0"),
+    linkType,
+  );
+  fs.symlinkSync(
+    path.join(elsewhere, "missing"),
+    path.join(linkSdk, "platforms", "tizen-15.0", "tizen"),
+    linkType,
+  );
+} catch (_e) {
+  linked = false;
+}
+
 (async () => {
   try {
     console.log("--- isPlatformInstalled ---");
@@ -126,6 +166,29 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       listFullyInstalledPlatformVersions(sdkPath),
       ["10.0"],
     );
+
+    console.log("--- linked and mixed-case directories ---");
+    if (!linked) {
+      console.log("SKIP linked directories (symlinkSync refused)");
+    } else {
+      check(
+        "a linked version directory is listed",
+        listInstalledPlatformVersions(linkSdk),
+        ["12.0", "13.0", "14.0", "15.0"],
+      );
+      check(
+        "linked profile, linked version, mixed case → installed; dangling link → not",
+        ["12.0", "13.0", "14.0", "15.0"].map((v) =>
+          isPlatformInstalled(linkSdk, v),
+        ),
+        [true, true, true, false],
+      );
+      check(
+        "a linked profile is a payload profile",
+        platformPayloadProfiles(linkSdk, "12.0"),
+        ["tizen"],
+      );
+    }
 
     console.log("--- listPlatforms ---");
     {
@@ -635,6 +698,24 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         probe.stdout.trim().split("\n"),
         ["9.0 no", "10.0 yes", "11.0 no", "8.0 no"],
       );
+      if (linked) {
+        const linkProbe = spawnSync(
+          "bash",
+          [
+            "-c",
+            'set -euo pipefail; source "$1"; for v in 12.0 13.0 14.0 15.0; do if platform_installed "$2" "$v"; then echo "$v yes"; else echo "$v no"; fi; done',
+            "_",
+            common,
+            linkSdk,
+          ],
+          { encoding: "utf8" },
+        );
+        check(
+          "platform_installed matches isPlatformInstalled on linked and mixed-case directories",
+          linkProbe.stdout.trim().split("\n"),
+          ["12.0 yes", "13.0 yes", "14.0 yes", "15.0 no"],
+        );
+      }
       fs.mkdirSync(path.join(sdkPath, ".package"), { recursive: true });
       const run = spawnSync(
         "bash",
