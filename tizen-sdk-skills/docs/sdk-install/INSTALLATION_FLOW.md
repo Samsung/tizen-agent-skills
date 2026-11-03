@@ -18,13 +18,12 @@
 
 요청에 10.0이 들어 있으므로 에이전트는 이 버전을 러너에 넘깁니다(`node sdk-install-cli.js 10.0`). 버전이 없으면 러너는 `""`를 받고, 설치 스크립트는 저장소가 제공하는 최신 플랫폼을 설치하며 `Tizen SDK Tools`에도 그 버전이 붙습니다.
 
-Claude Code, Codex, Gemini CLI는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
 
 ---
 
 ### Step 2️⃣: 에이전트 자동 선택
 
-Claude Code / Codex / Gemini CLI가 `tizen-sdk-install` 에이전트를 선택하여 실행합니다(Cline에서는 메인 에이전트가 같은 이름의 스킬을 불러옵니다).
+Claude Code, Codex, Gemini CLI는 `tizen-sdk-install` 에이전트를 선택하여 실행합니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 불러오며, 이후 단계는 어느 쪽이든 같습니다.
 
 ```markdown
 ---
@@ -56,7 +55,7 @@ const result = await installSdk('10.0', 'tizen');  // '10.0' = 첫 번째 위치
 ### Step 4️⃣: installSdk() 함수 실행
 
 ```javascript
-// lib/core/sdk-commands.js의 installSdk() 함수
+// lib/core/sdk-commands.js의 installSdk() 함수 (lib/core/sdk.js에서 다시 내보냄)
 
 async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = 최신 플랫폼
 
@@ -65,37 +64,42 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
   if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
   if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
 
-  // 4-1️⃣ Node.js 확인
-  const nodeCheck = await checkNode();
-  if (nodeCheck.status !== 'success') {
-    return nodeCheck;  // node_not_found 에러 — 설치 안내와 함께 중단
-  }
+  try {
+    // 4-1️⃣ Node.js 확인
+    const nodeCheck = await checkNode();
+    if (nodeCheck.status !== 'success') {
+      return nodeCheck;  // node_not_found / node_version_unsupported — 설치 안내와 함께 중단
+    }
 
-  // 4-2️⃣ SDK가 이미 설치되어 있는지 확인
-  const sdkPath = readSdkPath();
-  const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
-  if (statusCheck.alreadyInstalled) {
-    const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
-    if (missing) return missing;  // 요청한 버전이 설치되지 않음: platform_version_not_found
-    const packages = installedPackageSummary(sdkPath, version);
-    return formatSdkInstall(packages, warnings, startTime);  // 성공
-  }
+    // 4-2️⃣ SDK가 이미 설치되어 있는지 확인
+    const sdkPath = readSdkPath();
+    const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
+    if (statusCheck.alreadyInstalled) {
+      const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+      if (missing) return missing;  // 요청한 버전이 설치되지 않음: platform_version_not_found
+      const packages = installedPackageSummary(sdkPath, version);
+      return formatSdkInstall(packages, warnings, startTime, command);  // 성공
+    }
 
-  // 4-3️⃣ 디스크 공간 확인 (15 GB, 사용자 홈 드라이브)
-  const diskCheck = await checkDiskSpace(os.homedir(), 15);
-  if (diskCheck.status !== 'success') {
-    return diskCheck;  // insufficient_disk_space 에러 — 설치 중단
-  }
+    // 4-3️⃣ 디스크 공간 확인 (15 GB, 사용자 홈 드라이브)
+    const diskCheck = await checkDiskSpace(os.homedir(), 15);
+    if (diskCheck.status !== 'success') {
+      return diskCheck;  // insufficient_disk_space — 설치 중단
+    }
 
-  // 4-4️⃣ Phase 2(백그라운드 설치)용 설치 명령 반환
-  return formatError(
-    'tizen-sdk sdk-install',
-    'execution_error',
-    'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
-      harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
-    installerCommand,   // suggested_fix: { command, background_command }
-    startTime
-  );
+    // 4-4️⃣ Phase 2(백그라운드 설치)용 설치 명령 반환
+    return formatError(
+      command,
+      'execution_error',
+      'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+        harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
+        sdkPrecheckRerunHint('…'),    // 같은 버전으로, --force 없이 재실행하라는 안내
+      installerCommand,   // suggested_fix: { command, background_command }
+      startTime
+    );
+  } catch (error) {
+    return formatError(command, 'io_error', `Failed to install SDK: ${error.message}`);
+  }
 }
 ```
 
@@ -116,8 +120,9 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
 ```javascript
 // lib/envelope/response-formatter.js의 formatSdkInstall()
 
-function formatSdkInstall(packages, warnings = []) {
-  const envelope = new Envelope('tizen-sdk sdk-install');
+function formatSdkInstall(packages, warnings = [], startTime, command = 'tizen-sdk sdk-install') {
+  const envelope = new Envelope(command);
+  if (typeof startTime === 'number') envelope.startTime = startTime;  // duration_ms from the CLI start
   
   return envelope.success(
     {
@@ -134,7 +139,7 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6️⃣: Standard JSON Envelope 생성
 
-Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같은 `installSdk('10.0', 'tizen')` 사전 점검을 다시 실행합니다. 이번에는 이미 설치된 경우의 분기(Step 4)를 타고 성공 Envelope를 돌려줍니다. SDK는 기본 경로 `~/tizen-sdk`에 설치되었고, `Tizen SDK Tools`에는 요청한 버전 `10.0`이 붙습니다:
+Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같은 `installSdk('10.0', 'tizen')` 사전 점검을 같은 버전으로, `--force` 없이 다시 실행합니다. 이번에는 이미 설치된 경우의 분기(Step 4)를 타고 성공 Envelope를 돌려줍니다. SDK는 기본 경로 `~/tizen-sdk`에 설치되었고, `Tizen SDK Tools`에는 요청한 버전 `10.0`이 붙습니다:
 
 ```json
 {
@@ -285,6 +290,7 @@ const result = await installSdk('10.0');
 
 // ===== installSdk() (lib/core/sdk-commands.js) =====
 async function installSdk(version) {
+  // 0. 버전 형식 확인, --repo-url이면 installSdkFromRepo()로 위임
   // 1. Node.js 확인
   // 2. 이미 설치됨? → 버전별 패키지 목록, 그리고 formatSdkInstall() 호출 ← 여기!
   if (alreadyInstalled) {
@@ -296,8 +302,9 @@ async function installSdk(version) {
 }
 
 // ===== formatSdkInstall() (lib/envelope/response-formatter.js) =====
-function formatSdkInstall(packages, warnings) {
-  const envelope = new Envelope('tizen-sdk sdk-install');
+function formatSdkInstall(packages, warnings = [], startTime, command = 'tizen-sdk sdk-install') {
+  const envelope = new Envelope(command);
+  if (typeof startTime === 'number') envelope.startTime = startTime;
   return envelope.success({
     packages,
     installation_status: 'completed',

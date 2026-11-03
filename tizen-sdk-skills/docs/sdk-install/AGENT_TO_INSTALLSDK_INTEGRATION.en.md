@@ -52,48 +52,50 @@ const result = await installSdk(version, label);
 ### Step 4: installSdk() Executes
 
 ```javascript
-// installSdk() function in lib/core/sdk-commands.js
+// installSdk() in lib/core/sdk-commands.js (re-exported from lib/core/sdk.js)
 
 async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = newest platform
-  try {
-    // 0. Version syntax first (X.Y, else invalid_argument); a custom repository hands off
-    const versionCheck = validateTizenVersion(version);
-    if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
-    if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
 
-    // 1. ✅ Node.js check
+  // 4-0️⃣ Version syntax first (X.Y, else invalid_argument); a custom repository hands off
+  const versionCheck = validateTizenVersion(version);
+  if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+  if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+  try {
+    // 4-1️⃣ Node.js check
     const nodeCheck = await checkNode();
     if (nodeCheck.status !== 'success') {
-      return nodeCheck;  // node_not_found — aborts with install guide
+      return nodeCheck;  // node_not_found / node_version_unsupported — aborts with install guide
     }
 
-    // 2. Check if SDK is already installed
+    // 4-2️⃣ Check if SDK is already installed
     const sdkPath = readSdkPath();
     const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
     if (statusCheck.alreadyInstalled) {
       const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
       if (missing) return missing;  // requested version not installed: platform_version_not_found
       const packages = installedPackageSummary(sdkPath, version);
-      return formatSdkInstall(packages, warnings, startTime);  // success
+      return formatSdkInstall(packages, warnings, startTime, command);  // success
     }
 
-    // 3. ✅ Disk space check (15 GB, user's home drive)
+    // 4-3️⃣ Disk space check (15 GB, user's home drive)
     const diskCheck = await checkDiskSpace(os.homedir(), 15);
     if (diskCheck.status !== 'success') {
       return diskCheck;  // insufficient_disk_space — aborts installation
     }
 
-    // 4. Return installer command for Phase 2 (background install)
+    // 4-4️⃣ Return installer command for Phase 2 (background install)
     return formatError(
-      'tizen-sdk sdk-install',
+      command,
       'execution_error',
       'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
-        harnessGuidance('detach') + '…',   // 'Run the suggested_fix command per your harness: …'
+        harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
+        sdkPrecheckRerunHint('…'),    // re-run with the same version, without --force
       installerCommand,   // suggested_fix: { command, background_command }
       startTime
     );
   } catch (error) {
-    return formatError(...);
+    return formatError(command, 'io_error', `Failed to install SDK: ${error.message}`);
   }
 }
 ```
@@ -125,8 +127,9 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
 ```javascript
 // formatSdkInstall() in lib/envelope/response-formatter.js
 
-function formatSdkInstall(packages, warnings = []) {
-  const envelope = new Envelope('tizen-sdk sdk-install');
+function formatSdkInstall(packages, warnings = [], startTime, command = 'tizen-sdk sdk-install') {
+  const envelope = new Envelope(command);
+  if (typeof startTime === 'number') envelope.startTime = startTime;  // duration_ms from the CLI start
   
   return envelope.success(
     {
@@ -142,7 +145,7 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6: Standard JSON Envelope Generated
 
-After Phase 2 installs the SDK in the background, the agent re-runs the same `installSdk('10.0', 'tizen')` pre-check. It now takes the already-installed branch (Step 4) and returns the success envelope. The SDK went to the default path `~/tizen-sdk`, and `Tizen SDK Tools` carries the requested version `10.0`:
+After Phase 2 installs the SDK in the background, the agent re-runs the same `installSdk('10.0', 'tizen')` pre-check — the same version, without `--force`. It now takes the already-installed branch (Step 4) and returns the success envelope. The SDK went to the default path `~/tizen-sdk`, and `Tizen SDK Tools` carries the requested version `10.0`:
 
 ```json
 {
