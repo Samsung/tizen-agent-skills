@@ -6,7 +6,7 @@ The extension ships the skill and agent asset tree, so entries below cover both 
 
 ## [1.7.0] — 2026-11-03
 
-No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** `sdk-install` / `platform-install --list` now report the platforms the user installed, read from `<sdk>/.platform-installed` (one `Tizen SDK X.Y` entry each), TV SDK ZIPs of different versions install side by side (`tv-sdk-install-from-zip --tv-version`), linked platform directories count, and Node.js 22 or later is required. See the project CHANGELOG for details.
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** `sdk-install` / `platform-install --list` now report the platforms the user installed, read from `<sdk>/.platform-installed` (one `Tizen SDK X.Y` entry each), TV SDK ZIPs of different versions install side by side (`tv-sdk-install-from-zip --tv-version`), linked platform directories count, Cline in Ask / Plan mode asks for Act mode instead of handing over runner commands, and Node.js 22 or later is required. See the project CHANGELOG for details.
 
 ## [1.6.1] — 2026-10-26
 

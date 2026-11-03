@@ -25,8 +25,9 @@ The plugin moved by a minor version, so the release does too.
   `Tizen SDK Tools` entry — instead of every `platforms/tizen-X.Y`, so the `tv` /
   `tv-samsung` folders the TV extension bundles for older versions no longer read as
   installed. TV SDK ZIPs of different versions install side by side
-  (`tv-sdk-install-from-zip --tv-version`); linked platform directories count; Node.js 22
-  or later is required. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
+  (`tv-sdk-install-from-zip --tv-version`); linked platform directories count; Cline in a
+  mode that cannot run commands (Ask / Plan) asks for Act mode instead of handing the runner
+  commands to the user; Node.js 22 or later is required. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
   for details. The release assets stamped with the plugin version are therefore
   `tizen-sdk-v1.7.0.zip` and `tizen-ai-extension-v1.7.0.vsix`.
 - The marketplace catalog version follows `tizen-sdk-skills` and is now 1.7.0.
