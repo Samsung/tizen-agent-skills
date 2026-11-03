@@ -49,6 +49,24 @@
 
 ### 수정
 
+- `sdk-install` / `sdk-install-custom-repo`가 `platforms/` 아래 항목을 모두 묶어
+  버전 하나만 붙인 `Tizen Platforms (N)` 패키지 한 줄로 보고하지 않습니다. 이
+  개수에는 `common`과 플랫폼 내용이 없는 버전까지 들어갔고, 버전은 설치된 것 중
+  가장 높은 버전 하나뿐이어서, 10.0과 11.0만 완전히 설치된 SDK에서
+  `Tizen Platforms (13) / installed / 11.0`이 "11.0 플랫폼 13개 설치됨"으로
+  읽혔습니다. 이제 `result.packages`에는 버전마다 `Tizen Platform X.Y` 항목이
+  하나씩 있고, `platform-install --list`와 같은 `status`(`installed`,
+  `incomplete`, `not_installed`)와 `profiles`를 갖습니다. 스킬에도 이 항목을 그대로
+  전하고, "설치된 버전이 뭐야?" 같은 후속 질문에는 `platform-install --list`로
+  답하라는 규칙을 추가했습니다.
+- `sdk-install` / `sdk-install-custom-repo`의 `result.packages`와
+  `platform-install --list`의 `profiles`에는 실제 플랫폼 내용이 있는 프로필만
+  나옵니다. `common`과, `tizen-create-project`가 동기화한 템플릿 `samples`만 있는
+  `tizen` 폴더는 빠집니다. 이전에는 TV 전용 버전도 `tizen` 프로필까지 설치된 것처럼
+  보였습니다.
+- 버전을 지정하지 않은 `sdk-install-custom-repo`도 `sdk-install`처럼
+  `Tizen SDK Tools`에 설치된 최신 플랫폼 버전을 붙입니다(이전에는 `"installed"`).
+
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):
   - macOS: 종료 코드 0으로 끝난 저장이 `security`의 stderr 경고 때문에 실패로

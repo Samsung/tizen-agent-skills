@@ -14,6 +14,8 @@
  *   - isPlatformInstalled / listFullyInstalledPlatformVersions: a profile
  *     besides "common", and no .platform-installing-X.Y marker
  *   - listPlatforms (platform-install-cli.js --list, tizen-cli platform-list)
+ *   - collectInstalledPackages (sdk-install result.packages): one entry per
+ *     version with the same status as listPlatforms
  *   - installPlatform pre-check per version (other versions do not matter)
  *   - create-project / list-templates --platform-version validation and the
  *     --tz-profile / -TzProfile hand-off to the scripts
@@ -38,6 +40,8 @@ process.env.USERPROFILE = sandboxHome;
 // Must come AFTER the env redirect: CONFIG_FILE is computed at require time.
 const {
   CONFIG_FILE,
+  collectInstalledPackages,
+  installedPackageSummary,
   isPlatformInstalled,
   listFullyInstalledPlatformVersions,
   listPlatforms,
@@ -80,7 +84,7 @@ mk("platforms", "tizen-9.0", "common");
 mk("platforms", "tizen-9.0", "tizen", "samples", "Template");
 mk("platforms", "tizen-10.0", "common");
 mk("platforms", "tizen-10.0", "tizen", "emulator-images", "tizen-10.0-x86_64");
-mk("platforms", "tizen-10.0", "tv-samsung");
+mk("platforms", "tizen-10.0", "tv-samsung", "rootstraps");
 mk("platforms", "tizen-11.0", "tizen", "rootstraps");
 fs.writeFileSync(path.join(sdkPath, ".platform-installing-11.0"), "");
 fs.writeFileSync(
@@ -132,7 +136,11 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         ],
       );
       const p10 = env.result.platforms[1];
-      check("10.0 profiles", p10.profiles, ["common", "tizen", "tv-samsung"]);
+      check(
+        "10.0 profiles: payload profiles only, no shared common",
+        p10.profiles,
+        ["tizen", "tv-samsung"],
+      );
       check("10.0 emulator images", p10.emulator_images, [
         { profile: "tizen", image: "tizen-10.0-x86_64" },
       ]);
@@ -159,6 +167,100 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         "sdk_path_invalid",
       );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+    }
+
+    console.log("--- collectInstalledPackages (sdk-install result) ---");
+    {
+      fs.mkdirSync(path.join(sdkPath, "tools"), { recursive: true });
+      const pkgs = collectInstalledPackages(sdkPath, "10.0");
+      check(
+        "one entry per platform version with its own status, then the tools",
+        pkgs.map((p) => [p.name, p.status, p.version]),
+        [
+          ["Tizen Platform 9.0", "not_installed", "9.0"],
+          ["Tizen Platform 10.0", "installed", "10.0"],
+          ["Tizen Platform 11.0", "incomplete", "11.0"],
+          ["Tizen SDK Tools", "installed", "10.0"],
+        ],
+      );
+      check("platform entries carry their payload profiles", pkgs[1].profiles, [
+        "tizen",
+        "tv-samsung",
+      ]);
+      check(
+        "statuses match platform-install --list",
+        pkgs.slice(0, 3).map((p) => p.status),
+        (await listPlatforms()).result.platforms.map((p) => p.status),
+      );
+      fs.rmSync(path.join(sdkPath, "tools"), { recursive: true });
+    }
+
+    console.log("--- TV-only version with a samples-only tizen folder ---");
+    {
+      // An SDK with the TV extension after tizen-create-project synced
+      // templates for 8.0: tizen/ holds only samples, tv-samsung/ is the real
+      // payload. `profiles` must not list "tizen" for it, or the SKILL.md rule
+      // "installed without tizen in profiles = only those profiles" never fires.
+      const tvSdk = path.join(sandboxHome, "tv-only-sdk");
+      const tv = (...p) =>
+        fs.mkdirSync(path.join(tvSdk, ...p), { recursive: true });
+      tv("platforms", "tizen-8.0", "common");
+      tv("platforms", "tizen-8.0", "tizen", "samples", "Template");
+      tv("platforms", "tizen-8.0", "tv-samsung", "rootstraps");
+      tv("platforms", "tizen-7.0", "tizen", "samples", "Template");
+      tv("platforms", "tizen-7.0", "tv"); // empty profile directory
+      tv("tools");
+      fs.writeFileSync(path.join(tvSdk, "sdk.info"), "x\n");
+      check(
+        "TV payload → 8.0 installed",
+        isPlatformInstalled(tvSdk, "8.0"),
+        true,
+      );
+      const pkgs = installedPackageSummary(tvSdk, "");
+      check(
+        "per-version status and payload profiles",
+        pkgs
+          .filter((p) => p.name.startsWith("Tizen Platform "))
+          .map((p) => [p.version, p.status, p.profiles]),
+        [
+          ["7.0", "not_installed", []],
+          ["8.0", "installed", ["tv-samsung"]],
+        ],
+      );
+      check(
+        "no version → tools labelled with the newest installed platform",
+        pkgs.find((p) => p.name === "Tizen SDK Tools").version,
+        "8.0",
+      );
+      fs.writeFileSync(CONFIG_FILE, `${tvSdk}\n`);
+      const env = await listPlatforms();
+      check(
+        "platform-install --list reports the same payload profiles",
+        env.result.platforms.map((p) => [p.version, p.status, p.profiles]),
+        [
+          ["7.0", "not_installed", []],
+          ["8.0", "installed", ["tv-samsung"]],
+        ],
+      );
+      fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+    }
+
+    console.log("--- installedPackageSummary call sites ---");
+    {
+      // installSdkFromRepo validates the URL by running the installer before
+      // it reaches the summary, so its call sites are checked in the source.
+      const src = fs.readFileSync(
+        path.join(__dirname, "..", "core", "sdk.js"),
+        "utf8",
+      );
+      // collectInstalledPackages( appears twice: its definition and the one
+      // call inside installedPackageSummary. A call site that builds
+      // packages itself (with its own label) adds a third.
+      check(
+        "only installedPackageSummary calls collectInstalledPackages",
+        (src.match(/collectInstalledPackages\(/g) || []).length,
+        2,
+      );
     }
 
     console.log("--- installPlatform pre-check ---");

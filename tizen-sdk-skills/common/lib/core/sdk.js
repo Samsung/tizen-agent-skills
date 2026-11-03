@@ -194,24 +194,25 @@ async function getSdkStatus(command = "tizen-sdk sdk-status") {
 /**
  * Scan installed SDK components and generate package list
  *
+ * One entry per platforms/tizen-X.Y, oldest first, with that version's own
+ * status (platformStatus — the same rule as platform-install --list) and its
+ * profiles. A single "Tizen Platforms (N)" row used to count every entry of
+ * platforms/ — "common" and directories that hold no platform payload
+ * included — and stamp it with one version label (the newest installed), so
+ * "Tizen Platforms (13) / installed / 11.0" read as thirteen installed 11.0
+ * platforms while only 10.0 and 11.0 were complete.
+ *
  * @param {string} sdkPath - SDK installation path
- * @param {string} version - SDK version for display
- * @returns {Array<{name: string, status: string, version: string}>}
+ * @param {string} version - SDK version label for the tools entry
+ * @returns {Array<{name: string, status: string, version: string, profiles?: string[]}>}
  */
 function collectInstalledPackages(sdkPath, version) {
-  const packages = [];
-
-  const platformsDir = path.join(sdkPath, "platforms");
-  if (fs.existsSync(platformsDir)) {
-    const platformDirs = fs.readdirSync(platformsDir);
-    if (platformDirs.length > 0) {
-      packages.push({
-        name: `Tizen Platforms (${platformDirs.length})`,
-        status: "installed",
-        version,
-      });
-    }
-  }
+  const packages = listInstalledPlatformVersions(sdkPath).map((v) => ({
+    name: `Tizen Platform ${v}`,
+    status: platformStatus(sdkPath, v),
+    version: v,
+    profiles: platformPayloadProfiles(sdkPath, v),
+  }));
 
   if (fs.existsSync(path.join(sdkPath, "tools"))) {
     packages.push({ name: "Tizen SDK Tools", status: "installed", version });
@@ -226,6 +227,24 @@ function collectInstalledPackages(sdkPath, version) {
   }
 
   return packages;
+}
+
+/**
+ * result.packages of a successful sdk-install / sdk-install-custom-repo: the
+ * per-version platform entries plus the tools entry labelled with the
+ * requested version, else the newest installed one (installedVersionLabel).
+ * Both commands use this so the same SDK reports the same packages; the
+ * custom-repo path used to label the tools "installed" when no version was
+ * given while sdk-install said "11.0".
+ *
+ * @param {string} sdkPath
+ * @param {string} version - requested version ("" = none requested)
+ */
+function installedPackageSummary(sdkPath, version) {
+  return collectInstalledPackages(
+    sdkPath,
+    installedVersionLabel(sdkPath, version),
+  );
 }
 
 /**
@@ -360,6 +379,35 @@ function platformProfiles(sdkPath, version) {
 }
 
 /**
+ * Profiles of platforms/tizen-X.Y that hold a platform payload, sorted:
+ * every sub-directory except the shared "common" data, and except a profile
+ * directory that is empty or holds only synced template "samples" (what
+ * tizen-create-project leaves in platforms/tizen-X.Y/tizen for a version
+ * whose tizen profile was never installed). This is what result.packages and
+ * platform-install --list report as `profiles`, so "installed but no `tizen`
+ * in profiles" really means the tizen profile is absent.
+ *
+ * @param {string} sdkPath
+ * @param {string} version - "X.Y"
+ * @returns {string[]}
+ */
+function platformPayloadProfiles(sdkPath, version) {
+  const dir = platformDirPath(sdkPath, version);
+  if (!dir) return [];
+  return platformProfiles(sdkPath, version)
+    .filter((p) => !PLATFORM_SHARED_DIRS.includes(p))
+    .filter((p) => {
+      let entries;
+      try {
+        entries = fs.readdirSync(path.join(dir, p));
+      } catch (_e) {
+        return false;
+      }
+      return entries.some((e) => !PROFILE_NON_PAYLOAD.includes(e));
+    });
+}
+
+/**
  * Is TIZEN-X.Y installed? platforms/tizen-X.Y holds a platform profile — a
  * sub-directory besides "common" (e.g. "tizen") with content besides the
  * synced "samples" (rootstraps, emulator-images, features, ...) — and no
@@ -380,21 +428,29 @@ function platformProfiles(sdkPath, version) {
  * @returns {boolean}
  */
 function isPlatformInstalled(sdkPath, version) {
-  const dir = platformDirPath(sdkPath, version);
-  if (!dir || fs.existsSync(platformInstallingMarker(sdkPath, version))) {
+  if (
+    !platformDirPath(sdkPath, version) ||
+    fs.existsSync(platformInstallingMarker(sdkPath, version))
+  ) {
     return false;
   }
-  return platformProfiles(sdkPath, version)
-    .filter((p) => !PLATFORM_SHARED_DIRS.includes(p))
-    .some((p) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(path.join(dir, p));
-      } catch (_e) {
-        return false;
-      }
-      return entries.some((e) => !PROFILE_NON_PAYLOAD.includes(e));
-    });
+  return platformPayloadProfiles(sdkPath, version).length > 0;
+}
+
+/**
+ * Status of platforms/tizen-X.Y, as platform-install --list reports it:
+ * "incomplete" while a tizen-platform-install run of that version has not
+ * finished, "installed" when isPlatformInstalled holds, else "not_installed".
+ *
+ * @param {string} sdkPath
+ * @param {string} version - "X.Y"
+ * @returns {"installed"|"incomplete"|"not_installed"}
+ */
+function platformStatus(sdkPath, version) {
+  if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
+    return "incomplete";
+  }
+  return isPlatformInstalled(sdkPath, version) ? "installed" : "not_installed";
 }
 
 /** Installed platform versions (isPlatformInstalled), oldest first. */
@@ -917,10 +973,7 @@ async function installSdkSteps(
         );
       }
 
-      const packages = collectInstalledPackages(
-        sdkPath,
-        installedVersionLabel(sdkPath, version),
-      );
+      const packages = installedPackageSummary(sdkPath, version);
       return formatSdkInstall(packages, warnings, startTime, command);
     }
 
@@ -1026,10 +1079,7 @@ async function installSdkSteps(
             );
           }
 
-          const packages = collectInstalledPackages(
-            sdkPath,
-            installedVersionLabel(sdkPath, version),
-          );
+          const packages = installedPackageSummary(sdkPath, version);
           return formatSdkInstall(packages, warnings, startTime, command);
         } else {
           return formatError(
@@ -2551,10 +2601,7 @@ async function installSdkFromRepoSteps(
         );
       }
 
-      const packages = collectInstalledPackages(
-        sdkPath,
-        platformVersion || "installed",
-      );
+      const packages = installedPackageSummary(sdkPath, platformVersion);
       return formatCustomRepoInstall(
         packages,
         installedRepo || normalizedUrl,
@@ -2666,10 +2713,7 @@ async function installSdkFromRepoSteps(
           );
         }
 
-        const packages = collectInstalledPackages(
-          sdkPath,
-          platformVersion || "installed",
-        );
+        const packages = installedPackageSummary(sdkPath, platformVersion);
         return formatCustomRepoInstall(
           packages,
           readInstalledRepository(sdkPath) || normalizedUrl,
@@ -3270,8 +3314,10 @@ async function installPlatform(
  *     "not_installed" when the directory holds no platform payload — only the
  *     shared "common" data the base SDK ships for older versions, or synced
  *     template samples — so that version can still be installed
- *   - profiles: sub-directories of platforms/tizen-X.Y (e.g. "tizen",
- *     "tv-samsung" when the TV extension is installed for that version)
+ *   - profiles: the profiles of platforms/tizen-X.Y that hold a platform
+ *     payload (platformPayloadProfiles — e.g. "tizen", "tv-samsung" when the
+ *     TV extension is installed for that version; never "common" or a
+ *     samples-only folder)
  *   - emulator_images: emulator image directories of that version
  * result.newest is the newest installed version — what create-project and
  * list-templates use when no --platform-version is given.
@@ -3294,16 +3340,10 @@ async function listPlatforms(command = "tizen-sdk platform-list") {
     }
     const images = listInstalledEmulatorImages(sdkPath);
     const platforms = listInstalledPlatformVersions(sdkPath).map((version) => {
-      let status = "installed";
-      if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
-        status = "incomplete";
-      } else if (!isPlatformInstalled(sdkPath, version)) {
-        status = "not_installed";
-      }
       return {
         version,
-        status,
-        profiles: platformProfiles(sdkPath, version),
+        status: platformStatus(sdkPath, version),
+        profiles: platformPayloadProfiles(sdkPath, version),
         emulator_images: images
           .filter((i) => i.platform === version)
           .map((i) => ({ profile: i.profile, image: i.image })),
@@ -4091,6 +4131,8 @@ module.exports = {
   initSdk,
   getSdkStatus,
   collectInstalledPackages,
+  installedPackageSummary,
+  platformPayloadProfiles,
   ensureSdkPathConfig,
   validateTizenVersion,
   listInstalledPlatformVersions,
