@@ -319,9 +319,9 @@ function comparePlatformVersions(a, b) {
  * large platform or profile directory (rootstraps, emulator-images) to another
  * disk and linking it back is common, and the script mirrors (the directory
  * glob in platform_installed, Get-ChildItem -Directory in
- * Test-PlatformInstalled) already follow such links. Dirent.isDirectory() alone is false for a link,
- * so that platform read as not installed here while the scripts saw it
- * installed. A dangling link is skipped.
+ * Test-PlatformInstalled) already follow such links. Dirent.isDirectory()
+ * alone is false for a link, so that platform read as not installed here
+ * while the scripts saw it installed. A dangling link is skipped.
  */
 function listSubdirectories(dir) {
   try {
