@@ -34,8 +34,10 @@ below use those release tags.
   - An SDK installed before this change keeps reporting what it has: the
     base install's platform (the newest version holding a non-TV payload)
     until a `sdk-install` record exists, and the TV version an older
-    `.tv-sdk-installed` names. The TV installers turn that marker into a
-    record before they replace it.
+    `.tv-sdk-installed` names. The installers turn both into records before
+    they write their own: `sdk-install` records that base platform before it
+    installs (so a later forced install of another version keeps it), and
+    the TV installers record the marker's TV version before replacing it.
   - `create-project` / `list-templates --platform-version` still accept any
     version whose files are on disk, so a bundled older TV version stays
     usable there.

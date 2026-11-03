@@ -835,6 +835,14 @@ if (-not $DryRun) {
 }
 
 # Platform package installation (core)
+# An SDK from before the install record: record its base platform first
+# (Convert-BasePlatformToRecord, lib\common.ps1), so it is still reported once
+# this run writes its own sdk-install block. Before the install, while
+# platforms\ still shows the old state.
+if (-not $DryRun -and (Test-Path -LiteralPath (Join-Path $Path "platforms"))) {
+    try { Convert-BasePlatformToRecord -SdkPath $Path } catch { Write-Warn "Could not record the existing base platform: $_" }
+}
+
 $pkgOk = Install-PlatformPackages
 if (-not $pkgOk) {
     Write-Warn "Some platform packages failed to install (see logs above)"

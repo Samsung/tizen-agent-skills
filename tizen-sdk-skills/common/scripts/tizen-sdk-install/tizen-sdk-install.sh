@@ -1124,6 +1124,14 @@ fi
 
 # Install platform packages (core operation)
 INSTALL_FAILED=false
+# An SDK from before the install record: record its base platform first
+# (migrate_base_platform_record, lib/common.sh), so it is still reported once
+# this run writes its own sdk-install block. Before the install, while
+# platforms/ still shows the old state.
+if [ "$DRY_RUN" != true ] && [ -d "$INSTALL_PATH/platforms" ]; then
+  migrate_base_platform_record "$INSTALL_PATH" || true
+fi
+
 if ! install_platform_packages; then
   INSTALL_FAILED=true
   log_warning "Some platform packages failed to install (see log above)"

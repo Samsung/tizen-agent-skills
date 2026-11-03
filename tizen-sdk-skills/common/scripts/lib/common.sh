@@ -882,6 +882,35 @@ migrate_tv_sdk_marker() {
   fi
 }
 
+# An SDK installed before sdk-install wrote records has its base platform
+# unrecorded; readers count it while no "Installed by: sdk-install" block
+# exists (recordedPlatformProfiles in lib/core/sdk.js). Record it before a new
+# sdk-install run writes its own block, or that platform would drop out of
+# the report: the newest version that platform_installed holds (non-TV
+# payload, no unfinished install) and that no non-TV block records yet. Does
+# nothing on a fresh SDK or once an sdk-install block exists. Call it before
+# the run changes platforms/, so the version just installed is not mistaken
+# for the old base.
+migrate_base_platform_record() {
+  local sdk="$1" f="$1/.platform-installed" p name v base=""
+  if [[ -f "$f" ]] && tr -d '\r' < "$f" | grep -q '^Installed by:[[:space:]]*sdk-install[[:space:]]*$'; then
+    return 0
+  fi
+  for p in "$sdk/platforms"/*/; do
+    [[ -d "$p" ]] || continue
+    name="$(basename "$p" | tr '[:upper:]' '[:lower:]')"
+    [[ "$name" =~ ^tizen-([0-9]+\.[0-9]+)$ ]] || continue
+    v="${BASH_REMATCH[1]}"
+    platform_installed "$sdk" "$v" || continue
+    if platform_records "$sdk" | awk -v v="$v" '$1 == v && $2 != "tv" && $2 !~ /^tv-samsung/ { f = 1 } END { exit !f }'; then
+      continue
+    fi
+    if [[ -z "$base" ]] || version_gt "$v" "$base"; then base="$v"; fi
+  done
+  [[ -n "$base" ]] || return 0
+  record_platform_install "$sdk" "TIZEN-$base" "$base" "$(platform_install_profiles "$sdk" "$base")" sdk-install
+}
+
 # Is X.Y $1 newer than X.Y $2?
 version_gt() {
   local a1="${1%%.*}" a2="${1#*.}" b1="${2%%.*}" b2="${2#*.}"

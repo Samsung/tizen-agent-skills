@@ -1124,7 +1124,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 }
 ```
 
-**`result.packages`:** 사용자가 설치한 플랫폼 버전마다 `Tizen SDK X.Y` 항목이 하나씩(오래된 버전부터) 있습니다. `.platform-installed`에 기록된 버전(sdk-install, platform-install, 두 TV 설치기가 설치할 때마다 버전·`Profile`·`Installed by`·`Source`를 담은 블록을 덧붙입니다)과, `platform-install`이 아직 끝나지 않은 버전입니다. 항목마다 `platform-install --list`와 같은 `status`(`installed`, `incomplete`, 기록된 폴더가 지워졌으면 `not_installed`)와 `profiles`(디스크에 있는 기록된 프로필: `tizen`, 그 버전에 TV 확장을 설치했으면 `tv-samsung`)를 가집니다. TV 확장이 예전 버전용으로 함께 깔아 두는 `tv` / `tv-samsung` 폴더(2.4 … 9.0)는 항목이 아닙니다. 기록이 생기기 전에 설치한 SDK도 기본 설치 플랫폼(TV가 아닌 내용이 있는 가장 높은 버전)과 `.tv-sdk-installed`에 적힌 TV 버전은 그대로 보고합니다. 요약에서는 모든 항목을 프로필과 함께 한 줄에 적습니다(예: `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
+**`result.packages`:** 사용자가 설치한 플랫폼 버전마다 `Tizen SDK X.Y` 항목이 하나씩(오래된 버전부터) 있습니다. `.platform-installed`에 기록된 버전(sdk-install, platform-install, 두 TV 설치기가 설치할 때마다 버전·`Profile`·`Installed by`·`Source`를 담은 블록을 덧붙입니다)과, `platform-install`이 아직 끝나지 않은 버전입니다. 항목마다 `platform-install --list`와 같은 `status`(`installed`, `incomplete`, 기록된 폴더가 지워졌으면 `not_installed`)와 `profiles`(디스크에 있는 기록된 프로필: `tizen`, 그 버전에 TV 확장을 설치했으면 `tv-samsung`)를 가집니다. TV 확장이 예전 버전용으로 함께 깔아 두는 `tv` / `tv-samsung` 폴더(2.4 … 9.0)는 항목이 아닙니다. 기록이 생기기 전에 설치한 SDK도 기본 설치 플랫폼(TV가 아닌 내용이 있는 가장 높은 버전)과 `.tv-sdk-installed`에 적힌 TV 버전은 그대로 보고하며, `sdk-install`과 TV 설치기는 자기 블록을 쓰기 전에 이 둘을 먼저 기록합니다. 요약에서는 모든 항목을 프로필과 함께 한 줄에 적습니다(예: `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
 
 **참고:** repository_url은 루트에서 `pkg_list_{OS}-{64,32}`를 제공하는 어떤 서버든 될 수 있습니다. 예:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 미러)

@@ -48,6 +48,8 @@ const {
   isPlatformInstalled,
   isTvVersionRecorded,
   installTvSdkFromZip,
+  installSdk,
+  installedTizenPlatformVersions,
 } = require("../core/sdk");
 
 console.log("=== platform install record tests ===\n");
@@ -193,6 +195,24 @@ function makeReportedSdk(root) {
           isTvVersionRecorded(reported, "9.0"),
         ],
         [true, false],
+      );
+      check(
+        "installed TIZEN-X.Y platforms for messages: 10.0 and 11.0, no TV-only version",
+        installedTizenPlatformVersions(reported),
+        ["10.0", "11.0"],
+      );
+      // "TIZEN-9.0 is not part of it" must not list 9.0 (or 2.4 … 8.0) as
+      // installed: that note used every directory that held a payload.
+      fs.writeFileSync(CONFIG_FILE, `${reported}\n`);
+      const missing = await installSdk("9.0");
+      const message = missing.errors?.[0]?.message || "";
+      check(
+        "sdk-install 9.0 → platform_version_not_found listing only 10.0, 11.0",
+        [
+          missing.errors?.[0]?.error_category,
+          message.includes("(installed platforms: 10.0, 11.0)"),
+        ],
+        ["platform_version_not_found", true],
       );
     }
 
@@ -397,6 +417,65 @@ function makeReportedSdk(root) {
           ],
         );
       }
+      {
+        // The base install (11.0) has no record. A new sdk-install run first
+        // records it (migrate_base_platform_record), so once that run writes
+        // its own block — here a forced reinstall with 12.0 — 11.0 stays.
+        const sdk = path.join(sandboxHome, "base-sdk");
+        makeReportedSdk(sdk);
+        sh(
+          'migrate_base_platform_record "$1"; migrate_base_platform_record "$1"',
+          sdk,
+        );
+        check(
+          "migrate_base_platform_record records the unrecorded base platform once (11.0)",
+          readPlatformRecords(sdk)
+            .filter((r) => r.installedBy === "sdk-install")
+            .map((r) => [r.version, r.profiles]),
+          [["11.0", ["tizen"]]],
+        );
+        fs.mkdirSync(
+          path.join(sdk, "platforms", "tizen-12.0", "tizen", "rootstraps"),
+          {
+            recursive: true,
+          },
+        );
+        sh(
+          'record_platform_install "$1" TIZEN-12.0 12.0 tizen sdk-install https://repo',
+          sdk,
+        );
+        check(
+          "a later sdk-install of another version keeps the old base platform",
+          installedPackageSummary(sdk, "").map((p) => p.version),
+          ["10.0", "11.0", "12.0"],
+        );
+        sh('migrate_base_platform_record "$1"', sdk);
+        check(
+          "with an sdk-install block, migrate_base_platform_record does nothing",
+          readPlatformRecords(sdk).filter(
+            (r) => r.installedBy === "sdk-install",
+          ).length,
+          2,
+        );
+        const fresh = path.join(sandboxHome, "fresh-sdk");
+        fs.mkdirSync(fresh, { recursive: true });
+        sh('migrate_base_platform_record "$1"', fresh);
+        check(
+          "a fresh SDK → no record written",
+          fs.existsSync(path.join(fresh, ".platform-installed")),
+          false,
+        );
+      }
+      {
+        const sdkSh = read("tizen-sdk-install", "tizen-sdk-install.sh");
+        check(
+          "sh: the base platform is migrated before the install changes platforms/",
+          sdkSh.indexOf('migrate_base_platform_record "$INSTALL_PATH"') > 0 &&
+            sdkSh.indexOf('migrate_base_platform_record "$INSTALL_PATH"') <
+              sdkSh.indexOf("if ! install_platform_packages; then"),
+          true,
+        );
+      }
 
       const haveZip =
         spawnSync("zip", ["-v"]).status === 0 &&
@@ -537,6 +616,13 @@ function makeReportedSdk(root) {
       const zipPs1 = read(
         "tizen-tv-sdk-install-from-zip",
         "tizen-tv-sdk-install-from-zip.ps1",
+      );
+      check(
+        "ps1: the base platform is migrated before Install-PlatformPackages",
+        sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") > 0 &&
+          sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") <
+            sdkPs1.indexOf("$pkgOk = Install-PlatformPackages"),
+        true,
       );
       check(
         "every installer records through Add-PlatformRecord",

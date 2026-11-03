@@ -278,6 +278,33 @@ function Add-PlatformRecord {
     [System.IO.File]::AppendAllText($file, $prefix + ($lines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
 }
 
+# An SDK installed before sdk-install wrote records has its base platform
+# unrecorded; readers count it while no "Installed by: sdk-install" block
+# exists. Record it before a new sdk-install run writes its own block (mirror
+# of migrate_base_platform_record, lib/common.sh): the newest version that
+# Test-PlatformInstalled holds and no non-TV block records yet. Call it
+# before the run changes platforms\.
+function Convert-BasePlatformToRecord {
+    param([string]$SdkPath)
+    $file = Join-Path $SdkPath ".platform-installed"
+    if ((Test-Path -LiteralPath $file) -and
+        @([System.IO.File]::ReadAllLines($file) | Where-Object { $_.Trim() -eq 'Installed by: sdk-install' }).Count -gt 0) {
+        return
+    }
+    $records = @(Get-PlatformRecords -SdkPath $SdkPath)
+    $base = $null
+    foreach ($d in (Get-ChildItem -Path (Join-Path $SdkPath "platforms") -Directory -ErrorAction SilentlyContinue)) {
+        if ($d.Name -notmatch '^tizen-([0-9]+\.[0-9]+)$') { continue }
+        $v = $Matches[1]
+        if (-not (Test-PlatformInstalled -SdkPath $SdkPath -Version $v)) { continue }
+        if (@($records | Where-Object { $_.Version -eq $v -and -not (Test-TvProfileName $_.Profile) }).Count -gt 0) { continue }
+        if ($null -eq $base -or [version]$v -gt [version]$base) { $base = $v }
+    }
+    if (-not $base) { return }
+    Add-PlatformRecord -SdkPath $SdkPath -Target "TIZEN-$base" -Version $base `
+        -Profiles (Get-PlatformInstallProfiles -SdkPath $SdkPath -Version $base) -InstalledBy "sdk-install"
+}
+
 # An SDK whose TV extension was installed before the TV installers wrote
 # records has only .tv-sdk-installed. Turn it into a record before a new TV
 # install replaces that marker (mirror of migrate_tv_sdk_marker, lib/common.sh):
