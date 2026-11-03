@@ -1061,6 +1061,13 @@ echo ""
 check_install_path || true
 echo ""
 
+# Did a previous install complete? Remembered before --force removes sdk.info
+# below: only then are the folders under platforms/ an installed SDK whose
+# base platform migrate_base_platform_record may record. A run that failed
+# partway leaves no sdk.info, and its half-filled platform is not installed.
+HAD_SDK_INFO=false
+[ -f "$INSTALL_PATH/sdk.info" ] && HAD_SDK_INFO=true
+
 # Skip if already installed.
 # sdk.info is created only when install succeeds to completion, so its existence means
 # previous install completed (partial interrupted install has no file).
@@ -1127,8 +1134,9 @@ INSTALL_FAILED=false
 # An SDK from before the install record: record its base platform first
 # (migrate_base_platform_record, lib/common.sh), so it is still reported once
 # this run writes its own sdk-install block. Before the install, while
-# platforms/ still shows the old state.
-if [ "$DRY_RUN" != true ] && [ -d "$INSTALL_PATH/platforms" ]; then
+# platforms/ still shows the old state, and only when a previous install
+# completed (HAD_SDK_INFO).
+if [ "$DRY_RUN" != true ] && [ "$HAD_SDK_INFO" = true ] && [ -d "$INSTALL_PATH/platforms" ]; then
   migrate_base_platform_record "$INSTALL_PATH" || true
 fi
 

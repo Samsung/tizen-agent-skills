@@ -468,11 +468,22 @@ function makeReportedSdk(root) {
       }
       {
         const sdkSh = read("tizen-sdk-install", "tizen-sdk-install.sh");
+        const had = sdkSh.indexOf("HAD_SDK_INFO=false");
+        const migrate = sdkSh.indexOf(
+          'migrate_base_platform_record "$INSTALL_PATH"',
+        );
         check(
-          "sh: the base platform is migrated before the install changes platforms/",
-          sdkSh.indexOf('migrate_base_platform_record "$INSTALL_PATH"') > 0 &&
-            sdkSh.indexOf('migrate_base_platform_record "$INSTALL_PATH"') <
-              sdkSh.indexOf("if ! install_platform_packages; then"),
+          "sh: the base platform is migrated before the install changes platforms/, only after a completed install",
+          had > 0 &&
+            had <
+              sdkSh.indexOf(
+                '[ "$FORCE" = true ] && rm -f "$INSTALL_PATH/sdk.info"',
+              ) &&
+            migrate > 0 &&
+            migrate < sdkSh.indexOf("if ! install_platform_packages; then") &&
+            /\[ "\$HAD_SDK_INFO" = true \] && \[ -d "\$INSTALL_PATH\/platforms" \]; then\s*\n\s*migrate_base_platform_record/.test(
+              sdkSh,
+            ),
           true,
         );
       }
@@ -618,10 +629,14 @@ function makeReportedSdk(root) {
         "tizen-tv-sdk-install-from-zip.ps1",
       );
       check(
-        "ps1: the base platform is migrated before Install-PlatformPackages",
-        sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") > 0 &&
+        "ps1: the base platform is migrated before Install-PlatformPackages, only after a completed install",
+        sdkPs1.indexOf("$hadSdkInfo = Test-Path $sdkInfoPath") > 0 &&
+          sdkPs1.indexOf("$hadSdkInfo = Test-Path $sdkInfoPath") <
+            sdkPs1.indexOf("if ($Force) { Remove-Item $sdkInfoPath") &&
+          sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") > 0 &&
           sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") <
-            sdkPs1.indexOf("$pkgOk = Install-PlatformPackages"),
+            sdkPs1.indexOf("$pkgOk = Install-PlatformPackages") &&
+          /if \(-not \$DryRun -and \$hadSdkInfo -and /.test(sdkPs1),
         true,
       );
       check(

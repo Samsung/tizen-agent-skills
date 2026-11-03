@@ -402,6 +402,11 @@ if (Test-Path $Path) {
 # Also confirm the core tools (sdb/tz) exist: if sdk.info is present but the tools
 # are missing (a legacy partial install), don't short-circuit - reinstall instead.
 $sdkInfoPath = Join-Path $Path "sdk.info"
+# Did a previous install complete? Remembered before -Force removes sdk.info
+# below: only then are the folders under platforms\ an installed SDK whose
+# base platform Convert-BasePlatformToRecord may record. A run that failed
+# partway leaves no sdk.info, and its half-filled platform is not installed.
+$hadSdkInfo = Test-Path $sdkInfoPath
 if ((Test-Path $sdkInfoPath) -and -not $Force) {
     $sdbExists = Test-Path (Join-Path $Path "tools\sdb.exe")
     $tzExists  = Test-Path (Join-Path $Path "tools\tizen-core\tz.exe")
@@ -838,8 +843,9 @@ if (-not $DryRun) {
 # An SDK from before the install record: record its base platform first
 # (Convert-BasePlatformToRecord, lib\common.ps1), so it is still reported once
 # this run writes its own sdk-install block. Before the install, while
-# platforms\ still shows the old state.
-if (-not $DryRun -and (Test-Path -LiteralPath (Join-Path $Path "platforms"))) {
+# platforms\ still shows the old state, and only when a previous install
+# completed ($hadSdkInfo).
+if (-not $DryRun -and $hadSdkInfo -and (Test-Path -LiteralPath (Join-Path $Path "platforms"))) {
     try { Convert-BasePlatformToRecord -SdkPath $Path } catch { Write-Warn "Could not record the existing base platform: $_" }
 }
 

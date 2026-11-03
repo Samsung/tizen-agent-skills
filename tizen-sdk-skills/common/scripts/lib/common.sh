@@ -890,7 +890,8 @@ migrate_tv_sdk_marker() {
 # payload, no unfinished install) and that no non-TV block records yet. Does
 # nothing on a fresh SDK or once an sdk-install block exists. Call it before
 # the run changes platforms/, so the version just installed is not mistaken
-# for the old base.
+# for the old base, and only for an SDK whose previous install completed
+# (sdk.info existed): a failed run's half-filled platform is not installed.
 migrate_base_platform_record() {
   local sdk="$1" f="$1/.platform-installed" p name v base=""
   if [[ -f "$f" ]] && tr -d '\r' < "$f" | grep -q '^Installed by:[[:space:]]*sdk-install[[:space:]]*$'; then
