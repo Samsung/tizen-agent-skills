@@ -406,7 +406,11 @@ $sdkInfoPath = Join-Path $Path "sdk.info"
 # below: only then are the folders under platforms\ an installed SDK whose
 # base platform Convert-BasePlatformToRecord may record. A run that failed
 # partway leaves no sdk.info, and its half-filled platform is not installed.
-$hadSdkInfo = Test-Path $sdkInfoPath
+# Same rule as the already-installed check below: sdk.info without the core
+# tools (sdb/tz) is a past incomplete install too.
+$hadSdkInfo = (Test-Path $sdkInfoPath) -and
+    (Test-Path (Join-Path $Path "tools\sdb.exe")) -and
+    (Test-Path (Join-Path $Path "tools\tizen-core\tz.exe"))
 if ((Test-Path $sdkInfoPath) -and -not $Force) {
     $sdbExists = Test-Path (Join-Path $Path "tools\sdb.exe")
     $tzExists  = Test-Path (Join-Path $Path "tools\tizen-core\tz.exe")

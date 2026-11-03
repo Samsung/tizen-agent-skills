@@ -469,6 +469,20 @@ function makeReportedSdk(root) {
       {
         const sdkSh = read("tizen-sdk-install", "tizen-sdk-install.sh");
         const had = sdkSh.indexOf("HAD_SDK_INFO=false");
+        const hadBlock = sdkSh.slice(
+          had,
+          sdkSh.indexOf("# Skip if already installed.", had),
+        );
+        check(
+          "sh: a completed install needs sdk.info and the core tools, as the already-installed check",
+          [
+            '-f "$INSTALL_PATH/sdk.info"',
+            '-x "$INSTALL_PATH/tools/sdb"',
+            '-x "$INSTALL_PATH/tools/tizen-core/tz"',
+            "HAD_SDK_INFO=true",
+          ].every((t) => hadBlock.includes(t)),
+          true,
+        );
         const migrate = sdkSh.indexOf(
           'migrate_base_platform_record "$INSTALL_PATH"',
         );
@@ -630,8 +644,20 @@ function makeReportedSdk(root) {
       );
       check(
         "ps1: the base platform is migrated before Install-PlatformPackages, only after a completed install",
-        sdkPs1.indexOf("$hadSdkInfo = Test-Path $sdkInfoPath") > 0 &&
-          sdkPs1.indexOf("$hadSdkInfo = Test-Path $sdkInfoPath") <
+        [
+          "(Test-Path $sdkInfoPath) -and",
+          'tools\\sdb.exe")) -and',
+          'tools\\tizen-core\\tz.exe"))',
+        ].every((t) =>
+          sdkPs1
+            .slice(
+              sdkPs1.indexOf("$hadSdkInfo = "),
+              sdkPs1.indexOf("if ((Test-Path $sdkInfoPath) -and -not $Force)"),
+            )
+            .includes(t),
+        ) &&
+          sdkPs1.indexOf("$hadSdkInfo = ") > 0 &&
+          sdkPs1.indexOf("$hadSdkInfo = ") <
             sdkPs1.indexOf("if ($Force) { Remove-Item $sdkInfoPath") &&
           sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") > 0 &&
           sdkPs1.indexOf("Convert-BasePlatformToRecord -SdkPath $Path") <

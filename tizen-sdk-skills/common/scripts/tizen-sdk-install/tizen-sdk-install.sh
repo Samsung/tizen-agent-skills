@@ -1065,8 +1065,13 @@ echo ""
 # below: only then are the folders under platforms/ an installed SDK whose
 # base platform migrate_base_platform_record may record. A run that failed
 # partway leaves no sdk.info, and its half-filled platform is not installed.
+# Same rule as the already-installed check below: sdk.info without the core
+# tools (sdb/tz) is a past incomplete install too.
 HAD_SDK_INFO=false
-[ -f "$INSTALL_PATH/sdk.info" ] && HAD_SDK_INFO=true
+if [ -f "$INSTALL_PATH/sdk.info" ] && [ -x "$INSTALL_PATH/tools/sdb" ] \
+   && [ -x "$INSTALL_PATH/tools/tizen-core/tz" ]; then
+  HAD_SDK_INFO=true
+fi
 
 # Skip if already installed.
 # sdk.info is created only when install succeeds to completion, so its existence means
