@@ -239,6 +239,7 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
   "duration_ms": 780000,
   "result": {
     "packages": [
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": ["common"] },
       { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["common", "tizen"] },
       { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["common", "tizen"] },
       { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }

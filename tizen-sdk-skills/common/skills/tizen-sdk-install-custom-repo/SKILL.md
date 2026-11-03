@@ -345,8 +345,8 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
   버전 하나를 SDK 전체의 버전처럼 요약하지 않는다. `installed`여도 `profiles`에 `tizen`이
   없으면 그 버전은 나열된 프로필(예: `tv-samsung`)용으로만 설치된 것이다.
 - "설치된 SDK/플랫폼 버전이 뭐야?" 같은 **후속 질문**에는 이 Envelope를 다시 해석하거나
-  디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 러너를 `--list`로 실행해 그
-  Envelope로 답한다.
+  디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 스킬을 로드해 그 스킬의
+  `--list` 단계(러너 경로 찾기 포함)를 실행하고 그 Envelope로 답한다.
 
 ## Handoff
 
