@@ -31,6 +31,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
+const { precheckWithoutDiskCheck } = require("./precheck-without-disk-check");
 
 const sandboxHome = fs.mkdtempSync(
   path.join(os.tmpdir(), "tizen-multi-platform-home-"),
@@ -351,24 +352,20 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
           "8.0",
         );
         // Not installed yet: the message must say to re-run with the same
-        // URL and version, without --force (15 GB disk check permitting).
-        fs.writeFileSync(
-          CONFIG_FILE,
-          `${path.join(sandboxHome, "custom-repo-not-installed")}\n`,
+        // URL and version, without --force (disk check stubbed out).
+        const fresh = precheckWithoutDiskCheck("repo", repoUrl);
+        check(
+          "custom repo, not installed → execution_error",
+          fresh.errors?.[0]?.error_category,
+          "execution_error",
         );
-        const fresh = await installSdkFromRepo(repoUrl, "10.0");
-        fs.writeFileSync(CONFIG_FILE, `${repoSdk}\n`);
-        if (fresh.errors?.[0]?.error_category === "insufficient_disk_space") {
-          console.log("SKIP custom-repo re-run hint (less than 15 GB free)");
-        } else {
-          check(
-            "custom repo, not installed → re-run with the same URL and version, without --force",
-            String(fresh.errors?.[0]?.message).includes(
-              "re-run this CLI with the same repository URL and version as this run but without --force",
-            ),
-            true,
-          );
-        }
+        check(
+          "custom repo, not installed → re-run with the same URL and version, without --force",
+          String(fresh.errors?.[0]?.message).includes(
+            "re-run this CLI with the same repository URL and version as this run but without --force",
+          ),
+          true,
+        );
         const pinned = await installSdkFromRepo(repoUrl, "6.0");
         check(
           "custom repo, version 6.0 → tools labelled 6.0, not the newest",

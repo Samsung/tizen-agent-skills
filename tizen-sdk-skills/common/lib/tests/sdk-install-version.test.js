@@ -39,6 +39,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { precheckWithoutDiskCheck } = require("./precheck-without-disk-check");
 
 const sandboxHome = fs.mkdtempSync(
   path.join(os.tmpdir(), "tizen-sdk-install-version-home-"),
@@ -455,27 +456,23 @@ console.error = () => {};
     // --- not installed: the message says how to re-run ------------------------
     // The final envelope comes from re-running this pre-check after the
     // background install; it must keep the version (requestedPlatformMissing)
-    // and drop --force. Needs 15 GB free for the disk check, so a host below
-    // that skips (the message itself is covered in harness-guidance.test.js).
+    // and drop --force. Runs with the 15 GB disk check stubbed out, so the
+    // check holds on any host.
     console.log("\n--- not installed: re-run hint ---");
     {
-      const emptySdk = path.join(sandboxHome, "sdk-not-installed-yet");
-      fs.writeFileSync(CONFIG_FILE, `${emptySdk}\n`);
-      const env = await installSdk("10.0");
-      const category = env.errors?.[0]?.error_category;
-      if (category === "insufficient_disk_space") {
-        console.log("SKIP re-run hint (less than 15 GB free on this host)");
-      } else {
-        check("not installed → execution_error", category, "execution_error");
-        check(
-          "not installed → re-run with the same version, without --force",
-          String(env.errors?.[0]?.message).includes(
-            "re-run this CLI with the same version (and label) as this run but without --force",
-          ),
-          true,
-        );
-      }
-      fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+      const env = precheckWithoutDiskCheck("sdk");
+      check(
+        "not installed → execution_error",
+        env.errors?.[0]?.error_category,
+        "execution_error",
+      );
+      check(
+        "not installed → re-run with the same version, without --force",
+        String(env.errors?.[0]?.message).includes(
+          "re-run this CLI with the same version (and label) as this run but without --force",
+        ),
+        true,
+      );
     }
 
     // --- sdkInstallerFlags: order and quoting ----------------------------------

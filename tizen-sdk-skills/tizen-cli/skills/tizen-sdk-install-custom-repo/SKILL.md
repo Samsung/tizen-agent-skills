@@ -85,6 +85,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      | `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list  | Ask the user for the repository **directory** URL |
      | `repo_url_unreachable` | Well-formed but serves no `pkg_list_{OS}-{64,32}`  | Wrong URL, or internal mirror needs VPN/proxy     |
      | `execution_error`      | URL valid, SDK not installed                       | Run `errors[0].suggested_fix.command` (Phase 2)   |
+     | `platform_version_not_found` | SDK installed, requested platform is not     | Offer `errors[0].suggested_fix.command` (`platform-install`); never reinstall with `--force` |
 
 2. **Phase 2 — install**: run `errors[0].suggested_fix.command` verbatim (it already
    contains the repository flag). 10–15 minutes, ~121 packages.
@@ -93,7 +94,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      `run_in_background: true` (10-min kill), never foreground (log floods the context).
    - **Never drop the repository flag** from a relaunch — the install would silently fall
      back to the default CDN mirror.
-3. **Verify**: re-run the Phase 1 command with the same repository URL and version but without `--force`; it must return `status: "success"`. Confirm the
+3. **Verify**: re-run the Phase 1 command with the same repository URL and version but without `--force`; it must return `status: "success"`. A `platform_version_not_found` failure here means the SDK is installed without the requested platform — report it with its `platform-install` fix (table above). Confirm the
    source with `sdk-repo-info` (or read `{SDK_PATH}/.package/repository.info`).
 
 ## Output

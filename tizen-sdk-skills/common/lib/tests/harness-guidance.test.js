@@ -313,6 +313,19 @@ for (const [rel, phrases] of [
     ],
   ],
   [
+    ["tizen-cli", "skills", "tizen-sdk-install", "SKILL.md"],
+    [
+      "re-run `tizen-cli tizen-sdk sdk-install` with the same version (and label) but without `--force`",
+    ],
+  ],
+  [
+    ["tizen-cli", "skills", "tizen-sdk-install-custom-repo", "SKILL.md"],
+    [
+      "re-run the Phase 1 command with the same repository URL and version but without `--force`",
+      "| `platform_version_not_found` |",
+    ],
+  ],
+  [
     ["common", "agents", "tizen-sdk-install-custom-repo.md"],
     [
       "**Pass the same repository URL and version as in step 1, and never `--force`.**",

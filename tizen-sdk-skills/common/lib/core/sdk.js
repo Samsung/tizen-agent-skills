@@ -2775,7 +2775,7 @@ async function installSdkFromRepoSteps(
         `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
         harnessGuidance("detach") +
         sdkPrecheckRerunHint(
-          "<sdk-path>/sdk.info exists and that <sdk-path>/.package/repository.info records the custom repository",
+          "<sdk-path>/sdk.info exists, the requested platform is installed and <sdk-path>/.package/repository.info records the custom repository",
           { customRepo: true },
         ) +
         "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
