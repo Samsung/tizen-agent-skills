@@ -17,6 +17,14 @@
 
 ### 변경
 
+- **명령을 실행할 수 없는 모드(Ask / Plan)의 Cline은 러너 명령을 사용자에게 넘기지 않고 Act
+  모드로 바꿔 달라고 안내합니다** (`cline/hooks/tizen-sdk-skills-guard.md` 규칙 12). Ask
+  모드에서 SDK 설치를 요청하면 Cline이 스킬을 읽은 뒤 러너 찾기 명령을 사용자에게 실행하라고
+  넘겼는데, 옮겨 적으면서 `%USERPROFILE%\.cline`의 `.cline` 앞 `\`를 빠뜨려 cmd.exe 명령이
+  러너를 찾지 못했고 결과 Envelope도 남지 않았습니다. 이제는 Act 모드가 필요하다고 한 줄로
+  안내하고 턴을 끝내며, 사용자가 직접 실행하겠다고 할 때만 SKILL.md 블록을 원문 그대로
+  보여 줍니다.
+
 - **`sdk-install` / `sdk-install-custom-repo`의 result.packages와
   `platform-install --list`가 사용자가 설치한 플랫폼을 보고합니다.**
   `platforms/tizen-X.Y`를 모두 나열하지 않고 `<sdk>/.platform-installed`에서

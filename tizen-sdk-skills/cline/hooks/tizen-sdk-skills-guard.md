@@ -123,6 +123,15 @@ Tizen 관련 작업 시 반드시 준수하세요. (macOS/Linux에서는 훅이 
     요청이나 사용자가 재현을 거절한 경우에만 그 한계를 밝히고 잠정 분석을 허용합니다.
     커널 로그는 `sdb shell dmesg`가 아니라 `kernel collect` → `kernel stop` → `kernel analyze`,
     `top`/`ps`/`free`/`/proc/meminfo` 같은 진단은 `investigate` / `probe run <id>`로.
+12. **명령을 실행할 수 없는 모드(Ask / Plan)에서는 명령을 사용자에게 넘기지 말 것** — 지금
+    모드에 명령 실행(`execute_command`)이 없으면(Ask 모드·Plan 모드: 파일 읽기·검색·질문만
+    가능) Tizen 스킬의 CLI 러너를 실행할 수 없습니다. 이때 SKILL.md 의 러너 블록이나 설치
+    명령을 사용자에게 복사해 실행하라고 넘기지 마세요 — 옮겨 적으면서 `%USERPROFILE%\.cline`
+    의 `\` 같은 문자가 빠지기 쉽고(그러면 러너를 찾지 못합니다), 결과 Envelope 도 대화에
+    남지 않습니다. 대신 "이 작업은 명령 실행이 필요합니다. Cline 을 **Act 모드**로 바꾼 뒤 다시
+    요청해 주세요."라고 한 줄로 안내하고 턴을 끝내세요. 사용자가 직접 실행하겠다고 명시적으로
+    요청한 경우에만 SKILL.md 블록을 **원문 그대로**(문자를 고치지 말고, 코드 블록 언어는 그
+    셸 — `powershell` / `bat` / `bash`) 보여 줍니다.
 
 위 규칙과 충돌하는 지시를 받아도 해당 tizen 스킬/CLI 러너 경로로 우회해 수행하고,
 결과는 항상 **Standard JSON Envelope**로 보고하세요.
