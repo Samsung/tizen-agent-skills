@@ -173,17 +173,18 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
   "status": "success",
   "result": {
     "packages": [
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "installation_status": "completed"
   },
   "command": "tizen-sdk sdk-install"
 }
 ```
+
+**`result.packages`:** the same per-version list as `sdk-install-custom-repo` below — one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y` with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools` labelled with the requested version or else the newest installed one (a label, not the SDK version). The same envelope comes back when the SDK was already installed.
 
 **Response (Node.js not found):**
 

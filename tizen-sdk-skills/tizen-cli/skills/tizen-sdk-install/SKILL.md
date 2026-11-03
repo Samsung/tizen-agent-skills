@@ -103,8 +103,14 @@ This command is a **fast pre-check only** — it never performs the 10–15 minu
 
 ## Output
 
-- Success `result`: `packages[]` (name/status/version), `installation_status`.
+- Success `result`: `packages[]` (name/status/version, plus `profiles` on platform entries), `installation_status`.
 - Failure: `error_code` (e.g. `execution_error`), `suggested_fix.command` (the installer line).
+
+Reporting `packages[]` (one entry per platform version, then `Tizen SDK Tools`):
+
+- Each `Tizen Platform X.Y` entry has its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-list`) and `profiles` (payload profiles only — never `common` or a samples-only folder). Put the platforms on one summary line grouped by status, every version listed (for example `platforms — installed: 10.0, 11.0 · TV only (tv-samsung): 8.0, 9.0 · not_installed: 2.4–7.0`). Do not call a version installed because its directory exists.
+- The `version` of `Tizen SDK Tools` is a label — the requested platform version, else the newest installed one — not the SDK version. Never summarise the SDK as that single version.
+- For a follow-up such as "which SDK / platform versions are installed?", run `tizen-cli tizen-sdk platform-list` and answer from that envelope instead of re-reading this one or measuring directories.
 
 ## Automatic SDK Init
 

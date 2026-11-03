@@ -249,16 +249,32 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     {
       // installSdkFromRepo validates the URL by running the installer before
       // it reaches the summary, so its call sites are checked in the source.
-      const src = fs.readFileSync(
-        path.join(__dirname, "..", "core", "sdk.js"),
-        "utf8",
-      );
+      // Comments stripped, so a comment naming a function cannot shift a count.
+      const src = fs
+        .readFileSync(path.join(__dirname, "..", "core", "sdk.js"), "utf8")
+        .replace(/\/\*[\s\S]*?\*\//g, "")
+        .replace(/^\s*\/\/.*$/gm, "");
+      const count = (re) => (src.match(re) || []).length;
       // collectInstalledPackages( appears twice: its definition and the one
       // call inside installedPackageSummary. A call site that builds
       // packages itself (with its own label) adds a third.
       check(
         "only installedPackageSummary calls collectInstalledPackages",
-        (src.match(/collectInstalledPackages\(/g) || []).length,
+        count(/collectInstalledPackages\(/g),
+        2,
+      );
+      // Each call site hands over the raw requested version, so the label
+      // comes from installedVersionLabel — no `|| "installed"` of its own.
+      check(
+        "sdk-install call sites pass the requested version as is",
+        count(/const packages = installedPackageSummary\(sdkPath, version\);/g),
+        2,
+      );
+      check(
+        "custom-repo call sites pass the requested version as is",
+        count(
+          /const packages = installedPackageSummary\(sdkPath, platformVersion\);/g,
+        ),
         2,
       );
     }
