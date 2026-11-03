@@ -12,6 +12,30 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-11-03
+
+Repository-wide release that ships `tizen-sdk-skills` 1.7.0 and `tizen-action-skills` 1.0.0.
+The plugin moved by a minor version, so the release does too.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.6.1 to 1.7.0. Highlights: `sdk-install` and
+  `platform-install --list` report the platforms the user installed, read from
+  `<sdk>/.platform-installed` — one `Tizen SDK X.Y` entry per version, and no more
+  `Tizen SDK Tools` entry — instead of every `platforms/tizen-X.Y`, so the `tv` /
+  `tv-samsung` folders the TV extension bundles for older versions no longer read as
+  installed. TV SDK ZIPs of different versions install side by side
+  (`tv-sdk-install-from-zip --tv-version`); linked platform directories count; Cline in a
+  mode that cannot run commands (Ask / Plan) asks for Act mode instead of handing the runner
+  commands to the user; Node.js 22 or later is required. See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md)
+  for details. The release assets stamped with the plugin version are therefore
+  `tizen-sdk-v1.7.0.zip` and `tizen-ai-extension-v1.7.0.vsix`.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.7.0.
+- The root READMEs name Node.js 22 as the prerequisite, and Dependabot keeps `@types/node`
+  on the Node 22 line (it must not run ahead of the runtime the code targets).
+- CI packages the VS Code extension with `vsce package` after its build, as `release.yml`
+  does on a release tag, so a packaging break shows up before the release.
+
 ## [1.3.1] — 2026-10-26
 
 Repository-wide release that ships `tizen-sdk-skills` 1.6.1 and `tizen-action-skills` 1.0.0.
