@@ -252,6 +252,13 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
 }
 ```
 
+**Reporting `result.packages`** (the main thread relays the envelope; these rules apply to its summary):
+
+- There is one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, each with its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-install --list`) and `profiles`. Relay the entries one by one. Do not call a version installed because its directory exists.
+- `profiles` holds only the profiles with a platform payload (never `common` or a folder with only synced template `samples`). An `installed` version without `tizen` in `profiles` is installed for the listed profiles only (for example `tv-samsung`).
+- The `version` of `Tizen SDK Tools` is a label: the requested platform version, or else the newest installed one. It is not a tools version and not "the SDK version". Never summarise the SDK as that single version.
+- For a follow-up question such as "which SDK / platform versions are installed?", do not re-read this envelope or measure directories. Load the `tizen-platform-install` skill, run its `--list` step and answer from that envelope.
+
 **Note:** The repository URL can be any server that serves `pkg_list_{OS}-{64,32}` at its root, for example:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 mirror)
 - `http://mirror.example.com/packages/tizen_studio_6.5/` (SDK 10.0 MR / Tizen Studio 6.5 mirror)

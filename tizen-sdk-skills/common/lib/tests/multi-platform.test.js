@@ -248,22 +248,18 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     console.log("--- installedPackageSummary call sites ---");
     {
       // installSdkFromRepo validates the URL by running the installer before
-      // it reaches the summary, so its call sites are checked in the source:
-      // all four go through installedPackageSummary, none labels the tools
-      // "installed" by hand.
+      // it reaches the summary, so its call sites are checked in the source.
       const src = fs.readFileSync(
         path.join(__dirname, "..", "core", "sdk.js"),
         "utf8",
       );
+      // collectInstalledPackages( appears twice: its definition and the one
+      // call inside installedPackageSummary. A call site that builds
+      // packages itself (with its own label) adds a third.
       check(
-        "sdk-install and sdk-install-custom-repo share installedPackageSummary",
-        (src.match(/const packages = installedPackageSummary\(/g) || []).length,
-        4,
-      );
-      check(
-        "no call site labels the tools entry by hand",
-        /platformVersion \|\| "installed"/.test(src),
-        false,
+        "only installedPackageSummary calls collectInstalledPackages",
+        (src.match(/collectInstalledPackages\(/g) || []).length,
+        2,
       );
     }
 

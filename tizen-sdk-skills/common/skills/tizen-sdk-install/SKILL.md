@@ -407,6 +407,8 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
   버전 하나를 SDK 전체의 버전처럼 요약하지 않는다. `profiles`에는 실제 플랫폼 내용이 있는
   프로필만 담기므로(`common`, 템플릿 `samples`만 있는 폴더는 제외), `installed`여도
   `profiles`에 `tizen`이 없으면 그 버전은 나열된 프로필(예: `tv-samsung`)용으로만 설치된 것이다.
+- `Tizen SDK Tools` 항목의 `version`은 요청한 플랫폼 버전(없으면 설치된 최신 플랫폼 버전)을 붙인
+  라벨이다. 도구 자체의 버전이나 "SDK 버전"이 아니므로 그대로 SDK 버전이라고 전하지 않는다.
 - "설치된 SDK/플랫폼 버전이 뭐야?" 같은 **후속 질문**에는 이 Envelope를 다시 해석하거나
   디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 스킬을 로드해 그 스킬의
   `--list` 단계(러너 경로 찾기 포함)를 실행하고 그 Envelope로 답한다.
