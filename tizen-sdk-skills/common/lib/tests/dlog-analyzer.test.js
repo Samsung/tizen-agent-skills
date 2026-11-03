@@ -88,6 +88,13 @@ const {
   STOP_OUTPUT_LINES,
   searchLogs,
   buildSearchArgs,
+  buildErrorAnalyzeArgs,
+  buildErrorAnalyzeFileArgs,
+  buildAppLogArgs,
+  buildAppLogFileArgs,
+  buildInvestigateArgs,
+  buildKernelAnalyzeArgs,
+  buildKernelAnalyzeFileArgs,
   summarizeSearchOutput,
   CRASH_DUMP_DIRS,
   parseCrashDumpDirs,
@@ -689,6 +696,7 @@ check(
     maxMatches: 20,
     maxLines: 0,
     maxChars: 16000,
+    full: true,
   }),
   [
     "search",
@@ -725,12 +733,84 @@ check(
     "0",
     "--max-chars",
     "16000",
+    "--full",
   ],
 );
 check(
   "false switches and absent options add nothing",
   buildSearchArgs(["x"], { regex: false, count: false, context: undefined }),
   ["search", "--pattern", "x"],
+);
+
+// --full must reach the binary on every budgeted command, not only on search:
+// these run the real argv builders, so a forwarding line deleted in
+// core/dlog-analyzer.js fails here instead of slipping through a source-text
+// grep. Each builder is checked with the flag on (appended last), with it
+// absent, and explicitly false (the CLI hands over `full: false` by default).
+console.log("\nTest 11c: --full forwarding in every budgeted argv builder");
+const fullArgvBuilders = [
+  [
+    "error-analyze (collection)",
+    (o) => buildErrorAnalyzeArgs("org.a", "summary", o),
+    ["error-analyze", "--app-id", "org.a", "--format", "summary"],
+  ],
+  [
+    "error-analyze (--file)",
+    (o) =>
+      buildErrorAnalyzeFileArgs("org.a", "details", {
+        file: "/tmp/app.dlog",
+        ...o,
+      }),
+    [
+      "error-analyze",
+      "--file",
+      "/tmp/app.dlog",
+      "--format",
+      "details",
+      "--app-id",
+      "org.a",
+    ],
+  ],
+  [
+    "app-log (collection)",
+    (o) => buildAppLogArgs("org.a", o),
+    ["app-log", "--app-id", "org.a"],
+  ],
+  [
+    "app-log (--file)",
+    (o) => buildAppLogFileArgs({ file: "/tmp/app.dlog", ...o }),
+    ["app-log", "--file", "/tmp/app.dlog"],
+  ],
+  [
+    "investigate",
+    (o) => buildInvestigateArgs("org.a", "emulator-26101", o),
+    ["investigate", "--serial", "emulator-26101", "--app-id", "org.a"],
+  ],
+  [
+    "kernel analyze (--file)",
+    (o) => buildKernelAnalyzeFileArgs({ file: "/tmp/kernel.log", ...o }),
+    ["kernel", "analyze", "--file", "/tmp/kernel.log"],
+  ],
+  [
+    "kernel analyze (collection)",
+    (o) => buildKernelAnalyzeArgs(o),
+    ["kernel", "analyze"],
+  ],
+];
+check(
+  "--full is appended last when set, and never when absent or false",
+  fullArgvBuilders.map(([name, build]) => [
+    name,
+    build({ full: true }),
+    build({}),
+    build({ full: false }),
+  ]),
+  fullArgvBuilders.map(([name, , base]) => [
+    name,
+    [...base, "--full"],
+    base,
+    base,
+  ]),
 );
 
 // summarizeSearchOutput — the envelope tells the agent whether to narrow down
@@ -995,6 +1075,14 @@ if (fs.existsSync(tsSpec)) {
     tsSource.includes("sdkCommands.searchLogs("),
     true,
   );
+  check(
+    "tizen-cli spec offers --full and wires it into all five actions",
+    [
+      tsSource.includes('flags: "--full"'),
+      (tsSource.match(/full: o\.full,/g) || []).length,
+    ],
+    [true, 5],
+  );
 }
 check("CLI runner parses --format", cliSource.includes('"--format"'), true);
 check(
@@ -1009,6 +1097,15 @@ check(
 );
 check("CLI runner parses --tag", cliSource.includes('"--tag"'), true);
 check("CLI runner parses --refresh", cliSource.includes('"--refresh"'), true);
+check("CLI runner parses --full", cliSource.includes('"--full"'), true);
+// Every budgeted action must hand the flag over: error-analyze and app-log and
+// search each have a file- and a collection-mode call site, plus investigate
+// and kernel analyze — eight in total.
+check(
+  "CLI runner forwards --full to every budgeted action",
+  (cliSource.match(/full: options\.full === true/g) || []).length,
+  8,
+);
 
 // Test 13: resolveLogBaseDir — mirrors the binary's sdk_paths.py exactly
 console.log("\nTest 13: resolveLogBaseDir (SDK-resolved log directory)");
@@ -1476,18 +1573,21 @@ console.log("\nTest 14c: manageRules argument construction");
 // Test 14b: consent and app-scoping flags reach the binary
 console.log("\nTest 14b: --allow-network-probe / --app-id reach the binary");
 {
-  const investigateBody = domainSource.slice(
-    domainSource.indexOf("async function investigate("),
-    domainSource.indexOf("async function manageRules("),
-  );
   const runProbeBody = domainSource.slice(
     domainSource.indexOf("async function runProbe("),
     domainSource.indexOf("async function manageSnapshot("),
   );
   check(
     "core investigate passes --allow-network-probe to the binary",
-    investigateBody.includes('args.push("--allow-network-probe")'),
-    true,
+    [
+      buildInvestigateArgs(null, "emulator-26101", {
+        allowNetworkProbe: true,
+      }).includes("--allow-network-probe"),
+      buildInvestigateArgs(null, "emulator-26101", {}).includes(
+        "--allow-network-probe",
+      ),
+    ],
+    [true, false],
   );
   check(
     "core runProbe passes --app-id to the binary",

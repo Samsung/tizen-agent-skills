@@ -6,7 +6,7 @@ redistributed here so that the skill works without a Python toolchain on the hos
 
 | File | Platform | Size (bytes) | SHA-256 |
 |---|---|---|---|
-| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,451,720 | `44e7ed1edc0309c156979dc38094d510a59243813d5cfc5d50ba9179690c8bd8` |
+| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 16,851,264 | `8bbbc2c93db56cb97562f22fc1507849e9a1d8d72044c3b0e44aeac33592d10d` |
 | `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,776,778 | `fce9adc71010dfba0477f772ea04f053b52887887b445b834d0d0999463bd11e` |
 | `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 18,067,808 | `d8c6221834f05e3b30854cf9d2498a55c91d677ed3827d26ede886c6c67e873a` |
 

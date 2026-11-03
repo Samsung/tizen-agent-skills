@@ -14,6 +14,26 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Added
+
+- **`--full` flag on the dlog-analyzer runner** (`dlog-analyzer-cli.js` and the
+  `tizen-cli` command spec). The analyzer's token budget caps text output to
+  protect an agent's context window; `--full` is the explicit opt-out when a
+  client needs the complete logs or report: `error-analyze`, `app-log`,
+  `search`, `investigate` and `kernel analyze` accept it and forward it to the
+  native binary (TizenDLogAnalyzer PR #226; requires the shipped binary that
+  carries the flag). On `search` it also ignores `--max-matches`. The skill
+  documents the usage policy: budgeted by default, `--full` only when the user
+  explicitly asks for the complete, untruncated output or wants what
+  `... N more omitted` cut. File mode is covered on the same terms:
+  `error-analyze --file`, `app-log --file` and `kernel analyze --file` forward
+  it too (`app-log --file` dropped the flag until now). The argv builders
+  behind every budgeted command are exported (`buildErrorAnalyzeArgs`,
+  `buildErrorAnalyzeFileArgs`, `buildAppLogArgs`, `buildAppLogFileArgs`,
+  `buildInvestigateArgs`, `buildKernelAnalyzeArgs`,
+  `buildKernelAnalyzeFileArgs`) and unit-tested, so a forwarding line deleted
+  in the runner fails the suite instead of passing silently.
+
 ### Changed
 
 - **Node.js 22 or later is now required** (Node.js 20 reached end-of-life on

@@ -206,6 +206,12 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
           "For --action app-log, search, investigate: cap the number of characters returned (stdout only).",
       },
       {
+        flags: "--full",
+        description:
+          "For --action error-analyze, app-log, search, investigate and kernel --subcommand analyze: print the text report/log to stdout without the output budget, ignoring --max-lines/--max-chars/--budget/--budget-tokens (on search it also ignores --max-matches). Use only when the complete output is explicitly needed; per-item rendering limits still apply.",
+        default: false,
+      },
+      {
         flags: "--refresh",
         description:
           "For --action device-profile: force a fresh profile detection (bypass cache).",
@@ -376,6 +382,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               withContext: o.withContext,
               maxLines: o.maxLines,
               maxChars: o.maxChars,
+              full: o.full,
             },
             commandLabel,
           );
@@ -396,6 +403,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               output: o.output,
               maxLines: o.maxLines,
               maxChars: o.maxChars,
+              full: o.full,
             },
             commandLabel,
           );
@@ -429,6 +437,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               maxMatches: o.maxMatches,
               maxLines: o.maxLines,
               maxChars: o.maxChars,
+              full: o.full,
             },
             commandLabel,
           );
@@ -448,6 +457,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               format: o.format,
               budget: o.budget,
               budgetTokens: o.budgetTokens,
+              full: o.full,
               allowNetworkProbe: o.allowNetworkProbe,
               rulesDir: o.rulesDir,
               parallel: o.parallel,
@@ -519,6 +529,7 @@ export const DLOG_ANALYZER_SPECS: CommandSpec[] = [
               appId: o.appId,
               maxLines: o.maxLines,
               maxChars: o.maxChars,
+              full: o.full,
             },
             commandLabel,
           );

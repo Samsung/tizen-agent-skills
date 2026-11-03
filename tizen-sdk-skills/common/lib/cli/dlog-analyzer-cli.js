@@ -173,6 +173,13 @@ const BOOLEAN_FLAGS = {
   "--refresh": "refresh",
   "--with-context": "withContext",
   "--with-kernel": "withKernel",
+  // --full: explicit opt-out of the token budget (error-analyze / app-log /
+  // search / investigate / kernel analyze). Needs the analyzer binary built
+  // from TizenDLogAnalyzer PR #226 or later. The version string cannot express
+  // that: such a build prints the same version as the previous release
+  // (v0.2.9a0), so the requirement is stated as the PR, as SKILL.md does. An
+  // older binary rejects the flag and the runner reports a failure envelope.
+  "--full": "full",
   "--allow-network-probe": "allowNetworkProbe",
   "--parallel": "parallel",
   "--deduplicate": "deduplicate",
@@ -303,9 +310,10 @@ runCli(COMMAND, async () => {
           withContext: options.withContext === true,
           maxLines: options.maxLines,
           maxChars: options.maxChars,
+          full: options.full === true,
         });
       }
-      return analyzeErrors(param1, param2);
+      return analyzeErrors(param1, param2, { full: options.full === true });
     case "app-log":
       // app-log <app-id> [serial] — filter options from flags.
       // In file mode, --file selects a saved dlog file; --pid selects records.
@@ -324,6 +332,7 @@ runCli(COMMAND, async () => {
           output: options.output,
           maxLines: options.maxLines,
           maxChars: options.maxChars,
+          full: options.full === true,
         });
       }
       return appLog(param1, {
@@ -336,6 +345,7 @@ runCli(COMMAND, async () => {
         output: options.output,
         maxLines: options.maxLines,
         maxChars: options.maxChars,
+        full: options.full === true,
       });
     case "search":
       // search <pattern> [pattern ...] — every positional after the action is
@@ -370,6 +380,7 @@ runCli(COMMAND, async () => {
             maxMatches: options.maxMatches,
             maxLines: options.maxLines,
             maxChars: options.maxChars,
+            full: options.full === true,
           },
         );
       }
@@ -392,6 +403,7 @@ runCli(COMMAND, async () => {
         maxMatches: options.maxMatches,
         maxLines: options.maxLines,
         maxChars: options.maxChars,
+        full: options.full === true,
       });
     case "device-profile":
       // device-profile [serial] [--refresh] [--max-age <n>] [--format <f>]
@@ -408,6 +420,7 @@ runCli(COMMAND, async () => {
         format: options.format,
         budget: options.budget,
         budgetTokens: options.budgetTokens,
+        full: options.full === true,
         allowNetworkProbe: options.allowNetworkProbe === true,
         rulesDir: options.rulesDir,
         parallel: options.parallel === true,
@@ -463,6 +476,7 @@ runCli(COMMAND, async () => {
         appId: options.appId,
         maxLines: options.maxLines,
         maxChars: options.maxChars,
+        full: options.full === true,
       });
     case "log-dump":
       // log-dump [serial] — filter / lines / output come from the flags

@@ -13,6 +13,24 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **dlog-analyzer 러너에 `--full` 플래그** (`dlog-analyzer-cli.js`와
+  `tizen-cli` 명령 사양). 분석기의 토큰 예산은 에이전트의 컨텍스트 창을 보호하려고
+  텍스트 출력을 잘라냅니다. `--full`은 완전한 로그나 보고서를 받아야 하는 클라이언트를
+  위한 명시적 예외입니다. `error-analyze`, `app-log`, `search`, `investigate`,
+  `kernel analyze`가 받아 네이티브 바이너리로 전달합니다(TizenDLogAnalyzer
+  PR #226; 플래그를 담은 동봉 바이너리 필요). `search`에서는 `--max-matches`도
+  무시합니다. 스킬에 사용 원칙을 문서화했습니다 — 기본은 예산을 적용하고, 사용자가
+  잘리지 않은 완전한 출력을 명시적으로 요구하거나 `... N more omitted`에 잘린
+  내용을 물었을 때만 `--full`을 씁니다. 파일 모드도 같은 조건입니다 —
+  `error-analyze --file`, `app-log --file`, `kernel analyze --file`도 전달합니다
+  (`app-log --file`은 지금까지 플래그를 버렸습니다). 예산을 적용하는 모든 명령의
+  argv 빌더를 러너 코어에서 내보내(`buildErrorAnalyzeArgs`,
+  `buildErrorAnalyzeFileArgs`, `buildAppLogArgs`, `buildAppLogFileArgs`,
+  `buildInvestigateArgs`, `buildKernelAnalyzeArgs`, `buildKernelAnalyzeFileArgs`)
+  단위 테스트로 검사하므로, 전달 라인이 지워지면 테스트가 실패합니다.
+
 ### 변경
 
 - **Node.js 22 이상이 필요합니다** (Node.js 20은 2026-04-30에 지원이
