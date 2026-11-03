@@ -339,9 +339,12 @@ console.error = () => {};
         env.errors[0].error_code,
         "TIZEN_SDK_PLATFORM_E001",
       );
+      // The note lists what platform-install --list reports as installed —
+      // with no .platform-installed yet, the base install's platform (11.0) —
+      // not every directory that holds a payload.
       check(
-        "99.0 → message lists the installed platforms",
-        env.errors[0].message.includes("5.5, 9.0, 10.0, 11.0") &&
+        "99.0 → message lists the installed platforms (as --list reports them)",
+        env.errors[0].message.includes("(installed platforms: 11.0)") &&
           env.errors[0].message.includes("TIZEN-99.0"),
         true,
       );

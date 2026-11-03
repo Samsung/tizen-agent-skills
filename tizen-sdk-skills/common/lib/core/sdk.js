@@ -856,8 +856,27 @@ function describeEmulatorImages(images) {
  */
 function installedVersionLabel(sdkPath, version) {
   if (version) return version;
-  const installed = listFullyInstalledPlatformVersions(sdkPath);
+  const installed = installedTizenPlatformVersions(sdkPath);
   return installed.length > 0 ? installed[installed.length - 1] : "installed";
+}
+
+/**
+ * The TIZEN-X.Y platforms the user has, oldest first, for messages that
+ * list "installed platforms": installed entries (installedPlatformEntries)
+ * with a non-TV profile. A version that has only TV folders — bundled, or a
+ * TV extension installed for it — is not an installed TIZEN-X.Y, so
+ * "TIZEN-9.0 is not part of it" no longer lists 9.0 as installed.
+ *
+ * @param {string} sdkPath
+ * @returns {string[]}
+ */
+function installedTizenPlatformVersions(sdkPath) {
+  return installedPlatformEntries(sdkPath)
+    .filter(
+      (e) =>
+        e.status === "installed" && e.profiles.some((p) => !isTvProfile(p)),
+    )
+    .map((e) => e.version);
 }
 
 /**
@@ -893,7 +912,7 @@ function requestedPlatformMissing(
   // platforms/tizen-X.Y with only "common", or only the TV extension's
   // folders, is not an installed platform (see isTizenPlatformInstalled).
   if (isTizenPlatformInstalled(sdkPath, version)) return null;
-  const installed = listFullyInstalledPlatformVersions(sdkPath);
+  const installed = installedTizenPlatformVersions(sdkPath);
 
   const installedNote =
     installed.length > 0
@@ -3521,7 +3540,7 @@ async function installPlatform(
           version: platformVersion,
         },
       ];
-      const others = listFullyInstalledPlatformVersions(sdkPath).filter(
+      const others = installedTizenPlatformVersions(sdkPath).filter(
         (v) => v !== platformVersion,
       );
       const warnings = [
@@ -4501,6 +4520,7 @@ module.exports = {
   recordedPlatformProfiles,
   installedPlatformEntries,
   isTvVersionRecorded,
+  installedTizenPlatformVersions,
   ensureSdkPathConfig,
   validateTizenVersion,
   listInstalledPlatformVersions,
