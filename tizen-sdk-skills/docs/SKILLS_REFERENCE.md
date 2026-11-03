@@ -1126,7 +1126,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 }
 ```
 
-**`result.packages`:** `platforms/tizen-X.Y`마다 `Tizen Platform X.Y` 항목이 하나씩(오래된 버전부터) 있고, `platform-install --list`와 같은 `status`(`installed`, `incomplete`, `not_installed`)와 `profiles`(실제 플랫폼 내용이 있는 프로필만 — `common`이나 동기화된 템플릿 `samples`만 있는 폴더는 제외)를 가지며, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다. 설치가 성공해도 `not_installed`나 `incomplete` 버전이 함께 나올 수 있으니 항목별로 그대로 보고합니다.
+**`result.packages`:** `platforms/tizen-X.Y`마다 `Tizen Platform X.Y` 항목이 하나씩(오래된 버전부터) 있고, `platform-install --list`와 같은 `status`(`installed`, `incomplete`, `not_installed`)와 `profiles`(실제 플랫폼 내용이 있는 프로필만 — `common`이나 동기화된 템플릿 `samples`만 있는 폴더는 제외)를 가지며, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다. 설치가 성공해도 `not_installed`나 `incomplete` 버전이 함께 나올 수 있으니 모두 보고합니다. 요약에서는 `status`별로(`installed`는 `profiles`에 `tizen`이 있는지로 나눠) 묶어 한 줄에 모든 버전을 적습니다.
 
 **참고:** repository_url은 루트에서 `pkg_list_{OS}-{64,32}`를 제공하는 어떤 서버든 될 수 있습니다. 예:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 미러)

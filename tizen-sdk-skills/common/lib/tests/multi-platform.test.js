@@ -277,6 +277,19 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
         ),
         2,
       );
+      // An added call site would slip past the exact-string counts above:
+      // the definition plus those four calls is every occurrence, and no
+      // call may build a fallback label of its own.
+      check(
+        "installedPackageSummary has no call site besides those four",
+        count(/installedPackageSummary\(/g),
+        5,
+      );
+      check(
+        "no installedPackageSummary call builds its own fallback label",
+        count(/installedPackageSummary\([^)]*(\|\||\?\?)/g),
+        0,
+      );
     }
 
     console.log("--- installPlatform pre-check ---");
