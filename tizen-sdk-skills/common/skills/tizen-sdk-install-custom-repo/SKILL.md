@@ -187,6 +187,11 @@ re-installed **from their URL**, re-run with `--force`.
 
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
+**Re-running the Phase 1 pre-check** (the last step in every harness below) means the same command
+line as Phase 1 — the same repository URL and version — **without `--force`**. Dropping the version skips
+the check that the requested platform went in (`platform_version_not_found`); keeping `--force` skips the
+already-installed check and hands back the installer command again.
+
 Run `errors[0].suggested_fix.command` verbatim. It takes 10–15 minutes (~121 packages).
 **실행 방법은 하네스에 따라 다릅니다:**
 

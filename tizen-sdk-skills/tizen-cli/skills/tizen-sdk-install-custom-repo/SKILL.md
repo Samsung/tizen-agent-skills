@@ -93,7 +93,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      `run_in_background: true` (10-min kill), never foreground (log floods the context).
    - **Never drop the repository flag** from a relaunch — the install would silently fall
      back to the default CDN mirror.
-3. **Verify**: re-run the Phase 1 command; it must return `status: "success"`. Confirm the
+3. **Verify**: re-run the Phase 1 command with the same repository URL and version but without `--force`; it must return `status: "success"`. Confirm the
    source with `sdk-repo-info` (or read `{SDK_PATH}/.package/repository.info`).
 
 ## Output

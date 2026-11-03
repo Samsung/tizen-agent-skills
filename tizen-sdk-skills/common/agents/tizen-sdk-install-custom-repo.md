@@ -18,7 +18,7 @@ envelope (`node "<lib/cli>/job-cli.js" run --script tizen-sdk-install-custom-rep
 forwards the same repository/platform flags) **with escalated permissions** (it downloads; the
 default sandbox disables network). It returns a job receipt within a second; then poll
 `node "<lib/cli>/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until `job.state` is `done`,
-re-run the Phase 1 pre-check, and report that envelope. Never run `suggested_fix.command` in the
+re-run the Phase 1 pre-check (same repository URL and version, no `--force`), and report that envelope. Never run `suggested_fix.command` in the
 Codex foreground; a tool result that is only progress lines is NOT the outcome.
 
 **When running the installer:**
@@ -30,7 +30,8 @@ Codex foreground; a tool result that is only progress lines is NOT the outcome.
    `true`/no-op commands, no repeated reads of the output file. The harness automatically
    re-invokes you with a `<task-notification>` when the background task finishes — that
    notification is your only signal to continue.
-5. Only after the notification arrives: re-run the pre-check CLI and report the envelope.
+5. Only after the notification arrives: re-run the pre-check CLI with the same repository URL and
+   version, without `--force`, and report the envelope.
 
 **⚠️ NEVER drop the repository URL from any command.** `--repo-url` (bash) / `-RepoUrl`
 (PowerShell) is what makes this a custom-repository install. Omit it on a relaunch and the

@@ -23,7 +23,7 @@
 const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
-const { harnessGuidance } = require("../core/sdk");
+const { harnessGuidance, sdkPrecheckRerunHint } = require("../core/sdk");
 
 let passed = 0;
 let failed = 0;
@@ -267,6 +267,50 @@ if (fs.existsSync(cliSkill)) {
   console.log(
     "  skip tizen-cli/skills/tizen-sdk-install/SKILL.md (not in this tree)",
   );
+}
+
+test("sdkPrecheckRerunHint: same version, no --force", () => {
+  const s = sdkPrecheckRerunHint("<sdk-path>/sdk.info exists");
+  assert.ok(s.includes("with the same version (and label) as this run"));
+  assert.ok(s.includes("without --force"));
+  assert.ok(s.includes("to verify <sdk-path>/sdk.info exists. "));
+  assert.ok(s.endsWith(" "));
+});
+
+test("sdkPrecheckRerunHint: custom repository keeps the URL", () => {
+  const s = sdkPrecheckRerunHint("x", { customRepo: true });
+  assert.ok(s.includes("the same repository URL and version"));
+  assert.ok(s.includes("without --force"));
+});
+
+// The re-run after the background install must repeat the Phase 1 version and
+// drop --force; a bare `node "$CLI"` re-run skipped requestedPlatformMissing.
+for (const [rel, phrases] of [
+  [
+    ["common", "skills", "tizen-sdk-install", "SKILL.md"],
+    ["**Re-running the Phase 1 pre-check**", "the same version and label"],
+  ],
+  [
+    ["common", "skills", "tizen-sdk-install-custom-repo", "SKILL.md"],
+    [
+      "**Re-running the Phase 1 pre-check**",
+      "the same repository URL and version",
+    ],
+  ],
+  [
+    ["common", "agents", "tizen-sdk-install.md"],
+    ["Pass the same version (and label) as in step 1"],
+  ],
+  [
+    ["common", "agents", "tizen-sdk-install-custom-repo.md"],
+    ["with the same repository URL and\n   version, without `--force`"],
+  ],
+]) {
+  test(`${rel.join("/")}: re-run keeps the version, drops --force`, () => {
+    const text = fs.readFileSync(path.join(repoRoot, ...rel), "utf-8");
+    for (const phrase of phrases) assert.ok(text.includes(phrase), phrase);
+    assert.ok(text.includes("--force"));
+  });
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

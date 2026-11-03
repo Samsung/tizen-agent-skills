@@ -1121,7 +1121,9 @@ async function installSdkSteps(
         "execution_error",
         "SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). " +
           harnessGuidance("detach") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists. " +
+          sdkPrecheckRerunHint(
+            "<sdk-path>/sdk.info exists and the requested platform is installed",
+          ) +
           "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
           "or node job-cli.js list for a job started via background_command. " +
           "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
@@ -1274,6 +1276,26 @@ function installerFix(
     command: buildScriptCommand(scriptPath, winArgs, unixArgs),
     background_command: buildJobCommand(group, winArgs, unixArgs),
   };
+}
+
+/**
+ * How an SDK pre-check tells the agent to re-run it once the background install
+ * finished. The re-run repeats this run's arguments — the version (and label),
+ * and for a custom repository the URL — so the already-installed branch still
+ * checks that the requested platform went in (requestedPlatformMissing), and
+ * drops --force, which skips the already-installed check and would hand back
+ * the installer command again. A bare re-run lost the version: a requested
+ * 10.0 that never got installed was then reported as a completed install.
+ *
+ * @param {string} verify - what the re-run confirms
+ * @param {{customRepo?: boolean}} [opts]
+ * @returns {string} one sentence ending with a trailing space
+ */
+function sdkPrecheckRerunHint(verify, { customRepo = false } = {}) {
+  const same = customRepo
+    ? "the same repository URL and version"
+    : "the same version (and label)";
+  return `Either way, afterwards re-run this CLI with ${same} as this run but without --force, to verify ${verify}. `;
 }
 
 /**
@@ -2752,8 +2774,10 @@ async function installSdkFromRepoSteps(
       `SDK is NOT installed. The repository ${normalizedUrl} is valid` +
         `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
         harnessGuidance("detach") +
-        "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists and that " +
-        "<sdk-path>/.package/repository.info records the custom repository. " +
+        sdkPrecheckRerunHint(
+          "<sdk-path>/sdk.info exists and that <sdk-path>/.package/repository.info records the custom repository",
+          { customRepo: true },
+        ) +
         "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
       installerCommand,
       startTime,
@@ -4127,6 +4151,7 @@ module.exports = {
   installerFix,
   installerPathArgs,
   harnessGuidance,
+  sdkPrecheckRerunHint,
   DEFAULT_SDK_PATH,
   initSdk,
   getSdkStatus,

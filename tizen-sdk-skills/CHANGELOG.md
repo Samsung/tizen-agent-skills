@@ -86,6 +86,13 @@ below use those release tags.
   `docs/sdk-install/` flow guides (EN/KO) describe the real flow — pre-check,
   background install, pre-check again — instead of a 3-minute inline
   `execSync` install.
+- After the background install, the `sdk-install` / `sdk-install-custom-repo`
+  pre-check message tells the agent to re-run it with the same version (and
+  repository URL) but without `--force`, and the skill and agent texts say the
+  same. Their re-run block used to be a bare `node "$CLI"`, which dropped the
+  version and so skipped the check that the requested platform went in
+  (`platform_version_not_found`); `--force` would skip the already-installed
+  check and return the installer command again.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

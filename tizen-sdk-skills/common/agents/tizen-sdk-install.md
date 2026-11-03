@@ -15,7 +15,7 @@ foreground tool call there (issue #48). Run `suggested_fix.background_command` f
 envelope (`node "<lib/cli>/job-cli.js" run --script tizen-sdk-install …`) **with escalated
 permissions** — it downloads, and Codex's default sandbox sets `CODEX_SANDBOX_NETWORK_DISABLED=1`.
 It returns a job receipt within a second; then poll `node "<lib/cli>/job-cli.js" wait --id <job_id>`
-(each call blocks ≤ 25 s) until `job.state` is `done`, re-run the Phase 1 pre-check, and report that
+(each call blocks ≤ 25 s) until `job.state` is `done`, re-run the Phase 1 pre-check (same version, no `--force`), and report that
 envelope. Never run `suggested_fix.command` in the Codex foreground; a tool result that is only
 progress lines is NOT the outcome.
 
@@ -247,8 +247,13 @@ report or a fake JSON:
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI"
+node "$CLI"   # + the version / label you passed in step 1 (e.g. node "$CLI" 10.0); never --force
 ```
+
+**Pass the same version (and label) as in step 1, and never `--force`.** Without the version the
+re-run skips the check that the requested platform went in (`platform_version_not_found`), so a
+version the installer did not install would come back as a completed install; `--force` skips the
+already-installed check and returns the installer command again.
 
 - Exit `0` + success envelope → installation verified. **Show this envelope
   (the JSON) to the user as the final result**, then summarize next steps.
