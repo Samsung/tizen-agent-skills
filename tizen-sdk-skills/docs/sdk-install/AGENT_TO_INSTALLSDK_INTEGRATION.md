@@ -104,43 +104,26 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6: Standard JSON Envelope 생성
 
-```javascript
-// Envelope.success()에서 자동으로 생성
-
+```json
 {
-  "command": "tizen-sdk sdk-install",
   "status": "success",
-  "duration_ms": 185000,
   "result": {
     "packages": [
-      {
-        "name": "Tizen Studio Tools",
-        "version": "6.5",
-        "size_mb": 200,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "size_mb": 400,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 8.0",
-        "version": "8.0",
-        "size_mb": 350,
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "installation_status": "completed"
   },
-  "warnings": [
-    "Emulator requires 4GB RAM minimum",
-    "Some optional tools are missing"
-  ],
-  "errors": []
+  "warnings": [],
+  "errors": [],
+  "command": "tizen-sdk sdk-install",
+  "duration_ms": 185000
 }
 ```
+
+`result.packages`에는 `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 `Tizen SDK Tools`가 옵니다. 이 항목의 `version`은 라벨(요청한 플랫폼 버전, 없으면 설치된 최신 버전)이며 SDK 버전이 아닙니다.
 
 ---
 
@@ -155,21 +138,15 @@ console.log(JSON.stringify(envelope));
 
 ### Step 8: 사용자에게 결과 표시
 
-Cline가 JSON을 파싱하여 사용자에게 표시합니다.
+응답은 [`tizen-sdk-install/SKILL.md`](../../common/skills/tizen-sdk-install/SKILL.md)의 "결과 보고"
+규칙을 따릅니다. 위 Envelope JSON을 수정 없이 fenced `json` 블록에 먼저 싣고, 그 아래 1~2줄 요약에서
+플랫폼을 상태별로 묶어 모든 버전을 한 줄에 적습니다.
 
 ```
-✅ SDK 설치 완료!
+<Step 6의 Envelope JSON을 그대로 ```json 블록에>
 
-설치된 패키지 (3개):
-  • Tizen Studio Tools (6.5)
-  • Tizen SDK 10.0 (400MB)
-  • Tizen SDK 8.0 (350MB)
-
-소요 시간: 3분 5초
-
-⚠️ 주의사항:
-  • Emulator requires 4GB RAM minimum
-  • Some optional tools are missing
+SDK 설치 완료 (installation_status: completed).
+플랫폼 — installed: 10.0, 11.0 · not_installed: 9.0
 ```
 
 ---

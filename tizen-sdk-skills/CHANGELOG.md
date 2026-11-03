@@ -78,9 +78,11 @@ below use those release tags.
   platforms go on one line grouped by status, with every version listed. The
   standalone `tizen-cli` skills (`tizen-platform-install`, `tizen-sdk-install`,
   `tizen-sdk-install-custom-repo`) now carry the same rules and the
-  payload-`profiles` description. The main `sdk-install` example in the
-  reference docs shows the per-version list instead of the `Tizen SDK 10.0`
-  fallback row.
+  payload-`profiles` description. Versions are written out rather than as
+  ranges, and `installed` versions without `tizen` are grouped and labelled
+  by their profiles. The `sdk-install` examples in the reference docs and in
+  `docs/sdk-install/` show the per-version list instead of the
+  `Tizen SDK 10.0` fallback row or made-up `size_mb` rows.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

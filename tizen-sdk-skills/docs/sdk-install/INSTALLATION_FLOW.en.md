@@ -156,36 +156,21 @@ function formatSdkInstall(packages, warnings = []) {
   "status": "success",
   "result": {
     "packages": [
-      {
-        "name": "Tizen Studio Tools",
-        "version": "6.5",
-        "size_mb": 200,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "size_mb": 400,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 8.0",
-        "version": "8.0",
-        "size_mb": 350,
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "installation_status": "completed"
   },
-  "warnings": [
-    "Emulator requires 4GB RAM minimum",
-    "Some optional tools are missing"
-  ],
+  "warnings": [],
   "errors": [],
   "command": "tizen-sdk sdk-install",
   "duration_ms": 185000
 }
 ```
+
+`result.packages` has one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools`, whose `version` is a label (the requested platform version, else the newest installed one) and not the SDK version.
 
 ---
 
@@ -200,23 +185,16 @@ console.log(JSON.stringify(envelope));
 
 ### Step 8️⃣: Display Result to User
 
-Cline / Chat interface parses the JSON and displays it to the user.
+The reply follows the skill's "결과 보고" (result reporting) rules in
+[`tizen-sdk-install/SKILL.md`](../../common/skills/tizen-sdk-install/SKILL.md): the envelope JSON
+above goes first, verbatim, in a fenced `json` block, followed by a 1–2 line summary with the
+platforms on one line grouped by status, every version listed.
 
 ```
-✅ SDK Installation Complete!
+<the envelope JSON from Step 6, verbatim, in a ```json block>
 
-Installed packages (3):
-  • Tizen Studio Tools (6.5)
-  • Tizen SDK 10.0 (400MB)
-  • Tizen SDK 8.0 (350MB)
-
-Duration: 3 min 5 sec
-
-⚠️ Warnings:
-  • Emulator requires 4GB RAM minimum
-  • Some optional tools are missing
-
-[View JSON Response]
+SDK installation complete (installation_status: completed).
+Platforms — installed: 10.0, 11.0 · not_installed: 9.0
 ```
 
 ---

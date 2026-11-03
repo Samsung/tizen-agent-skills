@@ -342,7 +342,8 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - `result.packages`의 플랫폼 항목은 `platforms/tizen-X.Y`마다 하나씩이며, 버전별
   `status`(`installed` / `incomplete` / `not_installed`)와 `profiles`를 갖는다. 1~2줄 요약
   안에서 플랫폼은 **한 줄로** 쓴다: `status`별로 묶고, `installed`는 `profiles`에 `tizen`이
-  있는지로 다시 나눈다(없으면 나열된 프로필 전용). 버전은 범위로 줄이지 말고 **하나씩 모두**
+  있는지로 다시 나누고, `tizen`이 없는 버전은 `profiles`가 같은 것끼리 묶어 그 프로필 이름을
+  붙인다(그 프로필 전용 설치). 버전은 범위로 줄이지 말고 **하나씩 모두**
   적는다 (예: `플랫폼 — installed: 10.0, 11.0 · installed(tv-samsung 전용): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`).
   디렉터리가 있다고 "설치됨"이라 하지 말고, 가장 높은 버전 하나를 SDK 전체의 버전처럼
   요약하지 않는다. `profiles`에는 실제 플랫폼 내용이 있는

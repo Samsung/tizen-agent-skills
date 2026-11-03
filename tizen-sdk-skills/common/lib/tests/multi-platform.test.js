@@ -16,6 +16,8 @@
  *   - listPlatforms (platform-install-cli.js --list, tizen-cli platform-list)
  *   - collectInstalledPackages (sdk-install result.packages): one entry per
  *     version with the same status as listPlatforms
+ *   - installSdkFromRepo on an installed SDK against a stub repository: the
+ *     same result.packages as sdk-install (skipped on win32)
  *   - installPlatform pre-check per version (other versions do not matter)
  *   - create-project / list-templates --platform-version validation and the
  *     --tz-profile / -TzProfile hand-off to the scripts
@@ -27,7 +29,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 
 const sandboxHome = fs.mkdtempSync(
   path.join(os.tmpdir(), "tizen-multi-platform-home-"),
@@ -41,6 +43,7 @@ process.env.USERPROFILE = sandboxHome;
 const {
   CONFIG_FILE,
   collectInstalledPackages,
+  installSdkFromRepo,
   installedPackageSummary,
   isPlatformInstalled,
   listFullyInstalledPlatformVersions,
@@ -245,51 +248,74 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
 
-    console.log("--- installedPackageSummary call sites ---");
-    {
-      // installSdkFromRepo validates the URL by running the installer before
-      // it reaches the summary, so its call sites are checked in the source.
-      // Comments stripped, so a comment naming a function cannot shift a count.
-      const src = fs
-        .readFileSync(path.join(__dirname, "..", "core", "sdk.js"), "utf8")
-        .replace(/\/\*[\s\S]*?\*\//g, "")
-        .replace(/^\s*\/\/.*$/gm, "");
-      const count = (re) => (src.match(re) || []).length;
-      // collectInstalledPackages( appears twice: its definition and the one
-      // call inside installedPackageSummary. A call site that builds
-      // packages itself (with its own label) adds a third.
-      check(
-        "only installedPackageSummary calls collectInstalledPackages",
-        count(/collectInstalledPackages\(/g),
-        2,
+    console.log("--- sdk-install-custom-repo on an installed SDK ---");
+    if (process.platform === "win32") {
+      // The URL probe runs the PowerShell installer there; this check drives
+      // the bash one (CI runs on Linux).
+      console.log("SKIP custom-repo run (win32)");
+    } else {
+      // Run the real installSdkFromRepo pre-check against the TV-only SDK
+      // above: the installer's --validate-repo-url probe fetches
+      // pkg_list_<os>-64 from a stub repository, then the already-installed
+      // branch builds result.packages. The stub runs in a child process
+      // because the probe is a blocking execSync — a server in this process
+      // could not answer it.
+      const tvSdk = path.join(sandboxHome, "tv-only-sdk");
+      const stub = spawn(
+        process.execPath,
+        [
+          "-e",
+          `require("http").createServer((req, res) => {
+             res.statusCode = /\\/pkg_list_[a-z]+-(64|32)$/.test(req.url) ? 200 : 404;
+             res.end(req.method === "HEAD" ? undefined : "Package : stub\\n");
+           }).listen(0, "127.0.0.1", function () {
+             console.log(this.address().port);
+           });`,
+        ],
+        { stdio: ["ignore", "pipe", "inherit"] },
       );
-      // Each call site hands over the raw requested version, so the label
-      // comes from installedVersionLabel — no `|| "installed"` of its own.
-      check(
-        "sdk-install call sites pass the requested version as is",
-        count(/const packages = installedPackageSummary\(sdkPath, version\);/g),
-        2,
-      );
-      check(
-        "custom-repo call sites pass the requested version as is",
-        count(
-          /const packages = installedPackageSummary\(sdkPath, platformVersion\);/g,
-        ),
-        2,
-      );
-      // An added call site would slip past the exact-string counts above:
-      // the definition plus those four calls is every occurrence, and no
-      // call may build a fallback label of its own.
-      check(
-        "installedPackageSummary has no call site besides those four",
-        count(/installedPackageSummary\(/g),
-        5,
-      );
-      check(
-        "no installedPackageSummary call builds its own fallback label",
-        count(/installedPackageSummary\([^)]*(\|\||\?\?)/g),
-        0,
-      );
+      const port = await new Promise((resolve, reject) => {
+        stub.stdout.once("data", (d) => resolve(String(d).trim()));
+        stub.once("error", reject);
+        stub.once("exit", (code) =>
+          reject(new Error(`stub repository exited (${code})`)),
+        );
+      });
+      const savedNoProxy = [process.env.NO_PROXY, process.env.no_proxy];
+      // A proxy from the environment must not intercept the loopback probe.
+      process.env.NO_PROXY = process.env.no_proxy = "127.0.0.1,localhost";
+      fs.writeFileSync(CONFIG_FILE, `${tvSdk}\n`);
+      try {
+        const repoUrl = `http://127.0.0.1:${port}/repo`;
+        const env = await installSdkFromRepo(repoUrl, "");
+        check("custom repo, installed SDK → success", env.status, "success");
+        check(
+          "custom repo → same packages as sdk-install for this SDK",
+          env.result && env.result.packages,
+          installedPackageSummary(tvSdk, ""),
+        );
+        check(
+          'custom repo, no version → tools labelled "8.0", not "installed"',
+          env.result &&
+            env.result.packages.find((p) => p.name === "Tizen SDK Tools")
+              .version,
+          "8.0",
+        );
+        const pinned = await installSdkFromRepo(repoUrl, "8.0");
+        check(
+          "custom repo, version 8.0 → tools labelled with it",
+          pinned.result &&
+            pinned.result.packages.find((p) => p.name === "Tizen SDK Tools")
+              .version,
+          "8.0",
+        );
+      } finally {
+        stub.kill();
+        [process.env.NO_PROXY, process.env.no_proxy] = savedNoProxy;
+        if (savedNoProxy[0] === undefined) delete process.env.NO_PROXY;
+        if (savedNoProxy[1] === undefined) delete process.env.no_proxy;
+        fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+      }
     }
 
     console.log("--- installPlatform pre-check ---");

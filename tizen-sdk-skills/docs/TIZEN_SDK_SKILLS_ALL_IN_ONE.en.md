@@ -1129,7 +1129,7 @@ Both are validating front-ends: once the URL passes they delegate to `tizen-sdk-
 }
 ```
 
-**`result.packages`:** one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, oldest first, with the same `status` as `platform-install --list` (`installed`, `incomplete` or `not_installed`) and its `profiles` — only the profiles that hold a platform payload, never `common` or a folder with nothing but synced template `samples` — then `Tizen SDK Tools`, labelled with the requested version or else the newest installed one. A successful install can still list `not_installed` or `incomplete` versions. Report them all: in the summary, one line grouped by `status` (with `installed` split by whether `tizen` is in `profiles`) that names every version.
+**`result.packages`:** one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, oldest first, with the same `status` as `platform-install --list` (`installed`, `incomplete` or `not_installed`) and its `profiles` — only the profiles that hold a platform payload, never `common` or a folder with nothing but synced template `samples` — then `Tizen SDK Tools`, labelled with the requested version or else the newest installed one. A successful install can still list `not_installed` or `incomplete` versions. Report them all: in the summary, one line grouped by `status` (with `installed` split by whether `tizen` is in `profiles`, and versions without `tizen` grouped and labelled by their `profiles`) that names every version.
 
 **Note:** The repository_url can be any server that serves `pkg_list_{OS}-{64,32}` at its root, for example:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 mirror)

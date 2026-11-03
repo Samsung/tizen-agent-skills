@@ -69,8 +69,10 @@
 - `sdk-install` 결과 보고 규칙이 1~2줄 요약 제한과 맞도록, 플랫폼을 상태별로 묶어
   모든 버전을 한 줄에 쓰게 했습니다. 단독 `tizen-cli` 스킬(`tizen-platform-install`,
   `tizen-sdk-install`, `tizen-sdk-install-custom-repo`)에도 같은 규칙과 `profiles`
-  설명(실제 내용이 있는 프로필만)을 넣었습니다. 참조 문서의 `sdk-install` 기본 예시는
-  `Tizen SDK 10.0` 한 줄 대신 버전별 목록을 보여 줍니다.
+  설명(실제 내용이 있는 프로필만)을 넣었습니다. 버전은 범위로 줄이지 않고 모두 적으며,
+  `tizen`이 없는 `installed` 버전은 프로필별로 묶어 그 이름을 붙입니다. 참조 문서와
+  `docs/sdk-install/`의 `sdk-install` 예시는 `Tizen SDK 10.0` 한 줄이나 지어낸 `size_mb`
+  항목 대신 버전별 목록을 보여 줍니다.
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):
