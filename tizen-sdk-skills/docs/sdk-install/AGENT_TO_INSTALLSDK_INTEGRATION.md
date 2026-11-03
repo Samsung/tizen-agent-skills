@@ -20,9 +20,9 @@
 
 ---
 
-### Step 2: Cline가 에이전트 선택
+### Step 2: 호스트가 에이전트 선택
 
-Cline가 자동으로 `tizen-sdk-install` 에이전트를 선택하여 실행합니다.
+Claude Code와 Codex는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
 
 ```
 agents/tizen-sdk-install.md → 실행
@@ -55,7 +55,7 @@ console.log(JSON.stringify(result));
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수
 
-async function installSdk(version = '10.0', label = 'tizen', force = false) {
+async function installSdk(version = '', label = 'tizen', force = false) {  // '' = 최신 플랫폼
 
   // 4-1️⃣ Node.js 확인 (가장 먼저)
   const nodeCheck = await checkNode();
@@ -67,6 +67,8 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   const sdkPath = readSdkPath();
   const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
   if (statusCheck.alreadyInstalled) {
+    const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+    if (missing) return missing;  // 요청한 버전이 설치되지 않음: platform_version_not_found
     const packages = installedPackageSummary(sdkPath, version);
     return formatSdkInstall(packages, warnings, startTime);  // 성공
   }
@@ -139,7 +141,8 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 1900
+  "user_command": "node sdk-install-cli.js 10.0",
+  "duration_ms": 12
 }
 ```
 
@@ -260,7 +263,7 @@ installSdk()는 어느 경우든 Standard JSON Envelope를 반환합니다. SDK�
 {
   "command": "tizen-sdk sdk-install",
   "status": "success",
-  "duration_ms": 1900,
+  "duration_ms": 12,
   "result": { "packages": [...] },
   "warnings": [...],
   "errors": []
@@ -279,8 +282,8 @@ lib/core/sdk-commands.js (installSdk)
   │   ↓
   │   lib/envelope/envelope.js (Envelope 클래스)
   │
-  ├─ Node.js child_process (점검, 사용자 지정 저장소면 URL 확인. 설치 자체는
-  │   설치를 직접 실행하는 pkg 컴파일 tizen-cli에서만 여기서 실행)
+  ├─ Node.js child_process (점검, 사용자 지정 저장소면 URL 확인. 설치 스크립트는
+  │   직접 설치하는 pkg 컴파일 tizen-cli에서만 여기서 실행됩니다)
   │
   └─ fs (파일 I/O)
 ```

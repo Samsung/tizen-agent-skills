@@ -18,13 +18,13 @@
 
 요청에 10.0이 들어 있으므로 에이전트는 이 버전을 러너에 넘깁니다(`node sdk-install-cli.js 10.0`). 버전이 없으면 러너는 `""`를 받고, 설치 스크립트는 저장소가 제공하는 최신 플랫폼을 설치하며 `Tizen SDK Tools`에도 그 버전이 붙습니다.
 
-Cline가 이 요청을 인식합니다.
+Claude Code와 Codex는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
 
 ---
 
 ### Step 2️⃣: 에이전트 자동 선택
 
-Cline가 자동으로 `tizen-sdk-install` 에이전트를 선택하여 실행합니다.
+Claude Code / Codex가 `tizen-sdk-install` 에이전트를 선택하여 실행합니다(Cline에서는 메인 에이전트가 같은 이름의 스킬을 불러옵니다).
 
 ```markdown
 ---
@@ -58,7 +58,7 @@ console.log(JSON.stringify(result));  // JSON Envelope 출력
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수
 
-async function installSdk(version = '10.0', label = 'tizen', force = false) {
+async function installSdk(version = '', label = 'tizen', force = false) {  // '' = 최신 플랫폼
 
   // 4-1️⃣ Node.js 확인 (가장 먼저)
   const nodeCheck = await checkNode();
@@ -70,6 +70,8 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   const sdkPath = readSdkPath();
   const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
   if (statusCheck.alreadyInstalled) {
+    const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+    if (missing) return missing;  // 요청한 버전이 설치되지 않음: platform_version_not_found
     const packages = installedPackageSummary(sdkPath, version);
     return formatSdkInstall(packages, warnings, startTime);  // 성공
   }
@@ -145,7 +147,8 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 1900
+  "user_command": "node sdk-install-cli.js 10.0",
+  "duration_ms": 12
 }
 ```
 
@@ -185,7 +188,7 @@ SDK 설치 완료 (installation_status: completed).
 사용자: "Tizen SDK 10.0 설치해줄 수 있어?"
   │
   ▼
-tizen-sdk-install 에이전트 (Cline / Claude Code가 선택)
+tizen-sdk-install 에이전트 (Claude Code / Codex) 또는 스킬 (Cline, 메인 에이전트에서)
   │
   ├─ Phase 1 — 사전 점검
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
@@ -193,7 +196,7 @@ tizen-sdk-install 에이전트 (Cline / Claude Code가 선택)
   │    ← 실패 Envelope (execution_error), suggested_fix.command에 설치 명령
   │
   ├─ Phase 2 — 백그라운드 설치 (10–15분, 약 121개 패키지)
-  │    하네스가 suggested_fix 실행 (tizen-sdk-install.sh / .ps1 --platform 10.0 …):
+  │    하네스가 suggested_fix 실행 (tizen-sdk-install.sh --platform "10.0" … / .ps1 -Platform "10.0" …):
   │      Claude Code: command를 run_in_background로, 작업 완료 알림에서 재개
   │      Cline: command에 --detach / -Detach, --status / -Status로 확인
   │      Codex: background_command (job-cli.js 작업), job-cli.js wait로 확인

@@ -18,13 +18,13 @@ User: "Can you install Tizen SDK 10.0?"
 
 The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
-Cline recognizes this request.
+Claude Code and Codex hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
 
 ---
 
 ### Step 2️⃣: Agent Auto-Selection
 
-Cline automatically selects and runs the `tizen-sdk-install` agent.
+Claude Code / Codex select and run the `tizen-sdk-install` agent (on Cline, the main agent loads the skill of the same name).
 
 ```markdown
 ---
@@ -58,7 +58,7 @@ console.log(JSON.stringify(result));  // JSON Envelope output
 ```javascript
 // installSdk() in lib/core/sdk-commands.js
 
-async function installSdk(version = '10.0', label = 'tizen', force = false) {
+async function installSdk(version = '', label = 'tizen', force = false) {  // '' = newest platform
 
   // 4-1️⃣ Node.js check (very first step)
   const nodeCheck = await checkNode();
@@ -70,6 +70,8 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
   const sdkPath = readSdkPath();
   const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
   if (statusCheck.alreadyInstalled) {
+    const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+    if (missing) return missing;  // requested version not installed: platform_version_not_found
     const packages = installedPackageSummary(sdkPath, version);
     return formatSdkInstall(packages, warnings, startTime);  // success
   }
@@ -173,7 +175,8 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 1900
+  "user_command": "node sdk-install-cli.js 10.0",
+  "duration_ms": 12
 }
 ```
 
@@ -214,7 +217,7 @@ Platforms — installed: 10.0 · not_installed: 9.0
 User: "Can you install Tizen SDK 10.0?"
   │
   ▼
-tizen-sdk-install agent (picked by Cline / Claude Code)
+tizen-sdk-install agent (Claude Code / Codex) or skill (Cline, in the main agent)
   │
   ├─ Phase 1 — pre-check
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
@@ -222,7 +225,7 @@ tizen-sdk-install agent (picked by Cline / Claude Code)
   │    ← failure envelope (execution_error) with the installer in suggested_fix.command
   │
   ├─ Phase 2 — install, in the background (10–15 min, ~121 packages)
-  │    the harness runs suggested_fix (tizen-sdk-install.sh / .ps1 --platform 10.0 …):
+  │    the harness runs suggested_fix (tizen-sdk-install.sh --platform "10.0" … / .ps1 -Platform "10.0" …):
   │      Claude Code: command with run_in_background, resumes on the task notification
   │      Cline: command with --detach / -Detach, polls --status / -Status
   │      Codex: background_command (a job-cli.js job), polls job-cli.js wait

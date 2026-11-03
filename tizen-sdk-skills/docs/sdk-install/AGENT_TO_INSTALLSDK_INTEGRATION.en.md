@@ -20,9 +20,9 @@ The request names 10.0, so the agent passes it to the runner (`node sdk-install-
 
 ---
 
-### Step 2: Cline Selects Agent
+### Step 2: The Host Selects the Agent
 
-Cline automatically selects and runs the `tizen-sdk-install` agent.
+Claude Code and Codex hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
 
 ```
 agents/tizen-sdk-install.md → execute
@@ -55,9 +55,9 @@ console.log(JSON.stringify(result));
 ```javascript
 // installSdk() function in lib/core/sdk-commands.js
 
-async function installSdk(version = '10.0', label = 'tizen', force = false) {
+async function installSdk(version = '', label = 'tizen', force = false) {  // '' = newest platform
   try {
-    // 1. ✅ Node.js check (very first step) — NEW
+    // 1. ✅ Node.js check (very first step)
     const nodeCheck = await checkNode();
     if (nodeCheck.status !== 'success') {
       return nodeCheck;  // node_not_found — aborts with install guide
@@ -67,6 +67,8 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
     const sdkPath = readSdkPath();
     const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
     if (statusCheck.alreadyInstalled) {
+      const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+      if (missing) return missing;  // requested version not installed: platform_version_not_found
       const packages = installedPackageSummary(sdkPath, version);
       return formatSdkInstall(packages, warnings, startTime);  // success
     }
@@ -154,7 +156,8 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 1900
+  "user_command": "node sdk-install-cli.js 10.0",
+  "duration_ms": 12
 }
 ```
 
