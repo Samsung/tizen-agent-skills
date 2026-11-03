@@ -139,14 +139,11 @@ TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
 
 # The TV versions tizen-tv-sdk-install recorded (the online repository
 # carries one TV version, so any of them means it is in).
+# Read through platform_record_blocks (lib/common.sh), the parser every
+# reader shares.
 online_tv_versions() {
-    awk '
-        /^Platform package installed at/ { if (by == "tv-sdk-install" && v != "") print v; v = ""; by = "" }
-        { sub(/\r$/, "") }
-        /^Platform version:/ { v = $0; sub(/^Platform version:[ \t]*/, "", v) }
-        /^Installed by:/     { by = $0; sub(/^Installed by:[ \t]*/, "", by) }
-        END { if (by == "tv-sdk-install" && v != "") print v }
-    ' "$SDK_PATH/.platform-installed" 2>/dev/null | sort -u | paste -sd, - | sed 's/,/, /g'
+    platform_record_blocks "$SDK_PATH" | awk -F'\t' '$2 == "tv-sdk-install" { print $1 }' \
+        | sort -u | paste -sd, - | sed 's/,/, /g'
 }
 
 # Check mode

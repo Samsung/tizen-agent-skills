@@ -738,27 +738,41 @@ platform_installed() {
 # TV-… is tv-samsung, anything else is tizen.
 # ----------------------------------------------------------------------------
 
-# Prints "X.Y profile" for every recorded profile.
-platform_records() {
+# Prints "X.Y<TAB>installed-by<TAB>profiles" for every block with a valid X.Y
+# version, in file order — the one parser the readers below share, so they
+# all see the blocks readPlatformRecords (lib/core/sdk.js) sees. Lines before
+# the first "Platform package installed at" belong to no block and are
+# ignored, as there. Empty profiles fall back to the Target's (tv-samsung for
+# TV-…, else tizen).
+platform_record_blocks() {
   local f="$1/.platform-installed"
   [[ -f "$f" ]] || return 0
   awk '
-    function flush(   n, i, a) {
-      if (ver ~ /^[0-9]+\.[0-9]+$/) {
+    function flush() {
+      if (inblock && ver ~ /^[0-9]+\.[0-9]+$/) {
         if (prof == "") prof = (target ~ /^[Tt][Vv]-/) ? "tv-samsung" : "tizen"
-        n = split(prof, a, /[ \t]*,[ \t]*/)
-        for (i = 1; i <= n; i++) if (a[i] != "") print ver " " a[i]
+        print ver "\t" by "\t" prof
       }
-      ver = ""; prof = ""; target = ""
+      ver = ""; prof = ""; target = ""; by = ""
     }
     NR == 1 { sub(/^\357\273\277/, "") }
     { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
-    /^Platform package installed at/ { flush(); next }
+    /^Platform package installed at/ { flush(); inblock = 1; next }
+    !inblock { next }
     /^Target:/           { target = $0; sub(/^Target:[ \t]*/, "", target); next }
     /^Platform version:/ { ver = $0;    sub(/^Platform version:[ \t]*/, "", ver); next }
     /^Profile:/          { prof = $0;   sub(/^Profile:[ \t]*/, "", prof); next }
+    /^Installed by:/     { by = $0;     sub(/^Installed by:[ \t]*/, "", by); next }
     END { flush() }
   ' "$f"
+}
+
+# Prints "X.Y profile" for every recorded profile.
+platform_records() {
+  platform_record_blocks "$1" | awk -F'\t' '{
+    n = split($3, a, /[ \t]*,[ \t]*/)
+    for (i = 1; i <= n; i++) if (a[i] != "") print $1 " " a[i]
+  }'
 }
 
 # Is profile $3 of version $2 recorded in the SDK at $1?
@@ -893,8 +907,8 @@ migrate_tv_sdk_marker() {
 # for the old base, and only for an SDK whose previous install completed
 # (sdk.info existed): a failed run's half-filled platform is not installed.
 migrate_base_platform_record() {
-  local sdk="$1" f="$1/.platform-installed" p name v base=""
-  if [[ -f "$f" ]] && tr -d '\r' < "$f" | grep -q '^Installed by:[[:space:]]*sdk-install[[:space:]]*$'; then
+  local sdk="$1" p name v base=""
+  if platform_record_blocks "$sdk" | awk -F'\t' '$2 == "sdk-install" { f = 1 } END { exit !f }'; then
     return 0
   fi
   for p in "$sdk/platforms"/*/; do
