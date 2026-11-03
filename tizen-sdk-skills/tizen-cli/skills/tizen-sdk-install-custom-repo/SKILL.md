@@ -80,12 +80,12 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      `--force` if the user wants a reinstall from their URL.
    - `status: "failure"` → inspect `errors[0].error_category`:
 
-     | `error_category`       | Meaning                                            | Action                                            |
-     | ---------------------- | -------------------------------------------------- | ------------------------------------------------- |
-     | `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list  | Ask the user for the repository **directory** URL |
-     | `repo_url_unreachable` | Well-formed but serves no `pkg_list_{OS}-{64,32}`  | Wrong URL, or internal mirror needs VPN/proxy     |
-     | `execution_error`      | URL valid, SDK not installed                       | Run `errors[0].suggested_fix.command` (Phase 2)   |
-     | `platform_version_not_found` | SDK installed, requested platform is not     | Offer `errors[0].suggested_fix.command` (`platform-install`); never reinstall with `--force` |
+     | `error_category`             | Meaning                                           | Action                                                                                       |
+     | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+     | `repo_url_invalid`           | Malformed URL / wrong scheme / points at pkg_list | Ask the user for the repository **directory** URL                                            |
+     | `repo_url_unreachable`       | Well-formed but serves no `pkg_list_{OS}-{64,32}` | Wrong URL, or internal mirror needs VPN/proxy                                                |
+     | `execution_error`            | URL valid, SDK not installed                      | Run `errors[0].suggested_fix.command` (Phase 2)                                              |
+     | `platform_version_not_found` | SDK installed, requested platform is not          | Offer `errors[0].suggested_fix.command` (`platform-install`); never reinstall with `--force` |
 
 2. **Phase 2 — install**: run `errors[0].suggested_fix.command` verbatim (it already
    contains the repository flag). 10–15 minutes, ~121 packages.

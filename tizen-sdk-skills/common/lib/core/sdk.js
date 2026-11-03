@@ -589,8 +589,10 @@ function requestedPlatformMissing(
     "platform_version_not_found",
     `Tizen SDK is installed at ${sdkPath}, but platform TIZEN-${version} is not part of it (${installedNote}). ` +
       "Check the version — existing releases look like 10.0 or 11.0. " +
-      `To add that platform to this SDK run "${platformInstall}"; ` +
-      "to reinstall the whole SDK with it, re-run this command with --force.",
+      `To add that platform to this SDK run "${platformInstall}". ` +
+      "Do not re-run this command with --force to get it: that reinstalls the whole SDK (10-15 min) " +
+      "and, right after an install that left the version out, the repository most likely does not offer it. " +
+      "A full reinstall is the user's call.",
     platformInstall,
     startTime,
   );

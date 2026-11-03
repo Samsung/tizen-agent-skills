@@ -94,7 +94,9 @@ below use those release tags.
   (`platform_version_not_found`); `--force` would skip the already-installed
   check and return the installer command again. A re-run that now returns
   `platform_version_not_found` is reported with the `platform-install` fix
-  instead of being treated as a failed install.
+  instead of being treated as a failed install, and that error's message no
+  longer suggests re-running with `--force` (a full reinstall, which would not
+  add a version the repository does not offer).
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

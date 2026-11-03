@@ -81,7 +81,9 @@
   `node "$CLI"`, 또는 저장소 URL만) 요청한 플랫폼이 설치됐는지 확인하는 단계
   (`platform_version_not_found`)를 건너뛰었습니다. `--force`를 붙이면
   이미 설치됨 확인을 건너뛰고 설치 명령을 다시 돌려줍니다. 재실행 결과가
-  `platform_version_not_found`이면 설치 실패로 다루지 않고 `platform-install` 안내와 함께 보고합니다.
+  `platform_version_not_found`이면 설치 실패로 다루지 않고 `platform-install` 안내와 함께 보고하며,
+  이 에러 메시지도 더 이상 `--force` 재실행을 권하지 않습니다(전체 재설치이고, 저장소에 없는 버전은
+  재설치로도 추가되지 않습니다).
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):

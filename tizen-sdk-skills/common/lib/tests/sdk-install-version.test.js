@@ -350,6 +350,16 @@ console.error = () => {};
         env.errors[0].suggested_fix.command,
         "tizen-sdk platform-install --platform-version 99.0",
       );
+      // The re-run after a background install lands here; it must not send
+      // the agent into a --force reinstall (the skills say the same).
+      check(
+        "99.0 → message steers away from a --force reinstall",
+        env.errors[0].message.includes(
+          "Do not re-run this command with --force to get it",
+        ) &&
+          !env.errors[0].message.includes("re-run this command with --force."),
+        true,
+      );
     }
     // Each platform entry carries its own version and status; only the
     // tools entry takes the requested / newest-installed label. A single

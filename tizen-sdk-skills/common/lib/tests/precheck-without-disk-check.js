@@ -42,9 +42,14 @@ function precheckWithoutDiskCheck(kind, repoUrl = "") {
       : sdk.installSdk("10.0")
     ).then((env) => process.stdout.write(JSON.stringify(env)));
   `;
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  // With TIZEN_SDK_INLINE_INSTALLER=1 installSdk runs the real installer
+  // instead of returning the not-installed message (runsInstallerInline);
+  // emulator-package-precheck.test.js drops it for the same reason.
+  delete env.TIZEN_SDK_INLINE_INSTALLER;
   try {
     const run = spawnSync(process.execPath, ["-e", code, kind, repoUrl], {
-      env: { ...process.env, HOME: home, USERPROFILE: home },
+      env,
       encoding: "utf8",
       timeout: 120000,
     });
