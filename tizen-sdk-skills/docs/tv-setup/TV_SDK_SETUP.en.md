@@ -112,6 +112,7 @@ The TV SDK extension downloads and merges the following packages:
 
 ```
 [OK] TV SDK package result: OK 18 / skipped 4 / failed 0 (total 22)
+[OK] TV 10.0 (tv-samsung) recorded in /home/user/tizen-sdk/.platform-installed
 [OK] .tv-sdk-installed created: /home/user/tizen-sdk/.tv-sdk-installed
 [OK] Tizen TV SDK extension installation completed!
 ```
@@ -139,8 +140,9 @@ The TV SDK extension downloads and merges the following packages:
 | Component        | Status       | Path                                    | Version   |
 | ---------------- | ------------ | --------------------------------------- | --------- |
 | Tizen SDK        | ✅ Installed | `/home/user/tizen-sdk`                   | 10.0      |
-| TV SDK Extension | ✅ Installed | `/home/user/tizen-sdk` (merged)          | extension |
+| TV SDK Extension | ✅ Installed | `/home/user/tizen-sdk` (merged)          | 10.0 (`tv-samsung`) |
 | SDK Path Config  | ✅ Written   | `~/.tizen.sdk.path.config`              | —         |
+| Install record   | ✅ Appended  | `/home/user/tizen-sdk/.platform-installed` | 10.0 `tv-samsung` |
 | TV SDK Marker    | ✅ Created   | `/home/user/tizen-sdk/.tv-sdk-installed` | —         |
 
 ## CDN Mirror Selection
@@ -166,7 +168,7 @@ To verify whether the TV SDK is installed, use the following methods:
 
 1. **`list-templates --type tv`** — Lists TV templates. If an empty array (`[]`) is returned, the TV SDK is not installed. If TV templates exist, the TV SDK is installed.
 
-2. **`tv-sdk-install` re-run (idempotent)** — The `tv-sdk-install` CLI checks the `.tv-sdk-installed` marker and returns success immediately if already installed. It is safe to re-run for verification purposes.
+2. **`tv-sdk-install` re-run (idempotent)** — The `tv-sdk-install` CLI checks the TV record in `.platform-installed` (or the `.tv-sdk-installed` an older install left) and returns success immediately if already installed. It is safe to re-run for verification purposes.
 
 ### ❌ Incorrect Method
 
@@ -177,7 +179,7 @@ To verify whether the TV SDK is installed, use the following methods:
 | Method                       | Reliability   | Note                                                   |
 | ---------------------------- | ------------- | ------------------------------------------------------ |
 | `list-templates --type tv`   | ✅ Reliable   | Empty array = not installed, items present = installed |
-| `tv-sdk-install` re-run      | ✅ Reliable   | Idempotent, uses `.tv-sdk-installed` marker            |
+| `tv-sdk-install` re-run      | ✅ Reliable   | Idempotent, uses the TV record in `.platform-installed` |
 | `list-platform --profile tv` | ❌ Unreliable | `--profile` ignored, false positive                    |
 
 ## Next Steps

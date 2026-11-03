@@ -193,10 +193,8 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen SDK 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] }
     ],
     "installation_status": "completed"
   },
@@ -204,7 +202,7 @@ The selected mirror URL is written to `{SDK_PATH}/.package/repository.info` afte
 }
 ```
 
-**`result.packages`:** the same per-version list as `sdk-install-custom-repo` below — one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y` with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools` labelled with the requested version or else the newest installed one (a label, not the SDK version). The same envelope comes back when the SDK was already installed.
+**`result.packages`:** the same list as `sdk-install-custom-repo` below — one `Tizen SDK X.Y` entry per platform version the user installed (what `.platform-installed` records), with the `status` and `profiles` of `platform-install --list`. The same envelope comes back when the SDK was already installed.
 
 **Response (Node.js not found):**
 
@@ -852,7 +850,7 @@ node <plugin>/lib/cli/tv-sdk-install-cli.js [--force]
    └─ Not installed → interactive prompt: "The Tizen SDK must be installed first. Install it now?"
        ├─ Approved → run the tizen-sdk-install skill → retry TV SDK install after completion
        └─ Declined → abort
-2. TV SDK already installed? (.tv-sdk-installed marker) → return success if so
+2. TV SDK already installed? (a `tv-sdk-install` record in `.platform-installed`, or the `.tv-sdk-installed` an older install left) → return success if so
 3. Return TV SDK installer command (suggested_fix) — run in Phase 2 (background)
 ```
 
@@ -1117,10 +1115,8 @@ Both are validating front-ends: once the URL passes they delegate to `tizen-sdk-
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] }
     ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
     "installation_status": "completed"
@@ -1129,7 +1125,7 @@ Both are validating front-ends: once the URL passes they delegate to `tizen-sdk-
 }
 ```
 
-**`result.packages`:** one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, oldest first, with the same `status` as `platform-install --list` (`installed`, `incomplete` or `not_installed`) and its `profiles` — only the profiles that hold a platform payload, never `common` or a folder with nothing but synced template `samples` — then `Tizen SDK Tools`, labelled with the requested version or else the newest installed one. A successful install can still list `not_installed` or `incomplete` versions. Report them all: in the summary, one line grouped by `status` (with `installed` split by whether `tizen` is in `profiles`, and versions without `tizen` grouped and labelled by their `profiles`) that names every version.
+**`result.packages`:** one `Tizen SDK X.Y` entry per platform version the user installed, oldest first — the versions `.platform-installed` records (sdk-install, platform-install and both TV installers each append a block with the version, its `Profile`, `Installed by` and `Source`), plus one whose `platform-install` has not finished. Each has the same `status` as `platform-install --list` (`installed`, `incomplete`, or `not_installed` when its recorded folders are gone) and `profiles` (the recorded profiles on disk: `tizen`, plus `tv-samsung` when the TV extension was installed for that version). The `tv` / `tv-samsung` folders the TV extension bundles for older versions (2.4 … 9.0) are not entries. An SDK installed before the record existed still reports its base-install platform (the newest one that holds a non-TV payload) and the TV version its `.tv-sdk-installed` names. Report every entry in the summary, on one line with its profiles (for example `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
 
 **Note:** The repository_url can be any server that serves `pkg_list_{OS}-{64,32}` at its root, for example:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 mirror)
@@ -1235,7 +1231,7 @@ node <plugin>/lib/cli/platform-install-cli.js [--platform-version <version>] [--
 
 ```
 1. Check whether the Tizen SDK is installed (sdk.info) → abort if not installed
-2. Platform package already installed? (.platform-installed marker) → return success if so
+2. Platform package already installed? (`platforms/tizen-X.Y` holds a profile other than `common` / `tv` / `tv-samsung*`, and no `.platform-installing-X.Y` is left) → return success if so
 3. Return platform package installer command (suggested_fix) — run in Phase 2 (background)
 ```
 

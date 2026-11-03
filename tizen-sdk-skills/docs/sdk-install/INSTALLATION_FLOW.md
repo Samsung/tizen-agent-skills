@@ -145,9 +145,7 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] }
     ],
     "installation_status": "completed"
   },
@@ -161,7 +159,7 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
 }
 ```
 
-`result.packages`에는 `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 `Tizen SDK Tools`가 옵니다. 이 항목의 `version`은 라벨(요청한 플랫폼 버전, 없으면 설치된 최신 버전)이며 SDK 버전이 아닙니다.
+`result.packages`에는 사용자가 설치한 플랫폼 버전마다 `platform-install --list`와 같은 `status`와 `profiles`를 가진 `Tizen SDK X.Y` 항목이 하나씩 있습니다. 설치 스크립트는 끝날 때 TIZEN-10.0을 `.platform-installed`에 기록하며(`Profile: tizen`, `Installed by: sdk-install`), 항목은 `platforms/` 아래 디렉터리가 아니라 이 기록에서 나옵니다.
 
 `installSdk('10.0')`이면 설치 스크립트는 `TIZEN-10.0`과 그 에뮬레이터 패키지(프로필 `tizen`)를 설치합니다. 기본 SDK는 이전 API 버전의 공유 `common` 데이터도 함께 넣는데, 이 디렉터리에는 플랫폼 내용이 없으므로 `not_installed`로 나옵니다(여기서는 9.0만 표시).
 
