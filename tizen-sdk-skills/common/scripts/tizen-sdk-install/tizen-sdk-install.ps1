@@ -579,6 +579,9 @@ function Install-PlatformPackages {
         $root = $platforms[-1]
     }
 
+    # The platform this run installs, recorded in .platform-installed on success.
+    $script:InstalledPlatformVersion = $root -replace '^TIZEN-', ''
+
     $rootVer = $db[$root].Version
     Write-Success "Target platform: $root (version $rootVer)"
 
@@ -884,6 +887,22 @@ try {
     Write-Info "TIZEN_SDK_DATA_PATH=$dataPath"
 } catch {
     Write-Err "Failed to create sdk.info: $_"
+}
+
+# Record the platform this run installed (the requested version, else the
+# repository's newest) in .platform-installed - what sdk-install
+# result.packages and platform-install --list read (Add-PlatformRecord,
+# lib\common.ps1).
+if ($script:InstalledPlatformVersion) {
+    try {
+        Add-PlatformRecord -SdkPath $Path -Target "TIZEN-$script:InstalledPlatformVersion" `
+            -Version $script:InstalledPlatformVersion `
+            -Profiles (Get-PlatformInstallProfiles -SdkPath $Path -Version $script:InstalledPlatformVersion) `
+            -InstalledBy "sdk-install" -Source $PkgRepo
+        Write-Success "TIZEN-$script:InstalledPlatformVersion recorded in $(Join-Path $Path '.platform-installed')"
+    } catch {
+        Write-Warn "Could not record TIZEN-$script:InstalledPlatformVersion in $(Join-Path $Path '.platform-installed'): $_"
+    }
 }
 
 # Write SDK path to ~/.tizen.sdk.path.config so that all other skills

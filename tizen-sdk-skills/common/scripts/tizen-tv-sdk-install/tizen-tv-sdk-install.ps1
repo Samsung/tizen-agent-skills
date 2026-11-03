@@ -8,7 +8,8 @@
 # - Downloads pkg_list from https://download.tizen.org/sdk/extensions/tv_extensions/
 # - Installs TV-SAMSUNG-Public package and its dependencies
 # - Merges data\ into the existing Tizen SDK root
-# - Creates .tv-sdk-installed marker on success
+# - Records the TV version in .platform-installed and creates the
+#   .tv-sdk-installed marker on success
 
 param(
     [string]$SdkPath = "",
@@ -68,7 +69,8 @@ What it does:
   2) Downloads/parses $PkgRepo/pkg_list_$PkgOs
   3) Resolves TV-SAMSUNG-Public and its Install-dependency packages
   4) Downloads each from (repo + Path) and merges data\ into the SDK root
-  5) Creates .tv-sdk-installed marker on success
+  5) Records the TV version (from its X.Y-MANDATORY dependency) in
+     .platform-installed and creates the .tv-sdk-installed marker on success
 
 Examples:
   .\tizen-tv-sdk-install.ps1
@@ -152,30 +154,39 @@ if (-not (Test-Path $sdkInfoPath)) {
 }
 Write-Success "Tizen SDK found: $SdkPath (sdk.info exists)"
 
+# An older install left only .tv-sdk-installed: record its TV version first
+# (Convert-TvSdkMarkerToRecord, lib\common.ps1), so it is still reported
+# after this run replaces the marker.
+$tvSdkMarkerPath = Join-Path $SdkPath ".tv-sdk-installed"
+if (-not $DryRun) { Convert-TvSdkMarkerToRecord -SdkPath $SdkPath }
+
+# The TV versions tizen-tv-sdk-install recorded (the online repository
+# carries one TV version, so any of them means it is in).
+$onlineTv = @(Get-PlatformRecords -SdkPath $SdkPath |
+    Where-Object { $_.InstalledBy -eq 'tv-sdk-install' -and (Test-TvProfileName $_.Profile) } |
+    ForEach-Object { $_.Version } | Sort-Object -Unique)
+
 # Check mode
 if ($Check) {
-    $tvSdkMarker = Join-Path $SdkPath ".tv-sdk-installed"
-    if (Test-Path $tvSdkMarker) {
-        Write-Success "TV SDK is already installed: $SdkPath (.tv-sdk-installed found)"
+    if ($onlineTv.Count -gt 0) {
+        Write-Success "TV SDK is already installed: $SdkPath (TV $($onlineTv -join ', ') recorded in .platform-installed)"
         exit 0
     } else {
-        Write-Info "TV SDK is NOT installed (.tv-sdk-installed not found)"
+        Write-Info "TV SDK is NOT installed (no tv-sdk-install record in .platform-installed)"
         exit 1
     }
 }
 
 # Skip if already installed
-$tvSdkMarkerPath = Join-Path $SdkPath ".tv-sdk-installed"
-if ((Test-Path $tvSdkMarkerPath) -and -not $Force) {
-    Write-Success "TV SDK is already installed: $SdkPath"
-    Write-Info ".tv-sdk-installed found. To reinstall, run again with -Force"
+if ($onlineTv.Count -gt 0 -and -not $Force -and -not $DryRun) {
+    Write-Success "TV SDK is already installed: $SdkPath (TV $($onlineTv -join ', '))"
+    Write-Info "Recorded in .platform-installed. To reinstall, run again with -Force"
     exit 0
 }
 
-if ($Force) {
-    Write-Warn "Force reinstall requested - removing .tv-sdk-installed marker"
-    Remove-Item $tvSdkMarkerPath -Force -ErrorAction SilentlyContinue
-}
+# -Status reports "done" once the marker exists, so drop the previous run's
+# marker before this one starts (its version is recorded above).
+if (-not $DryRun) { Remove-Item $tvSdkMarkerPath -Force -ErrorAction SilentlyContinue }
 
 # -----------------------------------------------------------------------------
 # Package installation (pkg_list driven)
@@ -274,6 +285,27 @@ while ($queue.Count -gt 0) {
 $total = $resolved.Count
 Write-Success "Total resolved packages: $total"
 
+# The TV version is the X.Y of the X.Y-MANDATORY platform meta it depends on
+# (TV-SAMSUNG-Public-Mandatory -> 10.0-MANDATORY).
+$tvVersion = ''
+foreach ($pkg in $resolved) {
+    if ($pkg -match '^([0-9]+\.[0-9]+)-MANDATORY$') {
+        if (-not $tvVersion -or [version]$Matches[1] -gt [version]$tvVersion) { $tvVersion = $Matches[1] }
+    }
+}
+if ($tvVersion) {
+    Write-Success "TV platform version: $tvVersion"
+    # The same TV version may already be in (e.g. from a ZIP).
+    if (-not $Force -and -not $DryRun -and (Test-TvVersionRecorded -SdkPath $SdkPath -Version $tvVersion)) {
+        Write-Success "TV SDK $tvVersion is already installed: $SdkPath (recorded in .platform-installed)"
+        Write-Info "To reinstall, run again with -Force"
+        Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+        exit 0
+    }
+} else {
+    Write-Warn "No X.Y-MANDATORY dependency found; the TV version is taken from platforms\ after the install"
+}
+
 # Dry-run: list only
 if ($DryRun) {
     Write-Warn "[DRY-RUN] The following packages would be installed (no download/install):"
@@ -349,8 +381,33 @@ if ($fail -gt 0) {
     exit 1
 }
 
-# Create .tv-sdk-installed marker
-Set-Content -Path $tvSdkMarkerPath -Value "TV SDK installed at $(Get-Date -Format 'o')" -Encoding UTF8
+# Record the TV version in .platform-installed (Add-PlatformRecord,
+# lib\common.ps1) - what sdk-install result.packages and platform-install
+# --list read. Without an X.Y-MANDATORY dependency, the newest version that
+# now holds a tv-samsung payload is the one this package is for.
+if (-not $tvVersion) {
+    foreach ($d in (Get-ChildItem -Path (Join-Path $SdkPath "platforms") -Directory -ErrorAction SilentlyContinue)) {
+        if ($d.Name -notmatch '^tizen-([0-9]+\.[0-9]+)$') { continue }
+        $v = $Matches[1]
+        if (-not (Get-TvInstallProfiles -SdkPath $SdkPath -Version $v)) { continue }
+        if (-not $tvVersion -or [version]$v -gt [version]$tvVersion) { $tvVersion = $v }
+    }
+}
+if ($tvVersion) {
+    $tvProfiles = Get-TvInstallProfiles -SdkPath $SdkPath -Version $tvVersion
+    if (-not $tvProfiles) { $tvProfiles = 'tv-samsung' }
+    Add-PlatformRecord -SdkPath $SdkPath -Target $TargetPackage -Version $tvVersion -Profiles $tvProfiles `
+        -InstalledBy "tv-sdk-install" -Source $PkgRepo
+    Write-Success "TV $tvVersion ($tvProfiles) recorded in $(Join-Path $SdkPath '.platform-installed')"
+} else {
+    Write-Warn "Could not tell which TV version was installed; nothing recorded in .platform-installed"
+}
+
+# Create .tv-sdk-installed marker (no BOM; Set-Content -Encoding UTF8 in
+# Windows PowerShell 5.1 writes one)
+$markerText = "TV SDK installed at $(Get-Date -Format 'o')`n"
+if ($tvVersion) { $markerText += "TV version: $tvVersion`n" }
+[System.IO.File]::WriteAllText($tvSdkMarkerPath, $markerText, [System.Text.UTF8Encoding]::new($false))
 Write-Success ".tv-sdk-installed created: $tvSdkMarkerPath"
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
