@@ -50,6 +50,7 @@ const {
   installSdkFromRepo,
   installedPackageSummary,
   isPlatformInstalled,
+  isTizenPlatformInstalled,
   listFullyInstalledPlatformVersions,
   listInstalledPlatformVersions,
   listPlatforms,
@@ -96,6 +97,22 @@ mk("platforms", "tizen-10.0", "tizen", "emulator-images", "tizen-10.0-x86_64");
 mk("platforms", "tizen-10.0", "tv-samsung", "rootstraps");
 mk("platforms", "tizen-11.0", "tizen", "rootstraps");
 fs.writeFileSync(path.join(sdkPath, ".platform-installing-11.0"), "");
+// What the user installed: TIZEN-10.0 (a block from before the Profile line
+// existed) and the 10.0 TV extension. 9.0 was never installed.
+fs.writeFileSync(
+  path.join(sdkPath, ".platform-installed"),
+  [
+    "Platform package installed at 2026-09-29T21:26:29.1166874+09:00",
+    "Target: TIZEN-10.0",
+    "Platform version: 10.0",
+    "Platform package installed at 2026-10-01T10:00:00+09:00",
+    "Target: TV-SAMSUNG-Public",
+    "Platform version: 10.0",
+    "Profile: tv-samsung",
+    "Installed by: tv-sdk-install",
+    "",
+  ].join("\n"),
+);
 fs.writeFileSync(
   path.join(sdkPath, "sdk.info"),
   "TIZEN_SDK_INSTALLED_PATH=x\n",
@@ -195,17 +212,16 @@ try {
       const env = await listPlatforms();
       check("status success", env.status, "success");
       check(
-        "one entry per directory, oldest first, with its status",
+        "one entry per recorded version (plus the unfinished one), oldest first",
         env.result.platforms.map((p) => [p.version, p.status]),
         [
-          ["9.0", "not_installed"],
           ["10.0", "installed"],
           ["11.0", "incomplete"],
         ],
       );
-      const p10 = env.result.platforms[1];
+      const p10 = env.result.platforms[0];
       check(
-        "10.0 profiles: payload profiles only, no shared common",
+        "10.0 profiles: the recorded ones (old block → tizen, TV block → tv-samsung)",
         p10.profiles,
         ["tizen", "tv-samsung"],
       );
@@ -242,22 +258,20 @@ try {
       fs.mkdirSync(path.join(sdkPath, "tools"), { recursive: true });
       const pkgs = collectInstalledPackages(sdkPath, "10.0");
       check(
-        "one entry per platform version with its own status, then the tools",
+        "one Tizen SDK X.Y entry per installed version, no tools entry",
         pkgs.map((p) => [p.name, p.status, p.version]),
         [
-          ["Tizen Platform 9.0", "not_installed", "9.0"],
-          ["Tizen Platform 10.0", "installed", "10.0"],
-          ["Tizen Platform 11.0", "incomplete", "11.0"],
-          ["Tizen SDK Tools", "installed", "10.0"],
+          ["Tizen SDK 10.0", "installed", "10.0"],
+          ["Tizen SDK 11.0", "incomplete", "11.0"],
         ],
       );
-      check("platform entries carry their payload profiles", pkgs[1].profiles, [
+      check("entries carry their recorded profiles", pkgs[0].profiles, [
         "tizen",
         "tv-samsung",
       ]);
       check(
         "statuses match platform-install --list",
-        pkgs.slice(0, 3).map((p) => p.status),
+        pkgs.map((p) => p.status),
         (await listPlatforms()).result.platforms.map((p) => p.status),
       );
       fs.rmSync(path.join(sdkPath, "tools"), { recursive: true });
@@ -279,36 +293,33 @@ try {
       tv("platforms", "tizen-7.0", "tv"); // empty profile directory
       tv("tools");
       fs.writeFileSync(path.join(tvSdk, "sdk.info"), "x\n");
+      // An online TV install from before the records: only the marker.
+      fs.writeFileSync(
+        path.join(tvSdk, ".tv-sdk-installed"),
+        "TV SDK installed at 2026-09-01T10:00:00+09:00\n",
+      );
       check(
-        "TV payload → 8.0 installed",
+        "TV payload → 8.0 on disk for create-project",
         isPlatformInstalled(tvSdk, "8.0"),
         true,
       );
+      check(
+        "TV payload alone → TIZEN-8.0 itself is not installed",
+        isTizenPlatformInstalled(tvSdk, "8.0"),
+        false,
+      );
       const pkgs = installedPackageSummary(tvSdk, "");
       check(
-        "per-version status and payload profiles",
-        pkgs
-          .filter((p) => p.name.startsWith("Tizen Platform "))
-          .map((p) => [p.version, p.status, p.profiles]),
-        [
-          ["7.0", "not_installed", []],
-          ["8.0", "installed", ["tv-samsung"]],
-        ],
-      );
-      check(
-        "no version → tools labelled with the newest installed platform",
-        pkgs.find((p) => p.name === "Tizen SDK Tools").version,
-        "8.0",
+        "the old marker's TV version (newest tv-samsung) is reported, 7.0 is not",
+        pkgs.map((p) => [p.name, p.status, p.profiles]),
+        [["Tizen SDK 8.0", "installed", ["tv-samsung"]]],
       );
       fs.writeFileSync(CONFIG_FILE, `${tvSdk}\n`);
       const env = await listPlatforms();
       check(
-        "platform-install --list reports the same payload profiles",
+        "platform-install --list reports the same entry",
         env.result.platforms.map((p) => [p.version, p.status, p.profiles]),
-        [
-          ["7.0", "not_installed", []],
-          ["8.0", "installed", ["tv-samsung"]],
-        ],
+        [["8.0", "installed", ["tv-samsung"]]],
       );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
@@ -326,17 +337,41 @@ try {
       // Run the real installSdkFromRepo pre-check on an installed SDK: the
       // installer's --validate-repo-url probe fetches pkg_list_<os>-64 from a
       // stub repository, then the already-installed branch builds
-      // result.packages. Two installed versions (6.0, 8.0) so that pinning the
-      // older one shows whether the requested version reaches the tools label.
+      // result.packages. Two installed versions (6.0 from the base install,
+      // 8.0 added later with its TV extension) so that pinning the older one
+      // shows the requested version passes the pre-check.
       const repoSdk = path.join(sandboxHome, "custom-repo-sdk");
       const mkRepo = (...p) =>
         fs.mkdirSync(path.join(repoSdk, ...p), { recursive: true });
-      mkRepo("platforms", "tizen-6.0", "tv-samsung", "rootstraps");
+      mkRepo("platforms", "tizen-6.0", "tizen", "rootstraps");
       mkRepo("platforms", "tizen-7.0", "common");
-      mkRepo("platforms", "tizen-8.0", "tizen", "samples", "Template");
+      mkRepo("platforms", "tizen-7.0", "tv-samsung", "rootstraps");
+      mkRepo("platforms", "tizen-8.0", "tizen", "rootstraps");
       mkRepo("platforms", "tizen-8.0", "tv-samsung", "rootstraps");
       mkRepo("tools");
       fs.writeFileSync(path.join(repoSdk, "sdk.info"), "x\n");
+      fs.writeFileSync(
+        path.join(repoSdk, ".platform-installed"),
+        [
+          "Platform package installed at 2026-11-01T10:00:00+0900",
+          "Target: TIZEN-6.0",
+          "Platform version: 6.0",
+          "Profile: tizen",
+          "Installed by: sdk-install",
+          "Platform package installed at 2026-11-02T10:00:00+0900",
+          "Target: TIZEN-8.0",
+          "Platform version: 8.0",
+          "Profile: tizen",
+          "Installed by: platform-install",
+          "Platform package installed at 2026-11-02T11:00:00+0900",
+          "Target: TV-SAMSUNG ZIP",
+          "Platform version: 8.0",
+          "Profile: tv-samsung",
+          "Installed by: tv-sdk-install-from-zip",
+          "Source: /tmp/tv-8.0.zip",
+          "",
+        ].join("\n"),
+      );
 
       // The stub runs in a child process because the probe is a blocking
       // execSync — a server in this process could not answer it. It exits
@@ -386,9 +421,6 @@ try {
       delete process.env.CURL_HOME;
       delete process.env.XDG_CONFIG_HOME;
       fs.writeFileSync(CONFIG_FILE, `${repoSdk}\n`);
-      const toolsVersion = (env) =>
-        env.result?.packages?.find((p) => p.name === "Tizen SDK Tools")
-          ?.version;
       try {
         const repoUrl = `http://127.0.0.1:${port}/repo`;
         const env = await installSdkFromRepo(repoUrl, "");
@@ -399,20 +431,16 @@ try {
           installedPackageSummary(repoSdk, ""),
         );
         check(
-          "custom repo → per-version status and payload profiles",
-          (env.result?.packages || [])
-            .filter((p) => p.name.startsWith("Tizen Platform "))
-            .map((p) => [p.version, p.status, p.profiles]),
+          "custom repo → the recorded versions only (not the bundled 7.0 TV folder)",
+          (env.result?.packages || []).map((p) => [
+            p.name,
+            p.status,
+            p.profiles,
+          ]),
           [
-            ["6.0", "installed", ["tv-samsung"]],
-            ["7.0", "not_installed", []],
-            ["8.0", "installed", ["tv-samsung"]],
+            ["Tizen SDK 6.0", "installed", ["tizen"]],
+            ["Tizen SDK 8.0", "installed", ["tizen", "tv-samsung"]],
           ],
-        );
-        check(
-          'custom repo, no version → tools labelled "8.0", not "installed"',
-          toolsVersion(env),
-          "8.0",
         );
         // Not installed yet: the message must say to re-run with the same
         // URL and version, without --force (disk check stubbed out).
@@ -431,9 +459,15 @@ try {
         );
         const pinned = await installSdkFromRepo(repoUrl, "6.0");
         check(
-          "custom repo, version 6.0 → tools labelled 6.0, not the newest",
-          toolsVersion(pinned),
-          "6.0",
+          "custom repo, version 6.0 → installed, the same packages",
+          [pinned.status, pinned.result?.packages],
+          ["success", env.result?.packages],
+        );
+        const tvOnly = await installSdkFromRepo(repoUrl, "7.0");
+        check(
+          "custom repo, version 7.0 (only a bundled TV folder) → not installed",
+          tvOnly.errors?.[0]?.error_category,
+          "platform_version_not_found",
         );
       } finally {
         stub.stdin.end();
@@ -638,17 +672,35 @@ try {
           /Remove-Item \$platformInstallingMarkerPath/.test(ps1),
         true,
       );
+      const commonSh = read("lib", "common.sh");
+      const commonPs1 = read("lib", "common.ps1");
+      const recordSh = commonSh.slice(
+        commonSh.indexOf("record_platform_install() {"),
+        commonSh.indexOf("migrate_tv_sdk_marker() {"),
+      );
+      const recordPs1 = commonPs1.slice(
+        commonPs1.indexOf("function Add-PlatformRecord"),
+        commonPs1.indexOf("function Convert-TvSdkMarkerToRecord"),
+      );
       check(
-        "sh/ps1: history is appended once per version, never rewritten or wiped",
-        /grep -qxF "Platform version: \$PLATFORM_VERSION"/.test(sh) &&
-          /\} >> "\$PLATFORM_PKG_MARKER"/.test(sh) &&
-          !/> "\$PLATFORM_PKG_MARKER"/.test(
-            sh.replace(/>> "\$PLATFORM_PKG_MARKER"/g, ""),
-          ) &&
+        "sh/ps1: the record is appended once per version and profile, never rewritten or wiped",
+        /record_platform_install "\$SDK_PATH" "\$TARGET_PACKAGE" "\$PLATFORM_VERSION"/.test(
+          sh,
+        ) &&
+          !/> "\$PLATFORM_PKG_MARKER"/.test(sh) &&
           !/rm -f "\$PLATFORM_PKG_MARKER"/.test(sh) &&
-          /Add-Content -Path \$platformPkgMarkerPath/.test(ps1) &&
+          /platform_recorded "\$sdk" "\$version" "\$p"/.test(recordSh) &&
+          /\} >> "\$sdk\/\.platform-installed"/.test(recordSh) &&
+          /Add-PlatformRecord -SdkPath \$SdkPath -Target \$TargetPackage -Version \$PlatformVersion/.test(
+            ps1,
+          ) &&
           !/Set-Content -Path \$platformPkgMarkerPath/.test(ps1) &&
-          !/Remove-Item \$platformPkgMarkerPath/.test(ps1),
+          !/Add-Content -Path \$platformPkgMarkerPath/.test(ps1) &&
+          !/Remove-Item \$platformPkgMarkerPath/.test(ps1) &&
+          /Test-PlatformRecorded -SdkPath \$SdkPath -Version \$Version -ProfileName \$p/.test(
+            recordPs1,
+          ) &&
+          /\[System\.IO\.File\]::AppendAllText\(\$file/.test(recordPs1),
         true,
       );
     }
@@ -814,9 +866,12 @@ try {
         fs.mkdirSync(path.join(hintSdk, ...d), { recursive: true });
       }
       fs.writeFileSync(path.join(hintSdk, "sdk.info"), "x=y\n");
-      // A TV installer ran: both installers skip on this marker without --force.
+      // An online TV install from before the records (only the marker): it
+      // counts for 10.0, the newest version with a tv-samsung folder. The
+      // installers skip only a recorded TV version, so 9.0 needs no --force.
       const tvMarker = path.join(hintSdk, ".tv-sdk-installed");
       fs.writeFileSync(tvMarker, "TV SDK installed\n");
+      const hintRecord = path.join(hintSdk, ".platform-installed");
       const hintStub = path.join(hintSdk, "tools", "tizen-core", "tz");
       fs.writeFileSync(
         hintStub,
@@ -836,8 +891,9 @@ try {
             "not installed for TIZEN-9.0 (installed for: 10.0)",
           ) &&
           hintEnv.errors[0].message.includes(
-            "from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --force",
-          ),
+            "from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version 9.0",
+          ) &&
+          !hintEnv.errors[0].message.includes("--force"),
         true,
       );
       // create --type tv for that version stops BEFORE the script runs, with
@@ -864,13 +920,19 @@ try {
         true,
       );
       check("nothing was created for it", fs.readdirSync(tvWs).length, 0);
-      // The extension installed for 9.0 too, but tz lists no TV templates
-      // under it: not "not installed" — an incomplete extension.
+      // The extension installed for 9.0 too (from a ZIP, recorded), but tz
+      // lists no TV templates under it: not "not installed" — an incomplete
+      // extension, and reinstalling a recorded TV version needs --force.
       fs.mkdirSync(
         path.join(hintSdk, "platforms", "tizen-9.0", "tv-samsung", "x"),
         {
           recursive: true,
         },
+      );
+      fs.writeFileSync(
+        hintRecord,
+        "Platform package installed at 2026-11-01T10:00:00+0900\nTarget: TV-SAMSUNG ZIP\n" +
+          "Platform version: 9.0\nProfile: tv-samsung\nInstalled by: tv-sdk-install-from-zip\nSource: /tmp/tv-9.0.zip\n",
       );
       fs.writeFileSync(
         hintStub,
@@ -891,7 +953,7 @@ try {
             "To reinstall it, install it with tizen-tv-sdk-install --force if the repository's TV package is for TIZEN-9.0",
           ) &&
           bothEnv.errors[0].message.includes(
-            "tizen-tv-sdk-install-from-zip --zip-path <zip> --force",
+            "tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version 9.0 --force",
           ) &&
           bothEnv.errors[0].message.includes(
             "omit --platform-version or pass one of: 10.0",
@@ -936,7 +998,7 @@ try {
         onlyEnv.status === "failure" &&
           onlyEnv.errors[0].message.includes(
             "To reinstall it, install it with tizen-tv-sdk-install --force if the repository's TV package is for TIZEN-9.0, " +
-              "or from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --force.",
+              "or from a TIZEN-9.0 TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version 9.0 --force.",
           ),
         true,
       );
@@ -974,15 +1036,16 @@ try {
         "9.0",
       );
       check(
-        "no TV extension but a stale marker → both installers get --force",
-        /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install --force if .*tizen-tv-sdk-install-from-zip --zip-path <zip> --force;/.test(
+        "no TV folder but a stale 9.0 record → both installers get --force",
+        /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install --force if .*tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version 9\.0 --force;/.test(
           noTv.errors[0].message,
         ),
         true,
       );
-      // No marker either: list-templates gets the same version-aware hint as
-      // create, not the generic "run tizen-tv-sdk-install".
+      // No record or marker either: list-templates gets the same
+      // version-aware hint as create, not the generic "run tizen-tv-sdk-install".
       fs.rmSync(tvMarker);
+      fs.rmSync(hintRecord);
       fs.writeFileSync(
         hintStub,
         "#!/bin/sh\nprintf 'tizen-10.0:\\n  Basic [web_app]\\ntizen-9.0:\\n  Basic [web_app]\\n'\n",
@@ -1009,7 +1072,7 @@ try {
         const message = env.errors[0].message;
         check(
           `no TV extension anywhere → ${name} offers both installers without --force`,
-          /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install if .*tizen-tv-sdk-install-from-zip --zip-path <zip>;/.test(
+          /not installed for TIZEN-9\.0\. To add it, install it with tizen-tv-sdk-install if .*tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version 9\.0;/.test(
             message,
           ) && !message.includes("--force"),
           true,
