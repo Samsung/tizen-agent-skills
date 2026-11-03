@@ -152,9 +152,7 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] }
     ],
     "installation_status": "completed"
   },
@@ -168,7 +166,7 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
 }
 ```
 
-`result.packages` has one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools`, whose `version` is a label (the requested platform version, else the newest installed one) and not the SDK version.
+`result.packages` has one `Tizen SDK X.Y` entry per platform version the user installed, with the `status` and `profiles` of `platform-install --list`. The installer recorded TIZEN-10.0 in `.platform-installed` when it finished (`Profile: tizen`, `Installed by: sdk-install`); that record, not the directories under `platforms/`, is what the entries come from.
 
 With `installSdk('10.0')` the installer installs `TIZEN-10.0` and its emulator package (profile `tizen`). The base SDK also ships the shared `common` data for older API versions; those directories hold no platform payload and appear as `not_installed` (only 9.0 is shown here).
 

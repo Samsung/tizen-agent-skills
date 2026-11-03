@@ -194,29 +194,25 @@ async function getSdkStatus(command = "tizen-sdk sdk-status") {
 /**
  * Scan installed SDK components and generate package list
  *
- * One entry per platforms/tizen-X.Y, oldest first, with that version's own
- * status (platformStatus — the same rule as platform-install --list) and its
- * profiles. A single "Tizen Platforms (N)" row used to count every entry of
- * platforms/ — "common" and directories that hold no platform payload
- * included — and stamp it with one version label (the newest installed), so
- * "Tizen Platforms (13) / installed / 11.0" read as thirteen installed 11.0
- * platforms while only 10.0 and 11.0 were complete.
+ * One "Tizen SDK X.Y" entry per platform the user installed, oldest first,
+ * with the same status and profiles as platform-install --list
+ * (installedPlatformEntries, read from .platform-installed). Listing every
+ * platforms/tizen-X.Y reported 2.4 … 9.0 as installed on an SDK where only
+ * TIZEN-10.0, TIZEN-11.0 and the 10.0 TV extension were installed: the TV
+ * extension lays down tv / tv-samsung for those older versions too. The
+ * "Tizen SDK Tools" entry is gone with it; it only repeated a version label.
  *
  * @param {string} sdkPath - SDK installation path
- * @param {string} version - SDK version label for the tools entry
+ * @param {string} version - version label for the fallback entry
  * @returns {Array<{name: string, status: string, version: string, profiles?: string[]}>}
  */
 function collectInstalledPackages(sdkPath, version) {
-  const packages = listInstalledPlatformVersions(sdkPath).map((v) => ({
-    name: `Tizen Platform ${v}`,
-    status: platformStatus(sdkPath, v),
-    version: v,
-    profiles: platformPayloadProfiles(sdkPath, v),
+  const packages = installedPlatformEntries(sdkPath).map((e) => ({
+    name: `Tizen SDK ${e.version}`,
+    status: e.status,
+    version: e.version,
+    profiles: e.profiles,
   }));
-
-  if (fs.existsSync(path.join(sdkPath, "tools"))) {
-    packages.push({ name: "Tizen SDK Tools", status: "installed", version });
-  }
 
   if (packages.length === 0) {
     packages.push({
@@ -231,11 +227,10 @@ function collectInstalledPackages(sdkPath, version) {
 
 /**
  * result.packages of a successful sdk-install / sdk-install-custom-repo: the
- * per-version platform entries plus the tools entry labelled with the
- * requested version, else the newest installed one (installedVersionLabel).
- * Both commands use this so the same SDK reports the same packages; the
- * custom-repo path used to label the tools "installed" when no version was
- * given while sdk-install said "11.0".
+ * installed-platform entries (collectInstalledPackages). Both commands use
+ * this so the same SDK reports the same packages. The version label
+ * (installedVersionLabel: the requested version, else the newest installed
+ * one) only names the fallback entry of an SDK that reports no platform.
  *
  * @param {string} sdkPath
  * @param {string} version - requested version ("" = none requested)
@@ -431,15 +426,14 @@ function platformPayloadProfiles(sdkPath, version) {
  * synced "samples" (rootstraps, emulator-images, features, ...) — and no
  * tizen-platform-install run of that version is still marked in progress.
  *
- * The directory is the source of truth: the platform the base SDK install put
- * in (it writes no platform marker) counts, and so does every version added
- * later. .platform-installed held one version only and was overwritten by the
- * next install, so it could not answer for several versions side by side.
+ * The directory is the source of truth here: create-project and
+ * list-templates --platform-version accept any version whose files are on
+ * disk, including a tv / tv-samsung folder the TV extension bundled for an
+ * older version. What the user installed is .platform-installed
+ * (installedPlatformEntries); the installers' own "already installed" check
+ * leaves the TV folders out (isTizenPlatformInstalled).
  * A run that failed partway leaves its in-progress marker, so its half-filled
  * directory does not count until a re-run (which resumes) completes it.
- *
- * Mirrored by platform_installed (scripts/lib/common.sh) and
- * Test-PlatformInstalled (scripts/lib/common.ps1).
  *
  * @param {string} sdkPath
  * @param {string} version - "X.Y"
@@ -456,19 +450,24 @@ function isPlatformInstalled(sdkPath, version) {
 }
 
 /**
- * Status of platforms/tizen-X.Y, as platform-install --list reports it:
- * "incomplete" while a tizen-platform-install run of that version has not
- * finished, "installed" when isPlatformInstalled holds, else "not_installed".
+ * Is the TIZEN-X.Y platform package itself installed? isPlatformInstalled
+ * without the TV extension's profiles (tv, tv-samsung*): the TV extension
+ * lays those down for older versions too, and tizen-9.0/tv alone must not
+ * make sdk-install --tizen-version 9.0 or platform-install 9.0 answer
+ * "already installed".
+ *
+ * Mirrored by platform_installed (scripts/lib/common.sh) and
+ * Test-PlatformInstalled (scripts/lib/common.ps1), the installers' check.
  *
  * @param {string} sdkPath
  * @param {string} version - "X.Y"
- * @returns {"installed"|"incomplete"|"not_installed"}
+ * @returns {boolean}
  */
-function platformStatus(sdkPath, version) {
-  if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
-    return "incomplete";
-  }
-  return isPlatformInstalled(sdkPath, version) ? "installed" : "not_installed";
+function isTizenPlatformInstalled(sdkPath, version) {
+  return (
+    isPlatformInstalled(sdkPath, version) &&
+    platformPayloadProfiles(sdkPath, version).some((p) => !isTvProfile(p))
+  );
 }
 
 /** Installed platform versions (isPlatformInstalled), oldest first. */
@@ -476,6 +475,324 @@ function listFullyInstalledPlatformVersions(sdkPath) {
   return listInstalledPlatformVersions(sdkPath).filter((v) =>
     isPlatformInstalled(sdkPath, v),
   );
+}
+
+/**
+ * The record of the platforms the user installed: one block per successful
+ * install, appended by every installer (record_platform_install in
+ * scripts/lib/common.sh, Add-PlatformRecord in scripts/lib/common.ps1):
+ *
+ *   Platform package installed at 2026-11-03T10:00:00+09:00
+ *   Target: TIZEN-11.0            (TV-SAMSUNG-Public, TV-SAMSUNG ZIP)
+ *   Platform version: 11.0
+ *   Profile: tizen                (tv-samsung; several are comma-separated)
+ *   Installed by: sdk-install     (platform-install, tv-sdk-install,
+ *                                  tv-sdk-install-from-zip)
+ *   Source: <repository URL or ZIP path>   (optional)
+ *
+ * The directories under platforms/ cannot say which versions the user asked
+ * for: the TV extension lays down tv / tv-samsung for 2.4 … 9.0 next to the
+ * one TV version it is for, so every one of them looked installed.
+ */
+function platformRecordPath(sdkPath) {
+  return path.join(sdkPath, ".platform-installed");
+}
+
+/** Profiles that belong to the TV extension, not to a TIZEN-X.Y platform. */
+function isTvProfile(profile) {
+  return profile === "tv" || profile.startsWith("tv-samsung");
+}
+
+/**
+ * Blocks of .platform-installed, in file order. A block written before the
+ * Profile line existed gets it from its Target: TV-… is tv-samsung, anything
+ * else (TIZEN-X.Y) is tizen. A block without a valid X.Y version is skipped.
+ *
+ * @param {string} sdkPath
+ * @returns {Array<{version: string, profiles: string[], target: string, installedBy: string, source: string}>}
+ */
+function readPlatformRecords(sdkPath) {
+  let text;
+  try {
+    text = fs.readFileSync(platformRecordPath(sdkPath), "utf8");
+  } catch (_e) {
+    return [];
+  }
+  const records = [];
+  let cur = null;
+  const flush = () => {
+    if (cur && /^[0-9]+\.[0-9]+$/.test(cur.version)) {
+      if (cur.profiles.length === 0) {
+        cur.profiles = [/^TV-/i.test(cur.target) ? "tv-samsung" : "tizen"];
+      }
+      records.push(cur);
+    }
+    cur = null;
+  };
+  // A file first written by Windows PowerShell 5.1's Add-Content carries a BOM.
+  for (const raw of text.replace(/^\uFEFF/, "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line.startsWith("Platform package installed at")) {
+      flush();
+      cur = {
+        version: "",
+        profiles: [],
+        target: "",
+        installedBy: "",
+        source: "",
+      };
+      continue;
+    }
+    if (!cur) continue;
+    const m = /^([A-Za-z ]+):\s*(.*)$/.exec(line);
+    if (!m) continue;
+    const [, key, value] = m;
+    if (key === "Target") cur.target = value;
+    else if (key === "Platform version") cur.version = value;
+    else if (key === "Profile") {
+      cur.profiles = value
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+    } else if (key === "Installed by") cur.installedBy = value;
+    else if (key === "Source") cur.source = value;
+  }
+  flush();
+  return records;
+}
+
+/** The TV version an older .tv-sdk-installed names ("TV milestone version: X.Y"), or "". */
+function legacyTvMarkerVersion(sdkPath) {
+  try {
+    const text = fs.readFileSync(
+      path.join(sdkPath, ".tv-sdk-installed"),
+      "utf8",
+    );
+    const m = /^TV milestone version:\s*([0-9]+\.[0-9]+)\s*$/m.exec(text);
+    return m ? m[1] : "";
+  } catch (_e) {
+    return "";
+  }
+}
+
+/**
+ * Recorded profiles per version (Map "X.Y" → Set of profiles), plus what an
+ * SDK installed before the installers wrote records still needs:
+ *
+ *   - sdk-install did not record its platform. While no block says
+ *     "Installed by: sdk-install", the newest version that holds a non-TV
+ *     payload (isTizenPlatformInstalled, so not one still being installed)
+ *     and is not recorded with one counts — that is the platform the base
+ *     install put in.
+ *   - The TV installers wrote only .tv-sdk-installed. While no block records
+ *     a TV profile and that marker exists, its "TV milestone version" (a ZIP
+ *     install) counts, else the newest version with a tv-samsung payload (the
+ *     online install, which carries one TV version).
+ *
+ * @param {string} sdkPath
+ * @returns {Map<string, Set<string>>}
+ */
+function recordedPlatformProfiles(sdkPath) {
+  const records = readPlatformRecords(sdkPath);
+  const byVersion = new Map();
+  const add = (version, profiles) => {
+    if (!byVersion.has(version)) byVersion.set(version, new Set());
+    for (const p of profiles) byVersion.get(version).add(p);
+  };
+  for (const r of records) add(r.version, r.profiles);
+
+  const onDisk = listInstalledPlatformVersions(sdkPath);
+  const payload = (v) => platformPayloadProfiles(sdkPath, v);
+
+  if (!records.some((r) => r.installedBy === "sdk-install")) {
+    // isTizenPlatformInstalled also skips a version whose
+    // tizen-platform-install run has not finished.
+    const base = [...onDisk].reverse().find((v) => {
+      const recorded = [...(byVersion.get(v) || [])];
+      return (
+        !recorded.some((p) => !isTvProfile(p)) &&
+        isTizenPlatformInstalled(sdkPath, v)
+      );
+    });
+    if (base)
+      add(
+        base,
+        payload(base).filter((p) => !isTvProfile(p)),
+      );
+  }
+
+  const tvRecorded = [...byVersion.values()].some((set) =>
+    [...set].some(isTvProfile),
+  );
+  if (!tvRecorded && fs.existsSync(path.join(sdkPath, ".tv-sdk-installed"))) {
+    const tvPayload = (v) =>
+      payload(v).filter((p) => p.startsWith("tv-samsung"));
+    const milestone = legacyTvMarkerVersion(sdkPath);
+    const tv =
+      milestone && tvPayload(milestone).length > 0
+        ? milestone
+        : [...onDisk].reverse().find((v) => tvPayload(v).length > 0);
+    if (tv) add(tv, tvPayload(tv));
+  }
+  return byVersion;
+}
+
+/**
+ * Does .platform-installed record a TV profile for this version (or, on an
+ * SDK from before the records, does recordedPlatformProfiles infer one)?
+ * The TV installers skip such a version unless --force is given.
+ *
+ * @param {string} sdkPath
+ * @param {string} version - "X.Y"
+ */
+function isTvVersionRecorded(sdkPath, version) {
+  if (!sdkPath || !version) return false;
+  const set = recordedPlatformProfiles(sdkPath).get(version);
+  return !!set && [...set].some(isTvProfile);
+}
+
+/** Text of .tv-sdk-installed, or null when it is missing. */
+function readTvSdkMarker(sdkPath) {
+  try {
+    return fs.readFileSync(path.join(sdkPath, ".tv-sdk-installed"), "utf8");
+  } catch (_e) {
+    return null;
+  }
+}
+
+/** result.packages entries of the TV installers, one per recorded TV version. */
+function tvPackageEntries(name, versions, sdkPath) {
+  const entries = installedPlatformEntries(sdkPath);
+  return [...new Set(versions)].sort(comparePlatformVersions).map((v) => {
+    const e = entries.find((x) => x.version === v);
+    return {
+      name,
+      status: e ? e.status : "installed",
+      version: v,
+      profiles: e ? e.profiles.filter(isTvProfile) : ["tv-samsung"],
+    };
+  });
+}
+
+/**
+ * TV versions tizen-tv-sdk-install (the online repository) installed: its
+ * records, or — for an SDK whose online TV install predates the records —
+ * the TV version recordedPlatformProfiles infers from a .tv-sdk-installed
+ * that has no "Source:" line (only the ZIP installer writes one).
+ *
+ * @param {string} sdkPath
+ * @returns {Array<{name: string, status: string, version: string, profiles: string[]}>}
+ */
+function onlineTvInstalled(sdkPath) {
+  const records = readPlatformRecords(sdkPath).filter(
+    (r) => r.installedBy === "tv-sdk-install" && r.profiles.some(isTvProfile),
+  );
+  let versions = records.map((r) => r.version);
+  if (versions.length === 0) {
+    const marker = readTvSdkMarker(sdkPath);
+    const anyTvRecord = readPlatformRecords(sdkPath).some((r) =>
+      r.profiles.some(isTvProfile),
+    );
+    if (marker !== null && !/^Source:/m.test(marker) && !anyTvRecord) {
+      versions = [...recordedPlatformProfiles(sdkPath)]
+        .filter(([, set]) => [...set].some(isTvProfile))
+        .map(([v]) => v);
+    }
+  }
+  return tvPackageEntries("TV-SAMSUNG-Public", versions, sdkPath);
+}
+
+/** Same file? Case-insensitive on Windows, where the scripts write C:\… paths. */
+function samePath(a, b) {
+  if (!a || !b) return false;
+  const norm = (p) => path.resolve(p).replace(/\\/g, "/");
+  return process.platform === "win32"
+    ? norm(a).toLowerCase() === norm(b).toLowerCase()
+    : norm(a) === norm(b);
+}
+
+/**
+ * TV versions installed from this ZIP: tizen-tv-sdk-install-from-zip records
+ * the ZIP as "Source:". With tvVersion, any TV record of that version counts
+ * (the same TV version may have come from another ZIP or the repository).
+ * An older ZIP install left only .tv-sdk-installed ("Source:" plus
+ * "TV milestone version:"); that still counts for the same ZIP.
+ *
+ * @param {string} sdkPath
+ * @param {string} zipPath
+ * @param {string} [tvVersion] - "X.Y", or "" when not given
+ */
+function zipTvInstalled(sdkPath, zipPath, tvVersion) {
+  const records = readPlatformRecords(sdkPath).filter((r) =>
+    r.profiles.some(isTvProfile),
+  );
+  let versions = records
+    .filter((r) =>
+      tvVersion
+        ? r.version === tvVersion
+        : r.installedBy === "tv-sdk-install-from-zip" &&
+          samePath(r.source, zipPath),
+    )
+    .map((r) => r.version);
+  if (versions.length === 0 && records.length === 0) {
+    const marker = readTvSdkMarker(sdkPath) || "";
+    const source = (/^Source:\s*(.+?)\s*$/m.exec(marker) || [])[1];
+    const milestone = legacyTvMarkerVersion(sdkPath);
+    if (
+      milestone &&
+      samePath(source, zipPath) &&
+      (!tvVersion || tvVersion === milestone)
+    ) {
+      versions = [milestone];
+    }
+  }
+  return tvPackageEntries("TV-SAMSUNG (ZIP)", versions, sdkPath);
+}
+
+/**
+ * The platforms the user installed, oldest first — what sdk-install
+ * result.packages and platform-install --list report. One entry per recorded
+ * version (recordedPlatformProfiles) plus any version whose
+ * tizen-platform-install run has not finished (it records only on success):
+ *
+ *   - status "incomplete" while .platform-installing-X.Y exists; "installed"
+ *     when platforms/tizen-X.Y still holds a recorded profile's payload;
+ *     "not_installed" when the recorded directories are gone.
+ *   - profiles: the recorded profiles still on disk (all recorded ones when
+ *     none is), so a tv / tv-samsung folder the TV extension bundled for an
+ *     older version is not reported as installed.
+ *
+ * @param {string} sdkPath
+ * @returns {Array<{version: string, status: string, profiles: string[]}>}
+ */
+function installedPlatformEntries(sdkPath) {
+  if (!sdkPath) return [];
+  const byVersion = recordedPlatformProfiles(sdkPath);
+  for (const v of listInstalledPlatformVersions(sdkPath)) {
+    if (
+      fs.existsSync(platformInstallingMarker(sdkPath, v)) &&
+      !byVersion.has(v)
+    ) {
+      byVersion.set(v, new Set());
+    }
+  }
+  return [...byVersion.keys()].sort(comparePlatformVersions).map((version) => {
+    const recorded = [...byVersion.get(version)].sort();
+    const present = platformPayloadProfiles(sdkPath, version).filter((p) =>
+      recorded.includes(p),
+    );
+    let status;
+    if (fs.existsSync(platformInstallingMarker(sdkPath, version))) {
+      status = "incomplete";
+    } else {
+      status = present.length > 0 ? "installed" : "not_installed";
+    }
+    return {
+      version,
+      status,
+      profiles: present.length > 0 ? present : recorded,
+    };
+  });
 }
 
 /**
@@ -539,8 +856,27 @@ function describeEmulatorImages(images) {
  */
 function installedVersionLabel(sdkPath, version) {
   if (version) return version;
-  const installed = listFullyInstalledPlatformVersions(sdkPath);
+  const installed = installedTizenPlatformVersions(sdkPath);
   return installed.length > 0 ? installed[installed.length - 1] : "installed";
+}
+
+/**
+ * The TIZEN-X.Y platforms the user has, oldest first, for messages that
+ * list "installed platforms": installed entries (installedPlatformEntries)
+ * with a non-TV profile. A version that has only TV folders — bundled, or a
+ * TV extension installed for it — is not an installed TIZEN-X.Y, so
+ * "TIZEN-9.0 is not part of it" no longer lists 9.0 as installed.
+ *
+ * @param {string} sdkPath
+ * @returns {string[]}
+ */
+function installedTizenPlatformVersions(sdkPath) {
+  return installedPlatformEntries(sdkPath)
+    .filter(
+      (e) =>
+        e.status === "installed" && e.profiles.some((p) => !isTvProfile(p)),
+    )
+    .map((e) => e.version);
 }
 
 /**
@@ -573,10 +909,10 @@ function requestedPlatformMissing(
   opts = {},
 ) {
   if (!version) return null;
-  // platforms/tizen-X.Y with only "common" is not an installed platform (see
-  // isPlatformInstalled): the base SDK ships that for older API versions.
-  if (isPlatformInstalled(sdkPath, version)) return null;
-  const installed = listFullyInstalledPlatformVersions(sdkPath);
+  // platforms/tizen-X.Y with only "common", or only the TV extension's
+  // folders, is not an installed platform (see isTizenPlatformInstalled).
+  if (isTizenPlatformInstalled(sdkPath, version)) return null;
+  const installed = installedTizenPlatformVersions(sdkPath);
 
   const installedNote =
     installed.length > 0
@@ -1718,23 +2054,18 @@ async function installTvSdk(
     }
     console.error(`[tizen-tv-sdk] Tizen SDK found at ${sdkPath}. Continuing.`);
 
-    // 2. Check if TV SDK is already installed
-    const tvSdkMarker = path.join(sdkPath, ".tv-sdk-installed");
-    if (fs.existsSync(tvSdkMarker) && !force) {
+    // 2. Check if TV SDK is already installed: the online repository carries
+    // one TV version, so any tv-sdk-install record (or the marker an older
+    // online install left without a record) means it is in.
+    const onlineTv = onlineTvInstalled(sdkPath);
+    if (onlineTv.length > 0 && !force) {
       console.error(
-        "[tizen-tv-sdk] TV SDK is already installed (.tv-sdk-installed found).",
+        "[tizen-tv-sdk] TV SDK is already installed (recorded in .platform-installed).",
       );
-      const packages = [
-        {
-          name: "TV-SAMSUNG-Public",
-          status: "installed",
-          version: "extension",
-        },
-      ];
       const warnings = [
-        `TV SDK installation verified at ${sdkPath} (.tv-sdk-installed found). To force a reinstall, run with --force.`,
+        `TV SDK installation verified at ${sdkPath} (TV ${onlineTv.map((p) => p.version).join(", ")} recorded in .platform-installed). To force a reinstall, run with --force.`,
       ];
-      return formatTvSdkInstall(packages, warnings, startTime, command);
+      return formatTvSdkInstall(onlineTv, warnings, startTime, command);
     }
 
     // 3. Resolve TV SDK installer script
@@ -1767,25 +2098,19 @@ async function installTvSdk(
         execPluginScript(installer.scriptPath, winArgs, unixArgs);
         console.error("[tizen-tv-sdk] Installer completed.");
 
-        // Verify installation: check .tv-sdk-installed marker
-        if (fs.existsSync(tvSdkMarker)) {
+        // Verify installation: the installer records the TV version it put in
+        const packages = onlineTvInstalled(sdkPath);
+        if (packages.length > 0) {
           console.error(
-            "[tizen-tv-sdk] TV SDK installation verified (.tv-sdk-installed found).",
+            "[tizen-tv-sdk] TV SDK installation verified (recorded in .platform-installed).",
           );
-          const packages = [
-            {
-              name: "TV-SAMSUNG-Public",
-              status: "installed",
-              version: "extension",
-            },
-          ];
           const warnings = [`TV SDK installed successfully at ${sdkPath}.`];
           return formatTvSdkInstall(packages, warnings, startTime, command);
         } else {
           return formatError(
             command,
             "execution_error",
-            `Installer completed but .tv-sdk-installed not found at ${tvSdkMarker}. Installation may have failed.`,
+            `Installer completed but no TV install is recorded in ${platformRecordPath(sdkPath)}. Installation may have failed.`,
             null,
             startTime,
           );
@@ -1820,7 +2145,7 @@ async function installTvSdk(
         "execution_error",
         "TV SDK is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("detach") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/.tv-sdk-installed exists. " +
+          "Either way, afterwards re-run this CLI to verify the TV version is recorded in <sdk-path>/.platform-installed. " +
           "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
         installerCommand,
         startTime,
@@ -3204,7 +3529,7 @@ async function installPlatform(
       `tizen-${platformVersion}`,
     );
     const installingMarker = platformInstallingMarker(sdkPath, platformVersion);
-    if (!force && isPlatformInstalled(sdkPath, platformVersion)) {
+    if (!force && isTizenPlatformInstalled(sdkPath, platformVersion)) {
       console.error(
         `[tizen-platform-pkg] Platform package TIZEN-${platformVersion} is already installed (${platformDir} found).`,
       );
@@ -3215,7 +3540,7 @@ async function installPlatform(
           version: platformVersion,
         },
       ];
-      const others = listFullyInstalledPlatformVersions(sdkPath).filter(
+      const others = installedTizenPlatformVersions(sdkPath).filter(
         (v) => v !== platformVersion,
       );
       const warnings = [
@@ -3278,7 +3603,7 @@ async function installPlatform(
 
         // Verify installation: the platform directory exists and the run's
         // in-progress marker is gone.
-        if (isPlatformInstalled(sdkPath, platformVersion)) {
+        if (isTizenPlatformInstalled(sdkPath, platformVersion)) {
           console.error(
             `[tizen-platform-pkg] Platform package installation verified (${platformDir} found).`,
           );
@@ -3353,19 +3678,20 @@ async function installPlatform(
 /**
  * List the Tizen platform versions in the installed SDK (read-only).
  *
- * One entry per platforms/tizen-X.Y directory, oldest first:
- *   - status: "installed" (see isPlatformInstalled); "incomplete" while a
- *     tizen-platform-install run of that version has not finished; or
- *     "not_installed" when the directory holds no platform payload — only the
- *     shared "common" data the base SDK ships for older versions, or synced
- *     template samples — so that version can still be installed
- *   - profiles: the profiles of platforms/tizen-X.Y that hold a platform
- *     payload (platformPayloadProfiles — e.g. "tizen", "tv-samsung" when the
- *     TV extension is installed for that version; never "common" or a
- *     samples-only folder)
+ * One entry per platform the user installed, oldest first — the versions
+ * .platform-installed records (installedPlatformEntries), not every
+ * platforms/tizen-X.Y directory: the TV extension also lays down tv /
+ * tv-samsung for older versions nobody asked for.
+ *   - status: "installed" when the recorded profiles are on disk;
+ *     "incomplete" while a tizen-platform-install run of that version has not
+ *     finished; "not_installed" when the recorded directories are gone
+ *   - profiles: the recorded profiles of that version that are on disk
+ *     (e.g. "tizen", plus "tv-samsung" when the TV extension was installed
+ *     for it)
  *   - emulator_images: emulator image directories of that version
- * result.newest is the newest installed version — what create-project and
- * list-templates use when no --platform-version is given.
+ * result.newest is the newest installed entry. create-project and
+ * list-templates still accept any platforms/tizen-X.Y that holds a payload
+ * (isPlatformInstalled), so a bundled older TV version stays usable there.
  *
  * @param {string} [command]
  * @returns {object} Standard JSON Envelope
@@ -3384,11 +3710,12 @@ async function listPlatforms(command = "tizen-sdk platform-list") {
       );
     }
     const images = listInstalledEmulatorImages(sdkPath);
-    const platforms = listInstalledPlatformVersions(sdkPath).map((version) => {
+    const platforms = installedPlatformEntries(sdkPath).map((entry) => {
+      const { version } = entry;
       return {
         version,
-        status: platformStatus(sdkPath, version),
-        profiles: platformPayloadProfiles(sdkPath, version),
+        status: entry.status,
+        profiles: entry.profiles,
         emulator_images: images
           .filter((i) => i.platform === version)
           .map((i) => ({ profile: i.profile, image: i.image })),
@@ -3977,18 +4304,26 @@ async function installRootstrap(
  * Flow:
  * 1. Validate zipPath parameter
  * 2. Check if Tizen SDK is installed (sdk.info) — abort with interactive guidance if not
- * 3. Check if TV SDK is already installed (.tv-sdk-installed marker)
+ * 3. Check if this ZIP's TV version is already installed (zipTvInstalled:
+ *    .platform-installed records this ZIP, or tvVersion, for a TV profile)
  * 4. Return TV SDK ZIP installer command (suggested_fix) — agent executes in Phase 2
+ *
+ * Several TV versions can be installed side by side from their ZIPs (TV 9.0,
+ * 10.0, 11.0). The installer reads the version from the inner ZIP names;
+ * tvVersion states it, and the installer stops before extracting anything
+ * when the two disagree or neither is known.
  *
  * @param {string} zipPath - Path to the TV SDK ZIP file (required)
  * @param {boolean} force - force reinstall (default: false)
  * @param {string} [command] - Command name for envelope
+ * @param {string} [tvVersion] - TV platform version "X.Y" the ZIP is for
  * @returns {object} Standard JSON Envelope
  */
 async function installTvSdkFromZip(
   zipPath,
   force = false,
   command = "tizen-sdk tv-sdk-install-from-zip",
+  tvVersion = "",
 ) {
   const startTime = Date.now();
   try {
@@ -3998,6 +4333,16 @@ async function installTvSdkFromZip(
         command,
         "invalid_parameters",
         "ZipPath is required. Use --zip-path <path> to specify the TV SDK ZIP file.",
+        null,
+        startTime,
+      );
+    }
+    const tv = validateTizenVersion(tvVersion, { required: true });
+    if (tv.error) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--tv-version: ${tv.error}`,
         null,
         startTime,
       );
@@ -4028,23 +4373,17 @@ async function installTvSdkFromZip(
       `[tizen-tv-sdk-zip] Tizen SDK found at ${sdkPath}. Continuing.`,
     );
 
-    // 3. Check if TV SDK is already installed
-    const tvSdkMarker = path.join(sdkPath, ".tv-sdk-installed");
-    if (fs.existsSync(tvSdkMarker) && !force) {
+    // 3. Check if this ZIP's TV version is already installed. Other TV
+    // versions do not matter: TV 9.0 and 11.0 ZIPs install side by side.
+    const already = zipTvInstalled(sdkPath, zipPath, tv.version);
+    if (already.length > 0 && !force) {
       console.error(
-        "[tizen-tv-sdk-zip] TV SDK is already installed (.tv-sdk-installed found).",
+        "[tizen-tv-sdk-zip] This TV version is already installed (recorded in .platform-installed).",
       );
-      const packages = [
-        {
-          name: "TV-SAMSUNG-Public",
-          status: "installed",
-          version: "extension",
-        },
-      ];
       const warnings = [
-        `TV SDK installation verified at ${sdkPath} (.tv-sdk-installed found). To force a reinstall, run with --force.`,
+        `TV SDK ${already.map((p) => p.version).join(", ")} installation verified at ${sdkPath} (recorded in .platform-installed). To force a reinstall, run with --force.`,
       ];
-      return formatTvSdkInstall(packages, warnings, startTime, command);
+      return formatTvSdkInstall(already, warnings, startTime, command);
     }
 
     // 4. Resolve TV SDK ZIP installer script
@@ -4078,6 +4417,10 @@ async function installTvSdkFromZip(
       `-ZipPath "${zipPath.replace(/"/g, '\\"')}"`,
     ];
     const unixFlags = [`--sdk-path="${sdkPath}"`, `--zip-path="${zipPath}"`];
+    if (tv.version) {
+      winFlags.push(`-TvVersion ${tv.version}`);
+      unixFlags.push(`--tv-version=${tv.version}`);
+    }
     if (force) {
       winFlags.push("-Force");
       unixFlags.push("--force");
@@ -4094,18 +4437,12 @@ async function installTvSdkFromZip(
         execPluginScript(installer.scriptPath, winArgs, unixArgs);
         console.error("[tizen-tv-sdk-zip] Installer completed.");
 
-        // Verify installation: check .tv-sdk-installed marker
-        if (fs.existsSync(tvSdkMarker)) {
+        // Verify installation: the installer records the ZIP's TV version
+        const packages = zipTvInstalled(sdkPath, zipPath, tv.version);
+        if (packages.length > 0) {
           console.error(
-            "[tizen-tv-sdk-zip] TV SDK installation verified (.tv-sdk-installed found).",
+            "[tizen-tv-sdk-zip] TV SDK installation verified (recorded in .platform-installed).",
           );
-          const packages = [
-            {
-              name: "TV-SAMSUNG-Public",
-              status: "installed",
-              version: "extension",
-            },
-          ];
           const warnings = [
             `TV SDK installed successfully at ${sdkPath} from ${zipPath}.`,
           ];
@@ -4114,7 +4451,7 @@ async function installTvSdkFromZip(
           return formatError(
             command,
             "execution_error",
-            `Installer completed but .tv-sdk-installed not found at ${tvSdkMarker}. Installation may have failed.`,
+            `Installer completed but ${zipPath} is not recorded in ${platformRecordPath(sdkPath)}. Installation may have failed.`,
             null,
             startTime,
           );
@@ -4148,7 +4485,7 @@ async function installTvSdkFromZip(
         "execution_error",
         "TV SDK is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("detach") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/.tv-sdk-installed exists. " +
+          "Either way, afterwards re-run this CLI with the same --zip-path (and --tv-version) to verify the TV version is recorded in <sdk-path>/.platform-installed. " +
           "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
         installerCommand,
         startTime,
@@ -4179,10 +4516,16 @@ module.exports = {
   collectInstalledPackages,
   installedPackageSummary,
   platformPayloadProfiles,
+  readPlatformRecords,
+  recordedPlatformProfiles,
+  installedPlatformEntries,
+  isTvVersionRecorded,
+  installedTizenPlatformVersions,
   ensureSdkPathConfig,
   validateTizenVersion,
   listInstalledPlatformVersions,
   isPlatformInstalled,
+  isTizenPlatformInstalled,
   listFullyInstalledPlatformVersions,
   requestedPlatformMissing,
   describeInstallerFailure,

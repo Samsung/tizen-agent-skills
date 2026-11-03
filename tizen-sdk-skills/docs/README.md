@@ -634,7 +634,7 @@ Tizen 웹앱(.wgt)에 대해 CDP로 Playwright 테스트를 **실행하거나 �
 #### 자동화되는 단계
 
 1. Tizen SDK 설치 여부 확인 — 미설치 시 대화형 안내와 함께 중단
-2. 기설치 확인 (`.tv-sdk-installed` 마커) — 설치되어 있으면 success 반환
+2. 기설치 확인 (`.platform-installed`의 `tv-sdk-install` 기록, 또는 이전 설치가 남긴 `.tv-sdk-installed`) — 설치되어 있으면 success 반환
 3. TV SDK 설치 스크립트 명령 반환 후 실행 (Phase 2)
 
 #### CLI 러너

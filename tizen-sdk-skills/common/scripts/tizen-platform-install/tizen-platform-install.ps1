@@ -118,6 +118,10 @@ $platformPkgMarkerPath = Join-Path $SdkPath ".platform-installed"
 # live side by side. Without -PlatformVersion the version is resolved from
 # pkg_list below and checked again there.
 if ($PlatformVersion -and -not $Force -and (Test-PlatformInstalled -SdkPath $SdkPath -Version $PlatformVersion)) {
+    # Asked for explicitly, so it belongs in the record even when an earlier
+    # install (e.g. the base SDK's) did not write one.
+    Add-PlatformRecord -SdkPath $SdkPath -Target "TIZEN-$PlatformVersion" -Version $PlatformVersion `
+        -Profiles (Get-PlatformInstallProfiles -SdkPath $SdkPath -Version $PlatformVersion) -InstalledBy "platform-install"
     Write-Success "Platform package TIZEN-$PlatformVersion is already installed: $(Join-Path $SdkPath "platforms\tizen-$PlatformVersion")"
     Write-Info "To reinstall, run again with -Force"
     exit 0
@@ -244,6 +248,8 @@ Write-Success "Target package found: $TargetPackage (version $($db[$TargetPackag
 
 # The auto-detected version may already be installed too.
 if (-not $Force -and (Test-PlatformInstalled -SdkPath $SdkPath -Version $PlatformVersion)) {
+    Add-PlatformRecord -SdkPath $SdkPath -Target "TIZEN-$PlatformVersion" -Version $PlatformVersion `
+        -Profiles (Get-PlatformInstallProfiles -SdkPath $SdkPath -Version $PlatformVersion) -InstalledBy "platform-install" -Source $PkgRepo
     Write-Success "Platform package TIZEN-$PlatformVersion is already installed: $(Join-Path $SdkPath "platforms\tizen-$PlatformVersion")"
     Write-Info "To reinstall, run again with -Force"
     Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
@@ -418,15 +424,12 @@ if ($fail -gt 0) {
     exit 1
 }
 
-# Completed: drop the in-progress marker and record the version in the history
-# (once per version; the other versions' entries stay).
+# Completed: drop the in-progress marker and record the version and its
+# profiles (Add-PlatformRecord, lib\common.ps1: once per version and profile;
+# the other entries stay).
 Remove-Item $platformInstallingMarkerPath -Force -ErrorAction SilentlyContinue
-$recorded = (Test-Path $platformPkgMarkerPath) -and
-    ([System.IO.File]::ReadAllLines($platformPkgMarkerPath) -contains "Platform version: $PlatformVersion")
-if (-not $recorded) {
-    $markerContent = "Platform package installed at $(Get-Date -Format 'o')`nTarget: $TargetPackage`nPlatform version: $PlatformVersion`n"
-    Add-Content -Path $platformPkgMarkerPath -Value $markerContent -Encoding UTF8 -NoNewline
-}
+Add-PlatformRecord -SdkPath $SdkPath -Target $TargetPackage -Version $PlatformVersion `
+    -Profiles (Get-PlatformInstallProfiles -SdkPath $SdkPath -Version $PlatformVersion) -InstalledBy "platform-install" -Source $PkgRepo
 Write-Success "TIZEN-$PlatformVersion recorded in $platformPkgMarkerPath"
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue

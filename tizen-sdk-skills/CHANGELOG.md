@@ -16,6 +16,49 @@ below use those release tags.
 
 ### Changed
 
+- **`sdk-install` / `sdk-install-custom-repo` result.packages and
+  `platform-install --list` report the platforms the user installed**, read
+  from `<sdk>/.platform-installed`, instead of every `platforms/tizen-X.Y`.
+  The TV extension lays down `tv` / `tv-samsung` folders for 2.4 … 9.0 next
+  to the one TV version it is for, so an SDK with TIZEN-10.0, TIZEN-11.0 and
+  the 10.0 TV extension listed twelve "installed" versions; it now lists
+  `Tizen SDK 10.0` (`tizen`, `tv-samsung`) and `Tizen SDK 11.0` (`tizen`).
+  - Entries are named `Tizen SDK X.Y` (was `Tizen Platform X.Y`), and the
+    `Tizen SDK Tools` entry, which only repeated a version label, is gone.
+  - Every installer appends one block per install — `Target`,
+    `Platform version`, `Profile`, `Installed by`, `Source`:
+    `sdk-install` (the requested version, else the repository's newest),
+    `platform-install`, `tv-sdk-install` (the version of its `X.Y-MANDATORY`
+    dependency) and `tv-sdk-install-from-zip`. A block from before the
+    `Profile` line counts as `tizen` (or `tv-samsung` for a `TV-…` target).
+  - An SDK installed before this change keeps reporting what it has: the
+    base install's platform (the newest version holding a non-TV payload)
+    until a `sdk-install` record exists, and the TV version an older
+    `.tv-sdk-installed` names. The installers turn both into records before
+    they write their own: `sdk-install` records that base platform before it
+    installs (so a later forced install of another version keeps it), and
+    the TV installers record the marker's TV version before replacing it.
+  - `create-project` / `list-templates --platform-version` still accept any
+    version whose files are on disk, so a bundled older TV version stays
+    usable there.
+- **TV SDK ZIPs of different versions install side by side.**
+  `tv-sdk-install-from-zip` used to stop at any `.tv-sdk-installed`, so a
+  second ZIP (TV 9.0 after TV 10.0) needed `--force`. Both TV installers now
+  skip only a TV version `.platform-installed` already records.
+  - New `--tv-version <X.Y>` (`-TvVersion`) names the TV version the ZIP is
+    for. The installer still reads it from the inner ZIP names; when the two
+    disagree, or neither gives one, it stops before extracting anything. A
+    ZIP that leaves no `tv-samsung` folder for that version is not recorded
+    and the run fails.
+  - The pre-check reports a ZIP as installed when `.platform-installed`
+    records it (`Source:`) or records `--tv-version`, and result.packages
+    carries the TV version instead of `"extension"`.
+  - `--status` no longer reads a previous run's marker as this run's
+    completion: the marker is removed when a new install starts.
+  - The TV hints of `create-project` / `list-templates` add
+    `--tv-version X.Y` and offer `--force` only for a TV version that is
+    already recorded.
+
 - **Node.js 22 or later is now required** (Node.js 20 reached end-of-life on
   2026-04-30). CI and releases run on Node 22 (`.nvmrc`) and `engines` is
   `>=22`. `check-node`, the `sdk-install` / `sdk-install-custom-repo`
@@ -54,6 +97,12 @@ below use those release tags.
   the password. No behaviour change.
 
 ### Fixed
+
+- `sdk-install --tizen-version 9.0` and `platform-install --platform-version
+9.0` no longer answer "already installed" when `platforms/tizen-9.0` holds
+  only the `tv` / `tv-samsung` folders the TV extension bundles: the
+  installers' check (`isTizenPlatformInstalled`, `platform_installed`,
+  `Test-PlatformInstalled`) leaves the TV profiles out.
 
 - `sdk-install` / `sdk-install-custom-repo` no longer report every
   `platforms/` entry as one `Tizen Platforms (N)` package with a single

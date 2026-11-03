@@ -155,10 +155,8 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen SDK 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] }
     ],
     "installation_status": "completed"
   },
@@ -166,7 +164,7 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
 }
 ```
 
-**`result.packages`:** 아래 `sdk-install-custom-repo`와 같은 버전별 목록입니다 — `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다(이 값은 라벨이며 SDK 버전이 아닙니다). SDK가 이미 설치되어 있을 때도 같은 Envelope가 돌아옵니다.
+**`result.packages`:** 아래 `sdk-install-custom-repo`와 같은 목록입니다 — 사용자가 설치한 플랫폼 버전(`.platform-installed`에 기록된 버전)마다 `platform-install --list`와 같은 `status`와 `profiles`를 가진 `Tizen SDK X.Y` 항목이 하나씩 있습니다. SDK가 이미 설치되어 있을 때도 같은 Envelope가 돌아옵니다.
 
 **응답 (Node.js 미설치):**
 
@@ -811,7 +809,7 @@ node <plugin>/lib/cli/tv-sdk-install-cli.js [--force]
    └─ 미설치 → 대화형 메시지: "Tizen SDK가 먼저 설치되어야 합니다. 설치하시겠습니까?"
        ├─ 승인 → tizen-sdk-install 스킬 호출 → 완료 후 TV SDK 설치 재시도
        └─ 거부 → 중단 종료
-2. TV SDK 이미 설치? (.tv-sdk-installed 마커) → 설치 시 success 반환
+2. TV SDK 이미 설치? (`.platform-installed`의 `tv-sdk-install` 기록, 또는 이전 설치가 남긴 `.tv-sdk-installed`) → 설치 시 success 반환
 3. TV SDK 설치 스크립트 명령 반환 (suggested_fix) — Phase 2 background 실행
 ```
 
@@ -836,12 +834,13 @@ node <plugin>/lib/cli/tv-sdk-install-cli.js [--force]
 | 파라미터   | 타입    | 기본값  | 설명                                    |
 | ---------- | ------- | ------- | --------------------------------------- |
 | `zipPath`  | string  | (필수)  | TV SDK 패키지가 포함된 ZIP 파일 경로    |
-| `force`    | boolean | `false` | 이미 설치되어 있어도 강제 재설치        |
+| `tvVersion` | string | ZIP에서 읽음 | ZIP이 담은 TV 플랫폼 버전(`--tv-version X.Y`). 내부 ZIP 이름에 버전이 없으면 필수 |
+| `force`    | boolean | `false` | 그 TV 버전이 이미 설치되어 있어도 강제 재설치 |
 
 **CLI 러너:**
 
 ```
-node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--force]
+node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--tv-version <X.Y>] [--force]
 ```
 
 **설치 조건 흐름:**
@@ -852,7 +851,7 @@ node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--force]
    └─ 미설치 → 대화형 메시지: "Tizen SDK가 먼저 설치되어야 합니다. 설치하시겠습니까?"
        ├─ 승인 → tizen-sdk-install 스킬 호출 → 완료 후 TV SDK 설치 재시도
        └─ 거부 → 중단 종료
-2. TV SDK 이미 설치? (.tv-sdk-installed 마커) → 설치 시 success 반환
+2. 이 ZIP의 TV 버전이 이미 설치? (`.platform-installed`에 이 ZIP 또는 `--tv-version`이 기록됨) → 설치 시 success 반환. 다른 TV 버전은 나란히 설치된다
 3. TV SDK 설치 스크립트 명령 반환 (suggested_fix) — Phase 2 background 실행
 ```
 
@@ -860,7 +859,8 @@ node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--force]
 
 - ZIP 파일에서 패키지 추출 (다운로드 불필요, 오프라인 설치)
 - 내부 ZIP 파일들을 SDK tools 경로에 압축 해제
-- `.tv-sdk-installed` 마커 파일 생성
+- 내부 ZIP 이름(또는 `--tv-version`)에서 TV 버전을 정한다. 둘이 다르거나 둘 다 없으면 압축을 풀기 전에 멈춘다
+- TV 버전을 `.platform-installed`에 기록(`Profile: tv-samsung`, `Source: <zip>`)하고 `.tv-sdk-installed` 마커를 쓴다
 
 **의존성:** `tizen-sdk-install` (Tizen SDK가 먼저 설치되어야 함)
 
@@ -1114,10 +1114,8 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] }
     ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
     "installation_status": "completed"
@@ -1126,7 +1124,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 }
 ```
 
-**`result.packages`:** `platforms/tizen-X.Y`마다 `Tizen Platform X.Y` 항목이 하나씩(오래된 버전부터) 있고, `platform-install --list`와 같은 `status`(`installed`, `incomplete`, `not_installed`)와 `profiles`(실제 플랫폼 내용이 있는 프로필만 — `common`이나 동기화된 템플릿 `samples`만 있는 폴더는 제외)를 가지며, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다. 설치가 성공해도 `not_installed`나 `incomplete` 버전이 함께 나올 수 있으니 모두 보고합니다. 요약에서는 `status`별로(`installed`는 `profiles`에 `tizen`이 있는지로 나누고, `tizen`이 없는 버전은 `profiles`별로 묶어 그 이름을 붙여) 묶어 한 줄에 모든 버전을 적습니다.
+**`result.packages`:** 사용자가 설치한 플랫폼 버전마다 `Tizen SDK X.Y` 항목이 하나씩(오래된 버전부터) 있습니다. `.platform-installed`에 기록된 버전(sdk-install, platform-install, 두 TV 설치기가 설치할 때마다 버전·`Profile`·`Installed by`·`Source`를 담은 블록을 덧붙입니다)과, `platform-install`이 아직 끝나지 않은 버전입니다. 항목마다 `platform-install --list`와 같은 `status`(`installed`, `incomplete`, 기록된 폴더가 지워졌으면 `not_installed`)와 `profiles`(디스크에 있는 기록된 프로필: `tizen`, 그 버전에 TV 확장을 설치했으면 `tv-samsung`)를 가집니다. TV 확장이 예전 버전용으로 함께 깔아 두는 `tv` / `tv-samsung` 폴더(2.4 … 9.0)는 항목이 아닙니다. 기록이 생기기 전에 설치한 SDK도 기본 설치 플랫폼(TV가 아닌 내용이 있는 가장 높은 버전)과 `.tv-sdk-installed`에 적힌 TV 버전은 그대로 보고하며, `sdk-install`과 TV 설치기는 자기 블록을 쓰기 전에 이 둘을 먼저 기록합니다. 요약에서는 모든 항목을 프로필과 함께 한 줄에 적습니다(예: `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
 
 **참고:** repository_url은 루트에서 `pkg_list_{OS}-{64,32}`를 제공하는 어떤 서버든 될 수 있습니다. 예:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 미러)
@@ -1232,7 +1230,7 @@ node <plugin>/lib/cli/platform-install-cli.js [--platform-version <version>] [--
 
 ```
 1. Tizen SDK 설치 여부 확인 (sdk.info) → 미설치 시 중단
-2. 플랫폼 패키지 이미 설치? (.platform-installed 마커) → 설치 시 success 반환
+2. 플랫폼 패키지 이미 설치? (`platforms/tizen-X.Y`에 `common` / `tv` / `tv-samsung*` 외의 프로필이 있고 `.platform-installing-X.Y`가 없음) → 설치 시 success 반환
 3. 플랫폼 패키지 설치 스크립트 명령 반환 (suggested_fix) — Phase 2 background 실행
 ```
 

@@ -111,6 +111,7 @@ TV SDK 확장은 다음 패키지를 다운로드하고 병합합니다:
 
 ```
 [OK] TV SDK package result: OK 18 / skipped 4 / failed 0 (total 22)
+[OK] TV 10.0 (tv-samsung) recorded in /home/user/tizen-sdk/.platform-installed
 [OK] .tv-sdk-installed created: /home/user/tizen-sdk/.tv-sdk-installed
 [OK] Tizen TV SDK extension installation completed!
 ```
@@ -138,8 +139,9 @@ TV SDK 확장은 다음 패키지를 다운로드하고 병합합니다:
 | 구성 요소     | 상태      | 경로                                    | 버전      |
 | ------------- | --------- | --------------------------------------- | --------- |
 | Tizen SDK     | ✅ 설치됨 | `/home/user/tizen-sdk`                   | 10.0      |
-| TV SDK 확장   | ✅ 설치됨 | `/home/user/tizen-sdk` (병합됨)          | extension |
+| TV SDK 확장   | ✅ 설치됨 | `/home/user/tizen-sdk` (병합됨)          | 10.0 (`tv-samsung`) |
 | SDK 경로 설정 | ✅ 작성됨 | `~/.tizen.sdk.path.config`              | —         |
+| 설치 기록     | ✅ 추가됨 | `/home/user/tizen-sdk/.platform-installed` | 10.0 `tv-samsung` |
 | TV SDK 마커   | ✅ 생성됨 | `/home/user/tizen-sdk/.tv-sdk-installed` | —         |
 
 ## CDN 미러 선택
@@ -165,7 +167,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 
 1. **`list-templates --type tv`** — TV 템플릿 목록을 확인합니다. 빈 배열(`[]`)이 반환되면 TV SDK가 미설치된 것입니다. TV 템플릿이 존재하면 설치된 것으로 판정합니다.
 
-2. **`tv-sdk-install` 재실행 (멱등성)** — `tv-sdk-install` CLI는 `.tv-sdk-installed` 마커를 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
+2. **`tv-sdk-install` 재실행 (멱등성)** — `tv-sdk-install` CLI는 `.platform-installed`의 TV 기록(또는 이전 설치가 남긴 `.tv-sdk-installed`)을 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
 
 ### ❌ 잘못된 방법
 
@@ -176,7 +178,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 | 방법                         | 신뢰성       | 비고                                         |
 | ---------------------------- | ------------ | -------------------------------------------- |
 | `list-templates --type tv`   | ✅ 신뢰 가능 | 빈 배열 = 미설치, 항목 있음 = 설치됨         |
-| `tv-sdk-install` 재실행      | ✅ 신뢰 가능 | 멱등성 보장, `.tv-sdk-installed` 마커로 판정 |
+| `tv-sdk-install` 재실행      | ✅ 신뢰 가능 | 멱등성 보장, `.platform-installed`의 TV 기록으로 판정 |
 | `list-platform --profile tv` | ❌ 오판 위험 | `--profile` 무시됨, false positive 유발      |
 
 ## 다음 단계

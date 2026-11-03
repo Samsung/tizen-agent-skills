@@ -31,6 +31,7 @@ const {
   describeChildExit,
   validateTizenVersion,
   isPlatformInstalled,
+  isTvVersionRecorded,
   listFullyInstalledPlatformVersions,
   comparePlatformVersions,
 } = require("./sdk");
@@ -462,16 +463,15 @@ function tvVersionsOnDisk(sdkPath) {
 /**
  * The two ways to get the TV extension of TIZEN-X.Y: tizen-tv-sdk-install
  * installs the one version the online repository carries, a TV SDK ZIP can
- * hold any version. Both installers skip while the single .tv-sdk-installed
- * marker exists, whatever version it was written for, so --force follows it.
+ * hold any version. Both installers skip only a TV version that
+ * .platform-installed already records (isTvVersionRecorded), so --force
+ * follows that version's record: adding another TV version needs none.
  */
 function tvInstallSteps(version, sdkPath) {
-  const f = fs.existsSync(path.join(sdkPath, ".tv-sdk-installed"))
-    ? " --force"
-    : "";
+  const f = isTvVersionRecorded(sdkPath, version) ? " --force" : "";
   return (
     `install it with tizen-tv-sdk-install${f} if the repository's TV package is for TIZEN-${version}, ` +
-    `or from a TIZEN-${version} TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip>${f}`
+    `or from a TIZEN-${version} TV SDK ZIP with tizen-tv-sdk-install-from-zip --zip-path <zip> --tv-version ${version}${f}`
   );
 }
 

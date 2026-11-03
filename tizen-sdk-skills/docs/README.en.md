@@ -644,7 +644,7 @@ Installs the **TV SDK extension** (TV-SAMSUNG-Public package) on top of an exist
 #### Automated Steps
 
 1. Verify the Tizen SDK is installed — abort with an interactive prompt if not
-2. Check for an existing installation (`.tv-sdk-installed` marker) — return success if already installed
+2. Check for an existing installation (a `tv-sdk-install` record in `.platform-installed`, or the `.tv-sdk-installed` an older install left) — return success if already installed
 3. Return the TV SDK install script command, then run it (Phase 2)
 
 #### CLI Runner

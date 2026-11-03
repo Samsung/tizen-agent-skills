@@ -103,10 +103,12 @@ function ConvertTo-QuotedArgument {
 
 # ----------------------------------------------------------------------------
 # Is platform TIZEN-$Version installed in the SDK at $SdkPath? Mirror of
-# isPlatformInstalled (lib/core/sdk.js): platforms\tizen-X.Y must hold a
-# platform profile - a sub-directory besides "common" (which the base SDK ships
-# for older API versions too) with content besides "samples" (which
-# tizen-create-project syncs templates into) - and no tizen-platform-install
+# isTizenPlatformInstalled (lib/core/sdk.js) - the installers' "already
+# installed" check: platforms\tizen-X.Y must hold a platform profile - a
+# sub-directory besides "common" (which the base SDK ships for older API
+# versions too) and besides the TV extension's tv / tv-samsung* (which it lays
+# down for older versions too) - with content besides "samples" (which
+# tizen-create-project syncs templates into), and no tizen-platform-install
 # run of that version may still be marked in progress (.platform-installing-X.Y).
 #
 # Like the JS layer it matches "Tizen-12.0" (NTFS is case-insensitive) and
@@ -119,13 +121,223 @@ function Test-PlatformInstalled {
     if (Test-Path (Join-Path $SdkPath ".platform-installing-$Version")) { return $false }
     $dir = Join-Path $SdkPath "platforms\tizen-$Version"
     $profiles = Get-ChildItem -Path $dir -Directory -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -ne 'common' }
+        Where-Object { $_.Name -ne 'common' -and -not (Test-TvProfileName $_.Name) }
     foreach ($p in $profiles) {
         $payload = Get-ChildItem -Path $p.FullName -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.Name -ne 'samples' }
         if ($payload) { return $true }
     }
     return $false
+}
+
+# Profiles that belong to the TV extension, not to a TIZEN-X.Y platform.
+function Test-TvProfileName {
+    param([string]$Name)
+    return ($Name -eq 'tv' -or $Name -like 'tv-samsung*')
+}
+
+# ----------------------------------------------------------------------------
+# $SdkPath\.platform-installed records the platforms the user installed: one
+# block per successful install, appended by every installer. Mirror of
+# readPlatformRecords (lib/core/sdk.js) and record_platform_install
+# (lib/common.sh):
+#
+#   Platform package installed at 2026-11-03T10:00:00.0000000+09:00
+#   Target: TIZEN-11.0                   (TV-SAMSUNG-Public, TV-SAMSUNG ZIP)
+#   Platform version: 11.0
+#   Profile: tizen                       (tv-samsung; comma-separated list)
+#   Installed by: sdk-install            (platform-install, tv-sdk-install,
+#                                         tv-sdk-install-from-zip)
+#   Source: <repository URL or ZIP path> (optional)
+#
+# A block written before the Profile line existed gets it from its Target:
+# TV-... is tv-samsung, anything else is tizen.
+# ----------------------------------------------------------------------------
+
+# One object (Version, Profile, InstalledBy) per recorded profile. Callers wrap
+# the call in @(): no records means no output.
+function Get-PlatformRecords {
+    param([string]$SdkPath)
+    $file = Join-Path $SdkPath ".platform-installed"
+    if (-not (Test-Path -LiteralPath $file)) { return }
+    $blocks = New-Object System.Collections.Generic.List[hashtable]
+    $cur = $null
+    # ReadAllLines drops the BOM Windows PowerShell 5.1's Add-Content wrote.
+    foreach ($raw in [System.IO.File]::ReadAllLines($file)) {
+        $line = $raw.Trim()
+        if ($line.StartsWith('Platform package installed at')) {
+            $cur = @{ Version = ''; Profiles = ''; Target = ''; By = '' }
+            $blocks.Add($cur)
+            continue
+        }
+        if ($null -eq $cur) { continue }
+        if ($line -match '^Target:\s*(.*)$') { $cur.Target = $Matches[1] }
+        elseif ($line -match '^Platform version:\s*(.*)$') { $cur.Version = $Matches[1] }
+        elseif ($line -match '^Profile:\s*(.*)$') { $cur.Profiles = $Matches[1] }
+        elseif ($line -match '^Installed by:\s*(.*)$') { $cur.By = $Matches[1] }
+    }
+    foreach ($b in $blocks) {
+        if ($b.Version -notmatch '^[0-9]+\.[0-9]+$') { continue }
+        $list = $b.Profiles
+        if (-not $list) {
+            if ($b.Target -match '^TV-') { $list = 'tv-samsung' } else { $list = 'tizen' }
+        }
+        foreach ($p in ($list -split ',')) {
+            $p = $p.Trim()
+            if ($p) { [pscustomobject]@{ Version = $b.Version; Profile = $p; InstalledBy = $b.By } }
+        }
+    }
+}
+
+# Is profile $ProfileName of $Version recorded?
+function Test-PlatformRecorded {
+    param([string]$SdkPath, [string]$Version, [string]$ProfileName)
+    return (@(Get-PlatformRecords -SdkPath $SdkPath | Where-Object {
+        $_.Version -eq $Version -and $_.Profile -eq $ProfileName }).Count -gt 0)
+}
+
+# Is any TV profile (tv, tv-samsung*) of $Version recorded?
+function Test-TvVersionRecorded {
+    param([string]$SdkPath, [string]$Version)
+    return (@(Get-PlatformRecords -SdkPath $SdkPath | Where-Object {
+        $_.Version -eq $Version -and (Test-TvProfileName $_.Profile) }).Count -gt 0)
+}
+
+# platforms\tizen-$Version (any case: NTFS is case-insensitive), or $null.
+function Get-PlatformVersionDir {
+    param([string]$SdkPath, [string]$Version)
+    $dir = Join-Path $SdkPath "platforms\tizen-$Version"
+    if (Test-Path -LiteralPath $dir -PathType Container) { return $dir }
+    return $null
+}
+
+# Sub-directories of platforms\tizen-$Version that hold a payload (content
+# besides synced "samples"), filtered by $Filter.
+function Get-PayloadProfileNames {
+    param([string]$SdkPath, [string]$Version, [scriptblock]$Filter)
+    $dir = Get-PlatformVersionDir -SdkPath $SdkPath -Version $Version
+    if (-not $dir) { return }
+    foreach ($d in (Get-ChildItem -Path $dir -Directory -ErrorAction SilentlyContinue | Sort-Object Name)) {
+        if (-not (& $Filter $d.Name)) { continue }
+        $payload = Get-ChildItem -Path $d.FullName -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -ne 'samples' }
+        if ($payload) { $d.Name }
+    }
+}
+
+# The non-TV profiles of platforms\tizen-$Version with a payload, comma-joined
+# ("tizen" when none) - what a TIZEN-X.Y install records as its Profile.
+function Get-PlatformInstallProfiles {
+    param([string]$SdkPath, [string]$Version)
+    $names = @(Get-PayloadProfileNames -SdkPath $SdkPath -Version $Version -Filter {
+        param($n) $n -ne 'common' -and -not (Test-TvProfileName $n) })
+    if ($names.Count -eq 0) { return 'tizen' }
+    return ($names -join ', ')
+}
+
+# The tv-samsung* profiles of platforms\tizen-$Version with a payload,
+# comma-joined, or '' - what a TV install records as its Profile.
+function Get-TvInstallProfiles {
+    param([string]$SdkPath, [string]$Version)
+    $names = @(Get-PayloadProfileNames -SdkPath $SdkPath -Version $Version -Filter {
+        param($n) $n -like 'tv-samsung*' })
+    return ($names -join ', ')
+}
+
+# Append one block to .platform-installed unless every profile in $Profiles
+# (comma-separated) is already recorded for $Version. Written without a BOM.
+function Add-PlatformRecord {
+    param(
+        [string]$SdkPath, [string]$Target, [string]$Version, [string]$Profiles,
+        [string]$InstalledBy, [string]$Source = ''
+    )
+    if (-not $Version -or -not $Profiles) { return }
+    $missing = $false
+    foreach ($p in ($Profiles -split ',')) {
+        $p = $p.Trim()
+        if ($p -and -not (Test-PlatformRecorded -SdkPath $SdkPath -Version $Version -ProfileName $p)) {
+            $missing = $true
+        }
+    }
+    if (-not $missing) { return }
+    $file = Join-Path $SdkPath ".platform-installed"
+    $prefix = ''
+    # A file whose last block lacks a newline would swallow the new first line.
+    if ((Test-Path -LiteralPath $file) -and (Get-Item -LiteralPath $file).Length -gt 0) {
+        $bytes = [System.IO.File]::ReadAllBytes($file)
+        if ($bytes[$bytes.Length - 1] -ne 10) { $prefix = "`n" }
+    }
+    $lines = @(
+        "Platform package installed at $(Get-Date -Format 'o')",
+        "Target: $Target",
+        "Platform version: $Version",
+        "Profile: $Profiles",
+        "Installed by: $InstalledBy"
+    )
+    if ($Source) { $lines += "Source: $Source" }
+    [System.IO.File]::AppendAllText($file, $prefix + ($lines -join "`n") + "`n", [System.Text.UTF8Encoding]::new($false))
+}
+
+# An SDK installed before sdk-install wrote records has its base platform
+# unrecorded; readers count it while no "Installed by: sdk-install" block
+# exists. Record it before a new sdk-install run writes its own block (mirror
+# of migrate_base_platform_record, lib/common.sh): the newest version that
+# Test-PlatformInstalled holds and no non-TV block records yet. Call it
+# before the run changes platforms\.
+function Convert-BasePlatformToRecord {
+    param([string]$SdkPath)
+    $file = Join-Path $SdkPath ".platform-installed"
+    if ((Test-Path -LiteralPath $file) -and
+        @([System.IO.File]::ReadAllLines($file) | Where-Object { $_.Trim() -eq 'Installed by: sdk-install' }).Count -gt 0) {
+        return
+    }
+    $records = @(Get-PlatformRecords -SdkPath $SdkPath)
+    $base = $null
+    foreach ($d in (Get-ChildItem -Path (Join-Path $SdkPath "platforms") -Directory -ErrorAction SilentlyContinue)) {
+        if ($d.Name -notmatch '^tizen-([0-9]+\.[0-9]+)$') { continue }
+        $v = $Matches[1]
+        if (-not (Test-PlatformInstalled -SdkPath $SdkPath -Version $v)) { continue }
+        if (@($records | Where-Object { $_.Version -eq $v -and -not (Test-TvProfileName $_.Profile) }).Count -gt 0) { continue }
+        if ($null -eq $base -or [version]$v -gt [version]$base) { $base = $v }
+    }
+    if (-not $base) { return }
+    Add-PlatformRecord -SdkPath $SdkPath -Target "TIZEN-$base" -Version $base `
+        -Profiles (Get-PlatformInstallProfiles -SdkPath $SdkPath -Version $base) -InstalledBy "sdk-install"
+}
+
+# An SDK whose TV extension was installed before the TV installers wrote
+# records has only .tv-sdk-installed. Turn it into a record before a new TV
+# install replaces that marker (mirror of migrate_tv_sdk_marker, lib/common.sh):
+# its "TV milestone version" (a ZIP install, which also wrote "Source:"), else
+# the newest version with a tv-samsung payload (the online install).
+function Convert-TvSdkMarkerToRecord {
+    param([string]$SdkPath)
+    $marker = Join-Path $SdkPath ".tv-sdk-installed"
+    if (-not (Test-Path -LiteralPath $marker)) { return }
+    if (@(Get-PlatformRecords -SdkPath $SdkPath | Where-Object { Test-TvProfileName $_.Profile }).Count -gt 0) { return }
+    $text = [System.IO.File]::ReadAllText($marker)
+    $version = ''
+    $source = ''
+    if ($text -match '(?m)^TV milestone version:\s*([0-9]+\.[0-9]+)') { $version = $Matches[1] }
+    if ($text -match '(?m)^Source:\s*(.+?)\s*$') { $source = $Matches[1] }
+    if (-not $version -or -not (Get-TvInstallProfiles -SdkPath $SdkPath -Version $version)) {
+        $version = ''
+        $best = $null
+        foreach ($d in (Get-ChildItem -Path (Join-Path $SdkPath "platforms") -Directory -ErrorAction SilentlyContinue)) {
+            if ($d.Name -notmatch '^tizen-([0-9]+\.[0-9]+)$') { continue }
+            $v = $Matches[1]
+            if (-not (Get-TvInstallProfiles -SdkPath $SdkPath -Version $v)) { continue }
+            if ($null -eq $best -or [version]$v -gt [version]$best) { $best = $v }
+        }
+        if ($best) { $version = $best }
+    }
+    if (-not $version) { return }
+    $profiles = Get-TvInstallProfiles -SdkPath $SdkPath -Version $version
+    if ($source) {
+        Add-PlatformRecord -SdkPath $SdkPath -Target "TV-SAMSUNG ZIP" -Version $version -Profiles $profiles -InstalledBy "tv-sdk-install-from-zip" -Source $source
+    } else {
+        Add-PlatformRecord -SdkPath $SdkPath -Target "TV-SAMSUNG-Public" -Version $version -Profiles $profiles -InstalledBy "tv-sdk-install"
+    }
 }
 
 # ----------------------------------------------------------------------------

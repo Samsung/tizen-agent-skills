@@ -8,10 +8,15 @@
 # - Accepts a local ZIP file path containing the TV SDK bundle
 # - Extracts the main ZIP to a temp directory
 # - Locates inner ZIPs (binary/ dir first, then root)
-# - Detects TV milestone version from inner ZIP filenames (majority vote)
+# - Detects TV milestone version from inner ZIP filenames (majority vote);
+#   --tv-version states it, and the install stops when the two disagree or
+#   neither is known
+# - Skips a TV version .platform-installed already records (other TV versions
+#   install side by side)
 # - Extracts each inner ZIP directly into the SDK tools path
 # - Copies pkg_list snapshot files
-# - Creates .tv-sdk-installed marker on success
+# - Records the TV version in .platform-installed and creates the
+#   .tv-sdk-installed marker on success
 
 set -euo pipefail
 
@@ -22,6 +27,7 @@ source "$SCRIPT_DIR/../lib/common.sh"
 # Defaults (SDK path resolution: TIZEN_SDK_PATH -> ~/.tizen.sdk.path.config -> ~/tizen-sdk)
 SDK_PATH="$(get_sdk_path)"
 ZIP_PATH=""
+TV_VERSION_ARG=""
 FORCE=false
 CHECK=false
 WAIT=false
@@ -35,6 +41,8 @@ while [[ $# -gt 0 ]]; do
         --sdk-path)    SDK_PATH="$2"; shift 2 ;;
         --zip-path=*)  ZIP_PATH="${1#*=}"; shift ;;
         --zip-path)    ZIP_PATH="$2"; shift 2 ;;
+        --tv-version=*) TV_VERSION_ARG="${1#*=}"; shift ;;
+        --tv-version)   TV_VERSION_ARG="${2:-}"; shift 2 ;;
         --force)       FORCE=true; shift ;;
         --check)       CHECK=true; shift ;;
         --wait)        WAIT=true; shift ;;
@@ -50,6 +58,8 @@ Options:
   --sdk-path <path>   Tizen SDK installation path
                       (default: TIZEN_SDK_PATH / ~/.tizen.sdk.path.config / ~/tizen-sdk)
   --zip-path <path>   Path to the TV SDK ZIP file (required for install)
+  --tv-version <X.Y>  TV platform version the ZIP is for (e.g. 9.0); required
+                      when the inner ZIP names carry none
   --force             Reinstall even if TV SDK is already installed
   --check             Check TV SDK installation only
   --status            Check if a background install is still running
@@ -62,15 +72,22 @@ What it does:
   2) Validates the ZIP file exists
   3) Extracts the main ZIP to a temp directory
   4) Locates inner ZIPs (binary/ dir first, then root)
-  5) Detects TV milestone version from inner ZIP filenames
+  5) Detects TV milestone version from inner ZIP filenames (or --tv-version)
   6) Extracts each inner ZIP directly into the SDK tools path
   7) Copies pkg_list snapshot files
-  8) Creates .tv-sdk-installed marker on success
+  8) Records the TV version in .platform-installed and creates the
+     .tv-sdk-installed marker on success
 EOF
             exit 0 ;;
         *) log_error "Unknown option: $1"; exit 1 ;;
     esac
 done
+
+# --tv-version reaches shell command lines and file names: X.Y only.
+if [[ -n "$TV_VERSION_ARG" && ! "$TV_VERSION_ARG" =~ ^[0-9]+\.[0-9]+$ ]]; then
+    log_error "Invalid --tv-version \"$TV_VERSION_ARG\". Expected MAJOR.MINOR such as 9.0 or 11.0."
+    exit 2
+fi
 
 # --status: check if a background install is still running.
 # --wait: the same, after a 60-second sleep.
@@ -92,6 +109,7 @@ if [[ "$DETACH" == "true" ]]; then
     # --force only when it was given. (The old ":+" parameter expansion fired for
     # FORCE=false too, since "false" is non-empty, so every detached run was forced.)
     detach_args=(--sdk-path="$SDK_PATH" --zip-path="$ZIP_PATH")
+    [[ -n "$TV_VERSION_ARG" ]] && detach_args+=(--tv-version="$TV_VERSION_ARG")
     [[ "$FORCE" == "true" ]] && detach_args+=(--force)
     nohup bash "$0" "${detach_args[@]}" > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 &
     jobs -p
@@ -112,28 +130,38 @@ if [[ ! -f "$SDK_INFO_PATH" ]]; then
 fi
 log_ok "Tizen SDK found: $SDK_PATH (sdk.info exists)"
 
-# Check mode
 TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
+
+# Check mode: is any TV version recorded (or, with --tv-version, that one)?
 if [[ "$CHECK" == "true" ]]; then
-    if [[ -f "$TV_SDK_MARKER" ]]; then
-        log_ok "TV SDK is already installed: $SDK_PATH (.tv-sdk-installed found)"
-        exit 0
-    else
-        log_info "TV SDK is NOT installed (.tv-sdk-installed not found)"
+    if [[ -n "$TV_VERSION_ARG" ]]; then
+        if tv_version_recorded "$SDK_PATH" "$TV_VERSION_ARG"; then
+            log_ok "TV SDK $TV_VERSION_ARG is already installed: $SDK_PATH (recorded in .platform-installed)"
+            exit 0
+        fi
+        log_info "TV SDK $TV_VERSION_ARG is NOT installed (not recorded in .platform-installed)"
         exit 1
     fi
+    if platform_records "$SDK_PATH" | awk '$2 == "tv" || $2 ~ /^tv-samsung/ { f = 1 } END { exit !f }' || [[ -f "$TV_SDK_MARKER" ]]; then
+        log_ok "TV SDK is already installed: $SDK_PATH"
+        exit 0
+    fi
+    log_info "TV SDK is NOT installed (no TV version recorded in .platform-installed)"
+    exit 1
 fi
 
-# Skip if already installed
-if [[ -f "$TV_SDK_MARKER" && "$FORCE" == "false" ]]; then
-    log_ok "TV SDK is already installed: $SDK_PATH"
-    log_info ".tv-sdk-installed found. To reinstall, run again with --force"
+# An older install left only .tv-sdk-installed: record its TV version first
+# (migrate_tv_sdk_marker, lib/common.sh), so it is still reported after this
+# run replaces the marker.
+migrate_tv_sdk_marker "$SDK_PATH" || true
+
+# Skip a TV version that is already recorded; other TV versions install side
+# by side. Without --tv-version the version is known only after the ZIP is
+# opened, and is checked again there.
+if [[ -n "$TV_VERSION_ARG" && "$FORCE" == "false" ]] && tv_version_recorded "$SDK_PATH" "$TV_VERSION_ARG"; then
+    log_ok "TV SDK $TV_VERSION_ARG is already installed: $SDK_PATH (recorded in .platform-installed)"
+    log_info "To reinstall, run again with --force"
     exit 0
-fi
-
-if [[ "$FORCE" == "true" ]]; then
-    log_warn "Force reinstall requested — removing .tv-sdk-installed marker"
-    rm -f "$TV_SDK_MARKER"
 fi
 
 # Validate ZIP path
@@ -241,8 +269,36 @@ done
 if [[ -n "$TV_MILESTONE" ]]; then
     log_ok "Detected TV milestone version: $TV_MILESTONE (majority vote: $MAX_COUNT)"
 else
-    log_warn "Could not detect TV milestone version from ZIP filenames — continuing anyway"
+    log_warn "Could not detect TV milestone version from ZIP filenames"
 fi
+
+# The version to record: --tv-version, checked against the ZIP. Stop here,
+# before anything is extracted into the SDK, when they disagree or neither is
+# known — a TV install that cannot be recorded would not be reported.
+if [[ -n "$TV_VERSION_ARG" && -n "$TV_MILESTONE" && "$TV_VERSION_ARG" != "$TV_MILESTONE" ]]; then
+    log_error "--tv-version $TV_VERSION_ARG does not match the ZIP, whose packages are for TV $TV_MILESTONE."
+    log_error "Re-run with --tv-version $TV_MILESTONE, or use the TV $TV_VERSION_ARG ZIP."
+    rm -rf "$WORKDIR"
+    exit 2
+fi
+TV_VERSION="${TV_VERSION_ARG:-$TV_MILESTONE}"
+if [[ -z "$TV_VERSION" ]]; then
+    log_error "Cannot tell which TV version this ZIP is for (no X.Y in its inner ZIP names)."
+    log_error "Re-run with --tv-version <X.Y>, e.g. --tv-version 9.0."
+    rm -rf "$WORKDIR"
+    exit 2
+fi
+if [[ "$FORCE" == "false" ]] && tv_version_recorded "$SDK_PATH" "$TV_VERSION"; then
+    log_ok "TV SDK $TV_VERSION is already installed: $SDK_PATH (recorded in .platform-installed)"
+    log_info "To reinstall, run again with --force"
+    rm -rf "$WORKDIR"
+    exit 0
+fi
+
+# --status reports "done" once the marker exists, so drop the previous run's
+# marker before this one changes the SDK (its version is recorded above).
+rm -f "$TV_SDK_MARKER"
+
 
 # -----------------------------------------------------------------------------
 # Process each inner ZIP: extract directly to SDK tools path
@@ -335,11 +391,25 @@ done
 # Create .tv-sdk-installed marker
 # -----------------------------------------------------------------------------
 
-echo "TV SDK installed at $(date -Iseconds)" > "$TV_SDK_MARKER"
-echo "Source: $ZIP_PATH" >> "$TV_SDK_MARKER"
-if [[ -n "$TV_MILESTONE" ]]; then
-    echo "TV milestone version: $TV_MILESTONE" >> "$TV_SDK_MARKER"
+# Record the TV version in .platform-installed (record_platform_install,
+# lib/common.sh) — what sdk-install result.packages and platform-install
+# --list read. The profiles are the tv-samsung* folders it now has.
+# No tv-samsung folder for that version means the ZIP is for another one
+# (a wrong --tv-version): record nothing rather than a TV version that is
+# not there, and fail so the pre-check does not report it installed.
+TV_PROFILES="$(tv_install_profiles "$SDK_PATH" "$TV_VERSION")"
+if [[ -z "$TV_PROFILES" ]]; then
+    log_error "The ZIP was extracted, but platforms/tizen-$TV_VERSION has no tv-samsung folder: it is not a TV $TV_VERSION ZIP."
+    log_error "Nothing was recorded in .platform-installed. Re-run with the --tv-version the ZIP is for."
+    rm -rf "$WORKDIR"
+    exit 1
 fi
+record_platform_install "$SDK_PATH" "TV-SAMSUNG ZIP" "$TV_VERSION" "$TV_PROFILES" tv-sdk-install-from-zip "$ZIP_PATH"
+log_ok "TV $TV_VERSION ($TV_PROFILES) recorded in $SDK_PATH/.platform-installed"
+
+echo "TV SDK installed at $(date +%Y-%m-%dT%H:%M:%S%z)" > "$TV_SDK_MARKER"
+echo "Source: $ZIP_PATH" >> "$TV_SDK_MARKER"
+echo "TV milestone version: $TV_VERSION" >> "$TV_SDK_MARKER"
 log_ok ".tv-sdk-installed created: $TV_SDK_MARKER"
 
 rm -rf "$WORKDIR"

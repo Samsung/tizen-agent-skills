@@ -402,6 +402,15 @@ if (Test-Path $Path) {
 # Also confirm the core tools (sdb/tz) exist: if sdk.info is present but the tools
 # are missing (a legacy partial install), don't short-circuit - reinstall instead.
 $sdkInfoPath = Join-Path $Path "sdk.info"
+# Did a previous install complete? Remembered before -Force removes sdk.info
+# below: only then are the folders under platforms\ an installed SDK whose
+# base platform Convert-BasePlatformToRecord may record. A run that failed
+# partway leaves no sdk.info, and its half-filled platform is not installed.
+# Same rule as the already-installed check below: sdk.info without the core
+# tools (sdb/tz) is a past incomplete install too.
+$hadSdkInfo = (Test-Path $sdkInfoPath) -and
+    (Test-Path (Join-Path $Path "tools\sdb.exe")) -and
+    (Test-Path (Join-Path $Path "tools\tizen-core\tz.exe"))
 if ((Test-Path $sdkInfoPath) -and -not $Force) {
     $sdbExists = Test-Path (Join-Path $Path "tools\sdb.exe")
     $tzExists  = Test-Path (Join-Path $Path "tools\tizen-core\tz.exe")
@@ -578,6 +587,9 @@ function Install-PlatformPackages {
         # Highest version (e.g. 11.0 > 10.0 > 9.0)
         $root = $platforms[-1]
     }
+
+    # The platform this run installs, recorded in .platform-installed on success.
+    $script:InstalledPlatformVersion = $root -replace '^TIZEN-', ''
 
     $rootVer = $db[$root].Version
     Write-Success "Target platform: $root (version $rootVer)"
@@ -832,6 +844,15 @@ if (-not $DryRun) {
 }
 
 # Platform package installation (core)
+# An SDK from before the install record: record its base platform first
+# (Convert-BasePlatformToRecord, lib\common.ps1), so it is still reported once
+# this run writes its own sdk-install block. Before the install, while
+# platforms\ still shows the old state, and only when a previous install
+# completed ($hadSdkInfo).
+if (-not $DryRun -and $hadSdkInfo -and (Test-Path -LiteralPath (Join-Path $Path "platforms"))) {
+    try { Convert-BasePlatformToRecord -SdkPath $Path } catch { Write-Warn "Could not record the existing base platform: $_" }
+}
+
 $pkgOk = Install-PlatformPackages
 if (-not $pkgOk) {
     Write-Warn "Some platform packages failed to install (see logs above)"
@@ -884,6 +905,22 @@ try {
     Write-Info "TIZEN_SDK_DATA_PATH=$dataPath"
 } catch {
     Write-Err "Failed to create sdk.info: $_"
+}
+
+# Record the platform this run installed (the requested version, else the
+# repository's newest) in .platform-installed - what sdk-install
+# result.packages and platform-install --list read (Add-PlatformRecord,
+# lib\common.ps1).
+if ($script:InstalledPlatformVersion) {
+    try {
+        Add-PlatformRecord -SdkPath $Path -Target "TIZEN-$script:InstalledPlatformVersion" `
+            -Version $script:InstalledPlatformVersion `
+            -Profiles (Get-PlatformInstallProfiles -SdkPath $Path -Version $script:InstalledPlatformVersion) `
+            -InstalledBy "sdk-install" -Source $PkgRepo
+        Write-Success "TIZEN-$script:InstalledPlatformVersion recorded in $(Join-Path $Path '.platform-installed')"
+    } catch {
+        Write-Warn "Could not record TIZEN-$script:InstalledPlatformVersion in $(Join-Path $Path '.platform-installed'): $_"
+    }
 }
 
 # Write SDK path to ~/.tizen.sdk.path.config so that all other skills

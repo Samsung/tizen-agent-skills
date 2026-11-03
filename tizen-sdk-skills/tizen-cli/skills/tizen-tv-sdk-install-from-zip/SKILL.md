@@ -29,7 +29,10 @@ tizen-cli tizen-sdk tv-sdk-install-from-zip --zip-path <path-to-zip>
 | Option | Required | Default | Description |
 |---|---|---|---|
 | `--zip-path <path>` | **yes** | — | Path to the TV SDK ZIP file containing all bundled packages |
-| `--force` | no | off | Force reinstall even if already installed |
+| `--tv-version <X.Y>` | no | from the ZIP | TV platform version the ZIP is for (e.g. `9.0`). The installer also reads it from the inner ZIP names and stops before extracting when they differ; it is required when they name none |
+| `--force` | no | off | Force reinstall of that TV version even if already installed |
+
+Several TV versions (9.0, 10.0, 11.0) install side by side from their ZIPs: only a TV version `.platform-installed` already records is skipped. Each install appends a `Profile: tv-samsung` block for its version, which `sdk-install` and `platform-list` report.
 
 ## Two-phase flow (same pattern as sdk-install)
 
@@ -37,10 +40,10 @@ tizen-cli tizen-sdk tv-sdk-install-from-zip --zip-path <path-to-zip>
    - `status: "success"` → TV SDK already installed.
    - `status: "failure"` with `suggested_fix` → run `errors[0].suggested_fix.command` with the Bash tool using `run_in_background: true` (installation can take several minutes; installer output is plain text, not JSON).
    - `status: "failure"` mentioning the base SDK → run `tizen-cli tizen-sdk sdk-install` first.
-2. **Verify**: re-run `tizen-cli tizen-sdk tv-sdk-install-from-zip --zip-path <path>` and confirm `status: "success"`.
+2. **Verify**: re-run `tizen-cli tizen-sdk tv-sdk-install-from-zip --zip-path <path>` (with the same `--tv-version`, if given) and confirm `status: "success"`.
 
 ## Output
-- Success `result`: TV SDK package/installation status.
+- Success `result`: `packages[]` — `{ name: "TV-SAMSUNG (ZIP)", status, version: "<TV version>", profiles: ["tv-samsung"] }` for the TV version this ZIP installed.
 - Failure: `error_code`, `message`, optional `suggested_fix.command`.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다

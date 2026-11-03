@@ -8,14 +8,20 @@
 # - Accepts a local ZIP file path containing the TV SDK bundle
 # - Extracts the main ZIP to a temp directory
 # - Locates inner ZIPs (binary/ dir first, then root)
-# - Detects TV milestone version from inner ZIP filenames (majority vote)
+# - Detects TV milestone version from inner ZIP filenames (majority vote);
+#   -TvVersion states it, and the install stops when the two disagree or
+#   neither is known
+# - Skips a TV version .platform-installed already records (other TV versions
+#   install side by side)
 # - Extracts each inner ZIP directly into the SDK tools path
 # - Copies pkg_list snapshot files
-# - Creates .tv-sdk-installed marker on success
+# - Records the TV version in .platform-installed and creates the
+#   .tv-sdk-installed marker on success
 
 param(
     [string]$SdkPath = "",
     [string]$ZipPath = "",
+    [string]$TvVersion = "",       # TV platform version the ZIP is for (X.Y)
     [switch]$Force,
     [switch]$Check,
     [switch]$Wait,
@@ -38,6 +44,8 @@ Options:
   -SdkPath <path>    Tizen SDK installation path
                      (default: TIZEN_SDK_PATH / ~\.tizen.sdk.path.config / $env:USERPROFILE\tizen-sdk)
   -ZipPath <path>     Path to the TV SDK ZIP file (required for install)
+  -TvVersion <X.Y>    TV platform version the ZIP is for (e.g. 9.0); required
+                      when the inner ZIP names carry none
   -Force              Reinstall even if TV SDK is already installed
   -Check              Check TV SDK installation only
   -Status             Check if a background install is still running
@@ -50,10 +58,11 @@ What it does:
   2) Validates the ZIP file exists
   3) Extracts the main ZIP to a temp directory
   4) Locates inner ZIPs (binary/ dir first, then root)
-  5) Detects TV milestone version from inner ZIP filenames
+  5) Detects TV milestone version from inner ZIP filenames (or -TvVersion)
   6) Extracts each inner ZIP directly into the SDK tools path
   7) Copies pkg_list snapshot files
-  8) Creates .tv-sdk-installed marker on success
+  8) Records the TV version in .platform-installed and creates the
+     .tv-sdk-installed marker on success
 
 Examples:
   .\tizen-tv-sdk-install-from-zip.ps1 -ZipPath "C:\downloads\tv-samsung-sdk.zip"
@@ -66,6 +75,12 @@ Examples:
 # Set default SDK path if not provided
 if (-not $SdkPath) {
     $SdkPath = Get-SdkPath
+}
+
+# -TvVersion reaches command lines and file names: X.Y only.
+if ($TvVersion -and $TvVersion -notmatch '^[0-9]+\.[0-9]+$') {
+    Write-Err "Invalid -TvVersion `"$TvVersion`". Expected MAJOR.MINOR such as 9.0 or 11.0."
+    exit 2
 }
 
 # -Status: check if a background install is still running
@@ -116,6 +131,7 @@ if ($Detach) {
     # Paths go through ConvertTo-QuotedArgument (lib\common.ps1): Start-Process
     # quotes nothing, and a trailing backslash would escape a plain closing quote.
     $argList = @("-SdkPath", (ConvertTo-QuotedArgument $SdkPath), "-ZipPath", (ConvertTo-QuotedArgument $ZipPath))
+    if ($TvVersion) { $argList += @("-TvVersion", $TvVersion) }
     if ($Force) { $argList += "-Force" }
     $proc = Start-Process -FilePath "powershell" `
         -ArgumentList (@("-ExecutionPolicy", "Bypass", "-NoProfile", "-File", (ConvertTo-QuotedArgument $PSCommandPath)) + $argList) `
@@ -138,28 +154,39 @@ if (-not (Test-Path $sdkInfoPath)) {
 }
 Write-Success "Tizen SDK found: $SdkPath (sdk.info exists)"
 
-# Check mode
 $tvSdkMarkerPath = Join-Path $SdkPath ".tv-sdk-installed"
+
+# Check mode: is any TV version recorded (or, with -TvVersion, that one)?
 if ($Check) {
-    if (Test-Path $tvSdkMarkerPath) {
-        Write-Success "TV SDK is already installed: $SdkPath (.tv-sdk-installed found)"
-        exit 0
-    } else {
-        Write-Info "TV SDK is NOT installed (.tv-sdk-installed not found)"
+    if ($TvVersion) {
+        if (Test-TvVersionRecorded -SdkPath $SdkPath -Version $TvVersion) {
+            Write-Success "TV SDK $TvVersion is already installed: $SdkPath (recorded in .platform-installed)"
+            exit 0
+        }
+        Write-Info "TV SDK $TvVersion is NOT installed (not recorded in .platform-installed)"
         exit 1
     }
+    $anyTv = @(Get-PlatformRecords -SdkPath $SdkPath | Where-Object { Test-TvProfileName $_.Profile }).Count -gt 0
+    if ($anyTv -or (Test-Path $tvSdkMarkerPath)) {
+        Write-Success "TV SDK is already installed: $SdkPath"
+        exit 0
+    }
+    Write-Info "TV SDK is NOT installed (no TV version recorded in .platform-installed)"
+    exit 1
 }
 
-# Skip if already installed
-if ((Test-Path $tvSdkMarkerPath) -and -not $Force) {
-    Write-Success "TV SDK is already installed: $SdkPath"
-    Write-Info ".tv-sdk-installed found. To reinstall, run again with -Force"
+# An older install left only .tv-sdk-installed: record its TV version first
+# (Convert-TvSdkMarkerToRecord, lib\common.ps1), so it is still reported
+# after this run replaces the marker.
+Convert-TvSdkMarkerToRecord -SdkPath $SdkPath
+
+# Skip a TV version that is already recorded; other TV versions install side
+# by side. Without -TvVersion the version is known only after the ZIP is
+# opened, and is checked again there.
+if ($TvVersion -and -not $Force -and (Test-TvVersionRecorded -SdkPath $SdkPath -Version $TvVersion)) {
+    Write-Success "TV SDK $TvVersion is already installed: $SdkPath (recorded in .platform-installed)"
+    Write-Info "To reinstall, run again with -Force"
     exit 0
-}
-
-if ($Force) {
-    Write-Warn "Force reinstall requested - removing .tv-sdk-installed marker"
-    Remove-Item $tvSdkMarkerPath -Force -ErrorAction SilentlyContinue
 }
 
 # Validate ZIP path
@@ -278,8 +305,35 @@ foreach ($kv in $versionCounts.GetEnumerator()) {
 if ($tvMilestone) {
     Write-Success "Detected TV milestone version: $tvMilestone (majority vote: $maxCount)"
 } else {
-    Write-Warn "Could not detect TV milestone version from ZIP filenames - continuing anyway"
+    Write-Warn "Could not detect TV milestone version from ZIP filenames"
 }
+
+# The version to record: -TvVersion, checked against the ZIP. Stop here,
+# before anything is extracted into the SDK, when they disagree or neither is
+# known - a TV install that cannot be recorded would not be reported.
+if ($TvVersion -and $tvMilestone -and $TvVersion -ne $tvMilestone) {
+    Write-Err "-TvVersion $TvVersion does not match the ZIP, whose packages are for TV $tvMilestone."
+    Write-Err "Re-run with -TvVersion $tvMilestone, or use the TV $TvVersion ZIP."
+    Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    exit 2
+}
+$tvVersionToRecord = if ($TvVersion) { $TvVersion } else { $tvMilestone }
+if (-not $tvVersionToRecord) {
+    Write-Err "Cannot tell which TV version this ZIP is for (no X.Y in its inner ZIP names)."
+    Write-Err "Re-run with -TvVersion <X.Y>, e.g. -TvVersion 9.0."
+    Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    exit 2
+}
+if (-not $Force -and (Test-TvVersionRecorded -SdkPath $SdkPath -Version $tvVersionToRecord)) {
+    Write-Success "TV SDK $tvVersionToRecord is already installed: $SdkPath (recorded in .platform-installed)"
+    Write-Info "To reinstall, run again with -Force"
+    Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    exit 0
+}
+
+# -Status reports "done" once the marker exists, so drop the previous run's
+# marker before this one changes the SDK (its version is recorded above).
+Remove-Item $tvSdkMarkerPath -Force -ErrorAction SilentlyContinue
 
 # -----------------------------------------------------------------------------
 # Process each inner ZIP: extract directly to SDK tools path
@@ -387,11 +441,24 @@ foreach ($snap in $snapshots) {
 # Create .tv-sdk-installed marker
 # -----------------------------------------------------------------------------
 
-$markerContent = "TV SDK installed at $(Get-Date -Format 'o')`r`nSource: $ZipPath"
-if ($tvMilestone) {
-    $markerContent += "`r`nTV milestone version: $tvMilestone"
+# Record the TV version in .platform-installed (Add-PlatformRecord,
+# lib\common.ps1) - what sdk-install result.packages and platform-install
+# --list read. No tv-samsung folder for that version means the ZIP is for
+# another one (a wrong -TvVersion): record nothing rather than a TV version
+# that is not there, and fail so the pre-check does not report it installed.
+$tvProfiles = Get-TvInstallProfiles -SdkPath $SdkPath -Version $tvVersionToRecord
+if (-not $tvProfiles) {
+    Write-Err "The ZIP was extracted, but platforms\tizen-$tvVersionToRecord has no tv-samsung folder: it is not a TV $tvVersionToRecord ZIP."
+    Write-Err "Nothing was recorded in .platform-installed. Re-run with the -TvVersion the ZIP is for."
+    Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue
+    exit 1
 }
-Set-Content -Path $tvSdkMarkerPath -Value $markerContent -Encoding UTF8
+Add-PlatformRecord -SdkPath $SdkPath -Target "TV-SAMSUNG ZIP" -Version $tvVersionToRecord -Profiles $tvProfiles `
+    -InstalledBy "tv-sdk-install-from-zip" -Source $ZipPath
+Write-Success "TV $tvVersionToRecord ($tvProfiles) recorded in $(Join-Path $SdkPath '.platform-installed')"
+
+$markerContent = "TV SDK installed at $(Get-Date -Format 'o')`r`nSource: $ZipPath`r`nTV milestone version: $tvVersionToRecord`r`n"
+[System.IO.File]::WriteAllText($tvSdkMarkerPath, $markerContent, [System.Text.UTF8Encoding]::new($false))
 Write-Success ".tv-sdk-installed created: $tvSdkMarkerPath"
 
 Remove-Item -Recurse -Force $workdir -ErrorAction SilentlyContinue

@@ -36,7 +36,7 @@ TV SDK는 Tizen SDK의 **확장 패키지**이므로, Tizen SDK가 먼저 설치
 
 ```
 1. Tizen SDK 설치 여부 확인 (sdk.info) ← 미설치 시 대화형 안내와 함께 중단
-2. TV SDK 이미 설치? (.tv-sdk-installed 마커) ← 설치 시 success 반환
+2. TV SDK 이미 설치? (`.platform-installed`의 TV 버전 기록) ← 설치 시 success 반환
 3. TV SDK 설치 스크립트 명령 반환 (suggested_fix) — 에이전트가 Phase 2 background로 실행
 ```
 
@@ -102,7 +102,7 @@ report that envelope. Never run `suggested_fix.command` in the Codex foreground.
 
 1. Run the installer command from `suggested_fix` with the Bash tool, `run_in_background: true`
 2. **END YOUR TURN** — wait for `<task-notification>` (do NOT poll/sleep)
-3. After notification, re-run the Phase 1 pre-check CLI (foreground) to verify `.tv-sdk-installed` exists
+3. After notification, re-run the Phase 1 pre-check CLI (foreground) to verify the TV version is recorded in `.platform-installed`
 4. Report the final success/failure envelope to the user
 
 **Do NOT (Claude Code):**
@@ -162,7 +162,7 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
    `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
    항상 시도 번호를 붙인 `sleep 25 && --status`를 사용하세요.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
+3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
 
 #### Windows (PowerShell)
 
@@ -191,10 +191,10 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
    **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `-Status`만 단독으로 연속 실행하지 마세요. 항상 시도 번호를 붙인 `Start-Sleep 25; -Status`를 사용하세요.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
+3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
 
 If the run state is unknown (interrupted session), just re-run the Phase 1 pre-check CLI —
-it is idempotent and reports whether `.tv-sdk-installed` exists. Report that envelope.
+it is idempotent and reports whether the TV version is recorded in `.platform-installed`. Report that envelope.
 
 **Do NOT (any harness):**
 
@@ -208,7 +208,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 
 1. **`list-templates --type tv`** — TV 템플릿 목록을 확인합니다. 빈 배열(`[]`)이 반환되면 TV SDK가 미설치된 것입니다. TV 템플릿이 존재하면 설치된 것으로 판정합니다.
 
-2. **`tv-sdk-install` 재실행 (멱등성)** — `tv-sdk-install` CLI는 `.tv-sdk-installed` 마커를 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
+2. **`tv-sdk-install` 재실행 (멱등성)** — `tv-sdk-install` CLI는 `.platform-installed`의 TV 기록(이전 설치가 남긴 `.tv-sdk-installed`도 포함)을 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
 
 ### ❌ 잘못된 방법
 
@@ -219,7 +219,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 | 방법                         | 신뢰성       | 비고                                         |
 | ---------------------------- | ------------ | -------------------------------------------- |
 | `list-templates --type tv`   | ✅ 신뢰 가능 | 빈 배열 = 미설치, 항목 있음 = 설치됨         |
-| `tv-sdk-install` 재실행      | ✅ 신뢰 가능 | 멱등성 보장, `.tv-sdk-installed` 마커로 판정 |
+| `tv-sdk-install` 재실행      | ✅ 신뢰 가능 | 멱등성 보장, `.platform-installed`의 TV 기록으로 판정 |
 | `list-platform --profile tv` | ❌ 오판 위험 | `--profile` 무시됨, false positive 유발      |
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다

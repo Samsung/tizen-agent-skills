@@ -339,9 +339,12 @@ console.error = () => {};
         env.errors[0].error_code,
         "TIZEN_SDK_PLATFORM_E001",
       );
+      // The note lists what platform-install --list reports as installed —
+      // with no .platform-installed yet, the base install's platform (11.0) —
+      // not every directory that holds a payload.
       check(
-        "99.0 → message lists the installed platforms",
-        env.errors[0].message.includes("5.5, 9.0, 10.0, 11.0") &&
+        "99.0 → message lists the installed platforms (as --list reports them)",
+        env.errors[0].message.includes("(installed platforms: 11.0)") &&
           env.errors[0].message.includes("TIZEN-99.0"),
         true,
       );
@@ -368,45 +371,68 @@ console.error = () => {};
         true,
       );
     }
-    // Each platform entry carries its own version and status; only the
-    // tools entry takes the requested / newest-installed label. A single
-    // "Tizen Platforms (N)" row stamped with that label read as N installed
-    // platforms of that one version.
+    // result.packages lists what the user installed (.platform-installed),
+    // not every platforms/tizen-X.Y: 9.0 and 10.0 were added with
+    // platform-install, 11.0 is the base install's platform (no record from
+    // before sdk-install wrote one), and 5.5 was never asked for. There is no
+    // "Tizen SDK Tools" row any more: it only repeated a version label.
     fs.mkdirSync(path.join(sdkPath, "tools"), { recursive: true });
+    const recordFile = path.join(sdkPath, ".platform-installed");
+    fs.writeFileSync(
+      recordFile,
+      ["9.0", "10.0"]
+        .map(
+          (v) =>
+            `Platform package installed at 2026-11-01T10:00:00+0900\nTarget: TIZEN-${v}\n` +
+            `Platform version: ${v}\nProfile: tizen\nInstalled by: platform-install\n`,
+        )
+        .join(""),
+    );
     const platformRows = (env) =>
-      env.result.packages
-        .filter((p) => p.name.startsWith("Tizen Platform "))
-        .map((p) => [p.version, p.status]);
-    const toolsVersion = (env) =>
-      env.result.packages.find((p) => p.name === "Tizen SDK Tools")?.version;
+      env.result.packages.map((p) => [p.name, p.version, p.status]);
     {
       const env = await installSdk("10.0");
       check("10.0 (installed) → success", env.status, "success");
       check(
-        "10.0 → one entry per installed platform, each with its own version",
+        "10.0 → one Tizen SDK X.Y entry per installed platform, each with its own version",
         platformRows(env),
         [
-          ["5.5", "installed"],
-          ["9.0", "installed"],
-          ["10.0", "installed"],
-          ["11.0", "installed"],
+          ["Tizen SDK 9.0", "9.0", "installed"],
+          ["Tizen SDK 10.0", "10.0", "installed"],
+          ["Tizen SDK 11.0", "11.0", "installed"],
         ],
       );
       check(
-        "10.0 → tools entry reports the requested version",
-        toolsVersion(env),
-        "10.0",
+        "10.0 → no Tizen SDK Tools entry",
+        env.result.packages.some((p) => p.name === "Tizen SDK Tools"),
+        false,
       );
     }
     {
       const env = await installSdk("");
       check("no version → success", env.status, "success");
       check(
-        "no version → tools entry reports the newest installed platform",
-        toolsVersion(env),
-        "11.0",
+        "no version → the same entries",
+        platformRows(env).map((r) => r[1]),
+        ["9.0", "10.0", "11.0"],
       );
     }
+    {
+      // Once sdk-install records its own platform, the base-install guess
+      // stops: 11.0 is reported only because a record names it.
+      fs.appendFileSync(
+        recordFile,
+        "Platform package installed at 2026-11-02T10:00:00+0900\nTarget: TIZEN-10.0\n" +
+          "Platform version: 10.0\nProfile: tizen\nInstalled by: sdk-install\n",
+      );
+      const env = await installSdk("");
+      check(
+        "an sdk-install record → no guessed base platform",
+        platformRows(env).map((r) => r[1]),
+        ["9.0", "10.0"],
+      );
+    }
+    fs.rmSync(recordFile);
     fs.rmSync(path.join(sdkPath, "tools"), { recursive: true });
     {
       const env = await installSdk();

@@ -247,10 +247,8 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
   "duration_ms": 780000,
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
-      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
+      { "name": "Tizen SDK 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] }
     ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
     "installation_status": "completed"
@@ -262,9 +260,7 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
 
 **Reporting `result.packages`** (the main thread relays the envelope; these rules apply to its summary):
 
-- There is one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, each with its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-install --list`) and `profiles`. Keep the 1–2 line summary by putting the platforms on one line: group them by `status`, split `installed` by whether `tizen` is in `profiles`, group the versions without `tizen` by their `profiles` and label each group with them (those versions are installed for the listed profiles only), and write every version out instead of a range (for example `platforms — installed: 10.0, 11.0 · installed (tv-samsung only): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`). Do not call a version installed because its directory exists.
-- `profiles` holds only the profiles with a platform payload (never `common` or a folder with only synced template `samples`). An `installed` version without `tizen` in `profiles` is installed for the listed profiles only (for example `tv-samsung`).
-- The `version` of `Tizen SDK Tools` is a label: the requested platform version, or else the newest installed one. It is not a tools version and not "the SDK version". Never summarise the SDK as that single version.
+- There is one `Tizen SDK X.Y` entry per platform version the user installed: the versions `.platform-installed` records (sdk-install, platform-install and both TV installers each append a block), plus one whose `platform-install` has not finished. Each has its own `status` (`installed`; `incomplete` while that install has not finished; `not_installed` when its recorded folders are gone — the same as `platform-install --list`) and `profiles` (the recorded profiles on disk: `tizen`, plus `tv-samsung` when the TV extension was installed for that version). Folders the TV extension bundles for older versions (for example `tv` / `tv-samsung` under 2.4 … 9.0) are not entries, so do not mention them. Keep the 1–2 line summary by putting the entries on one line with their profiles, every version written out (for example `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`), and add any `incomplete` / `not_installed` entry after it. Never summarise the SDK as a single version.
 - For a follow-up question such as "which SDK / platform versions are installed?", do not re-read this envelope or measure directories. Load the `tizen-platform-install` skill, run its `--list` step and answer from that envelope.
 
 **Note:** The repository URL can be any server that serves `pkg_list_{OS}-{64,32}` at its root, for example:

@@ -53,7 +53,7 @@ metadata:
 4. Targets `TIZEN-{version}` from the required `--platform-version` argument (there is no auto-detection of the latest platform)
 5. Recursively resolves all Install-dependency packages of the platform package
 6. Downloads each package zip from `{PKG_REPO_URL}{Path}` and extracts/merges `data/` into the SDK root
-7. Marks the run with `.platform-installing-X.Y` while it runs; on success removes it and appends the version to the `.platform-installed` history (a failed run keeps the marker, and a re-run resumes)
+7. Marks the run with `.platform-installing-X.Y` while it runs; on success removes it and appends a block for the version and its profiles to `.platform-installed` — the record of what the user installed, which `sdk-install` and both TV installers append to as well (a failed run keeps the marker, and a re-run resumes)
 8. Reports summary: OK / skipped / failed counts
 
 ### repository.info
@@ -99,7 +99,7 @@ node "<found-path>"
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
-**List installed platforms (read-only):** `node "$CLI" --list` — no `--platform-version`. `result.platforms` has one entry per `platforms/tizen-X.Y`: `status` is `installed`, `incomplete` (an unfinished install — re-run it to resume) or `not_installed` (the directory holds no platform payload — only the shared `common` data the base SDK ships for older versions, or synced template `samples` — so that version can still be installed), plus `profiles` (the profiles that hold a platform payload, e.g. `tizen`, `tv-samsung` — never `common` or a folder with only synced template `samples`, so an `installed` version without `tizen` is installed for the listed profiles only) and `emulator_images`. `result.newest` is what project creation uses when no `--platform-version` is given. Report it per the "결과 보고" rules below.
+**List installed platforms (read-only):** `node "$CLI" --list` — no `--platform-version`. `result.platforms` has one entry per platform version the user installed — the versions `.platform-installed` records, plus one whose install has not finished — not every `platforms/tizen-X.Y`: the `tv` / `tv-samsung` folders the TV extension bundles for older versions (2.4 … 9.0) are not entries. `status` is `installed`, `incomplete` (an unfinished install — re-run it to resume) or `not_installed` (recorded, but its folders are gone), plus `profiles` (the recorded profiles on disk: `tizen`, plus `tv-samsung` when the TV extension was installed for that version) and `emulator_images`. `result.newest` is the newest installed entry. Report it per the "결과 보고" rules below, every version with its profiles on one line (e.g. `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
 
 **Required:** `node "$CLI" --platform-version 10.0` (specify platform version — **mandatory**, `X.Y` form; anything else such as `99.99.99` fails with `invalid_argument` before anything runs), `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 

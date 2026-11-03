@@ -159,6 +159,11 @@ export const SDK_SPECS: CommandSpec[] = [
           "Path to the TV SDK ZIP file, e.g. /home/user/downloads/tv-samsung-sdk.zip",
       },
       {
+        flags: "--tv-version <X.Y>",
+        description:
+          "TV platform version the ZIP is for (e.g. 9.0). The installer also reads it from the inner ZIP names and stops when they differ; it is required when they name none.",
+      },
+      {
         flags: "--force",
         description: "Force reinstall even if already installed",
         default: false,
@@ -169,6 +174,7 @@ export const SDK_SPECS: CommandSpec[] = [
         o.zipPath,
         !!o.force,
         "tizen-sdk tv-sdk-install-from-zip",
+        o.tvVersion || "",
       ),
   },
   {

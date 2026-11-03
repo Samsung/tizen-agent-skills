@@ -34,8 +34,9 @@
 # s3 reinstalls the host's real .NET Tizen workload.
 #
 # Invariants the order relies on:
-#   * s1 needs an installed SDK with platforms/tizen-10.0, <sdk>/.tv-sdk-installed
-#     and the Tizen .NET workload: every command there takes its
+#   * s1 needs an installed SDK with platforms/tizen-10.0, an online TV install
+#     (a tv-sdk-install block in <sdk>/.platform-installed, or an older
+#     <sdk>/.tv-sdk-installed without a Source: line) and the Tizen .NET workload: every command there takes its
 #     already-installed short-circuit and downloads nothing. The three
 #     --repo-url TCs still validate the URL over the network (capability net).
 #   * k2 needs <sdk-data>/keystore free of TestDev / Jane-Dev / TestDev-v2 and

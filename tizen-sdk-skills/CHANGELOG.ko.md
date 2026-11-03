@@ -15,6 +15,44 @@
 
 ### 변경
 
+- **`sdk-install` / `sdk-install-custom-repo`의 result.packages와
+  `platform-install --list`가 사용자가 설치한 플랫폼을 보고합니다.**
+  `platforms/tizen-X.Y`를 모두 나열하지 않고 `<sdk>/.platform-installed`에서
+  읽습니다. TV 확장은 자기 TV 버전 하나 옆에 2.4 … 9.0용 `tv` / `tv-samsung`
+  폴더도 깔기 때문에, TIZEN-10.0, TIZEN-11.0과 10.0 TV 확장만 설치한 SDK가
+  12개 버전을 "installed"로 보고했습니다. 이제는 `Tizen SDK 10.0`(`tizen`,
+  `tv-samsung`)과 `Tizen SDK 11.0`(`tizen`)만 나옵니다.
+  - 항목 이름은 `Tizen SDK X.Y`입니다(이전 `Tizen Platform X.Y`). 버전 라벨만
+    되풀이하던 `Tizen SDK Tools` 항목은 없앴습니다.
+  - 모든 설치기가 설치할 때마다 블록을 하나씩 덧붙입니다 — `Target`,
+    `Platform version`, `Profile`, `Installed by`, `Source`. `sdk-install`(요청한
+    버전, 없으면 저장소의 최신 버전), `platform-install`, `tv-sdk-install`(의존하는
+    `X.Y-MANDATORY`의 버전), `tv-sdk-install-from-zip`입니다. `Profile` 줄이 생기기
+    전의 블록은 `tizen`(`TV-…` 대상이면 `tv-samsung`)으로 봅니다.
+  - 이번 변경 전에 설치한 SDK도 가진 것을 계속 보고합니다. `sdk-install` 기록이
+    생길 때까지는 기본 설치 플랫폼(TV가 아닌 내용이 있는 가장 높은 버전)을, 그리고
+    예전 `.tv-sdk-installed`에 적힌 TV 버전을 보고합니다. 설치기는 자기 기록을 쓰기
+    전에 둘 다 기록으로 옮깁니다. `sdk-install`은 설치를 시작하기 전에 그 기본 플랫폼을
+    기록하므로, 나중에 다른 버전으로 강제 재설치해도 빠지지 않습니다. TV 설치기는 마커를
+    교체하기 전에 그 TV 버전을 기록합니다.
+  - `create-project` / `list-templates --platform-version`은 여전히 디스크에 파일이
+    있는 버전을 모두 받으므로, 함께 깔린 예전 TV 버전도 그대로 쓸 수 있습니다.
+- **버전이 다른 TV SDK ZIP을 나란히 설치할 수 있습니다.**
+  `tv-sdk-install-from-zip`은 `.tv-sdk-installed`가 있으면 무조건 멈춰서, TV 10.0
+  다음에 TV 9.0 ZIP을 설치하려면 `--force`가 필요했습니다. 이제 두 TV 설치기 모두
+  `.platform-installed`에 이미 기록된 TV 버전만 건너뜁니다.
+  - 새 옵션 `--tv-version <X.Y>`(`-TvVersion`)로 ZIP이 담은 TV 버전을 지정합니다.
+    설치기는 내부 ZIP 이름에서도 버전을 읽으며, 둘이 다르거나 둘 다 없으면 아무것도
+    풀기 전에 멈춥니다. 그 버전의 `tv-samsung` 폴더가 생기지 않은 ZIP은 기록하지 않고
+    실패로 끝냅니다.
+  - 사전 점검은 `.platform-installed`에 그 ZIP(`Source:`)이나 `--tv-version`이
+    기록되어 있으면 설치된 것으로 보고하고, result.packages에는 `"extension"` 대신
+    TV 버전이 들어갑니다.
+  - `--status`가 이전 실행의 마커를 이번 실행의 완료로 읽지 않습니다. 새 설치를
+    시작할 때 마커를 지웁니다.
+  - `create-project` / `list-templates`의 TV 안내에 `--tv-version X.Y`를 붙이고,
+    `--force`는 이미 기록된 TV 버전에만 안내합니다.
+
 - **Node.js 22 이상이 필요합니다** (Node.js 20은 2026-04-30에 지원이
   종료되었습니다). CI와 릴리스는 Node 22(`.nvmrc`)로 실행되고 `engines`는
   `>=22`입니다. `check-node`, `sdk-install` / `sdk-install-custom-repo` 사전
@@ -48,6 +86,11 @@
   목록(`spawnargs`) 없이 보존합니다. 동작 변화는 없습니다.
 
 ### 수정
+
+- `platforms/tizen-9.0`에 TV 확장이 함께 깐 `tv` / `tv-samsung` 폴더만 있을 때
+  `sdk-install --tizen-version 9.0`과 `platform-install --platform-version 9.0`이
+  "이미 설치됨"으로 답하지 않습니다. 설치기의 확인(`isTizenPlatformInstalled`,
+  `platform_installed`, `Test-PlatformInstalled`)이 TV 프로필을 빼고 봅니다.
 
 - `sdk-install` / `sdk-install-custom-repo`가 `platforms/` 아래 항목을 모두 묶어
   버전 하나만 붙인 `Tizen Platforms (N)` 패키지 한 줄로 보고하지 않습니다. 이

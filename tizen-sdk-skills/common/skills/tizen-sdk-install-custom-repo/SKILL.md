@@ -346,18 +346,17 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
   말고 JSON 안의 것을 그대로 보이게 한다.
 - `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
-- `result.packages`의 플랫폼 항목은 `platforms/tizen-X.Y`마다 하나씩이며, 버전별
-  `status`(`installed` / `incomplete` / `not_installed`)와 `profiles`를 갖는다. 1~2줄 요약
-  안에서 플랫폼은 **한 줄로** 쓴다: `status`별로 묶고, `installed`는 `profiles`에 `tizen`이
-  있는지로 다시 나누고, `tizen`이 없는 버전은 `profiles`가 같은 것끼리 묶어 그 프로필 이름을
-  붙인다(그 프로필 전용 설치). 버전은 범위로 줄이지 말고 **하나씩 모두**
-  적는다 (예: `플랫폼 — installed: 10.0, 11.0 · installed(tv-samsung 전용): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`).
-  디렉터리가 있다고 "설치됨"이라 하지 말고, 가장 높은 버전 하나를 SDK 전체의 버전처럼
-  요약하지 않는다. `profiles`에는 실제 플랫폼 내용이 있는
-  프로필만 담기므로(`common`, 템플릿 `samples`만 있는 폴더는 제외), `installed`여도
-  `profiles`에 `tizen`이 없으면 그 버전은 나열된 프로필(예: `tv-samsung`)용으로만 설치된 것이다.
-- `Tizen SDK Tools` 항목의 `version`은 요청한 플랫폼 버전(없으면 설치된 최신 플랫폼 버전)을 붙인
-  라벨이다. 도구 자체의 버전이나 "SDK 버전"이 아니므로 그대로 SDK 버전이라고 전하지 않는다.
+- `result.packages`에는 사용자가 설치한 플랫폼 버전마다 `Tizen SDK X.Y` 항목이 하나씩 있다.
+  `.platform-installed`에 기록된 버전(sdk-install, platform-install, 두 TV 설치기가 설치할
+  때마다 블록을 하나씩 덧붙인다)과, `platform-install`이 아직 끝나지 않은 버전이다. 항목마다
+  `status`(`installed`; 그 설치가 끝나지 않았으면 `incomplete`; 기록된 폴더가 지워졌으면
+  `not_installed` — `platform-install --list`와 같다)와 `profiles`(디스크에 있는 기록된 프로필:
+  `tizen`, 그 버전에 TV 확장을 설치했으면 `tv-samsung`)를 갖는다. TV 확장이 예전 버전용으로 함께
+  깔아 두는 폴더(예: 2.4 … 9.0의 `tv` / `tv-samsung`)는 항목이 아니므로 언급하지 않는다. 1~2줄
+  요약 안에서 항목은 **한 줄로**, 버전마다 프로필을 붙여 **하나씩 모두** 적는다 (예:
+  `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`). `incomplete` /
+  `not_installed` 항목이 있으면 그 뒤에 덧붙인다. 가장 높은 버전 하나를 SDK 전체의 버전처럼
+  요약하지 않는다.
 - "설치된 SDK/플랫폼 버전이 뭐야?" 같은 **후속 질문**에는 이 Envelope를 다시 해석하거나
   디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 스킬을 로드해 그 스킬의
   `--list` 단계(러너 경로 찾기 포함)를 실행하고 그 Envelope로 답한다.

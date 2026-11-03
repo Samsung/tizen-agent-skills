@@ -226,6 +226,9 @@ function reportSdkState(paths, selected) {
   if (!selected.includes("s1-sdk-idempotent")) return;
   const facts = [
     ["platforms/tizen-10.0", join(paths.sdkRoot, "platforms", "tizen-10.0")],
+    // The online TV install short-circuits on a tv-sdk-install block in
+    // .platform-installed, or on an older .tv-sdk-installed (no Source: line).
+    [".platform-installed record", join(paths.sdkRoot, ".platform-installed")],
     [".tv-sdk-installed marker", join(paths.sdkRoot, ".tv-sdk-installed")],
   ];
   for (const [label, p] of facts)

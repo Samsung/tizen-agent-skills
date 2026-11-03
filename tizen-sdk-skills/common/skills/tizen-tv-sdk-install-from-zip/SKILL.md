@@ -20,7 +20,7 @@ metadata:
 > Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
 
 1. Agent tool로 `tizen-tv-sdk-install-from-zip` 에이전트 호출
-2. 수집된 입력(zip-path, force 옵션)을 프롬프트로 전달
+2. 수집된 입력(zip-path, tv-version, force 옵션)을 프롬프트로 전달
 3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
    (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
 
@@ -39,7 +39,7 @@ TV SDK는 Tizen SDK의 **확장 패키지**이므로, Tizen SDK가 먼저 설치
 ```
 1. zipPath 파라미터 검증 (필수)
 2. Tizen SDK 설치 여부 확인 (sdk.info) ← 미설치 시 대화형 안내와 함께 중단
-3. TV SDK 이미 설치? (.tv-sdk-installed 마커) ← 설치 시 success 반환
+3. TV SDK 이미 설치? (`.platform-installed`의 TV 버전 기록) ← 설치 시 success 반환
 4. TV SDK ZIP 설치 스크립트 명령 반환 (suggested_fix) — 에이전트가 Phase 2 background로 실행
 ```
 
@@ -82,7 +82,9 @@ node "<found-path>" --zip-path "C:\path\to\tv-samsung-sdk.zip"
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 
-Optional: `node "$CLI" --zip-path "<path>" --force` (force reinstall)
+Optional: `--tv-version <X.Y>` (the TV platform version the ZIP is for, e.g. `9.0` — pass it when the user names one), `--force` (force reinstall of that TV version)
+
+Several TV versions install side by side from their ZIPs (TV 9.0, 10.0, 11.0): the installer skips only a TV version `.platform-installed` already records, so another version needs no `--force`. It reads the version from the inner ZIP names; when `--tv-version` disagrees with them, or neither gives one, it stops **before** extracting anything and says which `--tv-version` to pass. Each install appends a block (`Profile: tv-samsung`, `Source: <zip>`) to `.platform-installed`, so `sdk-install` / `platform-install --list` report that TV version afterwards.
 
 Exit code: `0` = success (TV SDK already installed), `1` = failure (TV SDK not installed — proceed to Phase 2, or Tizen SDK not installed, or zip-path missing).
 
@@ -105,7 +107,7 @@ which forwards the same ZIP path / SDK path flags). It returns a job receipt at 
 
 1. Run the installer command from `suggested_fix` with the Bash tool, `run_in_background: true`
 2. **END YOUR TURN** — wait for `<task-notification>` (do NOT poll/sleep)
-3. After notification, re-run the Phase 1 pre-check CLI (foreground) to verify `.tv-sdk-installed` exists
+3. After notification, re-run the Phase 1 pre-check CLI (foreground) with the same `--zip-path` (and `--tv-version`) to verify the TV version is recorded in `.platform-installed`
 4. Report the final success/failure envelope to the user
 
 **Do NOT (Claude Code):**
@@ -165,7 +167,7 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
    `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
    항상 시도 번호를 붙인 `sleep 25 && --status`를 사용하세요.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
+3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
 
 #### Windows (PowerShell)
 
@@ -195,10 +197,10 @@ Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 
    **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
    `-Status`만 단독으로 연속 실행하지 마세요. 항상 시도 번호를 붙인 `Start-Sleep 25; -Status`를 사용하세요.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.tv-sdk-installed` 존재 확인
+3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
 
 If the run state is unknown (interrupted session), just re-run the Phase 1 pre-check CLI —
-it is idempotent and reports whether `.tv-sdk-installed` exists. Report that envelope.
+it is idempotent and reports whether this ZIP's TV version is recorded in `.platform-installed`. Report that envelope.
 
 **Do NOT (any harness):**
 
@@ -212,7 +214,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 
 1. **`list-templates --type tv`** — TV 템플릿 목록을 확인합니다. 빈 배열(`[]`)이 반환되면 TV SDK가 미설치된 것입니다. TV 템플릿이 존재하면 설치된 것으로 판정합니다.
 
-2. **`tv-sdk-install-from-zip` 재실행 (멱등성)** — `tv-sdk-install-from-zip` CLI는 `.tv-sdk-installed` 마커를 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
+2. **`tv-sdk-install-from-zip` 재실행 (멱등성)** — `tv-sdk-install-from-zip` CLI는 `.platform-installed`에서 이 ZIP(또는 `--tv-version`)의 TV 기록을 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
 
 ### ❌ 잘못된 방법
 
@@ -223,7 +225,7 @@ TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
 | 방법                             | 신뢰성       | 비고                                         |
 | -------------------------------- | ------------ | -------------------------------------------- |
 | `list-templates --type tv`       | ✅ 신뢰 가능 | 빈 배열 = 미설치, 항목 있음 = 설치됨         |
-| `tv-sdk-install-from-zip` 재실행 | ✅ 신뢰 가능 | 멱등성 보장, `.tv-sdk-installed` 마커로 판정 |
+| `tv-sdk-install-from-zip` 재실행 | ✅ 신뢰 가능 | 멱등성 보장, `.platform-installed`의 TV 기록으로 판정 |
 | `list-platform --profile tv`     | ❌ 오판 위험 | `--profile` 무시됨, false positive 유발      |
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
