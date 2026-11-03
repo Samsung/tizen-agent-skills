@@ -241,7 +241,9 @@ reporting "already installed".
 line as Phase 1 — the same version and label — **without `--force`**. Dropping the version skips the
 check that the requested platform went in (`platform_version_not_found`), so a version the installer
 did not install would be reported as a completed install; keeping `--force` skips the already-installed
-check and hands back the installer command again.
+check and hands back the installer command again. If that re-run returns `platform_version_not_found`,
+the SDK is installed without the requested platform: show the envelope and offer `suggested_fix.command`
+(`platform-install`), and do not re-run with `--force` (a full reinstall).
 
 When the pre-check returns failure with `suggested_fix.command`, run that installer
 command. The install takes 10–15 minutes (~121 packages). **실행 방법은 하네스에 따라 다릅니다:**

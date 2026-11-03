@@ -77,9 +77,11 @@
   설명합니다.
 - 백그라운드 설치가 끝난 뒤 `sdk-install` / `sdk-install-custom-repo` 사전 점검 메시지가
   같은 버전(과 저장소 URL)으로, `--force` 없이 다시 실행하라고 안내하며, 스킬과 에이전트
-  문서도 같게 말합니다. 이전의 재실행 블록은 버전 없는 `node "$CLI"`여서, 요청한 플랫폼이
-  설치됐는지 확인하는 단계(`platform_version_not_found`)를 건너뛰었습니다. `--force`를 붙이면
-  이미 설치됨 확인을 건너뛰고 설치 명령을 다시 돌려줍니다.
+  문서도 같게 말합니다. 이전에는 에이전트의 재실행 블록이 버전을 빠뜨려(버전 없는
+  `node "$CLI"`, 또는 저장소 URL만) 요청한 플랫폼이 설치됐는지 확인하는 단계
+  (`platform_version_not_found`)를 건너뛰었습니다. `--force`를 붙이면
+  이미 설치됨 확인을 건너뛰고 설치 명령을 다시 돌려줍니다. 재실행 결과가
+  `platform_version_not_found`이면 설치 실패로 다루지 않고 `platform-install` 안내와 함께 보고합니다.
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):

@@ -213,11 +213,18 @@ hand-write a text report or fake JSON:
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-custom-repo-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-custom-repo-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" "<repo-url>"
+node "$CLI" --repo-url "<repo-url>"   # + the version from step 1 (e.g. --platform-version 10.0); never --force
 ```
 
+**Pass the same repository URL and version as in step 1, and never `--force`.** Without the version the
+re-run skips the check that the requested platform went in (`platform_version_not_found`); `--force`
+skips the already-installed check and returns the installer command again.
+
 - Exit `0` + success envelope → verified. **Show the envelope to the user**, then summarize.
-- Exit `1` → installation did NOT complete. Read the log tail and report honestly:
+- Exit `1` with `errors[0].error_category` `platform_version_not_found` → the SDK is installed but
+  the requested platform is not. Show the envelope and offer `suggested_fix.command`
+  (`platform-install`); do NOT re-run with `--force`, which would reinstall the whole SDK (10–15 min).
+- Any other exit `1` → installation did NOT complete. Read the log tail and report honestly:
 
 ```bash
 tail -n 20 "<task-output-file-from-step-2>"

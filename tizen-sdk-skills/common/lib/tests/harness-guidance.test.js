@@ -284,32 +284,69 @@ test("sdkPrecheckRerunHint: custom repository keeps the URL", () => {
 });
 
 // The re-run after the background install must repeat the Phase 1 version and
-// drop --force; a bare `node "$CLI"` re-run skipped requestedPlatformMissing.
+// drop --force; a bare re-run skipped requestedPlatformMissing. Whitespace is
+// normalised so a re-wrap of the prose cannot break the checks.
+const flat = (rel) =>
+  fs.readFileSync(path.join(repoRoot, ...rel), "utf-8").replace(/\s+/g, " ");
 for (const [rel, phrases] of [
   [
     ["common", "skills", "tizen-sdk-install", "SKILL.md"],
-    ["**Re-running the Phase 1 pre-check**", "the same version and label"],
+    [
+      "**Re-running the Phase 1 pre-check**",
+      "the same version and label — **without `--force`**",
+      "do not re-run with `--force` (a full reinstall)",
+    ],
   ],
   [
     ["common", "skills", "tizen-sdk-install-custom-repo", "SKILL.md"],
     [
       "**Re-running the Phase 1 pre-check**",
-      "the same repository URL and version",
+      "the same repository URL and version — **without `--force`**",
+      "do not re-run with `--force` (a full reinstall)",
     ],
   ],
   [
     ["common", "agents", "tizen-sdk-install.md"],
-    ["Pass the same version (and label) as in step 1"],
+    [
+      "**Pass the same version (and label) as in step 1, and never `--force`.**",
+      "`platform_version_not_found` → the SDK is installed but the requested platform is not",
+    ],
   ],
   [
     ["common", "agents", "tizen-sdk-install-custom-repo.md"],
-    ["with the same repository URL and\n   version, without `--force`"],
+    [
+      "**Pass the same repository URL and version as in step 1, and never `--force`.**",
+      "re-run the pre-check CLI with the same repository URL and version, without `--force`",
+      "`platform_version_not_found` → the SDK is installed but the requested platform is not",
+    ],
   ],
 ]) {
   test(`${rel.join("/")}: re-run keeps the version, drops --force`, () => {
-    const text = fs.readFileSync(path.join(repoRoot, ...rel), "utf-8");
+    const text = flat(rel);
     for (const phrase of phrases) assert.ok(text.includes(phrase), phrase);
-    assert.ok(text.includes("--force"));
+  });
+}
+
+// The re-run code blocks themselves, not only the prose around them: the
+// custom-repo agent's block kept only the URL after the prose was fixed.
+for (const [rel, line] of [
+  [
+    ["common", "agents", "tizen-sdk-install.md"],
+    /^node "\$CLI" +# \+ the version \/ label you passed in step 1 .*never --force$/m,
+  ],
+  [
+    ["common", "agents", "tizen-sdk-install-custom-repo.md"],
+    /^node "\$CLI" --repo-url "<repo-url>" +# \+ the version from step 1 .*never --force$/m,
+  ],
+]) {
+  test(`${rel.join("/")}: re-run code block names the version`, () => {
+    const text = fs.readFileSync(path.join(repoRoot, ...rel), "utf-8");
+    const block = text.slice(
+      text.indexOf("re-run the pre-check CLI") >= 0
+        ? text.indexOf("re-run the pre-check CLI")
+        : text.indexOf("Re-run the pre-check CLI"),
+    );
+    assert.ok(line.test(block), String(line));
   });
 }
 

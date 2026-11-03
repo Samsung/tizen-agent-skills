@@ -257,7 +257,10 @@ already-installed check and returns the installer command again.
 
 - Exit `0` + success envelope → installation verified. **Show this envelope
   (the JSON) to the user as the final result**, then summarize next steps.
-- Exit `1` → installation did NOT complete. Read the log tail for diagnosis
+- Exit `1` with `errors[0].error_category` `platform_version_not_found` → the SDK is installed but
+  the requested platform is not. Show the envelope and offer `suggested_fix.command`
+  (`platform-install`); do NOT re-run with `--force`, which would reinstall the whole SDK (10–15 min).
+- Any other exit `1` → installation did NOT complete. Read the log tail for diagnosis
   and report the failure honestly:
 
 ```bash
