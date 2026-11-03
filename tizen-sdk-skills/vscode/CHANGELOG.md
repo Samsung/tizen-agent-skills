@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.7.0] — 2026-11-03
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** `sdk-install` / `platform-install --list` now report the platforms the user installed, read from `<sdk>/.platform-installed` (one `Tizen SDK X.Y` entry each), TV SDK ZIPs of different versions install side by side (`tv-sdk-install-from-zip --tv-version`), linked platform directories count, and Node.js 22 or later is required. See the project CHANGELOG for details.
+
 ## [1.6.1] — 2026-10-26
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** update check now records why a check failed and readable timestamps in `~/.tizen.agent.update.json`, works behind proxies that re-sign HTTPS and on slow machines, and is no longer killed by its own hook timeout; the bundled dlog analyzer moves to 0.2.9a0. See the project CHANGELOG for details.

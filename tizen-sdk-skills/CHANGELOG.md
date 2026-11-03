@@ -14,6 +14,8 @@ below use those release tags.
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-03
+
 ### Changed
 
 - **`sdk-install` / `sdk-install-custom-repo` result.packages and

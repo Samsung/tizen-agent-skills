@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-03
+
 ### 변경
 
 - **`sdk-install` / `sdk-install-custom-repo`의 result.packages와
