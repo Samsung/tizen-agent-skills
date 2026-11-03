@@ -54,7 +54,7 @@ const result = await installSdk(version, label);
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수 (lib/core/sdk.js에서 다시 내보냄)
 
-async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = 최신 플랫폼
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install', downloadJobs = 4) {  // '' = 최신 플랫폼
 
   // 4-0️⃣ 버전 형식 확인이 먼저 (X.Y, 아니면 invalid_argument). 사용자 지정 저장소면 위임
   const versionCheck = validateTizenVersion(version);
@@ -256,7 +256,7 @@ const { installSdk } = require('../core/sdk-commands');
 
 ### 2. installSdk() 호출
 
-실제로는 에이전트가 `node sdk-install-cli.js <버전>`을 실행하고, 아래 호출은 그 러너 안에서 일어납니다(Step 3와 같음).
+실제로는 에이전트가 `node sdk-install-cli.js <버전>`을 실행하고, 아래 호출은 그 러너 안에서 일어납니다(Step 3과 같음).
 
 ```javascript
 // sdk-install-cli.js 내부: 에이전트가 넘긴 명령줄 인자

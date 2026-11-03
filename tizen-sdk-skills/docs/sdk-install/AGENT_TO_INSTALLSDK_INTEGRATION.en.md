@@ -54,7 +54,7 @@ const result = await installSdk(version, label);
 ```javascript
 // installSdk() in lib/core/sdk-commands.js (re-exported from lib/core/sdk.js)
 
-async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = newest platform
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install', downloadJobs = 4) {  // '' = newest platform
 
   // 4-0️⃣ Version syntax first (X.Y, else invalid_argument); a custom repository hands off
   const versionCheck = validateTizenVersion(version);

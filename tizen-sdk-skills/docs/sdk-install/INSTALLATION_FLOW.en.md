@@ -18,7 +18,6 @@ User: "Can you install Tizen SDK 10.0?"
 
 The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
-
 ---
 
 ### Step 2️⃣: Agent Auto-Selection
@@ -57,7 +56,7 @@ const result = await installSdk('10.0', 'tizen');  // '10.0' = first positional 
 ```javascript
 // installSdk() in lib/core/sdk-commands.js (re-exported from lib/core/sdk.js)
 
-async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = newest platform
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install', downloadJobs = 4) {  // '' = newest platform
 
   // 4-0️⃣ Version syntax first (X.Y, else invalid_argument); a custom repository hands off
   const versionCheck = validateTizenVersion(version);
@@ -137,7 +136,6 @@ After a successful install, the selected mirror URL is written to `{SDK_PATH}/.p
 When a repository URL is supplied (`installSdkFromRepo()` / `--repo-url` / `-RepoUrl`), timezone-based mirror selection is skipped and every package — starting with `pkg_list` — is downloaded from that URL. The URL is validated **before** step 3 of the pre-check: it must serve `pkg_list_{OS}-64` or `pkg_list_{OS}-32`, otherwise the install is refused and nothing is downloaded. The custom URL is what gets written to `repository.info`, so updates and emulator packages follow it too.
 
 See [CUSTOM_REPOSITORY_INSTALL.en.md](CUSTOM_REPOSITORY_INSTALL.en.md) for the full flow.
-
 
 
 
