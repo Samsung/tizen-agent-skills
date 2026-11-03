@@ -27,13 +27,13 @@ The user asks to download / install the Tizen platform package (TIZEN-{version})
 tizen-cli tizen-sdk platform-list
 ```
 
-No options. `result.platforms` has one entry per `platforms/tizen-X.Y`, oldest first:
+No options. `result.platforms` has one entry per platform version the user installed, oldest first — the versions `.platform-installed` records (every installer appends a block), plus one whose `platform-install` has not finished. The `tv` / `tv-samsung` folders the TV extension bundles for older versions are not entries.
 
-- `status`: `installed`; `incomplete` (an unfinished `platform-install` — re-run it to resume); or `not_installed` (the directory holds no platform payload — only the shared `common` data the base SDK ships for older versions, or synced template `samples` — so that version can still be installed)
-- `profiles`: the profiles that hold a platform payload (e.g. `tizen`, `tv-samsung` — never `common` or a folder with only synced template `samples`), so an `installed` version without `tizen` is installed for the listed profiles only
+- `status`: `installed`; `incomplete` (an unfinished `platform-install` — re-run it to resume); or `not_installed` (recorded, but its folders are gone)
+- `profiles`: the recorded profiles on disk — `tizen`, plus `tv-samsung` when the TV extension was installed for that version
 - `emulator_images`
 
-`result.newest` is the version `create-project` / `list-templates` use when no `--platform-version` is given.
+`result.newest` is the newest installed entry. Report every entry with its profiles on one line (e.g. `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`).
 
 ## Command
 
@@ -62,7 +62,7 @@ tizen-cli tizen-sdk platform-install
 3. Auto-detects the latest TIZEN-X.Y platform (or uses the specified `--platform-version`)
 4. Resolves `TIZEN-{version}` and all its Install-dependency packages
 5. Downloads and merges each package into the SDK root
-6. Marks the run with `.platform-installing-X.Y`; on success removes it and appends the version to the `.platform-installed` history. A version counts as installed when `platforms/tizen-X.Y` holds a profile besides `common` with content besides the synced `samples` (rootstraps, emulator images, …) and no `.platform-installing-X.Y` is left.
+6. Marks the run with `.platform-installing-X.Y`; on success removes it and appends a block for the version and its profiles to `.platform-installed`. It skips a version that is already installed: `platforms/tizen-X.Y` holds a profile besides `common` and the TV extension's `tv` / `tv-samsung*` with content besides the synced `samples` (rootstraps, emulator images, …), and no `.platform-installing-X.Y` is left.
 
 ## Output
 - Success `result`: platform package/installation status.

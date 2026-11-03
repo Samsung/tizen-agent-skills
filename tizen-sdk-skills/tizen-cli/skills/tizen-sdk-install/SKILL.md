@@ -106,10 +106,9 @@ This command is a **fast pre-check only** — it never performs the 10–15 minu
 - Success `result`: `packages[]` (name/status/version, plus `profiles` on platform entries), `installation_status`.
 - Failure: `error_code` (e.g. `execution_error`), `suggested_fix.command` (the installer line).
 
-Reporting `packages[]` (one entry per platform version, then `Tizen SDK Tools`):
+Reporting `packages[]` (one `Tizen SDK X.Y` entry per installed platform version):
 
-- Each `Tizen Platform X.Y` entry has its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-list`) and `profiles` (payload profiles only — never `common` or a samples-only folder). Put the platforms on one summary line: group them by `status`, split `installed` by whether `tizen` is in `profiles`, group the versions without `tizen` by their `profiles` and label each group with them (those versions are installed for the listed profiles only), and write every version out instead of a range (for example `platforms — installed: 10.0, 11.0 · installed (tv-samsung only): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`). Do not call a version installed because its directory exists.
-- The `version` of `Tizen SDK Tools` is a label — the requested platform version, else the newest installed one — not the SDK version. Never summarise the SDK as that single version.
+- The entries are the versions `.platform-installed` records (every installer appends a block) plus one whose `platform-install` has not finished — not every `platforms/tizen-X.Y`: the TV extension's bundled `tv` / `tv-samsung` folders for older versions are not entries. Each has its own `status` (`installed`, `incomplete`, or `not_installed` when its recorded folders are gone — the same as `platform-list`) and `profiles` (the recorded ones on disk: `tizen`, plus `tv-samsung` when the TV extension was installed for that version). Put the entries on one summary line with their profiles, every version written out (for example `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`). Never summarise the SDK as a single version.
 - For a follow-up such as "which SDK / platform versions are installed?", run `tizen-cli tizen-sdk platform-list` and answer from that envelope instead of re-reading this one or measuring directories.
 
 ## Automatic SDK Init

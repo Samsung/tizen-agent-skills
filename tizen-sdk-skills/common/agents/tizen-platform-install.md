@@ -99,8 +99,8 @@ This agent handles platform package download by running the installer script in 
 - If `--platform-version` is specified, targets `TIZEN-{version}`; otherwise auto-detects the latest TIZEN-X.Y platform
 - Recursively resolves all Install-dependency packages
 - Downloads and merges each package into the SDK root
-- Marks the run with `.platform-installing-X.Y`; on success removes it and appends the version to the `.platform-installed` history (a failed run keeps the marker, and a re-run resumes)
-- Several versions live side by side: a version counts as installed when `platforms/tizen-X.Y` holds a profile besides `common` with content besides the synced `samples` (rootstraps, emulator images, …) and no `.platform-installing-X.Y` is left. `platform-install-cli.js --list` reports every version (read-only)
+- Marks the run with `.platform-installing-X.Y`; on success removes it and appends a block for the version and its profiles to `.platform-installed` — the record of what the user installed, which `sdk-install` and both TV installers append to as well (a failed run keeps the marker, and a re-run resumes)
+- Several versions live side by side. The "already installed" check: `platforms/tizen-X.Y` holds a profile besides `common` and the TV extension's `tv` / `tv-samsung*` with content besides the synced `samples` (rootstraps, emulator images, …), and no `.platform-installing-X.Y` is left. `platform-install-cli.js --list` reports the versions `.platform-installed` records (read-only)
 
 **Do NOT run scripts directly.** Always use this agent for consistent Standard JSON Envelope responses.
 

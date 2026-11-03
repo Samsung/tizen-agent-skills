@@ -38,7 +38,7 @@ tizen-cli tizen-sdk tv-sdk-install
 2. **Verify**: re-run `tizen-cli tizen-sdk tv-sdk-install` and confirm `status: "success"`.
 
 ## Output
-- Success `result`: TV SDK package/installation status.
+- Success `result`: `packages[]` — `{ name: "TV-SAMSUNG-Public", status, version: "<TV version>", profiles: ["tv-samsung"] }`. The repository carries one TV version (its `X.Y-MANDATORY` dependency); it is recorded in `.platform-installed`, which `sdk-install` and `platform-list` report. For another TV version, use `tv-sdk-install-from-zip` with that version's ZIP.
 - Failure: `error_code`, `message`, optional `suggested_fix.command`.
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
