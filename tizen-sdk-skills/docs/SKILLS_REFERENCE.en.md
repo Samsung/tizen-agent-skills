@@ -1137,9 +1137,9 @@ Both are validating front-ends: once the URL passes they delegate to `tizen-sdk-
   "status": "success",
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": ["common"] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["common", "tizen"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["common", "tizen"] },
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
       { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
@@ -1149,7 +1149,7 @@ Both are validating front-ends: once the URL passes they delegate to `tizen-sdk-
 }
 ```
 
-**`result.packages`:** one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, oldest first, with the same `status` as `platform-install --list` (`installed`, `incomplete` or `not_installed`) and its `profiles`, then `Tizen SDK Tools`. A successful install can still list `not_installed` or `incomplete` versions — report each entry as it is.
+**`result.packages`:** one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, oldest first, with the same `status` as `platform-install --list` (`installed`, `incomplete` or `not_installed`) and its `profiles` — only the profiles that hold a platform payload, never `common` or a folder with nothing but synced template `samples` — then `Tizen SDK Tools`, labelled with the requested version or else the newest installed one. A successful install can still list `not_installed` or `incomplete` versions — report each entry as it is.
 
 **Note:** The repository_url can be any server that serves `pkg_list_{OS}-{64,32}` at its root, for example:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 mirror)

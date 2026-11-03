@@ -239,9 +239,9 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
   "duration_ms": 780000,
   "result": {
     "packages": [
-      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": ["common"] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["common", "tizen"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["common", "tizen"] },
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
       { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",

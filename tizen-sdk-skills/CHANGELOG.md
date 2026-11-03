@@ -66,6 +66,14 @@ below use those release tags.
   or `not_installed`) and its `profiles`. The skills also tell the agent to
   report those entries as they are and to answer a follow-up "which versions
   are installed?" with `platform-install --list`.
+- `profiles` in `sdk-install` / `sdk-install-custom-repo` `result.packages`
+  and in `platform-install --list` lists only the profiles that hold a
+  platform payload. `common` and a `tizen` folder holding nothing but the
+  template `samples` that `tizen-create-project` syncs are left out; before,
+  a TV-only version looked installed for the `tizen` profile too.
+- `sdk-install-custom-repo` without a version labels `Tizen SDK Tools` with
+  the newest installed platform, as `sdk-install` does, instead of
+  `"installed"`.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

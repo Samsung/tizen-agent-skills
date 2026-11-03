@@ -59,6 +59,13 @@
   `incomplete`, `not_installed`)와 `profiles`를 갖습니다. 스킬에도 이 항목을 그대로
   전하고, "설치된 버전이 뭐야?" 같은 후속 질문에는 `platform-install --list`로
   답하라는 규칙을 추가했습니다.
+- `sdk-install` / `sdk-install-custom-repo`의 `result.packages`와
+  `platform-install --list`의 `profiles`에는 실제 플랫폼 내용이 있는 프로필만
+  나옵니다. `common`과, `tizen-create-project`가 동기화한 템플릿 `samples`만 있는
+  `tizen` 폴더는 빠집니다. 이전에는 TV 전용 버전도 `tizen` 프로필까지 설치된 것처럼
+  보였습니다.
+- 버전을 지정하지 않은 `sdk-install-custom-repo`도 `sdk-install`처럼
+  `Tizen SDK Tools`에 설치된 최신 플랫폼 버전을 붙입니다(이전에는 `"installed"`).
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):
