@@ -16,6 +16,9 @@
  *   - listPlatforms (platform-install-cli.js --list, tizen-cli platform-list)
  *   - collectInstalledPackages (sdk-install result.packages): one entry per
  *     version with the same status as listPlatforms
+ *   - installSdkFromRepo on an installed SDK against a stub repository: the
+ *     same result.packages as sdk-install, and the requested version on the
+ *     tools label (skipped on win32)
  *   - installPlatform pre-check per version (other versions do not matter)
  *   - create-project / list-templates --platform-version validation and the
  *     --tz-profile / -TzProfile hand-off to the scripts
@@ -27,7 +30,8 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
+const { precheckWithoutDiskCheck } = require("./precheck-without-disk-check");
 
 const sandboxHome = fs.mkdtempSync(
   path.join(os.tmpdir(), "tizen-multi-platform-home-"),
@@ -41,6 +45,7 @@ process.env.USERPROFILE = sandboxHome;
 const {
   CONFIG_FILE,
   collectInstalledPackages,
+  installSdkFromRepo,
   installedPackageSummary,
   isPlatformInstalled,
   listFullyInstalledPlatformVersions,
@@ -245,22 +250,137 @@ fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
     }
 
-    console.log("--- installedPackageSummary call sites ---");
-    {
-      // installSdkFromRepo validates the URL by running the installer before
-      // it reaches the summary, so its call sites are checked in the source.
-      const src = fs.readFileSync(
-        path.join(__dirname, "..", "core", "sdk.js"),
-        "utf8",
+    console.log("--- sdk-install-custom-repo on an installed SDK ---");
+    if (process.platform === "win32") {
+      // The URL probe runs the PowerShell installer there; this check drives
+      // the bash one (CI runs on Linux).
+      console.log("SKIP custom-repo run (win32)");
+    } else if (spawnSync("curl", ["--version"]).status !== 0) {
+      // The bash probe (url_exists) uses curl; without it the probe fails
+      // for reasons unrelated to the code under test.
+      console.log("SKIP custom-repo run (curl not found)");
+    } else {
+      // Run the real installSdkFromRepo pre-check on an installed SDK: the
+      // installer's --validate-repo-url probe fetches pkg_list_<os>-64 from a
+      // stub repository, then the already-installed branch builds
+      // result.packages. Two installed versions (6.0, 8.0) so that pinning the
+      // older one shows whether the requested version reaches the tools label.
+      const repoSdk = path.join(sandboxHome, "custom-repo-sdk");
+      const mkRepo = (...p) =>
+        fs.mkdirSync(path.join(repoSdk, ...p), { recursive: true });
+      mkRepo("platforms", "tizen-6.0", "tv-samsung", "rootstraps");
+      mkRepo("platforms", "tizen-7.0", "common");
+      mkRepo("platforms", "tizen-8.0", "tizen", "samples", "Template");
+      mkRepo("platforms", "tizen-8.0", "tv-samsung", "rootstraps");
+      mkRepo("tools");
+      fs.writeFileSync(path.join(repoSdk, "sdk.info"), "x\n");
+
+      // The stub runs in a child process because the probe is a blocking
+      // execSync — a server in this process could not answer it. It exits
+      // when its stdin closes, so it cannot outlive this test.
+      const stub = spawn(
+        process.execPath,
+        [
+          "-e",
+          `const srv = require("http").createServer((req, res) => {
+             res.statusCode = /\\/pkg_list_[a-z]+-(64|32)$/.test(req.url) ? 200 : 404;
+             res.end(req.method === "HEAD" ? undefined : "Package : stub\\n");
+           }).listen(0, "127.0.0.1", () => {
+             process.stdout.write(srv.address().port + "\\n");
+           });
+           process.stdin.on("end", () => process.exit(0)).resume();`,
+        ],
+        { stdio: ["pipe", "pipe", "inherit"] },
       );
-      // collectInstalledPackages( appears twice: its definition and the one
-      // call inside installedPackageSummary. A call site that builds
-      // packages itself (with its own label) adds a third.
-      check(
-        "only installedPackageSummary calls collectInstalledPackages",
-        (src.match(/collectInstalledPackages\(/g) || []).length,
-        2,
+      const port = await new Promise((resolve, reject) => {
+        let buf = "";
+        stub.stdout.on("data", (d) => {
+          buf += d;
+          if (buf.includes("\n")) resolve(buf.split("\n")[0].trim());
+        });
+        stub.once("error", reject);
+        stub.once("exit", (code) =>
+          reject(new Error(`stub repository exited (${code})`)),
+        );
+        setTimeout(
+          () => reject(new Error("stub repository did not start in 10 s")),
+          10000,
+        ).unref();
+      }).catch((error) => {
+        stub.kill();
+        throw error;
+      });
+
+      // Neither a proxy from the environment nor a curl config file may
+      // redirect the loopback probe: NO_PROXY covers the proxy variables, and
+      // CURL_HOME / XDG_CONFIG_HOME are where curl looks for .curlrc besides
+      // $HOME (already the sandbox).
+      const envKeys = ["NO_PROXY", "no_proxy", "CURL_HOME", "XDG_CONFIG_HOME"];
+      const savedEnv = Object.fromEntries(
+        envKeys.map((k) => [k, process.env[k]]),
       );
+      process.env.NO_PROXY = process.env.no_proxy = "127.0.0.1,localhost";
+      delete process.env.CURL_HOME;
+      delete process.env.XDG_CONFIG_HOME;
+      fs.writeFileSync(CONFIG_FILE, `${repoSdk}\n`);
+      const toolsVersion = (env) =>
+        env.result?.packages?.find((p) => p.name === "Tizen SDK Tools")
+          ?.version;
+      try {
+        const repoUrl = `http://127.0.0.1:${port}/repo`;
+        const env = await installSdkFromRepo(repoUrl, "");
+        check("custom repo, installed SDK → success", env.status, "success");
+        check(
+          "custom repo → same packages as sdk-install for this SDK",
+          env.result?.packages,
+          installedPackageSummary(repoSdk, ""),
+        );
+        check(
+          "custom repo → per-version status and payload profiles",
+          (env.result?.packages || [])
+            .filter((p) => p.name.startsWith("Tizen Platform "))
+            .map((p) => [p.version, p.status, p.profiles]),
+          [
+            ["6.0", "installed", ["tv-samsung"]],
+            ["7.0", "not_installed", []],
+            ["8.0", "installed", ["tv-samsung"]],
+          ],
+        );
+        check(
+          'custom repo, no version → tools labelled "8.0", not "installed"',
+          toolsVersion(env),
+          "8.0",
+        );
+        // Not installed yet: the message must say to re-run with the same
+        // URL and version, without --force (disk check stubbed out).
+        const fresh = precheckWithoutDiskCheck("repo", repoUrl);
+        check(
+          "custom repo, not installed → execution_error",
+          fresh.errors?.[0]?.error_category,
+          "execution_error",
+        );
+        check(
+          "custom repo, not installed → re-run with the same URL and version, without --force",
+          String(fresh.errors?.[0]?.message).includes(
+            "re-run this CLI with the same repository URL and version as this run but without --force",
+          ),
+          true,
+        );
+        const pinned = await installSdkFromRepo(repoUrl, "6.0");
+        check(
+          "custom repo, version 6.0 → tools labelled 6.0, not the newest",
+          toolsVersion(pinned),
+          "6.0",
+        );
+      } finally {
+        stub.stdin.end();
+        stub.kill();
+        for (const k of envKeys) {
+          if (savedEnv[k] === undefined) delete process.env[k];
+          else process.env[k] = savedEnv[k];
+        }
+        fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+      }
     }
 
     console.log("--- installPlatform pre-check ---");

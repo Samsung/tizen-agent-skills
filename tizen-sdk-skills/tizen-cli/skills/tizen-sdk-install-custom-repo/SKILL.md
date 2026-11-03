@@ -80,11 +80,12 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      `--force` if the user wants a reinstall from their URL.
    - `status: "failure"` → inspect `errors[0].error_category`:
 
-     | `error_category`       | Meaning                                            | Action                                            |
-     | ---------------------- | -------------------------------------------------- | ------------------------------------------------- |
-     | `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list  | Ask the user for the repository **directory** URL |
-     | `repo_url_unreachable` | Well-formed but serves no `pkg_list_{OS}-{64,32}`  | Wrong URL, or internal mirror needs VPN/proxy     |
-     | `execution_error`      | URL valid, SDK not installed                       | Run `errors[0].suggested_fix.command` (Phase 2)   |
+     | `error_category`             | Meaning                                           | Action                                                                                       |
+     | ---------------------------- | ------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+     | `repo_url_invalid`           | Malformed URL / wrong scheme / points at pkg_list | Ask the user for the repository **directory** URL                                            |
+     | `repo_url_unreachable`       | Well-formed but serves no `pkg_list_{OS}-{64,32}` | Wrong URL, or internal mirror needs VPN/proxy                                                |
+     | `execution_error`            | URL valid, SDK not installed                      | Run `errors[0].suggested_fix.command` (Phase 2)                                              |
+     | `platform_version_not_found` | SDK installed, requested platform is not          | Offer `errors[0].suggested_fix.command` (`platform-install`); never reinstall with `--force` |
 
 2. **Phase 2 — install**: run `errors[0].suggested_fix.command` verbatim (it already
    contains the repository flag). 10–15 minutes, ~121 packages.
@@ -93,15 +94,21 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url <url>
      `run_in_background: true` (10-min kill), never foreground (log floods the context).
    - **Never drop the repository flag** from a relaunch — the install would silently fall
      back to the default CDN mirror.
-3. **Verify**: re-run the Phase 1 command; it must return `status: "success"`. Confirm the
+3. **Verify**: re-run the Phase 1 command with the same repository URL and version but without `--force`; it must return `status: "success"`. A `platform_version_not_found` failure here means the SDK is installed without the requested platform — report it with its `platform-install` fix (table above). Confirm the
    source with `sdk-repo-info` (or read `{SDK_PATH}/.package/repository.info`).
 
 ## Output
 
-- Success `result`: `packages[]`, `repository_url`, `installation_status`.
+- Success `result`: `packages[]` (name/status/version, plus `profiles` on platform entries), `repository_url`, `installation_status`.
 - Validation success `result`: `repository_url`, `valid`, `pkg_list_file`, `pkg_list_url`.
 - Failure: `error_code` (`TIZEN_SDK_REPO_E001` / `E002`), `message`, `details[]` (every
   probed URL), `suggested_fix.command`.
+
+Reporting `packages[]` (one entry per platform version, then `Tizen SDK Tools`):
+
+- Each `Tizen Platform X.Y` entry has its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-list`) and `profiles` (payload profiles only — never `common` or a samples-only folder). Put the platforms on one summary line: group them by `status`, split `installed` by whether `tizen` is in `profiles`, group the versions without `tizen` by their `profiles` and label each group with them (those versions are installed for the listed profiles only), and write every version out instead of a range (for example `platforms — installed: 10.0, 11.0 · installed (tv-samsung only): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`). Do not call a version installed because its directory exists.
+- The `version` of `Tizen SDK Tools` is a label — the requested platform version, else the newest installed one — not the SDK version. Never summarise the SDK as that single version.
+- For a follow-up such as "which SDK / platform versions are installed?", run `tizen-cli tizen-sdk platform-list` and answer from that envelope instead of re-reading this one or measuring directories.
 
 ## Downstream effect
 

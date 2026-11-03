@@ -155,17 +155,18 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
   "status": "success",
   "result": {
     "packages": [
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "installation_status": "completed"
   },
   "command": "tizen-sdk sdk-install"
 }
 ```
+
+**`result.packages`:** 아래 `sdk-install-custom-repo`와 같은 버전별 목록입니다 — `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다(이 값은 라벨이며 SDK 버전이 아닙니다). SDK가 이미 설치되어 있을 때도 같은 Envelope가 돌아옵니다.
 
 **응답 (Node.js 미설치):**
 
@@ -1125,7 +1126,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 }
 ```
 
-**`result.packages`:** `platforms/tizen-X.Y`마다 `Tizen Platform X.Y` 항목이 하나씩(오래된 버전부터) 있고, `platform-install --list`와 같은 `status`(`installed`, `incomplete`, `not_installed`)와 `profiles`(실제 플랫폼 내용이 있는 프로필만 — `common`이나 동기화된 템플릿 `samples`만 있는 폴더는 제외)를 가지며, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다. 설치가 성공해도 `not_installed`나 `incomplete` 버전이 함께 나올 수 있으니 항목별로 그대로 보고합니다.
+**`result.packages`:** `platforms/tizen-X.Y`마다 `Tizen Platform X.Y` 항목이 하나씩(오래된 버전부터) 있고, `platform-install --list`와 같은 `status`(`installed`, `incomplete`, `not_installed`)와 `profiles`(실제 플랫폼 내용이 있는 프로필만 — `common`이나 동기화된 템플릿 `samples`만 있는 폴더는 제외)를 가지며, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다. 설치가 성공해도 `not_installed`나 `incomplete` 버전이 함께 나올 수 있으니 모두 보고합니다. 요약에서는 `status`별로(`installed`는 `profiles`에 `tizen`이 있는지로 나누고, `tizen`이 없는 버전은 `profiles`별로 묶어 그 이름을 붙여) 묶어 한 줄에 모든 버전을 적습니다.
 
 **참고:** repository_url은 루트에서 `pkg_list_{OS}-{64,32}`를 제공하는 어떤 서버든 될 수 있습니다. 예:
 - `http://mirror.example.com/packages/tizen_sdk_11.0/` (SDK 11.0 미러)

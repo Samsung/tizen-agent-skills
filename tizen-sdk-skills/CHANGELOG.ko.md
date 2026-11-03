@@ -66,6 +66,25 @@
   보였습니다.
 - 버전을 지정하지 않은 `sdk-install-custom-repo`도 `sdk-install`처럼
   `Tizen SDK Tools`에 설치된 최신 플랫폼 버전을 붙입니다(이전에는 `"installed"`).
+- `sdk-install` 결과 보고 규칙이 1~2줄 요약 제한과 맞도록, 플랫폼을 상태별로 묶어
+  모든 버전을 한 줄에 쓰게 했습니다. 단독 `tizen-cli` 스킬(`tizen-platform-install`,
+  `tizen-sdk-install`, `tizen-sdk-install-custom-repo`)에도 같은 규칙과 `profiles`
+  설명(실제 내용이 있는 프로필만)을 넣었습니다. 버전은 범위로 줄이지 않고 모두 적으며,
+  `tizen`이 없는 `installed` 버전은 프로필별로 묶어 그 이름을 붙입니다. 참조 문서와
+  `docs/sdk-install/`의 `sdk-install` 예시는 `Tizen SDK 10.0` 한 줄이나 지어낸 `size_mb`
+  항목 대신 버전별 목록을 보여 주고, `docs/sdk-install/`의 두 흐름 문서(영문·한글)는 3분짜리
+  `execSync` 직접 설치 대신 실제 흐름(사전 점검 → 백그라운드 설치 → 사전 점검 재실행)을
+  설명합니다.
+- 백그라운드 설치가 끝난 뒤 `sdk-install` / `sdk-install-custom-repo` 사전 점검 메시지가
+  같은 버전(과 저장소 URL)으로, `--force` 없이 다시 실행하라고 안내하며, 스킬과 에이전트
+  문서도 같게 말합니다. 이전에는 에이전트의 재실행 블록이 버전을 빠뜨려(버전 없는
+  `node "$CLI"`, 또는 저장소 URL만) 요청한 플랫폼이 설치됐는지 확인하는 단계
+  (`platform_version_not_found`)를 건너뛰었습니다. `--force`를 붙이면
+  이미 설치됨 확인을 건너뛰고 설치 명령을 다시 돌려줍니다. 재실행 결과가
+  `platform_version_not_found`이면 설치 실패로 다루지 않고 `platform-install` 안내와 함께 보고하며,
+  이 에러 메시지도 더 이상 `--force` 재실행을 권하지 않습니다(전체 재설치이고, 저장소에 없는 버전은
+  재설치로도 추가되지 않습니다). 또한 `platform-install`에도 저장소가 제공하는 버전이
+  필요하다고 알려 주며, 직접 설치 경로의 메시지는 더 이상 사전 점검을 다시 실행하라고 하지 않습니다.
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):

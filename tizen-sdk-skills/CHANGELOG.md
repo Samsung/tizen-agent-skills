@@ -74,6 +74,31 @@ below use those release tags.
 - `sdk-install-custom-repo` without a version labels `Tizen SDK Tools` with
   the newest installed platform, as `sdk-install` does, instead of
   `"installed"`.
+- The `sdk-install` reporting rules fit the one-to-two-line summary: the
+  platforms go on one line grouped by status, with every version listed. The
+  standalone `tizen-cli` skills (`tizen-platform-install`, `tizen-sdk-install`,
+  `tizen-sdk-install-custom-repo`) now carry the same rules and the
+  payload-`profiles` description. Versions are written out rather than as
+  ranges, and `installed` versions without `tizen` are grouped and labelled
+  by their profiles. The `sdk-install` examples in the reference docs and in
+  `docs/sdk-install/` show the per-version list instead of the
+  `Tizen SDK 10.0` fallback row or made-up `size_mb` rows, and the two
+  `docs/sdk-install/` flow guides (EN/KO) describe the real flow — pre-check,
+  background install, pre-check again — instead of a 3-minute inline
+  `execSync` install.
+- After the background install, the `sdk-install` / `sdk-install-custom-repo`
+  pre-check message tells the agent to re-run it with the same version (and
+  repository URL) but without `--force`, and the skill and agent texts say the
+  same. The agents' re-run blocks used to drop the version (a bare
+  `node "$CLI"`, or only the repository URL), which skipped the check that the requested platform went in
+  (`platform_version_not_found`); `--force` would skip the already-installed
+  check and return the installer command again. A re-run that now returns
+  `platform_version_not_found` is reported with the `platform-install` fix
+  instead of being treated as a failed install, and that error's message no
+  longer suggests re-running with `--force` (a full reinstall, which would not
+  add a version the repository does not offer). It also says that
+  `platform-install` needs a version the repository offers, and the variant
+  after an inline install no longer tells the agent to re-run the pre-check.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

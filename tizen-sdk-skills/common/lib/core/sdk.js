@@ -575,7 +575,7 @@ function requestedPlatformMissing(
       "platform_version_not_found",
       `The installer finished and sdk.info exists at ${sdkPath}, but the requested platform TIZEN-${version} is not part of the SDK (${installedNote}). ` +
         "The package repository most likely does not offer that version — existing releases look like 10.0 or 11.0. " +
-        `Re-run with a version the repository offers (or omit --tizen-version for the newest one), or add the platform with "${platformInstall}".`,
+        'The SDK itself is installed now, so re-running this command only reports it (and --force would reinstall it): add a version the repository offers with "tizen-sdk platform-install --platform-version <X.Y>".',
       platformInstall,
       startTime,
     );
@@ -589,8 +589,11 @@ function requestedPlatformMissing(
     "platform_version_not_found",
     `Tizen SDK is installed at ${sdkPath}, but platform TIZEN-${version} is not part of it (${installedNote}). ` +
       "Check the version — existing releases look like 10.0 or 11.0. " +
-      `To add that platform to this SDK run "${platformInstall}"; ` +
-      "to reinstall the whole SDK with it, re-run this command with --force.",
+      `To add that platform to this SDK run "${platformInstall}". ` +
+      "Do not re-run this command with --force to get it: that reinstalls the whole SDK (10-15 min). " +
+      "If an install just finished without that version, the repository most likely does not offer it, " +
+      "so platform-install will not find it either — use a version the repository offers. " +
+      "A full reinstall is the user's call.",
     platformInstall,
     startTime,
   );
@@ -1121,7 +1124,9 @@ async function installSdkSteps(
         "execution_error",
         "SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). " +
           harnessGuidance("detach") +
-          "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists. " +
+          sdkPrecheckRerunHint(
+            "<sdk-path>/sdk.info exists and the requested platform is installed",
+          ) +
           "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
           "or node job-cli.js list for a job started via background_command. " +
           "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
@@ -1274,6 +1279,26 @@ function installerFix(
     command: buildScriptCommand(scriptPath, winArgs, unixArgs),
     background_command: buildJobCommand(group, winArgs, unixArgs),
   };
+}
+
+/**
+ * How an SDK pre-check tells the agent to re-run it once the background install
+ * finished. The re-run repeats this run's arguments — the version (and label),
+ * and for a custom repository the URL — so the already-installed branch still
+ * checks that the requested platform went in (requestedPlatformMissing), and
+ * drops --force, which skips the already-installed check and would hand back
+ * the installer command again. A bare re-run lost the version: a requested
+ * 10.0 that never got installed was then reported as a completed install.
+ *
+ * @param {string} verify - what the re-run confirms
+ * @param {{customRepo?: boolean}} [opts]
+ * @returns {string} one sentence ending with a trailing space
+ */
+function sdkPrecheckRerunHint(verify, { customRepo = false } = {}) {
+  const same = customRepo
+    ? "the same repository URL and version"
+    : "the same version (and label)";
+  return `Either way, afterwards re-run this CLI with ${same} as this run but without --force, to verify ${verify}. `;
 }
 
 /**
@@ -2752,8 +2777,10 @@ async function installSdkFromRepoSteps(
       `SDK is NOT installed. The repository ${normalizedUrl} is valid` +
         `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
         harnessGuidance("detach") +
-        "Either way, afterwards re-run this CLI to verify <sdk-path>/sdk.info exists and that " +
-        "<sdk-path>/.package/repository.info records the custom repository. " +
+        sdkPrecheckRerunHint(
+          "<sdk-path>/sdk.info exists, the requested platform is installed and <sdk-path>/.package/repository.info records the custom repository",
+          { customRepo: true },
+        ) +
         "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
       installerCommand,
       startTime,
@@ -4127,6 +4154,7 @@ module.exports = {
   installerFix,
   installerPathArgs,
   harnessGuidance,
+  sdkPrecheckRerunHint,
   DEFAULT_SDK_PATH,
   initSdk,
   getSdkStatus,

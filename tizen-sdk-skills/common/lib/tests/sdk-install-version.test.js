@@ -39,6 +39,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { precheckWithoutDiskCheck } = require("./precheck-without-disk-check");
 
 const sandboxHome = fs.mkdtempSync(
   path.join(os.tmpdir(), "tizen-sdk-install-version-home-"),
@@ -349,6 +350,23 @@ console.error = () => {};
         env.errors[0].suggested_fix.command,
         "tizen-sdk platform-install --platform-version 99.0",
       );
+      // The re-run after a background install lands here; it must not send
+      // the agent into a --force reinstall (the skills say the same).
+      check(
+        "99.0 → message steers away from a --force reinstall",
+        env.errors[0].message.includes(
+          "Do not re-run this command with --force to get it",
+        ) &&
+          !env.errors[0].message.includes("re-run this command with --force."),
+        true,
+      );
+      check(
+        "99.0 → message says platform-install needs a version the repository offers",
+        env.errors[0].message.includes(
+          "so platform-install will not find it either — use a version the repository offers",
+        ),
+        true,
+      );
     }
     // Each platform entry carries its own version and status; only the
     // tools entry takes the requested / newest-installed label. A single
@@ -450,6 +468,28 @@ console.error = () => {};
         true,
       );
       fs.writeFileSync(CONFIG_FILE, `${sdkPath}\n`);
+    }
+
+    // --- not installed: the message says how to re-run ------------------------
+    // The final envelope comes from re-running this pre-check after the
+    // background install; it must keep the version (requestedPlatformMissing)
+    // and drop --force. Runs with the 15 GB disk check stubbed out, so the
+    // check holds on any host.
+    console.log("\n--- not installed: re-run hint ---");
+    {
+      const env = precheckWithoutDiskCheck("sdk");
+      check(
+        "not installed → execution_error",
+        env.errors?.[0]?.error_category,
+        "execution_error",
+      );
+      check(
+        "not installed → re-run with the same version, without --force",
+        String(env.errors?.[0]?.message).includes(
+          "re-run this CLI with the same version (and label) as this run but without --force",
+        ),
+        true,
+      );
     }
 
     // --- sdkInstallerFlags: order and quoting ----------------------------------

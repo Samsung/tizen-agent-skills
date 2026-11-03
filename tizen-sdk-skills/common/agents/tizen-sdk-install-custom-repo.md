@@ -18,7 +18,7 @@ envelope (`node "<lib/cli>/job-cli.js" run --script tizen-sdk-install-custom-rep
 forwards the same repository/platform flags) **with escalated permissions** (it downloads; the
 default sandbox disables network). It returns a job receipt within a second; then poll
 `node "<lib/cli>/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until `job.state` is `done`,
-re-run the Phase 1 pre-check, and report that envelope. Never run `suggested_fix.command` in the
+re-run the Phase 1 pre-check (same repository URL and version, no `--force`), and report that envelope. Never run `suggested_fix.command` in the
 Codex foreground; a tool result that is only progress lines is NOT the outcome.
 
 **When running the installer:**
@@ -30,7 +30,8 @@ Codex foreground; a tool result that is only progress lines is NOT the outcome.
    `true`/no-op commands, no repeated reads of the output file. The harness automatically
    re-invokes you with a `<task-notification>` when the background task finishes — that
    notification is your only signal to continue.
-5. Only after the notification arrives: re-run the pre-check CLI and report the envelope.
+5. Only after the notification arrives: re-run the pre-check CLI with the same repository URL and
+   version, without `--force`, and report the envelope.
 
 **⚠️ NEVER drop the repository URL from any command.** `--repo-url` (bash) / `-RepoUrl`
 (PowerShell) is what makes this a custom-repository install. Omit it on a relaunch and the
@@ -212,11 +213,18 @@ hand-write a text report or fake JSON:
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
 CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-custom-repo-cli.js 2>/dev/null | sort -V | tail -1) || true
 [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/sdk-install-custom-repo-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
-node "$CLI" "<repo-url>"
+node "$CLI" --repo-url "<repo-url>"   # + the version from step 1 (e.g. --platform-version 10.0); never --force
 ```
 
+**Pass the same repository URL and version as in step 1, and never `--force`.** Without the version the
+re-run skips the check that the requested platform went in (`platform_version_not_found`); `--force`
+skips the already-installed check and returns the installer command again.
+
 - Exit `0` + success envelope → verified. **Show the envelope to the user**, then summarize.
-- Exit `1` → installation did NOT complete. Read the log tail and report honestly:
+- Exit `1` with `errors[0].error_category` `platform_version_not_found` → the SDK is installed but
+  the requested platform is not. Show the envelope and offer `suggested_fix.command`
+  (`platform-install`); do NOT re-run with `--force`, which would reinstall the whole SDK (10–15 min).
+- Any other exit `1` → installation did NOT complete. Read the log tail and report honestly:
 
 ```bash
 tail -n 20 "<task-output-file-from-step-2>"
@@ -254,7 +262,7 @@ grep '^Repository=' "<sdk-path>/.package/repository.info"
 
 **Reporting `result.packages`** (the main thread relays the envelope; these rules apply to its summary):
 
-- There is one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, each with its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-install --list`) and `profiles`. Relay the entries one by one. Do not call a version installed because its directory exists.
+- There is one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, each with its own `status` (`installed`, `incomplete` or `not_installed`, the same as `platform-install --list`) and `profiles`. Keep the 1–2 line summary by putting the platforms on one line: group them by `status`, split `installed` by whether `tizen` is in `profiles`, group the versions without `tizen` by their `profiles` and label each group with them (those versions are installed for the listed profiles only), and write every version out instead of a range (for example `platforms — installed: 10.0, 11.0 · installed (tv-samsung only): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`). Do not call a version installed because its directory exists.
 - `profiles` holds only the profiles with a platform payload (never `common` or a folder with only synced template `samples`). An `installed` version without `tizen` in `profiles` is installed for the listed profiles only (for example `tv-samsung`).
 - The `version` of `Tizen SDK Tools` is a label: the requested platform version, or else the newest installed one. It is not a tools version and not "the SDK version". Never summarise the SDK as that single version.
 - For a follow-up question such as "which SDK / platform versions are installed?", do not re-read this envelope or measure directories. Load the `tizen-platform-install` skill, run its `--list` step and answer from that envelope.

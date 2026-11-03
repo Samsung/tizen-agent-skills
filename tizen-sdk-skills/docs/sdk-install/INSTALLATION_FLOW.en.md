@@ -13,16 +13,16 @@ A **complete flow** where the user requests SDK installation via natural languag
 ### Step 1️⃣: User Natural Language Input
 
 ```
-User: "Can you install the Tizen SDK at /opt/tizen-studio?"
+User: "Can you install Tizen SDK 10.0?"
 ```
 
-Cline recognizes this request.
+The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
 ---
 
 ### Step 2️⃣: Agent Auto-Selection
 
-Cline automatically selects and runs the `tizen-sdk-install` agent.
+Claude Code, Codex and Gemini CLI select and run the `tizen-sdk-install` agent. Cline has no agents, so its main agent loads the `tizen-sdk-install` skill itself; the steps below are the same either way.
 
 ```markdown
 ---
@@ -35,56 +35,70 @@ Analyzing user request...
 
 ---
 
-### Step 3️⃣: Agent Calls installSdk()
+### Step 3️⃣: The Agent Runs the Runner, Which Calls installSdk()
 
 ```javascript
-// Inside tizen-sdk-install agent
-const { installSdk } = require('../lib/core/sdk-commands');
+// Inside sdk-install-cli.js, which the agent runs as `node sdk-install-cli.js 10.0`
+const { installSdk } = require('../core/sdk-commands');
 
-const result = await installSdk('10.0', 'tizen');
-console.log(JSON.stringify(result));  // JSON Envelope output
+const result = await installSdk('10.0', 'tizen');  // '10.0' = first positional argument
+// cli-runner.js prints result as JSON (Step 7)
 ```
 
 **Key point:**
-- The agent calls the `installSdk()` function
-- `installSdk()` **handles all operations**
+- The agent runs the `sdk-install-cli.js` runner, which calls `installSdk()`
+- `installSdk()` runs the **pre-checks** and builds the result envelope. The install itself is a separate background command (Phase 2), and the agent calls `installSdk()` again once it finishes (Phase 3)
 
 ---
 
 ### Step 4️⃣: installSdk() Function Executes
 
 ```javascript
-// installSdk() in lib/core/sdk-commands.js
+// installSdk() in lib/core/sdk-commands.js (re-exported from lib/core/sdk.js)
 
-async function installSdk(version = '10.0', label = 'tizen', force = false) {
-  
-  // 4-1️⃣ Node.js check (very first step) ⭐ NEW
-  const nodeCheck = await checkNode();
-  if (nodeCheck.status !== 'success') {
-    return nodeCheck;  // node_not_found error — aborts with install guide
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install', downloadJobs = 4) {  // '' = newest platform
+
+  // 4-0️⃣ Version syntax first (X.Y, else invalid_argument); a custom repository hands off
+  const versionCheck = validateTizenVersion(version);
+  if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+  if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+  try {
+    // 4-1️⃣ Node.js check
+    const nodeCheck = await checkNode();
+    if (nodeCheck.status !== 'success') {
+      return nodeCheck;  // node_not_found / node_version_unsupported — aborts with install guide
+    }
+
+    // 4-2️⃣ Check if SDK is already installed
+    const sdkPath = readSdkPath();
+    const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
+    if (statusCheck.alreadyInstalled) {
+      const missing = requestedPlatformMissing(sdkPath, version, command, startTime);
+      if (missing) return missing;  // requested version not installed: platform_version_not_found
+      const packages = installedPackageSummary(sdkPath, version);
+      return formatSdkInstall(packages, warnings, startTime, command);  // success
+    }
+
+    // 4-3️⃣ Disk space check (15 GB, user's home drive)
+    const diskCheck = await checkDiskSpace(os.homedir(), 15);
+    if (diskCheck.status !== 'success') {
+      return diskCheck;  // insufficient_disk_space — aborts installation
+    }
+
+    // 4-4️⃣ Return installer command for Phase 2 (background install)
+    return formatError(
+      command,
+      'execution_error',
+      'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
+        harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
+        sdkPrecheckRerunHint('…'),    // re-run with the same version, without --force
+      installerCommand,   // suggested_fix: { command, background_command }
+      startTime
+    );
+  } catch (error) {
+    return formatError(command, 'io_error', `Failed to install SDK: ${error.message}`);
   }
-
-  // 4-2️⃣ Check if SDK is already installed
-  const sdkPath = readSdkPath();
-  const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
-  if (statusCheck.alreadyInstalled) {
-    return formatSdkInstall(packages, warnings, startTime);  // success
-  }
-
-  // 4-3️⃣ Disk space check (15 GB, user's home drive)
-  const diskCheck = await checkDiskSpace(os.homedir(), 15);
-  if (diskCheck.status !== 'success') {
-    return diskCheck;  // insufficient_disk_space error — aborts installation
-  }
-
-  // 4-4️⃣ Return installer command for Phase 2 (background install)
-  return formatError(
-    'tizen-sdk sdk-install',
-    'execution_error',
-    'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
-    installerCommand,
-    startTime
-  );
 }
 ```
 
@@ -125,7 +139,6 @@ See [CUSTOM_REPOSITORY_INSTALL.en.md](CUSTOM_REPOSITORY_INSTALL.en.md) for the f
 
 
 
-
 ---
 
 ### Step 5️⃣: formatSdkInstall() Called
@@ -133,8 +146,9 @@ See [CUSTOM_REPOSITORY_INSTALL.en.md](CUSTOM_REPOSITORY_INSTALL.en.md) for the f
 ```javascript
 // formatSdkInstall() in lib/envelope/response-formatter.js
 
-function formatSdkInstall(packages, warnings = []) {
-  const envelope = new Envelope('tizen-sdk sdk-install');
+function formatSdkInstall(packages, warnings = [], startTime, command = 'tizen-sdk sdk-install') {
+  const envelope = new Envelope(command);
+  if (typeof startTime === 'number') envelope.startTime = startTime;  // duration_ms from the CLI start
   
   return envelope.success(
     {
@@ -151,72 +165,57 @@ function formatSdkInstall(packages, warnings = []) {
 
 ### Step 6️⃣: Standard JSON Envelope Generated
 
+After Phase 2 installs the SDK in the background, the agent re-runs the same `installSdk('10.0', 'tizen')` pre-check — the same version, without `--force`. It now takes the already-installed branch (Step 4) and returns the success envelope. The SDK went to the default path `~/tizen-sdk`, and `Tizen SDK Tools` carries the requested version `10.0`:
+
 ```json
 {
   "status": "success",
   "result": {
     "packages": [
-      {
-        "name": "Tizen Studio Tools",
-        "version": "6.5",
-        "size_mb": 200,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "size_mb": 400,
-        "status": "installed"
-      },
-      {
-        "name": "Tizen SDK 8.0",
-        "version": "8.0",
-        "size_mb": 350,
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
     ],
     "installation_status": "completed"
   },
   "warnings": [
-    "Emulator requires 4GB RAM minimum",
-    "Some optional tools are missing"
+    "SDK installation verified at /home/user/tizen-sdk (sdk.info found). To force a reinstall, run with --force (script flag: -Force)."
   ],
   "errors": [],
   "command": "tizen-sdk sdk-install",
-  "duration_ms": 185000
+  "user_command": "node sdk-install-cli.js 10.0",
+  "duration_ms": 12
 }
 ```
+
+`result.packages` has one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools`, whose `version` is a label (the requested platform version, else the newest installed one) and not the SDK version.
+
+With `installSdk('10.0')` the installer installs `TIZEN-10.0` and its emulator package (profile `tizen`). The base SDK also ships the shared `common` data for older API versions; those directories hold no platform payload and appear as `not_installed` (only 9.0 is shown here).
 
 ---
 
 ### Step 7️⃣: Output to stdout
 
 ```javascript
-console.log(JSON.stringify(envelope));
-// ↑ JSON output to stdout
+// cli-runner.js (shared by the CLI runners, incl. sdk-install-cli.js)
+process.stdout.write(JSON.stringify(withUserCommand(envelope), null, 2) + "\n");
+// ↑ JSON to stdout, with user_command inserted right after command
 ```
 
 ---
 
 ### Step 8️⃣: Display Result to User
 
-Cline / Chat interface parses the JSON and displays it to the user.
+The reply follows the skill's "결과 보고" (result reporting) rules in
+[`tizen-sdk-install/SKILL.md`](../../common/skills/tizen-sdk-install/SKILL.md): the envelope JSON
+above goes first, verbatim, in a fenced `json` block, followed by a 1–2 line summary with the
+platforms on one line grouped by status, every version listed.
 
 ```
-✅ SDK Installation Complete!
+<the envelope JSON from Step 6, verbatim, in a ```json block>
 
-Installed packages (3):
-  • Tizen Studio Tools (6.5)
-  • Tizen SDK 10.0 (400MB)
-  • Tizen SDK 8.0 (350MB)
-
-Duration: 3 min 5 sec
-
-⚠️ Warnings:
-  • Emulator requires 4GB RAM minimum
-  • Some optional tools are missing
-
-[View JSON Response]
+SDK installation complete (installation_status: completed).
+Platforms — installed: 10.0 · not_installed: 9.0
 ```
 
 ---
@@ -224,48 +223,31 @@ Duration: 3 min 5 sec
 ## 🔄 Complete Flow Diagram
 
 ```
-┌─────────────────────────────────────────────┐
-│ User: "Can you install the SDK?"            │
-│ (Natural language input)                    │
-└────────────────┬──────────────────────────┘
-                  │
-          ┌───────▼────────┐
-          │ Cline           │
-          │ Select agent    │
-          └───────┬────────┘
-                  │
-          ┌───────▼──────────────────────┐
-          │ tizen-sdk-install agent      │
-          │ (Parse natural language)     │
-          └───────┬──────────────────────┘
-                  │
-          ┌───────▼──────────────────────────────┐
-          │ installSdk('10.0', 'tizen')           │  ⭐ Core!
-          │ (lib/core/sdk-commands.js)            │
-          │                                      │
-          │ 1. readSdkPath() - check path        │
-          │ 2. execSync() - run script           │ (3 min)
-          │ 3. JSON.parse() - parse result       │
-          │ 4. formatSdkInstall() - format JSON  │ ⭐ Called here!
-          │ 5. return envelope                    │
-          └───────┬──────────────────────────────┘
-                  │
-          ┌───────▼──────────────────────┐
-          │ formatSdkInstall()            │
-          │ return envelope.success()     │
-          └───────┬──────────────────────┘
-                  │
-          ┌───────▼──────────────────────┐
-          │ Standard JSON Envelope        │
-          └───────┬──────────────────────┘
-                  │
-          ┌───────▼──────────────────────┐
-          │ Output JSON to stdout         │
-          └───────┬──────────────────────┘
-                  │
-          ┌───────▼──────────────────────┐
-          │ Display result to user        │
-          └──────────────────────────────┘
+User: "Can you install Tizen SDK 10.0?"
+  │
+  ▼
+tizen-sdk-install agent (Claude Code / Codex / Gemini CLI) or skill (Cline, in the main agent)
+  │
+  ├─ Phase 1 — pre-check
+  │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
+  │      version syntax → Node.js check → already installed? (no) → disk space (15 GB)
+  │    ← failure envelope (execution_error) with the installer in suggested_fix.command
+  │
+  ├─ Phase 2 — install, in the background (10–15 min, ~121 packages)
+  │    the harness runs suggested_fix — tizen-sdk-install.sh --path "<sdk>" --platform "10.0" --download-jobs 4
+  │    (PowerShell: tizen-sdk-install.ps1 -Path "<sdk>" -Platform "10.0" -DownloadJobs 4):
+  │      Claude Code: command with run_in_background, resumes on the task notification
+  │      Cline and other hosts without a completion notice: command with --detach / -Detach, polls --status / -Status
+  │      Codex: background_command (a job-cli.js job), polls job-cli.js wait
+  │    the installer writes sdk.info and ~/.tizen.sdk.path.config
+  │
+  └─ Phase 3 — the same pre-check again
+       node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
+         already installed → installedPackageSummary() → formatSdkInstall()
+       ← success envelope (Step 6)
+  │
+  ▼
+Reply to the user: envelope JSON, then a 1–2 line summary (Step 8)
 ```
 
 ---
@@ -273,19 +255,14 @@ Duration: 3 min 5 sec
 ## 📊 Timeline
 
 ```
-t=0s      User input
-  │
-  ├─ t=1s     Agent starts
-  ├─ t=5s     installSdk() called
-  │  │
-  │  ├─ t=10s    Script execution starts
-  │  ├─ t=70s    Download complete (1 min)
-  │  ├─ t=185s   Installation complete (3 min 5 sec)
-  │  ├─ t=186s   JSON parsing (< 1ms)
-  │  └─ t=187s   formatSdkInstall() called (< 1ms)
-  │
-  ├─ t=188s   Standard JSON Envelope generated
-  └─ t=189s   Display result to user
+t=0s          User input, agent starts
+t≈1s          Phase 1: installSdk() pre-check
+t≈2s            ← execution_error envelope with the installer command
+t≈2s          Phase 2: installer runs in the background
+t≈10–15 min     ← installer exits 0 (sdk.info written)
+              Phase 3: installSdk() pre-check again
+  + ≈2s         ← success envelope (installation_status: completed)
+              Reply to the user
 ```
 
 ---
@@ -301,7 +278,7 @@ formatSdkInstall()
   │
 installSdk()
   ↑
-  │ (agent calls)
+  │ (the sdk-install-cli.js runner calls; the agent runs the runner)
   │
 tizen-sdk-install agent
   ↑
@@ -313,8 +290,8 @@ User
 **A connecting link was needed!**
 
 - `formatSdkInstall()` alone can't do anything (formatting only)
-- `installSdk()` **handles the actual work** and calls `formatSdkInstall()` in between
-- The agent calls `installSdk()` to connect the full flow
+- `installSdk()` **runs the pre-checks**: it returns the installer command when the SDK is missing, or builds `result.packages` with `installedPackageSummary()` and calls `formatSdkInstall()` when it is installed
+- The agent runs the `sdk-install-cli.js` runner, which calls `installSdk()`, to connect the full flow
 
 ---
 
@@ -322,35 +299,40 @@ User
 
 ```javascript
 // ===== Caller =====
-// tizen-sdk-install agent
-const { installSdk } = require('./lib/core/sdk-commands');
+// sdk-install-cli.js (run by the agent as `node sdk-install-cli.js 10.0`)
+const { installSdk } = require('../core/sdk-commands');
 const result = await installSdk('10.0');
-console.log(JSON.stringify(result));
+// cli-runner.js prints withUserCommand(result) as JSON
 
 // ===== installSdk() (lib/core/sdk-commands.js) =====
 async function installSdk(version) {
-  // 1. Validate
-  // 2. Run script (actual installation)
-  // 3. Parse result
-  // 4. Call formatSdkInstall() ← here!
-  return formatSdkInstall(packages, warnings);
+  // 0. Version syntax; --repo-url → installSdkFromRepo()
+  // 1. Node.js check
+  // 2. SDK already installed? → per-version packages, then formatSdkInstall() ← here!
+  if (alreadyInstalled) {
+    return formatSdkInstall(installedPackageSummary(sdkPath, version), warnings);
+  }
+  // 3. Disk space check
+  // 4. Not installed: return the installer command (Phase 2 runs it in the background)
+  return formatError('tizen-sdk sdk-install', 'execution_error', 'SDK is NOT installed…', installerCommand);
 }
 
 // ===== formatSdkInstall() (lib/envelope/response-formatter.js) =====
-function formatSdkInstall(packages, warnings) {
-  const envelope = new Envelope('tizen-sdk sdk-install');
+function formatSdkInstall(packages, warnings = [], startTime, command = 'tizen-sdk sdk-install') {
+  const envelope = new Envelope(command);
+  if (typeof startTime === 'number') envelope.startTime = startTime;
   return envelope.success({ packages, installation_status: 'completed' }, { warnings });
 }
 
 // ===== Envelope.success() (lib/envelope/envelope.js) =====
 success(result, options) {
   return {
-    command: this.command,
     status: 'success',
-    duration_ms: Date.now() - this.startTime,
     result,
     warnings: options.warnings || [],
     errors: [],
+    command: this.command,
+    duration_ms: Date.now() - this.startTime,
   };
 }
 ```
@@ -361,14 +343,14 @@ success(result, options) {
 
 | Step | Item | Description |
 |------|------|-------------|
-| 1 | User input | "Can you install the SDK?" (natural language) |
+| 1 | User input | "Can you install Tizen SDK 10.0?" (natural language) |
 | 2 | Agent selection | tizen-sdk-install |
-| 3 | **Call installSdk()** | ← Called here! |
-| 4 | Script execution | Actual installation (3 min) |
-| 5 | Parse result | JSON parsing |
-| 6 | **Call formatSdkInstall()** | ← Called inside installSdk()! |
+| 3 | **Call installSdk()** (Phase 1) | Pre-check; returns the installer command |
+| 4 | Install (Phase 2) | Installer in the background (10–15 min) |
+| 5 | Call installSdk() again (Phase 3) | Takes the already-installed branch |
+| 6 | **Call formatSdkInstall()** | ← Called inside installSdk(), with `installedPackageSummary()` |
 | 7 | Standard JSON Envelope | Auto-generated |
-| 8 | Display to user | JSON format response |
+| 8 | Display to user | Envelope JSON + 1–2 line summary |
 
 ---
 
@@ -379,7 +361,8 @@ Where is formatSdkInstall() called?
   → Inside the installSdk() function in lib/core/sdk-commands.js
 
 What data does it receive?
-  → Script execution result (packages, warnings)
+  → result.packages from installedPackageSummary() and the warnings of the
+    already-installed branch (Phase 3, after the background install)
 
 What does it return?
   → Standard JSON Envelope (status, result, duration_ms)

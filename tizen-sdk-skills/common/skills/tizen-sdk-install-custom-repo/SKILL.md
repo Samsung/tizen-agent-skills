@@ -187,6 +187,13 @@ re-installed **from their URL**, re-run with `--force`.
 
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
+**Re-running the Phase 1 pre-check** (the last step in every harness below) means the same command
+line as Phase 1 — the same repository URL and version — **without `--force`**. Dropping the version skips
+the check that the requested platform went in (`platform_version_not_found`); keeping `--force` skips the
+already-installed check and hands back the installer command again. If that re-run returns
+`platform_version_not_found`, the SDK is installed without the requested platform: show the envelope and
+offer `suggested_fix.command` (`platform-install`), and do not re-run with `--force` (a full reinstall).
+
 Run `errors[0].suggested_fix.command` verbatim. It takes 10–15 minutes (~121 packages).
 **실행 방법은 하네스에 따라 다릅니다:**
 
@@ -340,9 +347,13 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
   말고 JSON 안의 것을 그대로 보이게 한다.
 - `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
 - `result.packages`의 플랫폼 항목은 `platforms/tizen-X.Y`마다 하나씩이며, 버전별
-  `status`(`installed` / `incomplete` / `not_installed`)와 `profiles`를 갖는다. 요약 줄은
-  이 값을 항목별로 그대로 전한다 — 디렉터리가 있다고 "설치됨"이라 하지 말고, 가장 높은
-  버전 하나를 SDK 전체의 버전처럼 요약하지 않는다. `profiles`에는 실제 플랫폼 내용이 있는
+  `status`(`installed` / `incomplete` / `not_installed`)와 `profiles`를 갖는다. 1~2줄 요약
+  안에서 플랫폼은 **한 줄로** 쓴다: `status`별로 묶고, `installed`는 `profiles`에 `tizen`이
+  있는지로 다시 나누고, `tizen`이 없는 버전은 `profiles`가 같은 것끼리 묶어 그 프로필 이름을
+  붙인다(그 프로필 전용 설치). 버전은 범위로 줄이지 말고 **하나씩 모두**
+  적는다 (예: `플랫폼 — installed: 10.0, 11.0 · installed(tv-samsung 전용): 8.0, 9.0 · not_installed: 2.4, 3.0, 4.0, 5.0, 5.5, 6.0, 6.5, 7.0`).
+  디렉터리가 있다고 "설치됨"이라 하지 말고, 가장 높은 버전 하나를 SDK 전체의 버전처럼
+  요약하지 않는다. `profiles`에는 실제 플랫폼 내용이 있는
   프로필만 담기므로(`common`, 템플릿 `samples`만 있는 폴더는 제외), `installed`여도
   `profiles`에 `tizen`이 없으면 그 버전은 나열된 프로필(예: `tv-samsung`)용으로만 설치된 것이다.
 - `Tizen SDK Tools` 항목의 `version`은 요청한 플랫폼 버전(없으면 설치된 최신 플랫폼 버전)을 붙인
