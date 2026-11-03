@@ -1956,7 +1956,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.1...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.4.0...HEAD
+[1.7.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.1...tizen-agent-skills-v1.4.0
 [1.6.1]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.0...tizen-agent-skills-v1.3.1
 [1.6.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.2.0...tizen-agent-skills-v1.3.0
 [1.5.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.1.2...tizen-agent-skills-v1.2.0
