@@ -74,6 +74,13 @@ below use those release tags.
 - `sdk-install-custom-repo` without a version labels `Tizen SDK Tools` with
   the newest installed platform, as `sdk-install` does, instead of
   `"installed"`.
+- The `sdk-install` reporting rules fit the one-to-two-line summary: the
+  platforms go on one line grouped by status, with every version listed. The
+  standalone `tizen-cli` skills (`tizen-platform-install`, `tizen-sdk-install`,
+  `tizen-sdk-install-custom-repo`) now carry the same rules and the
+  payload-`profiles` description. The main `sdk-install` example in the
+  reference docs shows the per-version list instead of the `Tizen SDK 10.0`
+  fallback row.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):

@@ -175,17 +175,18 @@ node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
   "status": "success",
   "result": {
     "packages": [
-      {
-        "name": "Tizen SDK 10.0",
-        "version": "10.0",
-        "status": "installed"
-      }
+      { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
+      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen SDK Tools", "status": "installed", "version": "11.0" }
     ],
     "installation_status": "completed"
   },
   "command": "tizen-sdk sdk-install"
 }
 ```
+
+**`result.packages`:** 아래 `sdk-install-custom-repo`와 같은 버전별 목록입니다 — `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 요청한 버전(없으면 설치된 최신 버전)이 붙은 `Tizen SDK Tools`가 옵니다(이 값은 라벨이며 SDK 버전이 아닙니다). SDK가 이미 설치되어 있을 때도 같은 Envelope가 돌아옵니다.
 
 **응답 (Node.js 미설치):**
 

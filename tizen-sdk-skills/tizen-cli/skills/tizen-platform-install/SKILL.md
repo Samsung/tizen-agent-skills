@@ -30,7 +30,8 @@ tizen-cli tizen-sdk platform-list
 No options. `result.platforms` has one entry per `platforms/tizen-X.Y`, oldest first:
 
 - `status`: `installed`; `incomplete` (an unfinished `platform-install` — re-run it to resume); or `not_installed` (the directory holds no platform payload — only the shared `common` data the base SDK ships for older versions, or synced template `samples` — so that version can still be installed)
-- `profiles` (e.g. `tizen`, `tv-samsung`) and `emulator_images`
+- `profiles`: the profiles that hold a platform payload (e.g. `tizen`, `tv-samsung` — never `common` or a folder with only synced template `samples`), so an `installed` version without `tizen` is installed for the listed profiles only
+- `emulator_images`
 
 `result.newest` is the version `create-project` / `list-templates` use when no `--platform-version` is given.
 

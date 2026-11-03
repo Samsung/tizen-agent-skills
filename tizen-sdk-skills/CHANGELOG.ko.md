@@ -66,6 +66,11 @@
   보였습니다.
 - 버전을 지정하지 않은 `sdk-install-custom-repo`도 `sdk-install`처럼
   `Tizen SDK Tools`에 설치된 최신 플랫폼 버전을 붙입니다(이전에는 `"installed"`).
+- `sdk-install` 결과 보고 규칙이 1~2줄 요약 제한과 맞도록, 플랫폼을 상태별로 묶어
+  모든 버전을 한 줄에 쓰게 했습니다. 단독 `tizen-cli` 스킬(`tizen-platform-install`,
+  `tizen-sdk-install`, `tizen-sdk-install-custom-repo`)에도 같은 규칙과 `profiles`
+  설명(실제 내용이 있는 프로필만)을 넣었습니다. 참조 문서의 `sdk-install` 기본 예시는
+  `Tizen SDK 10.0` 한 줄 대신 버전별 목록을 보여 줍니다.
 
 - Samsung 인증서 비밀번호 저장소(`generate-samsung-author`와, 저장된 비밀번호를
   읽어 오는 명령):
