@@ -65,6 +65,7 @@ async function installSdk(version = '10.0', label = 'tizen', force = false) {
     const sdkPath = readSdkPath();
     const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
     if (statusCheck.alreadyInstalled) {
+      const packages = installedPackageSummary(sdkPath, version);
       return formatSdkInstall(packages, warnings, startTime);  // success
     }
 
@@ -140,8 +141,7 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
   "result": {
     "packages": [
       { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
       { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
     ],
     "installation_status": "completed"
@@ -156,6 +156,8 @@ After Phase 2 installs the SDK in the background, the agent re-runs the same `in
 ```
 
 `result.packages` has one `Tizen Platform X.Y` entry per `platforms/tizen-X.Y`, with the `status` of `platform-install --list` and its payload `profiles`, then `Tizen SDK Tools`, whose `version` is a label (the requested platform version, else the newest installed one) and not the SDK version.
+
+With `installSdk('10.0')` the installer installs `TIZEN-10.0` and its emulator package (profile `tizen`). The base SDK also ships the shared `common` data for older API versions; those directories hold no platform payload and appear as `not_installed` (only 9.0 is shown here).
 
 ---
 
@@ -179,7 +181,7 @@ platforms on one line grouped by status, every version listed.
 <the envelope JSON from Step 6, verbatim, in a ```json block>
 
 SDK installation complete (installation_status: completed).
-Platforms — installed: 10.0, 11.0 · not_installed: 9.0
+Platforms — installed: 10.0 · not_installed: 9.0
 ```
 
 ---
@@ -187,49 +189,28 @@ Platforms — installed: 10.0, 11.0 · not_installed: 9.0
 ## 📊 Complete Call Chain
 
 ```
-┌────────────────────────────────┐
-│ User                            │
-│ "Can you install the SDK?"     │
-└──────────────┬─────────────────┘
-               │
-               ▼
-     ┌──────────────────────────────┐
-     │ tizen-sdk-install agent      │
-     │                              │
-     │ const { installSdk } =       │
-     │   require('./sdk-commands'); │
-     │                              │
-     │ const result =               │
-     │   await installSdk('10.0'); │  ← caller!
-     └──────────────┬───────────────┘
-                    │ (call)
-                    ▼
-         ┌──────────────────────┐
-         │ installSdk()          │
-         │ 1. readSdkPath()      │
-         │ 2. execSync()         │ (3 min)
-         │ 3. JSON.parse()       │
-         │ 4. formatSdkInstall() │ ← called (internal)
-         │ 5. return envelope     │
-         └──────────┬───────────┘
-                    │
-         ┌──────────▼────────────────┐
-         │ formatSdkInstall()         │
-         │ return envelope.success()  │
-         └──────────┬────────────────┘
-                    │
-         ┌──────────▼────────────────┐
-         │ Standard JSON Envelope     │
-         └──────────┬────────────────┘
-                    │
-         ┌──────────▼────────────────┐
-         │ console.log(JSON.stringify│
-         │   (envelope))              │
-         └──────────┬────────────────┘
-                    │
-         ┌──────────▼────────────────┐
-         │ Display to user            │
-         └───────────────────────────┘
+User: "Can you install the Tizen SDK?"
+  │
+  ▼
+tizen-sdk-install agent
+  │
+  ├─ Phase 1: node sdk-install-cli.js 10.0
+  │    installSdk('10.0', 'tizen')      ← caller: the CLI runner
+  │      Node.js check → already installed? (no) → disk space
+  │    ← execution_error envelope; suggested_fix.command = installer
+  │
+  ├─ Phase 2: installer in the background (10–15 min)
+  │
+  └─ Phase 3: node sdk-install-cli.js 10.0 again
+       installSdk('10.0', 'tizen')
+         already installed
+         → installedPackageSummary(sdkPath, '10.0')
+         → formatSdkInstall(packages, warnings)   ← called (internal)
+         → envelope.success()
+       ← Standard JSON Envelope on stdout
+  │
+  ▼
+Display to user (envelope JSON + 1–2 line summary)
 ```
 
 ---
@@ -239,8 +220,8 @@ Platforms — installed: 10.0, 11.0 · not_installed: 9.0
 | Component | Responsibility | Location |
 |-----------|---------------|----------|
 | **User** | Natural language request | - |
-| **tizen-sdk-install agent** | Parse request + call `installSdk()` | agents/ |
-| **installSdk()** | Run script + call `formatSdkInstall()` | lib/core/sdk-commands.js |
+| **tizen-sdk-install agent** | Parse request, run the pre-check, run the installer in the background, run the pre-check again | agents/ |
+| **installSdk()** | Pre-checks: return the installer command, or build `result.packages` (`installedPackageSummary()`) and call `formatSdkInstall()` | lib/core/sdk-commands.js |
 | **formatSdkInstall()** | JSON formatting | lib/envelope/response-formatter.js |
 | **Envelope** | Add metadata | lib/envelope/envelope.js |
 
@@ -256,7 +237,9 @@ lib/core/sdk-commands.js (installSdk)
   │   ↓
   │   lib/envelope/envelope.js (Envelope class)
   │
-  ├─ Node.js child_process (script execution)
+  ├─ Node.js child_process (checks and, with a custom repository, the
+  │   URL probe; the installer itself runs here only in the pkg-compiled
+  │   tizen-cli, which installs inline)
   │
   └─ fs (file I/O)
 ```
@@ -269,7 +252,7 @@ lib/core/sdk-commands.js (installSdk)
 |----------|--------|
 | **Who calls installSdk()?** | tizen-sdk-install agent |
 | **Where is it called?** | In the agent's main logic |
-| **How is it called?** | `const result = await installSdk('10.0');` |
+| **How is it called?** | Through the runner, `node sdk-install-cli.js 10.0`, once before and once after the background install |
 | **What is returned?** | Standard JSON Envelope object |
 | **Where is JSON generated?** | Inside installSdk() via formatSdkInstall() |
 
@@ -291,9 +274,9 @@ lib/core/sdk-commands.js (installSdk)
 tizen-sdk-install agent
   ↓ (call)
 installSdk() ← lib/core/sdk-commands.js
-  ├─ Run script (actual installation)
-  ├─ Parse result
-  └─ formatSdkInstall() ← lib/envelope/response-formatter.js
+  ├─ Phase 1: pre-check → installer command (Phase 2 runs it in the background)
+  └─ Phase 3: already installed → installedPackageSummary()
+       └─ formatSdkInstall() ← lib/envelope/response-formatter.js
        ↓
        Return Standard JSON Envelope
        ↓

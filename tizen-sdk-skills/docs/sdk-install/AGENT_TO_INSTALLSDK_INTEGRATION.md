@@ -53,32 +53,46 @@ console.log(JSON.stringify(result));
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수
 
-async function installSdk(version = '10.0', label = 'tizen') {
-  try {
-    // 1. SDK 경로 확인
-    const sdkPath = readSdkPath();
-    
-    // 2. 스크립트 실행 (실제 설치 - 3분)
-    const output = execSync(
-      `powershell -ExecutionPolicy Bypass -File "tizen-sdk-install.ps1" ...`,
-      { encoding: 'utf-8' }
-    );
-    
-    // 3. 결과 파싱
-    const result = JSON.parse(output);
-    const packages = result.packages || [];
-    const warnings = result.warnings || [];
-    
-    // 4. ✅ formatSdkInstall() 호출 (여기서 호출!)
-    const envelope = formatSdkInstall(packages, warnings);
-    
-    // 5. Standard JSON Envelope 반환
-    return envelope;
-  } catch (error) {
-    return formatError(...);
+async function installSdk(version = '10.0', label = 'tizen', force = false) {
+
+  // 4-1️⃣ Node.js 확인 (가장 먼저)
+  const nodeCheck = await checkNode();
+  if (nodeCheck.status !== 'success') {
+    return nodeCheck;  // node_not_found 에러 — 설치 안내와 함께 중단
   }
+
+  // 4-2️⃣ SDK가 이미 설치되어 있는지 확인
+  const sdkPath = readSdkPath();
+  const statusCheck = await checkIfSdkAlreadyInstalled(sdkPath, force);
+  if (statusCheck.alreadyInstalled) {
+    const packages = installedPackageSummary(sdkPath, version);
+    return formatSdkInstall(packages, warnings, startTime);  // 성공
+  }
+
+  // 4-3️⃣ 디스크 공간 확인 (15 GB, 사용자 홈 드라이브)
+  const diskCheck = await checkDiskSpace(os.homedir(), 15);
+  if (diskCheck.status !== 'success') {
+    return diskCheck;  // insufficient_disk_space 에러 — 설치 중단
+  }
+
+  // 4-4️⃣ Phase 2(백그라운드 설치)용 설치 명령 반환
+  return formatError(
+    'tizen-sdk sdk-install',
+    'execution_error',
+    'SDK is NOT installed. Run the suggested_fix command with run_in_background: true...',
+    installerCommand,
+    startTime
+  );
 }
 ```
+
+**Node.js 확인:**
+- 러너를 실행 중인 인터프리터(`process.version` / `process.execPath`)를 Node.js 설치의 증거로 사용합니다. `where node` / `which node`는 PATH 경고만 추가합니다(issue #71: 샌드박스의 자식 PATH 때문에 node_not_found가 나와서는 안 됨).
+- Node.js 22 이상이 필요합니다(v18–v21은 경고만, v18 미만은 `node_version_unsupported`로 실패).
+
+**디스크 공간 확인:**
+- 사용자 홈 디렉터리가 있는 드라이브만 확인하며, 최소 15 GB가 필요합니다.
+- 부족하면 현재 여유 공간, 필요한 공간, 부족한 양을 담은 에러를 반환하고, 충분하면 Phase 2용 설치 명령을 반환합니다.
 
 ---
 
@@ -112,8 +126,7 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
   "result": {
     "packages": [
       { "name": "Tizen Platform 9.0", "status": "not_installed", "version": "9.0", "profiles": [] },
-      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen", "tv-samsung"] },
-      { "name": "Tizen Platform 11.0", "status": "installed", "version": "11.0", "profiles": ["tizen"] },
+      { "name": "Tizen Platform 10.0", "status": "installed", "version": "10.0", "profiles": ["tizen"] },
       { "name": "Tizen SDK Tools", "status": "installed", "version": "10.0" }
     ],
     "installation_status": "completed"
@@ -128,6 +141,8 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
 ```
 
 `result.packages`에는 `platforms/tizen-X.Y`마다 `platform-install --list`와 같은 `status`와 실제 내용이 있는 `profiles`를 가진 `Tizen Platform X.Y` 항목이 있고, 마지막에 `Tizen SDK Tools`가 옵니다. 이 항목의 `version`은 라벨(요청한 플랫폼 버전, 없으면 설치된 최신 버전)이며 SDK 버전이 아닙니다.
+
+`installSdk('10.0')`이면 설치 스크립트는 `TIZEN-10.0`과 그 에뮬레이터 패키지(프로필 `tizen`)를 설치합니다. 기본 SDK는 이전 API 버전의 공유 `common` 데이터도 함께 넣는데, 이 디렉터리에는 플랫폼 내용이 없으므로 `not_installed`로 나옵니다(여기서는 9.0만 표시).
 
 ---
 
@@ -150,7 +165,7 @@ console.log(JSON.stringify(envelope));
 <Step 6의 Envelope JSON을 그대로 ```json 블록에>
 
 SDK 설치 완료 (installation_status: completed).
-플랫폼 — installed: 10.0, 11.0 · not_installed: 9.0
+플랫폼 — installed: 10.0 · not_installed: 9.0
 ```
 
 ---
@@ -158,60 +173,28 @@ SDK 설치 완료 (installation_status: completed).
 ## 📊 완전한 호출 체인
 
 ```
-┌────────────────────────────────┐
-│ 사용자                         │
-│ "SDK를 설치해줄래?"           │
-└──────────────┬─────────────────┘
-               │
-               ▼
-    ┌──────────────────────────────┐
-    │ tizen-sdk-install 에이전트  │
-    │                              │
-    │ const { installSdk } =      │
-    │   require('./sdk-commands');│
-    │                              │
-    │ const result =              │
-    │   await installSdk('10.0'); │  ← 호출자!
-    └──────────────┬───────────────┘
-                   │ (호출)
-                   ▼
-        ┌──────────────────────┐
-        │ installSdk()         │
-        │                      │
-        │ 1. readSdkPath()     │
-        │ 2. execSync()        │ (3분)
-        │ 3. JSON.parse()      │
-        │ 4. formatSdkInstall()│ ← 호출 (내부)
-        │ 5. return envelope   │
-        └──────────┬───────────┘
-                   │
-        ┌──────────▼────────────────┐
-        │ formatSdkInstall()        │
-        │                           │
-        │ return envelope.success() │
-        └──────────┬────────────────┘
-                   │
-        ┌──────────▼────────────────┐
-        │ Standard JSON Envelope    │
-        │ {                         │
-        │   "command": "...",       │
-        │   "status": "success",    │
-        │   "duration_ms": 1900,    │
-        │   "result": {...},        │
-        │   "warnings": [...],      │
-        │   "errors": []            │
-        │ }                         │
-        └──────────┬────────────────┘
-                   │
-        ┌──────────▼────────────────┐
-        │ console.log(JSON.stringify│
-        │   (envelope))             │
-        └──────────┬────────────────┘
-                   │
-        ┌──────────▼────────────────┐
-        │ 사용자에게 표시           │
-        │ (JSON 파싱 후 UI 표시)   │
-        └───────────────────────────┘
+사용자: "Tizen SDK를 설치해줄래?"
+  │
+  ▼
+tizen-sdk-install 에이전트
+  │
+  ├─ Phase 1: node sdk-install-cli.js 10.0
+  │    installSdk('10.0', 'tizen')      ← 호출자: CLI 러너
+  │      Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간
+  │    ← execution_error Envelope, suggested_fix.command = 설치 명령
+  │
+  ├─ Phase 2: 백그라운드 설치 (10–15분)
+  │
+  └─ Phase 3: node sdk-install-cli.js 10.0 재실행
+       installSdk('10.0', 'tizen')
+         이미 설치됨
+         → installedPackageSummary(sdkPath, '10.0')
+         → formatSdkInstall(packages, warnings)   ← 호출 (내부)
+         → envelope.success()
+       ← stdout에 Standard JSON Envelope
+  │
+  ▼
+사용자에게 표시 (Envelope JSON + 1~2줄 요약)
 ```
 
 ---
@@ -221,8 +204,8 @@ SDK 설치 완료 (installation_status: completed).
 | 구성 요소 | 책임 | 위치 |
 |----------|------|------|
 | **사용자** | 자연어 요청 | - |
-| **tizen-sdk-install 에이전트** | 요청 파싱 + `installSdk()` 호출 | agents/ |
-| **installSdk()** | 스크립트 실행 + `formatSdkInstall()` 호출 | lib/core/sdk-commands.js |
+| **tizen-sdk-install 에이전트** | 요청 파싱, 사전 점검 실행, 백그라운드 설치, 사전 점검 재실행 | agents/ |
+| **installSdk()** | 사전 점검: 설치 명령을 반환하거나, `result.packages`(`installedPackageSummary()`)를 만들어 `formatSdkInstall()` 호출 | lib/core/sdk-commands.js |
 | **formatSdkInstall()** | JSON 포맷팅 | lib/envelope/response-formatter.js |
 | **Envelope** | 메타데이터 추가 | lib/envelope/envelope.js |
 
@@ -265,8 +248,8 @@ console.log(JSON.stringify(result));
 
 ### 3. 결과는 자동으로 Standard JSON Envelope
 
-installSdk()는 내부에서 formatSdkInstall()을 호출하므로, 
-반환값이 이미 Standard JSON Envelope 형식입니다.
+installSdk()는 어느 경우든 Standard JSON Envelope를 반환합니다. SDK가 없으면 설치 명령이 담긴
+실패 Envelope를, 설치되어 있으면 formatSdkInstall()이 만든 성공 Envelope를 돌려줍니다.
 
 ```javascript
 {
@@ -291,7 +274,8 @@ lib/core/sdk-commands.js (installSdk)
   │   ↓
   │   lib/envelope/envelope.js (Envelope 클래스)
   │
-  ├─ Node.js child_process (스크립트 실행)
+  ├─ Node.js child_process (점검, 사용자 지정 저장소면 URL 확인. 설치 자체는
+  │   설치를 직접 실행하는 pkg 컴파일 tizen-cli에서만 여기서 실행)
   │
   └─ fs (파일 I/O)
 ```
@@ -304,7 +288,7 @@ lib/core/sdk-commands.js (installSdk)
 |------|------|
 | **누가 installSdk()를 호출하나?** | tizen-sdk-install 에이전트 |
 | **어디서 호출하나?** | 에이전트의 메인 로직에서 |
-| **어떻게 호출하나?** | `const result = await installSdk('10.0');` |
+| **어떻게 호출하나?** | 러너 `node sdk-install-cli.js 10.0`로, 백그라운드 설치 전후에 한 번씩 |
 | **뭘 받나?** | Standard JSON Envelope 객체 |
 | **JSON은 어디서 생성되나?** | installSdk() 내부에서 formatSdkInstall() 호출 |
 
@@ -326,9 +310,9 @@ lib/core/sdk-commands.js (installSdk)
 tizen-sdk-install 에이전트
   ↓ (호출)
 installSdk() ← lib/core/sdk-commands.js
-  ├─ 스크립트 실행 (실제 설치)
-  ├─ 결과 파싱
-  └─ formatSdkInstall() ← lib/envelope/response-formatter.js
+  ├─ Phase 1: 사전 점검 → 설치 명령 (Phase 2에서 백그라운드로 실행)
+  └─ Phase 3: 이미 설치됨 → installedPackageSummary()
+       └─ formatSdkInstall() ← lib/envelope/response-formatter.js
        ↓
        Standard JSON Envelope 반환
        ↓

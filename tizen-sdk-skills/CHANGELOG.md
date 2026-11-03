@@ -82,7 +82,10 @@ below use those release tags.
   ranges, and `installed` versions without `tizen` are grouped and labelled
   by their profiles. The `sdk-install` examples in the reference docs and in
   `docs/sdk-install/` show the per-version list instead of the
-  `Tizen SDK 10.0` fallback row or made-up `size_mb` rows.
+  `Tizen SDK 10.0` fallback row or made-up `size_mb` rows, and the two
+  `docs/sdk-install/` flow guides (EN/KO) describe the real flow — pre-check,
+  background install, pre-check again — instead of a 3-minute inline
+  `execSync` install.
 
 - Samsung certificate password store (`generate-samsung-author` and the
   commands that read its password back):
