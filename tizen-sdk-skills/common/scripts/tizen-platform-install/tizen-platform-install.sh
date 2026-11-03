@@ -123,6 +123,10 @@ PLATFORM_PKG_MARKER="${SDK_PATH}/.platform-installed"
 # live side by side. Without --platform-version the version is resolved from
 # pkg_list below and checked again there.
 if [[ -n "$PLATFORM_VERSION" && "$FORCE" == "false" ]] && platform_installed "$SDK_PATH" "$PLATFORM_VERSION"; then
+    # Asked for explicitly, so it belongs in the record even when an earlier
+    # install (e.g. the base SDK's) did not write one.
+    record_platform_install "$SDK_PATH" "TIZEN-$PLATFORM_VERSION" "$PLATFORM_VERSION" \
+        "$(platform_install_profiles "$SDK_PATH" "$PLATFORM_VERSION")" platform-install || true
     log_ok "Platform package TIZEN-$PLATFORM_VERSION is already installed: $SDK_PATH/platforms/tizen-$PLATFORM_VERSION"
     log_info "To reinstall, run again with --force"
     exit 0
@@ -255,6 +259,8 @@ log_ok "Target package found: $TARGET_PACKAGE (version ${PKG_VERSION[$TARGET_PAC
 
 # The auto-detected version may already be installed too.
 if [[ "$FORCE" == "false" ]] && platform_installed "$SDK_PATH" "$PLATFORM_VERSION"; then
+    record_platform_install "$SDK_PATH" "TIZEN-$PLATFORM_VERSION" "$PLATFORM_VERSION" \
+        "$(platform_install_profiles "$SDK_PATH" "$PLATFORM_VERSION")" platform-install "$PKG_REPO" || true
     log_ok "Platform package TIZEN-$PLATFORM_VERSION is already installed: $SDK_PATH/platforms/tizen-$PLATFORM_VERSION"
     log_info "To reinstall, run again with --force"
     rm -rf "$WORKDIR"
@@ -482,16 +488,13 @@ if [[ $FAIL -gt 0 ]]; then
     exit 1
 fi
 
-# Completed: drop the in-progress marker and record the version in the history
-# (once per version; the other versions' entries stay).
+# Completed: drop the in-progress marker and record the version and its
+# profiles (record_platform_install, lib/common.sh: once per version and
+# profile; the other entries stay).
 rm -f "$PLATFORM_INSTALLING_MARKER"
-if ! grep -qxF "Platform version: $PLATFORM_VERSION" "$PLATFORM_PKG_MARKER" 2>/dev/null; then
-    {
-        echo "Platform package installed at $(date -Iseconds)"
-        echo "Target: $TARGET_PACKAGE"
-        echo "Platform version: $PLATFORM_VERSION"
-    } >> "$PLATFORM_PKG_MARKER"
-fi
+record_platform_install "$SDK_PATH" "$TARGET_PACKAGE" "$PLATFORM_VERSION" \
+    "$(platform_install_profiles "$SDK_PATH" "$PLATFORM_VERSION")" \
+    platform-install "$PKG_REPO"
 log_ok "TIZEN-$PLATFORM_VERSION recorded in $PLATFORM_PKG_MARKER"
 
 rm -rf "$WORKDIR"

@@ -686,12 +686,14 @@ installer_running() {
 }
 
 # ----------------------------------------------------------------------------
-# Is platform TIZEN-$2 installed in the SDK at $1? Mirror of isPlatformInstalled
-# (lib/core/sdk.js): platforms/tizen-X.Y must hold a platform profile — a
+# Is platform TIZEN-$2 installed in the SDK at $1? Mirror of
+# isTizenPlatformInstalled (lib/core/sdk.js) — the installers' "already
+# installed" check: platforms/tizen-X.Y must hold a platform profile — a
 # sub-directory besides "common" (which the base SDK ships for older API
-# versions too) with content besides "samples" (which tizen-create-project
-# syncs templates into) — and no tizen-platform-install run of that version may
-# still be marked in progress (.platform-installing-X.Y).
+# versions too) and besides the TV extension's tv / tv-samsung* (which it lays
+# down for older versions too) — with content besides "samples" (which
+# tizen-create-project syncs templates into), and no tizen-platform-install
+# run of that version may still be marked in progress (.platform-installing-X.Y).
 #
 # The version directory is matched case-insensitively ("Tizen-12.0" counts),
 # as platformDirPath does, so a case-sensitive file system gives the same
@@ -708,7 +710,7 @@ platform_installed() {
     [[ "$name" == "tizen-$version" ]] || continue
     for d in "$p"*/; do
       [[ -d "$d" ]] || continue
-      [[ "$(basename "$d")" == "common" ]] && continue
+      case "$(basename "$d")" in common|tv|tv-samsung*) continue ;; esac
       for e in "$d"* "$d".[!.]*; do
         [[ -e "$e" ]] || continue
         [[ "$(basename "$e")" == "samples" ]] && continue
@@ -717,4 +719,171 @@ platform_installed() {
     done
   done
   return 1
+}
+
+# ----------------------------------------------------------------------------
+# $SDK/.platform-installed records the platforms the user installed: one block
+# per successful install, appended by every installer. Mirror of
+# readPlatformRecords (lib/core/sdk.js) and Add-PlatformRecord (lib/common.ps1):
+#
+#   Platform package installed at 2026-11-03T10:00:00+0900
+#   Target: TIZEN-11.0                   (TV-SAMSUNG-Public, TV-SAMSUNG ZIP)
+#   Platform version: 11.0
+#   Profile: tizen                       (tv-samsung; comma-separated list)
+#   Installed by: sdk-install            (platform-install, tv-sdk-install,
+#                                         tv-sdk-install-from-zip)
+#   Source: <repository URL or ZIP path> (optional)
+#
+# A block written before the Profile line existed gets it from its Target:
+# TV-… is tv-samsung, anything else is tizen.
+# ----------------------------------------------------------------------------
+
+# Prints "X.Y profile" for every recorded profile.
+platform_records() {
+  local f="$1/.platform-installed"
+  [[ -f "$f" ]] || return 0
+  awk '
+    function flush(   n, i, a) {
+      if (ver ~ /^[0-9]+\.[0-9]+$/) {
+        if (prof == "") prof = (target ~ /^[Tt][Vv]-/) ? "tv-samsung" : "tizen"
+        n = split(prof, a, /[ \t]*,[ \t]*/)
+        for (i = 1; i <= n; i++) if (a[i] != "") print ver " " a[i]
+      }
+      ver = ""; prof = ""; target = ""
+    }
+    NR == 1 { sub(/^\357\273\277/, "") }
+    { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
+    /^Platform package installed at/ { flush(); next }
+    /^Target:/           { target = $0; sub(/^Target:[ \t]*/, "", target); next }
+    /^Platform version:/ { ver = $0;    sub(/^Platform version:[ \t]*/, "", ver); next }
+    /^Profile:/          { prof = $0;   sub(/^Profile:[ \t]*/, "", prof); next }
+    END { flush() }
+  ' "$f"
+}
+
+# Is profile $3 of version $2 recorded in the SDK at $1?
+platform_recorded() {
+  platform_records "$1" | grep -qxF "$2 $3"
+}
+
+# Is any TV profile (tv, tv-samsung*) of version $2 recorded in the SDK at $1?
+tv_version_recorded() {
+  platform_records "$1" | awk -v v="$2" '$1 == v && ($2 == "tv" || $2 ~ /^tv-samsung/) { f = 1 } END { exit !f }'
+}
+
+# The non-TV profiles of platforms/tizen-$2 that hold a payload, comma-joined
+# ("tizen" when none does) — what a TIZEN-X.Y install records as its Profile.
+# The TV extension's tv / tv-samsung* folders are left out: they come from
+# the TV installers, which record them themselves.
+platform_install_profiles() {
+  local sdk="$1" version="$2" p d e name out=""
+  for p in "$sdk/platforms"/*/; do
+    [[ -d "$p" ]] || continue
+    name="$(basename "$p" | tr '[:upper:]' '[:lower:]')"
+    [[ "$name" == "tizen-$version" ]] || continue
+    for d in "$p"*/; do
+      [[ -d "$d" ]] || continue
+      name="$(basename "$d")"
+      case "$name" in common|tv|tv-samsung*) continue ;; esac
+      for e in "$d"* "$d".[!.]*; do
+        [[ -e "$e" ]] || continue
+        [[ "$(basename "$e")" == "samples" ]] && continue
+        out="${out:+$out, }$name"
+        break
+      done
+    done
+  done
+  echo "${out:-tizen}"
+}
+
+# The TV profiles (tv-samsung*) of platforms/tizen-$2 that hold a payload,
+# comma-joined, or "" — what a TV install records as its Profile.
+tv_install_profiles() {
+  local sdk="$1" version="$2" p d e name out=""
+  for p in "$sdk/platforms"/*/; do
+    [[ -d "$p" ]] || continue
+    name="$(basename "$p" | tr '[:upper:]' '[:lower:]')"
+    [[ "$name" == "tizen-$version" ]] || continue
+    for d in "$p"tv-samsung*/; do
+      [[ -d "$d" ]] || continue
+      for e in "$d"* "$d".[!.]*; do
+        [[ -e "$e" ]] || continue
+        out="${out:+$out, }$(basename "$d")"
+        break
+      done
+    done
+  done
+  echo "$out"
+}
+
+# Append one block to $SDK/.platform-installed unless every profile in $4
+# (comma-separated) is already recorded for version $3.
+#   $1 sdk  $2 target  $3 version  $4 profiles  $5 installed-by  [$6 source]
+record_platform_install() {
+  local sdk="$1" target="$2" version="$3" profiles="$4" by="$5" source="${6:-}"
+  local p missing=false
+  local -a list
+  [[ -n "$version" && -n "$profiles" ]] || return 1
+  IFS=',' read -ra list <<< "$profiles"
+  for p in "${list[@]}"; do
+    p="${p#"${p%%[![:space:]]*}"}"; p="${p%"${p##*[![:space:]]}"}"
+    [[ -n "$p" ]] || continue
+    platform_recorded "$sdk" "$version" "$p" || missing=true
+  done
+  [[ "$missing" == "true" ]] || return 0
+  # A file whose last block lacks a newline would swallow the new first line.
+  if [[ -s "$sdk/.platform-installed" && -n "$(tail -c 1 "$sdk/.platform-installed")" ]]; then
+    echo >> "$sdk/.platform-installed"
+  fi
+  {
+    # date -Iseconds is GNU only; this form works with BSD date (macOS) too.
+    echo "Platform package installed at $(date +%Y-%m-%dT%H:%M:%S%z)"
+    echo "Target: $target"
+    echo "Platform version: $version"
+    echo "Profile: $profiles"
+    echo "Installed by: $by"
+    [[ -z "$source" ]] || echo "Source: $source"
+  } >> "$sdk/.platform-installed"
+}
+
+# An SDK whose TV extension was installed before the TV installers wrote
+# records has only .tv-sdk-installed. Turn it into a record before a new TV
+# install replaces that marker, so the earlier TV version keeps being reported
+# (the same inference as recordedPlatformProfiles in lib/core/sdk.js): its
+# "TV milestone version" (a ZIP install, which also wrote "Source:"), else the
+# newest version with a tv-samsung payload (the online install). Does nothing
+# when a TV profile is already recorded or the marker is missing.
+migrate_tv_sdk_marker() {
+  local sdk="$1" marker="$1/.tv-sdk-installed" version="" source="" profiles p name
+  [[ -f "$marker" ]] || return 0
+  if platform_records "$sdk" | awk '$2 == "tv" || $2 ~ /^tv-samsung/ { f = 1 } END { exit !f }'; then
+    return 0
+  fi
+  version="$(sed -n 's/^TV milestone version:[[:space:]]*\([0-9][0-9]*\.[0-9][0-9]*\).*/\1/p' "$marker" | head -1)"
+  source="$(sed -n 's/^Source:[[:space:]]*//p' "$marker" | tr -d '\r' | head -1)"
+  if [[ -z "$version" || -z "$(tv_install_profiles "$sdk" "$version")" ]]; then
+    version=""
+    for p in "$sdk/platforms"/*/; do
+      [[ -d "$p" ]] || continue
+      name="$(basename "$p" | tr '[:upper:]' '[:lower:]')"
+      [[ "$name" =~ ^tizen-([0-9]+\.[0-9]+)$ ]] || continue
+      [[ -n "$(tv_install_profiles "$sdk" "${BASH_REMATCH[1]}")" ]] || continue
+      if [[ -z "$version" ]] || version_gt "${BASH_REMATCH[1]}" "$version"; then
+        version="${BASH_REMATCH[1]}"
+      fi
+    done
+  fi
+  [[ -n "$version" ]] || return 0
+  profiles="$(tv_install_profiles "$sdk" "$version")"
+  if [[ -n "$source" ]]; then
+    record_platform_install "$sdk" "TV-SAMSUNG ZIP" "$version" "$profiles" tv-sdk-install-from-zip "$source"
+  else
+    record_platform_install "$sdk" "TV-SAMSUNG-Public" "$version" "$profiles" tv-sdk-install
+  fi
+}
+
+# Is X.Y $1 newer than X.Y $2?
+version_gt() {
+  local a1="${1%%.*}" a2="${1#*.}" b1="${2%%.*}" b2="${2#*.}"
+  (( a1 > b1 || (a1 == b1 && a2 > b2) ))
 }

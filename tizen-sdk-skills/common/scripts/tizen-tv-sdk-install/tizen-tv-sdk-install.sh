@@ -8,7 +8,8 @@
 # - Downloads pkg_list from https://download.tizen.org/sdk/extensions/tv_extensions/
 # - Installs TV-SAMSUNG-Public package and its dependencies
 # - Merges data/ into the existing Tizen SDK root
-# - Creates .tv-sdk-installed marker on success
+# - Records the TV version in .platform-installed and creates the
+#   .tv-sdk-installed marker on success
 
 set -euo pipefail
 
@@ -75,7 +76,8 @@ What it does:
   2) Downloads/parses ${PKG_REPO}/pkg_list_${PKG_OS}
   3) Resolves ${TARGET_PACKAGE} and its Install-dependency packages
   4) Downloads each from (repo + Path) and merges data/ into the SDK root
-  5) Creates .tv-sdk-installed marker on success
+  5) Records the TV version (from its X.Y-MANDATORY dependency) in
+     .platform-installed and creates the .tv-sdk-installed marker on success
 EOF
             exit 0 ;;
         *) echo "[ERROR] Unknown option: $1"; exit 1 ;;
@@ -129,29 +131,47 @@ if [[ ! -f "$SDK_INFO_PATH" ]]; then
 fi
 echo "[OK] Tizen SDK found: $SDK_PATH (sdk.info exists)"
 
-# Check mode
+# An older install left only .tv-sdk-installed: record its TV version first
+# (migrate_tv_sdk_marker, lib/common.sh), so it is still reported after this
+# run replaces the marker.
 TV_SDK_MARKER="${SDK_PATH}/.tv-sdk-installed"
+[[ "$DRY_RUN" == "true" ]] || migrate_tv_sdk_marker "$SDK_PATH" || true
+
+# The TV versions tizen-tv-sdk-install recorded (the online repository
+# carries one TV version, so any of them means it is in).
+online_tv_versions() {
+    awk '
+        /^Platform package installed at/ { if (by == "tv-sdk-install" && v != "") print v; v = ""; by = "" }
+        { sub(/\r$/, "") }
+        /^Platform version:/ { v = $0; sub(/^Platform version:[ \t]*/, "", v) }
+        /^Installed by:/     { by = $0; sub(/^Installed by:[ \t]*/, "", by) }
+        END { if (by == "tv-sdk-install" && v != "") print v }
+    ' "$SDK_PATH/.platform-installed" 2>/dev/null | sort -u | paste -sd, - | sed 's/,/, /g'
+}
+
+# Check mode
 if [[ "$CHECK" == "true" ]]; then
-    if [[ -f "$TV_SDK_MARKER" ]]; then
-        echo "[OK] TV SDK is already installed: $SDK_PATH (.tv-sdk-installed found)"
+    RECORDED="$(online_tv_versions)"
+    if [[ -n "$RECORDED" ]]; then
+        echo "[OK] TV SDK is already installed: $SDK_PATH (TV $RECORDED recorded in .platform-installed)"
         exit 0
     else
-        echo "[INFO] TV SDK is NOT installed (.tv-sdk-installed not found)"
+        echo "[INFO] TV SDK is NOT installed (no tv-sdk-install record in .platform-installed)"
         exit 1
     fi
 fi
 
 # Skip if already installed
-if [[ -f "$TV_SDK_MARKER" && "$FORCE" == "false" ]]; then
-    echo "[OK] TV SDK is already installed: $SDK_PATH"
-    echo "[INFO] .tv-sdk-installed found. To reinstall, run again with --force"
+RECORDED="$(online_tv_versions)"
+if [[ -n "$RECORDED" && "$FORCE" == "false" && "$DRY_RUN" == "false" ]]; then
+    echo "[OK] TV SDK is already installed: $SDK_PATH (TV $RECORDED)"
+    echo "[INFO] Recorded in .platform-installed. To reinstall, run again with --force"
     exit 0
 fi
 
-if [[ "$FORCE" == "true" ]]; then
-    echo "[WARN] Force reinstall requested — removing .tv-sdk-installed marker"
-    rm -f "$TV_SDK_MARKER"
-fi
+# --status reports "done" once the marker exists, so drop the previous run's
+# marker before this one starts (its version is recorded above).
+[[ "$DRY_RUN" == "true" ]] || rm -f "$TV_SDK_MARKER"
 
 # -----------------------------------------------------------------------------
 # Package installation (pkg_list driven)
@@ -236,6 +256,29 @@ done
 
 TOTAL=${#RESOLVED[@]}
 echo "[OK] Total resolved packages: $TOTAL"
+
+# The TV version is the X.Y of the X.Y-MANDATORY platform meta it depends on
+# (TV-SAMSUNG-Public-Mandatory -> 10.0-MANDATORY).
+TV_VERSION=""
+for pkg in "${RESOLVED[@]}"; do
+    if [[ "$pkg" =~ ^([0-9]+\.[0-9]+)-MANDATORY$ ]]; then
+        if [[ -z "$TV_VERSION" ]] || version_gt "${BASH_REMATCH[1]}" "$TV_VERSION"; then
+            TV_VERSION="${BASH_REMATCH[1]}"
+        fi
+    fi
+done
+if [[ -n "$TV_VERSION" ]]; then
+    echo "[OK] TV platform version: $TV_VERSION"
+    # The same TV version may already be in (e.g. from a ZIP).
+    if [[ "$FORCE" == "false" && "$DRY_RUN" == "false" ]] && tv_version_recorded "$SDK_PATH" "$TV_VERSION"; then
+        echo "[OK] TV SDK $TV_VERSION is already installed: $SDK_PATH (recorded in .platform-installed)"
+        echo "[INFO] To reinstall, run again with --force"
+        rm -rf "$WORKDIR"
+        exit 0
+    fi
+else
+    echo "[WARN] No X.Y-MANDATORY dependency found; the TV version is taken from platforms/ after the install"
+fi
 
 # Dry-run: list only
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -353,8 +396,31 @@ if [[ $FAIL -gt 0 ]]; then
     exit 1
 fi
 
+# Record the TV version in .platform-installed (record_platform_install,
+# lib/common.sh) — what sdk-install result.packages and platform-install
+# --list read. Without an X.Y-MANDATORY dependency, the newest version that
+# now holds a tv-samsung payload is the one this package is for.
+if [[ -z "$TV_VERSION" ]]; then
+    for d in "$SDK_PATH"/platforms/*/; do
+        name="$(basename "$d" | tr '[:upper:]' '[:lower:]')"
+        [[ "$name" =~ ^tizen-([0-9]+\.[0-9]+)$ ]] || continue
+        [[ -n "$(tv_install_profiles "$SDK_PATH" "${BASH_REMATCH[1]}")" ]] || continue
+        if [[ -z "$TV_VERSION" ]] || version_gt "${BASH_REMATCH[1]}" "$TV_VERSION"; then
+            TV_VERSION="${BASH_REMATCH[1]}"
+        fi
+    done
+fi
+if [[ -n "$TV_VERSION" ]]; then
+    TV_PROFILES="$(tv_install_profiles "$SDK_PATH" "$TV_VERSION")"
+    record_platform_install "$SDK_PATH" "$TARGET_PACKAGE" "$TV_VERSION" "${TV_PROFILES:-tv-samsung}" tv-sdk-install "$PKG_REPO"
+    echo "[OK] TV $TV_VERSION (${TV_PROFILES:-tv-samsung}) recorded in $SDK_PATH/.platform-installed"
+else
+    echo "[WARN] Could not tell which TV version was installed; nothing recorded in .platform-installed"
+fi
+
 # Create .tv-sdk-installed marker
-echo "TV SDK installed at $(date -Iseconds)" > "$TV_SDK_MARKER"
+echo "TV SDK installed at $(date +%Y-%m-%dT%H:%M:%S%z)" > "$TV_SDK_MARKER"
+[[ -z "$TV_VERSION" ]] || echo "TV version: $TV_VERSION" >> "$TV_SDK_MARKER"
 echo "[OK] .tv-sdk-installed created: $TV_SDK_MARKER"
 
 rm -rf "$WORKDIR"

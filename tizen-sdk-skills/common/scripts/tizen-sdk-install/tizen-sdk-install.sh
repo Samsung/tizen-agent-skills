@@ -94,6 +94,7 @@ PKG_OS=""                  # pkg_list suffix: windows-64 / ubuntu-64 / macos-64
 # in lib/common.sh (issue #70). --path always wins.
 INSTALL_PATH="$(default_sdk_install_path)"
 PLATFORM_VERSION=""        # Empty to auto-select latest, e.g., "10.0", "11.0"
+INSTALLED_PLATFORM_VERSION=""  # Set by install_platform_packages: the TIZEN-X.Y it installs
 REPO_URL=""                # Custom package repository URL (--repo-url); empty = timezone CDN
 VALIDATE_ONLY=false        # If true, only validate --repo-url and exit
 DRY_RUN=false              # If true, only print resolved package list without download/install
@@ -369,6 +370,9 @@ install_platform_packages() {
     latest="$(echo "$platforms" | tail -1)"
     root="TIZEN-$latest"
   fi
+
+  # The platform this run installs, recorded in .platform-installed on success.
+  INSTALLED_PLATFORM_VERSION="${root#TIZEN-}"
 
   local root_ver
   root_ver="$(lookup_field "$pkgdb" "$root" 3)"
@@ -1150,6 +1154,19 @@ fi
 # Create sdk.info file (only when install succeeds to completion)
 create_sdk_info
 echo ""
+
+# Record the platform this run installed (the requested version, else the
+# repository's newest) in .platform-installed — what sdk-install
+# result.packages and platform-install --list read (record_platform_install,
+# lib/common.sh).
+if [ -n "${INSTALLED_PLATFORM_VERSION:-}" ]; then
+  record_platform_install "$INSTALL_PATH" "TIZEN-$INSTALLED_PLATFORM_VERSION" \
+    "$INSTALLED_PLATFORM_VERSION" \
+    "$(platform_install_profiles "$INSTALL_PATH" "$INSTALLED_PLATFORM_VERSION")" \
+    sdk-install "$PKG_REPO" \
+    && log_success "TIZEN-$INSTALLED_PLATFORM_VERSION recorded in $INSTALL_PATH/.platform-installed" \
+    || log_warning "Could not record TIZEN-$INSTALLED_PLATFORM_VERSION in $INSTALL_PATH/.platform-installed"
+fi
 
 # Write SDK path to ~/.tizen.sdk.path.config so that all other skills
 # (build, create, device, debug, etc.) can locate the SDK via readSdkPath().
