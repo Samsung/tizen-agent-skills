@@ -5,13 +5,12 @@ name: Release (tizen-agent-skills)
 # GitHub Release publishes assets from every plugin:
 #   - tizen-sdk-skills:  tizen-sdk-v<plugin-version>.zip (CLI dist),
 #                         tizen-ai-extension-v<plugin-version>.vsix (VS Code),
-#                         tizen-sdk-skills-source-v<release-version>.zip (source)
-#   - tizen-action-skills: tizen-action-skills-source-v<release-version>.zip (source)
+#                         tizen-sdk-skills-source-v<plugin-version>.zip (source)
+#   - tizen-action-skills: tizen-action-skills-source-v<plugin-version>.zip (source)
 #
 # The release version (from root package.json) is independent from each
-# plugin's own version. The CLI zip and VSIX are stamped with the plugin's
-# declared version, not the release version, so the two can advance
-# independently.
+# plugin's own version. Every asset is stamped with its plugin's declared
+# version, not the release version, so the two can advance independently.
 on:
   push:
     tags:
@@ -127,21 +126,27 @@ jobs:
       # Each plugin's source directory is packaged separately so consumers
       # can download only the plugin they need. git archive produces a zip
       # of only the git-tracked files under that directory — no node_modules,
-      # dist/ or other build output. The zip filename uses the RELEASE version
-      # (not the plugin version) so the release page is consistent.
+      # dist/ or other build output. The zip filename uses the plugin's own
+      # version so it matches the CLI zip and VSIX of the same plugin.
       - name: Package tizen-sdk-skills source zip
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          SDK_VERSION: ${{ steps.sdk_ver.outputs.version }}
         run: |
           git archive --format=zip --prefix=tizen-sdk-skills/ HEAD tizen-sdk-skills/ \
-            -o "tizen-sdk-skills-source-v${VERSION}.zip"
+            -o "tizen-sdk-skills-source-v${SDK_VERSION}.zip"
+
+      - name: Read tizen-action-skills plugin version
+        id: action_ver
+        run: |
+          ACTION_VERSION="$(node -p "require('./tizen-action-skills/package.json').version")"
+          echo "version=${ACTION_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Package tizen-action-skills source zip
         env:
-          VERSION: ${{ steps.ver.outputs.version }}
+          ACTION_VERSION: ${{ steps.action_ver.outputs.version }}
         run: |
           git archive --format=zip --prefix=tizen-action-skills/ HEAD tizen-action-skills/ \
-            -o "tizen-action-skills-source-v${VERSION}.zip"
+            -o "tizen-action-skills-source-v${ACTION_VERSION}.zip"
 
       # Re-running an existing tag updates the release in place instead of
       # deleting it: assets are replaced by name (--clobber), so the
@@ -152,15 +157,15 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SHA: ${{ github.sha }}
           EVENT_NAME: ${{ github.event_name }}
-          VERSION: ${{ steps.ver.outputs.version }}
           SDK_VERSION: ${{ steps.sdk_ver.outputs.version }}
+          ACTION_VERSION: ${{ steps.action_ver.outputs.version }}
         run: |
           set -euo pipefail
 
           CLI_ZIP="tizen-sdk-skills/tizen-cli/tizen-sdk-v${SDK_VERSION}.zip"
           VSIX="tizen-sdk-skills/vscode/tizen-ai-extension-v${SDK_VERSION}.vsix"
-          SDK_SRC_ZIP="tizen-sdk-skills-source-v${VERSION}.zip"
-          ACTION_SRC_ZIP="tizen-action-skills-source-v${VERSION}.zip"
+          SDK_SRC_ZIP="tizen-sdk-skills-source-v${SDK_VERSION}.zip"
+          ACTION_SRC_ZIP="tizen-action-skills-source-v${ACTION_VERSION}.zip"
 
           if gh release view "${RELEASE_TAG}" &>/dev/null; then
             echo "Release ${RELEASE_TAG} exists; updating it in place"
