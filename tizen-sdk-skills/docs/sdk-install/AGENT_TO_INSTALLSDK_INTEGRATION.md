@@ -22,7 +22,7 @@
 
 ### Step 2: 호스트가 에이전트 선택
 
-Claude Code와 Codex는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
+Claude Code, Codex, Gemini CLI는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
 
 ```
 agents/tizen-sdk-install.md → 실행
@@ -30,22 +30,21 @@ agents/tizen-sdk-install.md → 실행
 
 ---
 
-### Step 3: 에이전트가 installSdk() 호출
+### Step 3: 에이전트가 러너를 실행하고, 러너가 installSdk() 호출
 
 ```javascript
-// tizen-sdk-install 에이전트 내부
+// 에이전트가 `node sdk-install-cli.js 10.0`으로 실행하는 러너 sdk-install-cli.js 내부
 
-const { installSdk } = require('../../../lib/core/sdk-commands');
+const { installSdk } = require('../core/sdk-commands');
 
-// 사용자 요청에서 파라미터 추출
-const version = '10.0';   // 사용자 요청에서 파싱
-const label = 'tizen';     // 기본값 또는 사용자 지정
+// 에이전트가 요청에서 만든 명령줄의 인자
+const version = '10.0';   // 첫 번째 위치 인자
+const label = 'tizen';     // 기본값 또는 두 번째 위치 인자
 
 // ✅ installSdk() 호출 (여기서 호출!)
 const result = await installSdk(version, label);
 
-// JSON으로 출력
-console.log(JSON.stringify(result));
+// cli-runner.js가 result를 JSON으로 출력 (Step 7)
 ```
 
 ---
@@ -55,9 +54,14 @@ console.log(JSON.stringify(result));
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수
 
-async function installSdk(version = '', label = 'tizen', force = false) {  // '' = 최신 플랫폼
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = 최신 플랫폼
 
-  // 4-1️⃣ Node.js 확인 (가장 먼저)
+  // 4-0️⃣ 버전 형식 확인이 먼저 (X.Y, 아니면 invalid_argument). 사용자 지정 저장소면 위임
+  const versionCheck = validateTizenVersion(version);
+  if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+  if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+  // 4-1️⃣ Node.js 확인
   const nodeCheck = await checkNode();
   if (nodeCheck.status !== 'success') {
     return nodeCheck;  // node_not_found 에러 — 설치 안내와 함께 중단
@@ -155,8 +159,9 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
 ### Step 7: stdout으로 출력
 
 ```javascript
-console.log(JSON.stringify(envelope));
-// ↑ JSON을 stdout으로 출력
+// cli-runner.js (sdk-install-cli.js 등 CLI 러너가 공유)
+process.stdout.write(JSON.stringify(withUserCommand(envelope), null, 2) + "\n");
+// ↑ command 바로 뒤에 user_command를 넣어 stdout으로 출력
 ```
 
 ---
@@ -186,12 +191,12 @@ tizen-sdk-install 에이전트
   │
   ├─ Phase 1: node sdk-install-cli.js 10.0
   │    installSdk('10.0', 'tizen')      ← 호출자: CLI 러너
-  │      Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간
+  │      버전 형식 → Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간
   │    ← execution_error Envelope, suggested_fix.command = 설치 명령
   │
   ├─ Phase 2: 백그라운드 설치 (10–15분) — Claude Code는 suggested_fix.command를
-  │    run_in_background로, Cline은 --detach로 실행하고 --status로 확인,
-  │    Codex는 suggested_fix.background_command(job-cli.js) 실행
+  │    run_in_background로 실행, Cline 등 완료 알림이 없는 호스트는 --detach / -Detach로
+  │    실행하고 --status / -Status로 확인, Codex는 suggested_fix.background_command(job-cli.js) 실행
   │
   └─ Phase 3: node sdk-install-cli.js 10.0 재실행
        installSdk('10.0', 'tizen')
@@ -231,7 +236,8 @@ description: Install Tizen SDK
 
 사용자의 SDK 설치 요청을 처리합니다.
 
-const { installSdk } = require('../../../lib/core/sdk-commands');
+// 에이전트는 `node sdk-install-cli.js <버전>`을 실행하고, 아래 require는 그 러너 안에 있습니다
+const { installSdk } = require('../core/sdk-commands');
 
 ## 구현 스텝
 
@@ -242,6 +248,8 @@ const { installSdk } = require('../../../lib/core/sdk-commands');
 ```
 
 ### 2. installSdk() 호출
+
+실제로는 에이전트가 `node sdk-install-cli.js <버전>`을 실행하고, 아래 호출은 그 러너 안에서 일어납니다.
 
 ```javascript
 const version = extractVersion(userRequest);  // "10.0" 등
@@ -294,8 +302,8 @@ lib/core/sdk-commands.js (installSdk)
 
 | 질문 | 답변 |
 |------|------|
-| **누가 installSdk()를 호출하나?** | tizen-sdk-install 에이전트 |
-| **어디서 호출하나?** | 에이전트의 메인 로직에서 |
+| **누가 installSdk()를 호출하나?** | 에이전트(Cline에서는 스킬)가 실행하는 `sdk-install-cli.js` 러너 |
+| **어디서 호출하나?** | `common/lib/cli/sdk-install-cli.js`에서 |
 | **어떻게 호출하나?** | 러너 `node sdk-install-cli.js 10.0`로, 백그라운드 설치 전후에 한 번씩 |
 | **뭘 받나?** | Standard JSON Envelope 객체 |
 | **JSON은 어디서 생성되나?** | installSdk() 내부에서 formatSdkInstall() 호출 |
@@ -316,7 +324,7 @@ lib/core/sdk-commands.js (installSdk)
 
 ```
 tizen-sdk-install 에이전트
-  ↓ (호출)
+  ↓ (node sdk-install-cli.js 10.0 실행, 러너가 호출)
 installSdk() ← lib/core/sdk-commands.js
   ├─ Phase 1: 사전 점검 → 설치 명령 (Phase 2에서 백그라운드로 실행)
   └─ Phase 3: 이미 설치됨 → installedPackageSummary()

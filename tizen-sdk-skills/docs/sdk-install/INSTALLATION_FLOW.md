@@ -18,13 +18,13 @@
 
 요청에 10.0이 들어 있으므로 에이전트는 이 버전을 러너에 넘깁니다(`node sdk-install-cli.js 10.0`). 버전이 없으면 러너는 `""`를 받고, 설치 스크립트는 저장소가 제공하는 최신 플랫폼을 설치하며 `Tizen SDK Tools`에도 그 버전이 붙습니다.
 
-Claude Code와 Codex는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
+Claude Code, Codex, Gemini CLI는 이 요청을 `tizen-sdk-install` 에이전트에 넘깁니다. Cline에는 에이전트 기능이 없어서 메인 에이전트가 `tizen-sdk-install` 스킬을 직접 실행하며, 이후 단계는 어느 쪽이든 같습니다.
 
 ---
 
 ### Step 2️⃣: 에이전트 자동 선택
 
-Claude Code / Codex가 `tizen-sdk-install` 에이전트를 선택하여 실행합니다(Cline에서는 메인 에이전트가 같은 이름의 스킬을 불러옵니다).
+Claude Code / Codex / Gemini CLI가 `tizen-sdk-install` 에이전트를 선택하여 실행합니다(Cline에서는 메인 에이전트가 같은 이름의 스킬을 불러옵니다).
 
 ```markdown
 ---
@@ -37,14 +37,14 @@ description: Install Tizen SDK, tizen sdk install, ...
 
 ---
 
-### Step 3️⃣: 에이전트가 installSdk() 호출
+### Step 3️⃣: 에이전트가 러너를 실행하고, 러너가 installSdk() 호출
 
 ```javascript
-// tizen-sdk-install 에이전트 내부
-const { installSdk } = require('../lib/core/sdk-commands');
+// 에이전트가 `node sdk-install-cli.js 10.0`으로 실행하는 러너 sdk-install-cli.js 내부
+const { installSdk } = require('../core/sdk-commands');
 
-const result = await installSdk('10.0', 'tizen');
-console.log(JSON.stringify(result));  // JSON Envelope 출력
+const result = await installSdk('10.0', 'tizen');  // '10.0' = 첫 번째 위치 인자
+// cli-runner.js가 result를 JSON으로 출력 (Step 7)
 ```
 
 **이 시점이 중요합니다:**
@@ -58,9 +58,14 @@ console.log(JSON.stringify(result));  // JSON Envelope 출력
 ```javascript
 // lib/core/sdk-commands.js의 installSdk() 함수
 
-async function installSdk(version = '', label = 'tizen', force = false) {  // '' = 최신 플랫폼
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = 최신 플랫폼
 
-  // 4-1️⃣ Node.js 확인 (가장 먼저)
+  // 4-0️⃣ 버전 형식 확인이 먼저 (X.Y, 아니면 invalid_argument). 사용자 지정 저장소면 위임
+  const versionCheck = validateTizenVersion(version);
+  if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+  if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+  // 4-1️⃣ Node.js 확인
   const nodeCheck = await checkNode();
   if (nodeCheck.status !== 'success') {
     return nodeCheck;  // node_not_found 에러 — 설치 안내와 함께 중단
@@ -161,8 +166,9 @@ Phase 2가 백그라운드에서 SDK를 설치하고 나면, 에이전트는 같
 ### Step 7️⃣: stdout으로 출력
 
 ```javascript
-console.log(JSON.stringify(envelope));
-// ↑ JSON을 stdout으로 출력
+// cli-runner.js (sdk-install-cli.js 등 CLI 러너가 공유)
+process.stdout.write(JSON.stringify(withUserCommand(envelope), null, 2) + "\n");
+// ↑ command 바로 뒤에 user_command를 넣어 stdout으로 출력
 ```
 
 ---
@@ -188,17 +194,18 @@ SDK 설치 완료 (installation_status: completed).
 사용자: "Tizen SDK 10.0 설치해줄 수 있어?"
   │
   ▼
-tizen-sdk-install 에이전트 (Claude Code / Codex) 또는 스킬 (Cline, 메인 에이전트에서)
+tizen-sdk-install 에이전트 (Claude Code / Codex / Gemini CLI) 또는 스킬 (Cline, 메인 에이전트에서)
   │
   ├─ Phase 1 — 사전 점검
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
-  │      Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간 (15 GB)
+  │      버전 형식 → Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간 (15 GB)
   │    ← 실패 Envelope (execution_error), suggested_fix.command에 설치 명령
   │
   ├─ Phase 2 — 백그라운드 설치 (10–15분, 약 121개 패키지)
-  │    하네스가 suggested_fix 실행 (tizen-sdk-install.sh --platform "10.0" … / .ps1 -Platform "10.0" …):
+  │    하네스가 suggested_fix 실행 — tizen-sdk-install.sh --path "<sdk>" --platform "10.0" --download-jobs 4
+  │    (PowerShell: tizen-sdk-install.ps1 -Path "<sdk>" -Platform "10.0" -DownloadJobs 4):
   │      Claude Code: command를 run_in_background로, 작업 완료 알림에서 재개
-  │      Cline: command에 --detach / -Detach, --status / -Status로 확인
+  │      Cline 등 완료 알림이 없는 호스트: command에 --detach / -Detach, --status / -Status로 확인
   │      Codex: background_command (job-cli.js 작업), job-cli.js wait로 확인
   │    설치 스크립트가 sdk.info와 ~/.tizen.sdk.path.config 기록
   │
@@ -250,7 +257,7 @@ formatSdkInstall()
   │
 installSdk()
   ↑
-  │ (에이전트 호출)
+  │ (sdk-install-cli.js 러너가 호출, 에이전트는 러너를 실행)
   │
 tizen-sdk-install 에이전트
   ↑
@@ -263,7 +270,7 @@ tizen-sdk-install 에이전트
 
 - `formatSdkInstall()` 혼자로는 아무것도 할 수 없음 (포맷팅만 가능)
 - `installSdk()`는 **사전 점검을 담당**: SDK가 없으면 설치 명령을 반환하고, 설치되어 있으면 `installedPackageSummary()`로 `result.packages`를 만든 뒤 `formatSdkInstall()`을 호출
-- 에이전트가 `installSdk()`를 호출하여 전체 흐름 연결
+- 에이전트가 `sdk-install-cli.js` 러너를 실행하고, 러너가 `installSdk()`를 호출하여 전체 흐름 연결
 
 ---
 
@@ -271,10 +278,10 @@ tizen-sdk-install 에이전트
 
 ```javascript
 // ===== 호출자 =====
-// tizen-sdk-install 에이전트
-const { installSdk } = require('./lib/core/sdk-commands');
+// sdk-install-cli.js (에이전트가 `node sdk-install-cli.js 10.0`으로 실행)
+const { installSdk } = require('../core/sdk-commands');
 const result = await installSdk('10.0');
-console.log(JSON.stringify(result));
+// cli-runner.js가 withUserCommand(result)를 JSON으로 출력
 
 // ===== installSdk() (lib/core/sdk-commands.js) =====
 async function installSdk(version) {
@@ -300,12 +307,12 @@ function formatSdkInstall(packages, warnings) {
 // ===== Envelope.success() (lib/envelope/envelope.js) =====
 success(result, options) {
   return {
-    command: this.command,
     status: 'success',
-    duration_ms: Date.now() - this.startTime,
     result,
     warnings: options.warnings || [],
     errors: [],
+    command: this.command,
+    duration_ms: Date.now() - this.startTime,
   };
 }
 ```

@@ -22,7 +22,7 @@ The request names 10.0, so the agent passes it to the runner (`node sdk-install-
 
 ### Step 2: The Host Selects the Agent
 
-Claude Code and Codex hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
+Claude Code, Codex and Gemini CLI hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
 
 ```
 agents/tizen-sdk-install.md → execute
@@ -30,22 +30,21 @@ agents/tizen-sdk-install.md → execute
 
 ---
 
-### Step 3: Agent Calls installSdk()
+### Step 3: The Agent Runs the Runner, Which Calls installSdk()
 
 ```javascript
-// Inside tizen-sdk-install agent
+// Inside sdk-install-cli.js, which the agent runs as `node sdk-install-cli.js 10.0`
 
-const { installSdk } = require('../../../lib/core/sdk-commands');
+const { installSdk } = require('../core/sdk-commands');
 
-// Extract parameters from user request
-const version = '10.0';   // parsed from user request
-const label = 'tizen';     // default or user-specified
+// Arguments from the command line the agent built from the request
+const version = '10.0';   // first positional argument
+const label = 'tizen';     // default or second positional argument
 
 // ✅ Call installSdk() (called here!)
 const result = await installSdk(version, label);
 
-// Output as JSON
-console.log(JSON.stringify(result));
+// cli-runner.js prints result as JSON (Step 7)
 ```
 
 ---
@@ -55,9 +54,14 @@ console.log(JSON.stringify(result));
 ```javascript
 // installSdk() function in lib/core/sdk-commands.js
 
-async function installSdk(version = '', label = 'tizen', force = false) {  // '' = newest platform
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = newest platform
   try {
-    // 1. ✅ Node.js check (very first step)
+    // 0. Version syntax first (X.Y, else invalid_argument); a custom repository hands off
+    const versionCheck = validateTizenVersion(version);
+    if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+    if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+    // 1. ✅ Node.js check
     const nodeCheck = await checkNode();
     if (nodeCheck.status !== 'success') {
       return nodeCheck;  // node_not_found — aborts with install guide
@@ -170,8 +174,9 @@ With `installSdk('10.0')` the installer installs `TIZEN-10.0` and its emulator p
 ### Step 7: Output to stdout
 
 ```javascript
-console.log(JSON.stringify(envelope));
-// ↑ JSON output to stdout
+// cli-runner.js (shared by the CLI runners, incl. sdk-install-cli.js)
+process.stdout.write(JSON.stringify(withUserCommand(envelope), null, 2) + "\n");
+// ↑ JSON to stdout, with user_command inserted right after command
 ```
 
 ---
@@ -202,12 +207,13 @@ tizen-sdk-install agent
   │
   ├─ Phase 1: node sdk-install-cli.js 10.0
   │    installSdk('10.0', 'tizen')      ← caller: the CLI runner
-  │      Node.js check → already installed? (no) → disk space
+  │      version syntax → Node.js check → already installed? (no) → disk space
   │    ← execution_error envelope; suggested_fix.command = installer
   │
   ├─ Phase 2: installer in the background (10–15 min) — Claude Code runs
-  │    suggested_fix.command with run_in_background, Cline adds --detach and
-  │    polls --status, Codex runs suggested_fix.background_command (job-cli.js)
+  │    suggested_fix.command with run_in_background; Cline and other hosts
+  │    without a completion notice add --detach / -Detach and poll
+  │    --status / -Status; Codex runs suggested_fix.background_command (job-cli.js)
   │
   └─ Phase 3: node sdk-install-cli.js 10.0 again
        installSdk('10.0', 'tizen')
@@ -258,8 +264,8 @@ lib/core/sdk-commands.js (installSdk)
 
 | Question | Answer |
 |----------|--------|
-| **Who calls installSdk()?** | tizen-sdk-install agent |
-| **Where is it called?** | In the agent's main logic |
+| **Who calls installSdk()?** | The `sdk-install-cli.js` runner, which the agent (or, on Cline, the skill) runs |
+| **Where is it called?** | In `common/lib/cli/sdk-install-cli.js` |
 | **How is it called?** | Through the runner, `node sdk-install-cli.js 10.0`, once before and once after the background install |
 | **What is returned?** | Standard JSON Envelope object |
 | **Where is JSON generated?** | Inside installSdk() via formatSdkInstall() |
@@ -280,7 +286,7 @@ lib/core/sdk-commands.js (installSdk)
 
 ```
 tizen-sdk-install agent
-  ↓ (call)
+  ↓ (runs node sdk-install-cli.js 10.0, which calls)
 installSdk() ← lib/core/sdk-commands.js
   ├─ Phase 1: pre-check → installer command (Phase 2 runs it in the background)
   └─ Phase 3: already installed → installedPackageSummary()

@@ -18,13 +18,13 @@ User: "Can you install Tizen SDK 10.0?"
 
 The request names 10.0, so the agent passes it to the runner (`node sdk-install-cli.js 10.0`). Without a version the runner gets `""`: the installer installs the newest platform the repository offers, and `Tizen SDK Tools` is labelled with that version instead.
 
-Claude Code and Codex hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
+Claude Code, Codex and Gemini CLI hand this request to the `tizen-sdk-install` agent. Cline has no agents, so its main agent runs the `tizen-sdk-install` skill itself; the steps below are the same either way.
 
 ---
 
 ### Step 2️⃣: Agent Auto-Selection
 
-Claude Code / Codex select and run the `tizen-sdk-install` agent (on Cline, the main agent loads the skill of the same name).
+Claude Code / Codex / Gemini CLI select and run the `tizen-sdk-install` agent (on Cline, the main agent loads the skill of the same name).
 
 ```markdown
 ---
@@ -37,14 +37,14 @@ Analyzing user request...
 
 ---
 
-### Step 3️⃣: Agent Calls installSdk()
+### Step 3️⃣: The Agent Runs the Runner, Which Calls installSdk()
 
 ```javascript
-// Inside tizen-sdk-install agent
-const { installSdk } = require('../lib/core/sdk-commands');
+// Inside sdk-install-cli.js, which the agent runs as `node sdk-install-cli.js 10.0`
+const { installSdk } = require('../core/sdk-commands');
 
-const result = await installSdk('10.0', 'tizen');
-console.log(JSON.stringify(result));  // JSON Envelope output
+const result = await installSdk('10.0', 'tizen');  // '10.0' = first positional argument
+// cli-runner.js prints result as JSON (Step 7)
 ```
 
 **Key point:**
@@ -58,9 +58,14 @@ console.log(JSON.stringify(result));  // JSON Envelope output
 ```javascript
 // installSdk() in lib/core/sdk-commands.js
 
-async function installSdk(version = '', label = 'tizen', force = false) {  // '' = newest platform
+async function installSdk(version = '', label = 'tizen', force = false, repoUrl = '', command = 'tizen-sdk sdk-install') {  // '' = newest platform
 
-  // 4-1️⃣ Node.js check (very first step)
+  // 4-0️⃣ Version syntax first (X.Y, else invalid_argument); a custom repository hands off
+  const versionCheck = validateTizenVersion(version);
+  if (versionCheck.error) return formatError(command, 'invalid_argument', versionCheck.error);
+  if (repoUrl) return installSdkFromRepo(repoUrl, version, force);
+
+  // 4-1️⃣ Node.js check
   const nodeCheck = await checkNode();
   if (nodeCheck.status !== 'success') {
     return nodeCheck;  // node_not_found error — aborts with install guide
@@ -189,8 +194,9 @@ With `installSdk('10.0')` the installer installs `TIZEN-10.0` and its emulator p
 ### Step 7️⃣: Output to stdout
 
 ```javascript
-console.log(JSON.stringify(envelope));
-// ↑ JSON output to stdout
+// cli-runner.js (shared by the CLI runners, incl. sdk-install-cli.js)
+process.stdout.write(JSON.stringify(withUserCommand(envelope), null, 2) + "\n");
+// ↑ JSON to stdout, with user_command inserted right after command
 ```
 
 ---
@@ -217,17 +223,18 @@ Platforms — installed: 10.0 · not_installed: 9.0
 User: "Can you install Tizen SDK 10.0?"
   │
   ▼
-tizen-sdk-install agent (Claude Code / Codex) or skill (Cline, in the main agent)
+tizen-sdk-install agent (Claude Code / Codex / Gemini CLI) or skill (Cline, in the main agent)
   │
   ├─ Phase 1 — pre-check
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
-  │      Node.js check → already installed? (no) → disk space (15 GB)
+  │      version syntax → Node.js check → already installed? (no) → disk space (15 GB)
   │    ← failure envelope (execution_error) with the installer in suggested_fix.command
   │
   ├─ Phase 2 — install, in the background (10–15 min, ~121 packages)
-  │    the harness runs suggested_fix (tizen-sdk-install.sh --platform "10.0" … / .ps1 -Platform "10.0" …):
+  │    the harness runs suggested_fix — tizen-sdk-install.sh --path "<sdk>" --platform "10.0" --download-jobs 4
+  │    (PowerShell: tizen-sdk-install.ps1 -Path "<sdk>" -Platform "10.0" -DownloadJobs 4):
   │      Claude Code: command with run_in_background, resumes on the task notification
-  │      Cline: command with --detach / -Detach, polls --status / -Status
+  │      Cline and other hosts without a completion notice: command with --detach / -Detach, polls --status / -Status
   │      Codex: background_command (a job-cli.js job), polls job-cli.js wait
   │    the installer writes sdk.info and ~/.tizen.sdk.path.config
   │
@@ -268,7 +275,7 @@ formatSdkInstall()
   │
 installSdk()
   ↑
-  │ (agent calls)
+  │ (the sdk-install-cli.js runner calls; the agent runs the runner)
   │
 tizen-sdk-install agent
   ↑
@@ -281,7 +288,7 @@ User
 
 - `formatSdkInstall()` alone can't do anything (formatting only)
 - `installSdk()` **runs the pre-checks**: it returns the installer command when the SDK is missing, or builds `result.packages` with `installedPackageSummary()` and calls `formatSdkInstall()` when it is installed
-- The agent calls `installSdk()` to connect the full flow
+- The agent runs the `sdk-install-cli.js` runner, which calls `installSdk()`, to connect the full flow
 
 ---
 
@@ -289,10 +296,10 @@ User
 
 ```javascript
 // ===== Caller =====
-// tizen-sdk-install agent
-const { installSdk } = require('./lib/core/sdk-commands');
+// sdk-install-cli.js (run by the agent as `node sdk-install-cli.js 10.0`)
+const { installSdk } = require('../core/sdk-commands');
 const result = await installSdk('10.0');
-console.log(JSON.stringify(result));
+// cli-runner.js prints withUserCommand(result) as JSON
 
 // ===== installSdk() (lib/core/sdk-commands.js) =====
 async function installSdk(version) {
@@ -315,12 +322,12 @@ function formatSdkInstall(packages, warnings) {
 // ===== Envelope.success() (lib/envelope/envelope.js) =====
 success(result, options) {
   return {
-    command: this.command,
     status: 'success',
-    duration_ms: Date.now() - this.startTime,
     result,
     warnings: options.warnings || [],
     errors: [],
+    command: this.command,
+    duration_ms: Date.now() - this.startTime,
   };
 }
 ```
