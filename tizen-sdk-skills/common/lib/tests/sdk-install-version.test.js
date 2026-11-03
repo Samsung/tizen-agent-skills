@@ -360,6 +360,13 @@ console.error = () => {};
           !env.errors[0].message.includes("re-run this command with --force."),
         true,
       );
+      check(
+        "99.0 → message says platform-install needs a version the repository offers",
+        env.errors[0].message.includes(
+          "so platform-install will not find it either — use a version the repository offers",
+        ),
+        true,
+      );
     }
     // Each platform entry carries its own version and status; only the
     // tools entry takes the requested / newest-installed label. A single

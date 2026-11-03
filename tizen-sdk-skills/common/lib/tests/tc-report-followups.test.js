@@ -123,6 +123,14 @@ try {
       env.errors[0].message,
     );
     check(
+      "  message does not send the agent back to a re-run of this command",
+      !/Re-run with a version/.test(env.errors[0].message) &&
+        /platform-install --platform-version <X\.Y>/.test(
+          env.errors[0].message,
+        ),
+      env.errors[0].message,
+    );
+    check(
       "  suggested_fix is platform-install for that version",
       env.errors[0].suggested_fix.command ===
         "tizen-sdk platform-install --platform-version 99.99",
