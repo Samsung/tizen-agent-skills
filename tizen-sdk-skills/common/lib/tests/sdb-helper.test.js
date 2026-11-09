@@ -43,10 +43,19 @@ const intentCases = [
   // Literal command and Korean phrasings used to fall through to
   // "Could not match request", relayed as "no device connected".
   ["sdb devices", "list-devices"],
+  ["sdb devices -l", "list-devices"],
   ["sdb로 디바이스 목록 보여줘", "list-devices"],
   ["연결된 기기 확인해줘", "list-devices"],
+  ["현재 연결된 디바이스 목록 좀 보여주세요", "list-devices"],
   ["장치 리스트", "list-devices"],
   ["디바이스 찾아줘", "list-devices"],
+  // A request that only mentions a device keeps the intent it had before
+  // the Korean list-devices entry existed (that entry is last and anchored).
+  ["reboot the 연결된 기기", "reboot"],
+  ["kill app org.x on 연결된 디바이스", "kill"],
+  ["take a screenshot of 연결된 기기", "screenshot"],
+  ["run shell command sdb devices", "shell-command"],
+  ["run shell command ls 디바이스 목록", "shell-command"],
   ["open an interactive shell", "shell-interactive"],
   ["log", "log-stream"],
   ["show dlog", "log-stream"],
@@ -75,7 +84,12 @@ for (const [request, expectedId] of intentCases) {
 }
 
 // Korean requests that only mention a device must not become list-devices
-for (const req of ["디바이스 재부팅", "디바이스에 설치된 앱 목록"]) {
+for (const req of [
+  "디바이스 재부팅",
+  "연결된 디바이스 재부팅해줘",
+  "디바이스에 설치된 앱 목록",
+  "디바이스 찾기 실패 로그 보여줘",
+]) {
   check(
     `  "${req}" is not list-devices`,
     matchIntent(req)?.id !== "list-devices",

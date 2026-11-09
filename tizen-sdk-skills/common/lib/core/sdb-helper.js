@@ -41,15 +41,10 @@ const execFileAsync = promisify(execFile);
  * Order matters: first match wins.
  */
 const INTENT_PATTERNS = [
-  // Discovery — handoff to tizen-device-manager (richer: emulator fallback).
-  // Also the literal "sdb devices" and Korean phrasings ("디바이스 목록",
-  // "연결된 기기"): unmatched, they failed with "Could not match request",
-  // which agents relayed as "no device connected". `\b` is ASCII-only in JS,
-  // so the Korean branches carry no word boundaries.
+  // Discovery — handoff to tizen-device-manager (richer: emulator fallback)
   {
     id: "list-devices",
-    regex:
-      /\b(list|show|find).*(devices?|connected)\b|\bsdb\s+devices\b|연결된\s*(디바이스|기기|장치)|(디바이스|기기|장치)\s*(목록|리스트|찾)/i,
+    regex: /\b(list|show|find).*(devices?|connected)\b/i,
     gated: false,
     handoff: "tizen-device-manager",
   },
@@ -223,6 +218,20 @@ const INTENT_PATTERNS = [
   { id: "shutdown", regex: /\b(shutdown|power off)\b/i, gated: true },
   { id: "factory-reset", regex: /\b(factory\s*reset)\b/i, gated: true },
   { id: "sendkey", regex: /\b(sendkey|send key|key event)\b/i, gated: false },
+
+  // The literal "sdb devices" and whole-request Korean device-list phrasings
+  // ("sdb로 디바이스 목록 보여줘", "연결된 기기 확인해줘"). Unmatched, they
+  // failed with "Could not match request", which agents relayed as "no device
+  // connected". Last and anchored, so a request that only mentions a device
+  // ("reboot the 연결된 기기", "run shell command sdb devices") keeps its
+  // own intent. `\b` is ASCII-only in JS, so the Korean branch has none.
+  {
+    id: "list-devices",
+    regex:
+      /^\s*sdb\s+devices\b|^\s*(?:sdb\s*(?:로|으로)?\s*)?(?:(?:현재\s*)?연결된\s*)?(?:디바이스|기기|장치)\s*(?:목록|리스트)?\s*(?:을|를|좀)?\s*(?:보여\s*줘|보여\s*주세요|알려\s*줘|확인\s*해\s*줘|확인|찾아\s*줘|조회\s*해\s*줘)?\s*[.?!]*\s*$/i,
+    gated: false,
+    handoff: "tizen-device-manager",
+  },
 ];
 
 /**
