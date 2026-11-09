@@ -20,6 +20,11 @@
   `Could not match request`로 실패했고, 에이전트는 Raspberry Pi 4가 연결되어 있는데도 이를
   "연결된 디바이스가 없습니다"로 전달했습니다. `tizen-device-manager`를 직접 지정해야만 보였습니다.
 
+- **`sdb-helper`가 여러 줄 요청을 한 줄 요청과 같게 분류합니다.** `matchIntent()`가 공백을
+  하나로 합친 요청 사본으로 의도를 판단하므로, "kill⏎the app org.x"는 `kill`(확인 절차는 그대로)로,
+  "remove⏎forward tcp:9999"는 `forward-add` 대신 `forward-remove`로 분류됩니다. sdb 명령은
+  여전히 원래 요청으로 만듭니다.
+
 ## [1.7.0] — 2026-11-03
 
 ### 변경
