@@ -49,6 +49,12 @@ const intentCases = [
   ["현재 연결된 디바이스 목록 좀 보여주세요", "list-devices"],
   ["장치 리스트", "list-devices"],
   ["디바이스 찾아줘", "list-devices"],
+  // Every listed verb takes every polite ending
+  ["기기 목록 확인해 주세요", "list-devices"],
+  ["디바이스 목록 알려주세요", "list-devices"],
+  ["연결된 장치 찾아주세요", "list-devices"],
+  ["디바이스 목록 조회", "list-devices"],
+  ["디바이스 목록 보여줄래?", "list-devices"],
   // A request that only mentions a device keeps the intent it had before
   // the Korean list-devices entry existed (that entry is last and anchored).
   ["reboot the 연결된 기기", "reboot"],
