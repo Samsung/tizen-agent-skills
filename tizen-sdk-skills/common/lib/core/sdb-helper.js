@@ -218,6 +218,22 @@ const INTENT_PATTERNS = [
   { id: "shutdown", regex: /\b(shutdown|power off)\b/i, gated: true },
   { id: "factory-reset", regex: /\b(factory\s*reset)\b/i, gated: true },
   { id: "sendkey", regex: /\b(sendkey|send key|key event)\b/i, gated: false },
+
+  // The literal "sdb devices" and whole-request Korean device-list phrasings
+  // ("sdb로 디바이스 목록 보여줘", "연결된 기기 확인해줘"). Unmatched, they
+  // failed with "Could not match request", which agents relayed as "no device
+  // connected". Last and anchored, so a request that only mentions a device
+  // ("reboot the 연결된 기기", "run shell command sdb devices") keeps its
+  // own intent. `\b` is ASCII-only in JS, so the Korean branch has none.
+  // matchIntent() collapses whitespace first, so each separator is ` ?`:
+  // chained `\s*` here backtracked polynomially on long whitespace runs.
+  {
+    id: "list-devices",
+    regex:
+      /^sdb devices\b|^(?:sdb ?(?:로|으로)? ?)?(?:(?:현재 ?)?연결된 ?)?(?:디바이스|기기|장치) ?(?:목록|리스트)? ?(?:을|를|좀)? ?(?:(?:보여|알려|찾아|확인 ?해|조회 ?해) ?(?:줘요|줘|주세요|줄래)?|볼래|확인|조회)? ?[.?!]*$/i,
+    gated: false,
+    handoff: "tizen-device-manager",
+  },
 ];
 
 /**
@@ -226,8 +242,10 @@ const INTENT_PATTERNS = [
  * @returns {{id: string, gated: boolean, handoff?: string, handoffHint?: string}|null}
  */
 function matchIntent(request) {
+  // Classification only — callers keep the original request for buildCommand().
+  const text = request.trim().replace(/\s+/g, " ");
   for (const pattern of INTENT_PATTERNS) {
-    if (pattern.regex.test(request)) {
+    if (pattern.regex.test(text)) {
       const intent = {
         id: pattern.id,
         gated: pattern.gated,

@@ -14,6 +14,20 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sdb-helper` hands Korean device-list requests and `sdb devices` to
+  `tizen-device-manager`.** The `list-devices` intent matched English phrasings only, so
+  "sdb로 디바이스 목록 보여줘" or "sdb devices" failed with `Could not match request`, and
+  agents relayed that as "no device connected" while a Raspberry Pi 4 was attached. Asking
+  for `tizen-device-manager` by name was the only way to see it.
+
+- **`sdb-helper` classifies a multi-line request like its single-line form.**
+  `matchIntent()` now matches against a copy of the request with whitespace collapsed, so
+  "kill⏎the app org.x" is `kill` (still behind the confirmation gate) and "remove⏎forward
+  tcp:9999" is `forward-remove` instead of `forward-add`. The runner still builds the sdb
+  command from the original request.
+
 ## [1.7.0] — 2026-11-03
 
 ### Changed

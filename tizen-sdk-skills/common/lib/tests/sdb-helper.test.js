@@ -40,6 +40,31 @@ function check(name, actual, expected) {
 console.log("Test 1: matchIntent ordering");
 const intentCases = [
   ["list devices", "list-devices"],
+  // Literal command and Korean phrasings used to fall through to
+  // "Could not match request", relayed as "no device connected".
+  ["sdb devices", "list-devices"],
+  ["sdb devices -l", "list-devices"],
+  ["sdb로 디바이스 목록 보여줘", "list-devices"],
+  ["연결된 기기 확인해줘", "list-devices"],
+  ["현재 연결된 디바이스 목록 좀 보여주세요", "list-devices"],
+  ["장치 리스트", "list-devices"],
+  ["디바이스 찾아줘", "list-devices"],
+  // Every listed verb takes every polite ending
+  ["기기 목록 확인해 주세요", "list-devices"],
+  ["디바이스 목록 알려주세요", "list-devices"],
+  ["연결된 장치 찾아주세요", "list-devices"],
+  ["디바이스 목록 조회", "list-devices"],
+  ["디바이스 목록 보여줄래?", "list-devices"],
+  ["디바이스 목록 보여줘요", "list-devices"],
+  ["디바이스 목록 볼래", "list-devices"],
+  ["  연결된   기기\n목록  ", "list-devices"],
+  // A request that only mentions a device keeps the intent it had before
+  // the Korean list-devices entry existed (that entry is last and anchored).
+  ["reboot the 연결된 기기", "reboot"],
+  ["kill app org.x on 연결된 디바이스", "kill"],
+  ["take a screenshot of 연결된 기기", "screenshot"],
+  ["run shell command sdb devices", "shell-command"],
+  ["run shell command ls 디바이스 목록", "shell-command"],
   ["open an interactive shell", "shell-interactive"],
   ["log", "log-stream"],
   ["show dlog", "log-stream"],
@@ -65,6 +90,33 @@ const intentCases = [
 for (const [request, expectedId] of intentCases) {
   const m = matchIntent(request);
   check(`  "${request}"`, m && m.id, expectedId);
+}
+
+// Korean requests that only mention a device must not become list-devices
+for (const req of [
+  "디바이스 재부팅",
+  "연결된 디바이스 재부팅해줘",
+  "디바이스에 설치된 앱 목록",
+  "디바이스 찾기 실패 로그 보여줘",
+]) {
+  check(
+    `  "${req}" is not list-devices`,
+    matchIntent(req)?.id !== "list-devices",
+    true,
+  );
+}
+
+// Long whitespace runs must not trigger regex backtracking: with chained `\s*`
+// the Korean list-devices pattern took seconds on 160 spaces.
+for (const ws of [" ", "\n"]) {
+  const start = process.hrtime.bigint();
+  matchIntent("디바이스" + ws.repeat(10000) + "x");
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  check(
+    `  10000 × ${JSON.stringify(ws)} after a device noun classifies under 50 ms`,
+    ms < 50,
+    true,
+  );
 }
 
 // Gating / handoff flags
