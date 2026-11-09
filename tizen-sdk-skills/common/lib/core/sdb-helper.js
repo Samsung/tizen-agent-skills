@@ -41,10 +41,15 @@ const execFileAsync = promisify(execFile);
  * Order matters: first match wins.
  */
 const INTENT_PATTERNS = [
-  // Discovery — handoff to tizen-device-manager (richer: emulator fallback)
+  // Discovery — handoff to tizen-device-manager (richer: emulator fallback).
+  // Also the literal "sdb devices" and Korean phrasings ("디바이스 목록",
+  // "연결된 기기"): unmatched, they failed with "Could not match request",
+  // which agents relayed as "no device connected". `\b` is ASCII-only in JS,
+  // so the Korean branches carry no word boundaries.
   {
     id: "list-devices",
-    regex: /\b(list|show|find).*(devices?|connected)\b/i,
+    regex:
+      /\b(list|show|find).*(devices?|connected)\b|\bsdb\s+devices\b|연결된\s*(디바이스|기기|장치)|(디바이스|기기|장치)\s*(목록|리스트|찾)/i,
     gated: false,
     handoff: "tizen-device-manager",
   },

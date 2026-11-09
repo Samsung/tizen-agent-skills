@@ -14,6 +14,14 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`sdb-helper` hands Korean device-list requests and `sdb devices` to
+  `tizen-device-manager`.** The `list-devices` intent matched English phrasings only, so
+  "sdb로 디바이스 목록 보여줘" or "sdb devices" failed with `Could not match request`, and
+  agents relayed that as "no device connected" while a Raspberry Pi 4 was attached. Asking
+  for `tizen-device-manager` by name was the only way to see it.
+
 ## [1.7.0] — 2026-11-03
 
 ### Changed

@@ -40,6 +40,13 @@ function check(name, actual, expected) {
 console.log("Test 1: matchIntent ordering");
 const intentCases = [
   ["list devices", "list-devices"],
+  // Literal command and Korean phrasings used to fall through to
+  // "Could not match request", relayed as "no device connected".
+  ["sdb devices", "list-devices"],
+  ["sdb로 디바이스 목록 보여줘", "list-devices"],
+  ["연결된 기기 확인해줘", "list-devices"],
+  ["장치 리스트", "list-devices"],
+  ["디바이스 찾아줘", "list-devices"],
   ["open an interactive shell", "shell-interactive"],
   ["log", "log-stream"],
   ["show dlog", "log-stream"],
@@ -65,6 +72,15 @@ const intentCases = [
 for (const [request, expectedId] of intentCases) {
   const m = matchIntent(request);
   check(`  "${request}"`, m && m.id, expectedId);
+}
+
+// Korean requests that only mention a device must not become list-devices
+for (const req of ["디바이스 재부팅", "디바이스에 설치된 앱 목록"]) {
+  check(
+    `  "${req}" is not list-devices`,
+    matchIntent(req)?.id !== "list-devices",
+    true,
+  );
 }
 
 // Gating / handoff flags

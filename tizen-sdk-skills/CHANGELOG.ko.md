@@ -13,6 +13,13 @@
 
 ## [Unreleased]
 
+### 수정
+
+- **`sdb-helper`가 한국어 디바이스 목록 요청과 `sdb devices`를 `tizen-device-manager`로 넘깁니다.**
+  `list-devices` 의도가 영어 문장만 인식해서 "sdb로 디바이스 목록 보여줘"나 "sdb devices"는
+  `Could not match request`로 실패했고, 에이전트는 Raspberry Pi 4가 연결되어 있는데도 이를
+  "연결된 디바이스가 없습니다"로 전달했습니다. `tizen-device-manager`를 직접 지정해야만 보였습니다.
+
 ## [1.7.0] — 2026-11-03
 
 ### 변경
