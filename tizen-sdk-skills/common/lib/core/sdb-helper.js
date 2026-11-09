@@ -225,10 +225,12 @@ const INTENT_PATTERNS = [
   // connected". Last and anchored, so a request that only mentions a device
   // ("reboot the 연결된 기기", "run shell command sdb devices") keeps its
   // own intent. `\b` is ASCII-only in JS, so the Korean branch has none.
+  // matchIntent() collapses whitespace first, so each separator is ` ?`:
+  // chained `\s*` here backtracked polynomially on long whitespace runs.
   {
     id: "list-devices",
     regex:
-      /^\s*sdb\s+devices\b|^\s*(?:sdb\s*(?:로|으로)?\s*)?(?:(?:현재\s*)?연결된\s*)?(?:디바이스|기기|장치)\s*(?:목록|리스트)?\s*(?:을|를|좀)?\s*(?:(?:보여|알려|찾아|확인\s*해|조회\s*해)\s*(?:줘|주세요|줄래)?|확인|조회)?\s*[.?!]*\s*$/i,
+      /^sdb devices\b|^(?:sdb ?(?:로|으로)? ?)?(?:(?:현재 ?)?연결된 ?)?(?:디바이스|기기|장치) ?(?:목록|리스트)? ?(?:을|를|좀)? ?(?:(?:보여|알려|찾아|확인 ?해|조회 ?해) ?(?:줘요|줘|주세요|줄래)?|볼래|확인|조회)? ?[.?!]*$/i,
     gated: false,
     handoff: "tizen-device-manager",
   },
@@ -240,8 +242,10 @@ const INTENT_PATTERNS = [
  * @returns {{id: string, gated: boolean, handoff?: string, handoffHint?: string}|null}
  */
 function matchIntent(request) {
+  // Classification only — callers keep the original request for buildCommand().
+  const text = request.trim().replace(/\s+/g, " ");
   for (const pattern of INTENT_PATTERNS) {
-    if (pattern.regex.test(request)) {
+    if (pattern.regex.test(text)) {
       const intent = {
         id: pattern.id,
         gated: pattern.gated,

@@ -55,6 +55,9 @@ const intentCases = [
   ["연결된 장치 찾아주세요", "list-devices"],
   ["디바이스 목록 조회", "list-devices"],
   ["디바이스 목록 보여줄래?", "list-devices"],
+  ["디바이스 목록 보여줘요", "list-devices"],
+  ["디바이스 목록 볼래", "list-devices"],
+  ["  연결된   기기\n목록  ", "list-devices"],
   // A request that only mentions a device keeps the intent it had before
   // the Korean list-devices entry existed (that entry is last and anchored).
   ["reboot the 연결된 기기", "reboot"],
@@ -99,6 +102,19 @@ for (const req of [
   check(
     `  "${req}" is not list-devices`,
     matchIntent(req)?.id !== "list-devices",
+    true,
+  );
+}
+
+// Long whitespace runs must not trigger regex backtracking: with chained `\s*`
+// the Korean list-devices pattern took seconds on 160 spaces.
+for (const ws of [" ", "\n"]) {
+  const start = process.hrtime.bigint();
+  matchIntent("디바이스" + ws.repeat(10000) + "x");
+  const ms = Number(process.hrtime.bigint() - start) / 1e6;
+  check(
+    `  10000 × ${JSON.stringify(ws)} after a device noun classifies under 50 ms`,
+    ms < 50,
     true,
   );
 }
