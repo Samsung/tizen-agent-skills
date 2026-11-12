@@ -209,33 +209,17 @@ tizen-cli tizen-sdk emulator-manager --action create-image --vm-name my-vm --out
 - Failure: em-cli errors — surface `message`; a missing `--size` returns `user_input_required` and an unsupported one returns `invalid_parameters`, both listing the supported sizes (ask the user, then retry); SDK not installed → run `sdk-install` first; TV SDK not installed → run `tizen-tv-sdk-install`.
 - `size_applied: false` means em-cli rejected the template and the VM was created at em-cli's own size — tell the user, and point at the `em-cli modify` command in the warnings.
 
-## Apple Silicon (ARM64) Macs: TV emulator must use the v2 stack + VirGL (create + direct --conf launch)
+## Apple Silicon (ARM64) Macs: TV emulator
 
 On Apple Silicon Macs (M1/M2/M3…) a TV (`tv-samsung`) emulator VM **can be created** through
-em-cli, but `create --launch` / `tizen-launch-emulator` **cannot boot it**: em-cli's
-`checkVTProperty` (em-lib.jar, verified in bytecode) throws `CPUVT.Invalid`
-("Your system cannot support HW virtualization") for image version >= 3.0 whenever HAXM is
-absent — and HAXM is Intel-only, so it is always absent on ARM Macs. `hwVirtualization=false`
-in the VM config does NOT bypass the check.
+em-cli, but em-cli **cannot boot it**: `create --launch` and `tizen-launch-emulator` fail with
+`TIZEN_SDK_EMULATOR_E003` ("Your system cannot support HW virtualization"), because em-cli
+requires HAXM for image version >= 3.0 and HAXM is Intel-only. The image is fine.
 
-On ARM Macs, create the VM without `--launch`, then boot it with the platform's
-**emulator-v2 stack (QEMU 9.x with VirGL) directly via `--conf`** — em-cli never executes:
-
-- QEMU binary: `<sdk>/platforms/tizen-10.0/tv-samsung/emulator-v2/bin/emulator-x86_64`
-- Base image: `.../emulator-images-v2/tv-samsung-10.0-x86_64/emulimg-10.0.x86_64`
-  (NOT the v1 `emulator-images/`; recreate the child image against it with
-  `qemu-img create -f qcow2 -b <base> -F qcow2 <child>`)
-- kernel/bios: `emulator-v2/data/kernel/bzImage.x86_64` + `emulator-v2/data/bios`
-- Required QEMU options (VirGL ON + TCG): `-accel tcg,thread=multi`,
-  `-device virtio-vga-gl,xres=1920,yres=1080`, `-display sdl,gl=on`, `-cpu max`
-  (`-cpu max` is mandatory — default `qemu64` kernel-panics the guest with "invalid opcode";
-  only the v2 QEMU 9.x supports it), and keep `force_pat` in `append`
-- After a fresh SDK/ZIP install clear Gatekeeper: `chmod -R u+w <emulator-v2 dir> &&
-  xattr -dr com.apple.quarantine <emulator-v2 dir>` (otherwise `zsh: killed`)
-
-Verified on an M2 MacBook Pro: guest boots and `sdb devices` shows the VM. Known-good
-reference conf: `~/.tizen-extension-platform/server/sdktools/sdk-data/emulator/vms/TV-12112026-01/vm_launch.conf`;
-ready launcher: `~/.tizen/scripts/launch-tv-emulator.sh` (if present).
+On an ARM Mac, create the TV VM **without `--launch`**, then boot it with the steps in
+[`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)
+(emulator-v2 QEMU with VirGL, started directly with `--conf`). Tell the user why: em-cli's HAXM
+check, not a missing image.
 
 ## Scope: create-emulator vs launch-emulator vs device-manager
 
