@@ -315,7 +315,7 @@ function makeReportedSdk(root) {
             JSON.stringify(other.errors?.[0]?.suggested_fix || ""),
           ),
         ],
-        ["failure", true],
+        ["needs_action", true],
       );
       const bad = await installTvSdkFromZip(zip9, false, "t", "9;rm");
       check(

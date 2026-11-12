@@ -446,9 +446,14 @@ try {
         // URL and version, without --force (disk check stubbed out).
         const fresh = precheckWithoutDiskCheck("repo", repoUrl);
         check(
-          "custom repo, not installed → execution_error",
+          "custom repo, not installed → needs_action status",
+          fresh.status,
+          "needs_action",
+        );
+        check(
+          "custom repo, not installed → install_required category",
           fresh.errors?.[0]?.error_category,
-          "execution_error",
+          "install_required",
         );
         check(
           "custom repo, not installed → re-run with the same URL and version, without --force",
@@ -487,7 +492,7 @@ try {
     }
     for (const v of ["9.0", "11.0"]) {
       const env = await installPlatform(v);
-      check(`${v} → failure (install needed)`, env.status, "failure");
+      check(`${v} → needs_action (install needed)`, env.status, "needs_action");
       // The installer command is OS-specific: PowerShell flags on win32,
       // long options elsewhere (installPlatform builds both lists).
       check(
@@ -502,7 +507,7 @@ try {
     }
     {
       const env = await installPlatform("10.0", true);
-      check("--force on 10.0 → install command", env.status, "failure");
+      check("--force on 10.0 → install command", env.status, "needs_action");
       check(
         "--force reaches the installer",
         String(env.errors[0].suggested_fix.command).includes(

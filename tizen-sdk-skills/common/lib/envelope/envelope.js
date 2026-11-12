@@ -53,6 +53,26 @@ class Envelope {
   }
 
   /**
+   * Pre-check handoff outcome: the pre-check itself PASSED (Node.js, disk
+   * space, installed-check) and the next step is for the caller to run the
+   * installer command carried in suggested_fix. Nothing failed, so the status
+   * is "needs_action" instead of "failure" — the shape (errors[] with
+   * error_code/category/message/suggested_fix) is identical to failure(),
+   * only the status label differs.
+   */
+  needsAction(errors) {
+    const errorArray = Array.isArray(errors) ? errors : [errors];
+    const duration = Date.now() - this.startTime;
+
+    return {
+      status: "needs_action",
+      errors: errorArray.map((e) => this._normalizeError(e)),
+      command: this.command,
+      duration_ms: duration,
+    };
+  }
+
+  /**
    * Normalize error object
    */
   _normalizeError(error) {
@@ -229,6 +249,17 @@ const ERROR_CODES = {
   EXECUTION_ERROR: {
     error_code: "TIZEN_SDK_EXEC_E001",
     error_category: "execution_error",
+  },
+  // 사전 확인(Pre-check) CLI의 설치 인계 상태. 사전 확인 자체는 통과했고
+  // (Node.js/디스크/설치 여부 확인 완료), 다음 단계로 suggested_fix에 담긴
+  // 설치기 명령을 실행하면 된다는 뜻이다. execution_error와 분리하는 이유:
+  // 무언가 실패한 게 아니라 의도된 정상 흐름이라, Envelope status를 failure가
+  // 아닌 needs_action으로 보고하기 위함이다 (인계 대상: installSdk,
+  // installTvSdk, installTvSdkFromZip, installFromRepo, emulator/mobile/
+  // platform/rootstrap 패키지 사전 확인들).
+  INSTALL_REQUIRED: {
+    error_code: "TIZEN_SDK_PRECHECK_E001",
+    error_category: "install_required",
   },
   // em-cli (emulator-manager core)와 플랫폼 emulator 플러그인의 버전 불일치
   // (NoSuchFieldError/NoSuchMethodError, 실사례 isVirgl). 실행은 되었지만
