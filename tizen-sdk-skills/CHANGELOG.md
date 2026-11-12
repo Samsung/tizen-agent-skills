@@ -20,8 +20,9 @@ below use those release tags.
   ARM Mac: it requires HAXM for image version 3.0 and later, and HAXM is Intel-only.
   `tizen-launch-emulator` now documents a launch path that works there: the platform's
   emulator-v2 QEMU 9.x with VirGL, started directly with `--conf`. It covers rebasing the disk
-  on the v2 base image, the launch conf changes (`-cpu max` is required), and clearing
-  Gatekeeper with the user's consent. `tizen-create-emulator` points to it. Verified for Tizen
+  on the v2 base image, generating the launch conf from the new
+  `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template` (`-cpu max` is required), and
+  clearing Gatekeeper with the user's consent. `tizen-create-emulator` points to it. Verified for Tizen
   10.0 on an M2 MacBook Pro.
 
 ### Changed
