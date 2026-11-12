@@ -1,17 +1,20 @@
 # Tizen TV emulator launch conf template — Apple Silicon (TCG + VirGL)
 #
-# Derived from an em-cli-generated vm_launch.conf (T-samsung-10.0-x86_64,
-# TV SDK 10.0, verified booting on an arm64 Mac with the emulator-v2 stack).
+# Derived from an em-cli-generated vm_launch.conf for a Tizen 10.0 tv-samsung
+# VM, verified booting on an arm64 Mac with the emulator-v2 stack.
 # Use this to bypass em-cli on Apple Silicon: em-cli's checkVTProperty throws
 # CPUVT.Invalid on macOS without HAXM (Intel-only), so the v2 QEMU stack must
-# be launched directly with -conf.
+# be launched directly with --conf.
 #
 # Placeholders (substitute with sed before use):
 #   __VM_NAME__        VM name (e.g. TV-1080) — also used for image/log file names
 #   __SDK_PATH__       Tizen SDK path (e.g. /Users/<u>/tizen-sdk)
 #   __SDK_DATA_PATH__  Tizen SDK data path (e.g. /Users/<u>/tizen-sdk-data)
 #
-# See vm_launch-tv-v2.README.md for the full generation/launch procedure.
+# The tizen-10.0 paths, image_ver and platform_version are for Tizen 10.0;
+# see vm-launch-tv-v2.md before using another version.
+#
+# See vm-launch-tv-v2.md for the full generation/launch procedure.
 
 # Character encoding : utf8
 
@@ -37,6 +40,8 @@ kernel_log="${vms_path}/${vm_name}/logs/emulator.klog"
 tuner_table_path="${vms_path}/${vm_name}/tuner_default.cfg"
 still_image_path="__SDK_PATH__/platforms/tizen-10.0/tv-samsung/emulator-resources/images"
 wsi=vigs_wsi
+# host_ip is QEMU user-mode networking's fixed address for the host (the
+# guest-side gateway), not an address on any real network.
 host_ip=10.0.2.2
 image_ver=10.0.6
 profile=tv-samsung

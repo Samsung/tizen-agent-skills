@@ -130,64 +130,31 @@ real path before you run or show a command.
      -b "<v2 base image>" -F qcow2 "<vms>/<vm>/emulimg-<vm>.x86_64"
    ```
 
-3. **Write a v2 launch conf.** Copy `<vms>/<vm>/vm_launch.conf` to
-   `<vms>/<vm>/vm_launch-v2.conf` and change it:
-   - `[[VARIABLES]]`: `bios_path="<v2>/data/bios"` and
-     `kernel="<v2>/data/kernel/bzImage.${image_arch}"`. Keep `force_pat` in `append`.
-   - `[[QEMU_OPTIONS]]`: remove the lines that set the accelerator, CPU model, display or GPU
-     device, and make sure these are present:
+3. **Generate a v2 launch conf from the template.** Do not edit em-cli's `vm_launch.conf`;
+   write a separate `<vms>/<vm>/vm_launch-v2.conf`.
+   The template ships with the tizen-sdk plugin at
+   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template`, in the plugin's install
+   folder (the `dist/` folder that holds `tizen-sdk.js`).
 
-     ```text
-     -accel tcg,thread=multi
-     -device virtio-vga-gl,xres=1920,yres=1080
-     -cpu max
-     -vga none
-     -display sdl,gl=on
-     ```
-
-     `-cpu max` is mandatory: the default `qemu64` model kernel-panics the guest with
-     "invalid opcode" in ld-linux, and even `-cpu Broadwell` still segfaults launchpad. It only
-     exists in the v2 QEMU 9.x — the old 2.8 `emulator/` binary rejects it. Match `xres`/`yres`
-     to `display_resolution`.
-
-   The complete `[[QEMU_OPTIONS]]` block that booted on the reference Mac (comment lines
-   dropped) — use it to check the result:
-
-   ```text
-   -drive ${drive},id=drive
-   -device virtio-blk-pci,drive=drive
-   -drive ${swap},id=swap
-   -device virtio-blk-pci,drive=swap
-   -accel tcg,thread=multi
-   -device virtio-vga-gl,xres=1920,yres=1080
-   -smp ${process_num}
-   -m ${ram}
-   -netdev user,id=net0
-   -device virtio-net-pci,netdev=net0
-   -device maru-virtual-tuner,system=ATSC,country=USA,table=${tuner_table_path},stillimg=${still_image_path},wsi=${wsi}
-   -chardev file,path=${kernel_log},id=con0
-   -device isa-serial,chardev=con0
-   -device virtio-serial
-   -cpu max
-   -L ${bios_path}
-   -kernel ${kernel}
-   -append ${append}
-   -device virtio-maru-touchscreen-pci,max_point=${max_point}
-   -nodefaults
-   -device virtio-maru-hwkey-pci
-   -device virtio-maru-evdi-pci
-   -device virtio-maru-motor-pci
-   -device virtio-maru-keyboard-pci
-   -rtc base=utc
-   -M maru-x86-machine
-   -audiodev coreaudio,id=snd0
-   -device intel-hda
-   -device hda-duplex,audiodev=snd0
-   -usb
-   -vga none
-   -device maru-external-input-pci,stillimg=${still_image_path},wsi=${wsi}
-   -display sdl,gl=on
+   ```bash
+   sed -e "s/__VM_NAME__/<vm>/g" \
+       -e "s|__SDK_PATH__|<sdk>|g" \
+       -e "s|__SDK_DATA_PATH__|<sdk-data>|g" \
+       "$TEMPLATE" > "<vms>/<vm>/vm_launch-v2.conf"
    ```
+
+   `<sdk-data>` is the SDK data folder (the parent of `emulator/vms`). The template's paths,
+   `image_ver` and `platform_version` are for Tizen 10.0; for another version, change them as
+   `scripts/tizen-emulator-manager/vm-launch-tv-v2.md` describes. The template already contains the
+   options Apple Silicon needs: `-accel tcg,thread=multi`,
+   `-device virtio-vga-gl,xres=1920,yres=1080`, `-cpu max`, `-display sdl,gl=on`, and
+   `force_pat` in `append`. Do not remove `-cpu max`: the default `qemu64` model kernel-panics
+   the guest with "invalid opcode" in ld-linux, and even `-cpu Broadwell` still segfaults
+   launchpad.
+
+   The conf needs `swap-<vm>.img` and `tuner_default.cfg` in the VM folder. em-cli creates
+   both in step 1; if either is missing, create it as `scripts/tizen-emulator-manager/vm-launch-tv-v2.md` describes (the tuner table comes
+   from the platform's `emulator-resources/tuner-template/`).
 
 4. **Gatekeeper (only when needed, and only with the user's consent).** After a fresh SDK or
    ZIP install the v2 binaries can still carry macOS's download quarantine, and the launch dies
