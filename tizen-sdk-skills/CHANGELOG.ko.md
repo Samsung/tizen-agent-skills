@@ -13,7 +13,20 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **사전 확인이 설치기로 넘길 때 `status: "needs_action"`을 보고합니다.** 사전 확인은 통과했고
+  설치기 실행만 남은 경우(SDK, TV SDK, 사용자 지정 저장소, 에뮬레이터, 플랫폼, 모바일 플랫폼,
+  rootstrap) 지금까지는 `execution_error`와 함께 `failure`로 보고했습니다. 이제 새 카테고리
+  `install_required`(`TIZEN_SDK_PRECHECK_E001`)와 함께 `needs_action`으로 보고합니다.
+  `errors[]`와 `suggested_fix` 형태는 같고 종료 코드도 그대로 `1`입니다. skill과 agent 문서는
+  `needs_action`이면 `suggested_fix.command`를 실행하라고 안내합니다.
+
 ### 수정
+
+- **UTF-8 BOM이 있는 플랫폼 설치 기록을 macOS에서도 제대로 읽습니다.** UTF-8 로케일에서는
+  BSD awk가 BOM 바이트를 매칭하지 못해 BOM이 남았습니다. 이제 awk 프로그램을 `LC_ALL=C`로 실행하고
+  앞의 세 바이트를 문자열로 비교합니다.
 
 - **`sdb-helper`가 한국어 디바이스 목록 요청과 `sdb devices`를 `tizen-device-manager`로 넘깁니다.**
   `list-devices` 의도가 영어 문장만 인식해서 "sdb로 디바이스 목록 보여줘"나 "sdb devices"는

@@ -89,7 +89,7 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
     // 4-4️⃣ Phase 2(백그라운드 설치)용 설치 명령 반환
     return formatError(
       command,
-      'execution_error',
+      'install_required',
       'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
         harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
         sdkPrecheckRerunHint('…'),    // 같은 버전으로, --force 없이 재실행하라는 안내
@@ -201,7 +201,7 @@ tizen-sdk-install 에이전트 (Claude Code / Codex / Gemini CLI) 또는 스킬 
   ├─ Phase 1 — 사전 점검
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
   │      버전 형식 → Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간 (15 GB)
-  │    ← 실패 Envelope (execution_error), suggested_fix.command에 설치 명령
+  │    ← needs_action Envelope (install_required), suggested_fix.command에 설치 명령
   │
   ├─ Phase 2 — 백그라운드 설치 (10–15분, 약 121개 패키지)
   │    하네스가 suggested_fix 실행 — tizen-sdk-install.sh --path "<sdk>" --platform "10.0" --download-jobs 4
@@ -227,7 +227,7 @@ tizen-sdk-install 에이전트 (Claude Code / Codex / Gemini CLI) 또는 스킬 
 ```
 t=0s          사용자 입력, 에이전트 시작
 t≈1s          Phase 1: installSdk() 사전 점검
-t≈2s            ← 설치 명령이 담긴 execution_error Envelope
+t≈2s            ← 설치 명령이 담긴 needs_action Envelope
 t≈2s          Phase 2: 설치 스크립트가 백그라운드에서 실행
 t≈10–15분       ← 설치 스크립트 종료 코드 0 (sdk.info 기록)
               Phase 3: installSdk() 사전 점검 재실행
@@ -295,7 +295,7 @@ async function installSdk(version) {
   }
   // 3. 디스크 공간 확인
   // 4. 미설치: 설치 명령 반환 (Phase 2에서 백그라운드로 실행)
-  return formatError('tizen-sdk sdk-install', 'execution_error', 'SDK is NOT installed…', installerCommand);
+  return formatError('tizen-sdk sdk-install', 'install_required', 'SDK is NOT installed…', installerCommand);
 }
 
 // ===== formatSdkInstall() (lib/envelope/response-formatter.js) =====

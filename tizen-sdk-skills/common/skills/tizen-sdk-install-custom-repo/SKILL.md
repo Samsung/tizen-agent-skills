@@ -160,13 +160,13 @@ Optional: `node "$CLI" --repo-url "<url>" --platform-version 11.0 --force --down
 `--download-jobs` = concurrent download jobs, 1-8, default 4).
 
 Exit code: `0` = success (SDK already installed — **read the warnings**, see below),
-`1` = not installed yet or URL rejected. Inspect `errors[0].error_category`:
+`1` = not installed yet (`status: "needs_action"`) or URL rejected (`status: "failure"`). Inspect `errors[0].error_category`:
 
 | `error_category`       | Meaning                                            | What to do                                        |
 | ---------------------- | -------------------------------------------------- | ------------------------------------------------- |
 | `repo_url_invalid`     | Malformed URL / wrong scheme / points at pkg_list  | Ask the user for the repository **directory** URL |
 | `repo_url_unreachable` | Well-formed, but no `pkg_list_{OS}-{64,32}` served | Wrong URL, or internal mirror needs VPN/proxy     |
-| `execution_error`      | URL is valid, SDK not installed                    | Run `suggested_fix.command` (Phase 2)             |
+| `install_required`     | URL is valid, SDK not installed                    | Run `suggested_fix.command` (Phase 2)             |
 
 ### installSdkFromRepo() Flow
 

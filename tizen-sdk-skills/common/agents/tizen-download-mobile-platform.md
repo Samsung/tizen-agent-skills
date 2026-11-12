@@ -125,14 +125,14 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 }
 ```
 
-**Failure (needs download):**
+**Needs action (needs download):**
 ```json
 {
-  "status": "failure",
+  "status": "needs_action",
   "errors": [
     {
-      "error_code": "TIZEN_SDK_E006",
-      "error_category": "execution_error",
+      "error_code": "TIZEN_SDK_PRECHECK_E001",
+      "error_category": "install_required",
       "message": "Mobile platform package is NOT installed. This pre-check CLI cannot install it. Run the suggested_fix command..."
     }
   ],

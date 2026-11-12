@@ -747,7 +747,7 @@ platform_installed() {
 platform_record_blocks() {
   local f="$1/.platform-installed"
   [[ -f "$f" ]] || return 0
-  awk '
+  LC_ALL=C awk '
     function flush() {
       if (inblock && ver ~ /^[0-9]+\.[0-9]+$/) {
         if (prof == "") prof = (target ~ /^[Tt][Vv]-/) ? "tv-samsung" : "tizen"
@@ -755,7 +755,11 @@ platform_record_blocks() {
       }
       ver = ""; prof = ""; target = ""; by = ""
     }
-    NR == 1 { sub(/^\357\273\277/, "") }
+    # Strip a UTF-8 BOM (PowerShell 5.1 Add-Content). LC_ALL=C on the awk
+    # call makes every awk read bytes: in a UTF-8 locale BSD awk (macOS)
+    # never matches the BOM bytes, and gawk reads the 3-byte BOM as one
+    # character, so substr() would not see three bytes.
+    NR == 1 { if (substr($0, 1, 3) == "\357\273\277") $0 = substr($0, 4) }
     { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
     /^Platform package installed at/ { flush(); inblock = 1; next }
     !inblock { next }

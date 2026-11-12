@@ -148,12 +148,14 @@ const ON_DISK_NOTE =
       assert.strictEqual(comparePlatformVersions("10.0", "10.0"), 0);
     });
 
-    console.log("\n=== marker missing → failure carries the on-disk scan ===");
+    console.log(
+      "\n=== marker missing → needs_action carries the on-disk scan ===",
+    );
 
-    await test("status failure with suggested_fix, not success", async () => {
+    await test("status needs_action with suggested_fix, not failure", async () => {
       const env = await downloadEmulatorPackage("");
-      assert.strictEqual(env.status, "failure");
-      assert.strictEqual(env.errors[0].error_category, "execution_error");
+      assert.strictEqual(env.status, "needs_action");
+      assert.strictEqual(env.errors[0].error_category, "install_required");
       assert.ok(env.errors[0].suggested_fix?.command, "suggested_fix.command");
     });
 
@@ -218,9 +220,9 @@ const ON_DISK_NOTE =
       "\n=== marker records 11.0 only → explicit 10.0 falls through, scan intact ===",
     );
 
-    await test("10.0 not recorded → failure, but details show the 10.0 images on disk", async () => {
+    await test("10.0 not recorded → needs_action, but details show the 10.0 images on disk", async () => {
       const env = await downloadEmulatorPackage("10.0");
-      assert.strictEqual(env.status, "failure");
+      assert.strictEqual(env.status, "needs_action");
       assert.ok(env.errors[0].suggested_fix?.command.includes("10.0"));
       assert.deepStrictEqual(env.errors[0].details, EXPECTED_DETAILS);
       assert.ok(env.errors[0].message.includes(ON_DISK_NOTE));
@@ -230,7 +232,7 @@ const ON_DISK_NOTE =
 
     await test("force → not-installed path with the same details", async () => {
       const env = await downloadEmulatorPackage("", true);
-      assert.strictEqual(env.status, "failure");
+      assert.strictEqual(env.status, "needs_action");
       assert.deepStrictEqual(env.errors[0].details, EXPECTED_DETAILS);
     });
 
@@ -247,10 +249,10 @@ const ON_DISK_NOTE =
       assert.ok(env.warnings[0].includes("Emulator images on disk: none."));
     });
 
-    await test("marker absent, no images → failure, no details, 'none' in message", async () => {
+    await test("marker absent, no images → needs_action, no details, 'none' in message", async () => {
       fs.rmSync(marker, { force: true });
       const env = await downloadEmulatorPackage("");
-      assert.strictEqual(env.status, "failure");
+      assert.strictEqual(env.status, "needs_action");
       // An empty diagnostic list is dropped by Envelope — the message says it.
       assert.strictEqual(env.errors[0].details, undefined);
       assert.ok(

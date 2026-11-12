@@ -81,6 +81,10 @@ The Standard JSON Envelope standardizes all `tizen-sdk` command responses into a
 | `.suggested_fix.auto_fixable` | boolean | Whether auto-fix is possible |
 | `.suggested_fix.guide_url` | string | Help doc URL |
 
+### Needs-Action Response
+
+A pre-check that passed but still needs its installer run returns `status: "needs_action"` instead of `failure`. The shape is the same as a failure response: `errors[0]` has `error_category: "install_required"` (`TIZEN_SDK_PRECHECK_E001`), and `suggested_fix.command` is the installer to run next. Nothing failed, so run that command rather than reporting an error. The process still exits with code `1`, because only `success` exits with `0`.
+
 ### `command` vs `user_command`
 
 The two fields differ **on purpose**.
@@ -169,6 +173,7 @@ formatDeviceList([{ device_id: 'emulator-26101', device_name: 'Tizen 10.0 Mobile
 | `io_error` | TIZEN_SDK_IO_E001 | File I/O error |
 | `permission_denied` | TIZEN_SDK_IO_E002 | Write refused (EACCES / Access is denied) |
 | `remote_path_not_found` | TIZEN_SDK_IO_E003 | Device-side path does not exist (file-transfer pull) — do not retry the same path |
+| `install_required` | TIZEN_SDK_PRECHECK_E001 | Pre-check passed; run `suggested_fix.command` to install (`status: "needs_action"`) |
 
 ---
 

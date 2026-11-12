@@ -200,7 +200,7 @@ tizen-cli tizen-sdk sdk-repo-info
 | `TIZEN_SDK_REPO_E001` | `repo_url_invalid`     | Missing/empty URL, non-`http(s)` scheme, malformed URL, or the URL points at the `pkg_list` file | Pass the **directory** URL that contains the pkg_list           |
 | `TIZEN_SDK_REPO_E002` | `repo_url_unreachable` | Well-formed URL, but no `pkg_list_{OS}-{64,32}` could be fetched            | Wrong URL, or an internal mirror unreachable without VPN/proxy   |
 | `TIZEN_SDK_SCRIPT_E001` | `script_not_found`   | Installer script missing from the plugin cache                               | Re-run the setup script to sync `scripts/`                       |
-| `TIZEN_SDK_EXEC_E001` | `execution_error`      | URL valid, SDK not installed (this is the normal Phase-1 result)             | Run `errors[0].suggested_fix.command` (Phase 2)                  |
+| `TIZEN_SDK_PRECHECK_E001` | `install_required`   | URL valid, SDK not installed (this is the normal Phase-1 result)             | Run `errors[0].suggested_fix.command` (Phase 2)                  |
 
 `errors[0].details` carries the last lines of the validation probe, including every URL it
 tried — quote those when reporting a rejection to the user.

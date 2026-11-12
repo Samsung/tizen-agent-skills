@@ -87,7 +87,7 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
     // 4-4️⃣ Return installer command for Phase 2 (background install)
     return formatError(
       command,
-      'execution_error',
+      'install_required',
       'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
         harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
         sdkPrecheckRerunHint('…'),    // re-run with the same version, without --force
@@ -209,7 +209,7 @@ tizen-sdk-install agent
   ├─ Phase 1: node sdk-install-cli.js 10.0
   │    installSdk('10.0', 'tizen')      ← caller: the CLI runner
   │      version syntax → Node.js check → already installed? (no) → disk space
-  │    ← execution_error envelope; suggested_fix.command = installer
+  │    ← needs_action envelope (install_required); suggested_fix.command = installer
   │
   ├─ Phase 2: installer in the background (10–15 min) — Claude Code runs
   │    suggested_fix.command with run_in_background; Cline and other hosts

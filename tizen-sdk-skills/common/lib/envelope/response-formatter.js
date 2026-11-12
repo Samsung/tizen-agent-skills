@@ -625,7 +625,7 @@ function formatError(
         ? { command: suggestedCommand }
         : null;
 
-  return envelope.failure({
+  const errorPayload = {
     error_code: errorDef.error_code,
     error_category: errorDef.error_category,
     message,
@@ -642,7 +642,14 @@ function formatError(
               : {}),
           }
         : errorDef.suggested_fix,
-  });
+  };
+
+  // "install_required"는 사전 확인 통과 후 설치기로 인계하는 정상 흐름이다.
+  // 무언가 실패한 게 아니므로 failure 대신 needs_action으로 보고한다.
+  if (errorCategory === "install_required") {
+    return envelope.needsAction(errorPayload);
+  }
+  return envelope.failure(errorPayload);
 }
 
 module.exports = {

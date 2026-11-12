@@ -82,6 +82,10 @@ Standard JSON Envelope는 모든 `tizen-sdk` 명령어의 응답을 **결정적�
 | `.suggested_fix.auto_fixable` | boolean | 자동 수정 가능 여부 |
 | `.suggested_fix.guide_url` | string | 도움말 문서 URL |
 
+### 조치 필요 응답
+
+사전 확인(pre-check)은 통과했지만 설치기를 아직 실행해야 하는 경우에는 `failure` 대신 `status: "needs_action"`을 반환합니다. 형태는 실패 응답과 같습니다. `errors[0]`의 `error_category`는 `"install_required"`(`TIZEN_SDK_PRECHECK_E001`)이고, `suggested_fix.command`에 다음에 실행할 설치기 명령이 들어 있습니다. 실패가 아니므로 에러로 보고하지 말고 그 명령을 실행하세요. `success`일 때만 종료 코드가 `0`이므로 이 경우에도 프로세스는 `1`로 종료합니다.
+
 ### `command` vs `user_command`
 
 두 필드는 **의도적으로 다릅니다**.
@@ -226,6 +230,7 @@ console.log(JSON.stringify(
 | `io_error` | TIZEN_SDK_IO_E001 | 파일 I/O 에러 |
 | `permission_denied` | TIZEN_SDK_IO_E002 | 쓰기 거부 (EACCES / Access is denied) |
 | `remote_path_not_found` | TIZEN_SDK_IO_E003 | 디바이스 쪽 경로가 존재하지 않음 (file-transfer pull) — 같은 경로로 재시도 금지 |
+| `install_required` | TIZEN_SDK_PRECHECK_E001 | 사전 확인 통과, `suggested_fix.command`로 설치 진행 (`status: "needs_action"`) |
 
 ---
 

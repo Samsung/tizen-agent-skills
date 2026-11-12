@@ -100,21 +100,17 @@ C:\Downloads\custom-arm-rootstrap.zip 에서 커스텀 루트스트랩 설치해
 tizen-cli tizen-sdk install-rootstrap --zip-path "C:\Downloads\custom-arm-rootstrap.zip"
 ```
 
-**성공 확인 (루트스트랩이 아직 설치되지 않은 경우):** 사전 확인이 `suggested_fix` 명령을 반환합니다:
+**사전 확인 결과 (루트스트랩이 아직 설치되지 않은 경우):** 사전 확인이 `suggested_fix` 명령을 반환합니다. `tizen-cli`는 성공이 아닌 상태를 모두 `failure`로 보고하고, 플러그인 CLI는 이 인계를 `needs_action`으로 보고합니다:
 
 ```json
 {
-  "status": "error",
-  "result": {
-    "zip_path": "C:\\Downloads\\custom-arm-rootstrap.zip",
-    "zip_exists": true,
-    "rootstrap_installed": false
-  },
+  "status": "failure",
+  "result": null,
   "warnings": [],
   "errors": [
     {
-      "error_code": "TIZEN_ROOTSTRAP_EXEC_E001",
-      "error_category": "execution_error",
+      "error_code": "TIZEN_SDK_PRECHECK_E001",
+      "error_category": "install_required",
       "message": "Rootstrap not installed yet. Run the suggested fix command to install.",
       "suggested_fix": {
         "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\<username>\\.cline\\plugins\\cache\\tizen-platform\\tizen-sdk-skills\\v1.2.3\\scripts\\tizen-install-rootstrap\\tizen-install-rootstrap.ps1\" --zip-path \"C:\\Downloads\\custom-arm-rootstrap.zip\"",
