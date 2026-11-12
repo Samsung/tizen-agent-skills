@@ -18,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # the Node layer (sdk.js updatePackage) parses the "[OK] Update result: ..."
 # summary line from captured stdout — do not switch to the stderr log_* helpers.
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 
 # Package repository (base URL for pkg_list and binary zip)
 # During SDK install, a CDN mirror is selected by timezone and stored in

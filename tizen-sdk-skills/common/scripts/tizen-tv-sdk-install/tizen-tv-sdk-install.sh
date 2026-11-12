@@ -16,6 +16,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Shared helpers: get_sdk_path, pkg_os_base (lib/common.sh).
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 
 # TV SDK extension repository
 PKG_REPO="https://download.tizen.org/sdk/extensions/tv_extensions"

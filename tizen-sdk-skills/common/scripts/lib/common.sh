@@ -63,6 +63,24 @@ format_duration() {
   fi
 }
 
+# Scripts that use associative arrays (declare -A) need bash 4+, but macOS
+# ships bash 3.2 at /bin/bash (issue #127). Call right after sourcing this
+# file, before any declare -A: require_bash4 "$@"
+# On bash 3.2 it re-runs the script with a Homebrew bash 4+ when one exists
+# (PATH is left alone), otherwise it exits before anything is installed.
+require_bash4() {
+  [ "${BASH_VERSINFO[0]}" -ge 4 ] && return 0
+  local b
+  for b in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+    if [ -x "$b" ] && "$b" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
+      exec "$b" "$0" "$@"
+    fi
+  done
+  log_error "This script needs bash 4 or newer; ${BASH} is ${BASH_VERSION}."
+  log_error "On macOS, run 'brew install bash' and retry. PATH does not need to change."
+  exit 1
+}
+
 # ----------------------------------------------------------------------------
 # OS detection -> linux | mac | windows | unknown
 # (includes WSL subtype detection for WSL2: set DETECTED_WSL=1 if running in WSL)

@@ -28,6 +28,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Shared helpers: log_* (to stderr), get_sdk_path, pkg_os_base.
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 
 # Default values
 SDK_PATH=""
