@@ -747,7 +747,7 @@ platform_installed() {
 platform_record_blocks() {
   local f="$1/.platform-installed"
   [[ -f "$f" ]] || return 0
-  awk '
+  LC_ALL=C awk '
     function flush() {
       if (inblock && ver ~ /^[0-9]+\.[0-9]+$/) {
         if (prof == "") prof = (target ~ /^[Tt][Vv]-/) ? "tv-samsung" : "tizen"
@@ -757,7 +757,9 @@ platform_record_blocks() {
     }
     # Strip a UTF-8 BOM (PowerShell 5.1 Add-Content). String-compare with
     # octal escapes instead of a regex: regex octal escapes are a gawk
-    # extension that BSD awk (macOS) silently does not match.
+    # extension that BSD awk (macOS) silently does not match. LC_ALL=C on
+    # the awk call makes substr() count bytes, not characters, in gawk too:
+    # in a UTF-8 locale gawk reads the 3-byte BOM as one character.
     NR == 1 { if (substr($0, 1, 3) == "\357\273\277") $0 = substr($0, 4) }
     { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
     /^Platform package installed at/ { flush(); inblock = 1; next }
