@@ -93,6 +93,34 @@ a guest reboot. Tunables: `TIZEN_HOMESCREEN_CHECK` (`auto`|`force`|`off`),
 
 > **Note:** sdb is a tool which is located in <TIZEN_SDK>/tools
 
+## Apple Silicon (ARM64) Macs: TV emulator cannot be launched via em-cli — use the v2 stack + VirGL `--conf` path
+
+On Apple Silicon Macs (M1/M2/M3…) `tizen-launch-emulator` fails for TV (`tv-samsung`) VMs with
+`TIZEN_SDK_EMULATOR_E003` / "Your system cannot support HW virtualization". Root cause: em-cli's
+`checkVTProperty` (em-lib.jar, verified in bytecode) throws `CPUVT.Invalid` for image version
+>= 3.0 whenever HAXM is absent — and HAXM is Intel-only, so it is always absent on ARM Macs.
+`hwVirtualization=false` does NOT bypass the check. The TV image is genuinely x86_64 (kernel
+`bzImage.x86_64` is an x86 boot image; `file` on the qcow2 only shows the container).
+
+Working launch path on ARM Macs — boot with the platform's **emulator-v2 stack (QEMU 9.x with
+VirGL) directly via `--conf`** — em-cli never executes:
+
+- QEMU binary: `<sdk>/platforms/tizen-10.0/tv-samsung/emulator-v2/bin/emulator-x86_64`
+- Base image: `.../emulator-images-v2/tv-samsung-10.0-x86_64/emulimg-10.0.x86_64`
+  (NOT the v1 `emulator-images/`; if the child image was created against the v1 base, recreate it:
+  `qemu-img create -f qcow2 -b <v2 base> -F qcow2 <child>`)
+- kernel/bios: `emulator-v2/data/kernel/bzImage.x86_64` + `emulator-v2/data/bios`
+- Required QEMU options (VirGL ON + TCG): `-accel tcg,thread=multi`,
+  `-device virtio-vga-gl,xres=1920,yres=1080`, `-display sdl,gl=on`, `-cpu max`
+  (`-cpu max` is mandatory — default `qemu64` kernel-panics the guest with "invalid opcode";
+  only the v2 QEMU 9.x supports it), and keep `force_pat` in `append`
+- After a fresh SDK/ZIP install clear Gatekeeper: `chmod -R u+w <emulator-v2 dir> &&
+  xattr -dr com.apple.quarantine <emulator-v2 dir>` (otherwise `zsh: killed`)
+
+Verified on an M2 MacBook Pro: guest boots and `sdb devices` shows the VM. Known-good
+reference conf: `~/.tizen-extension-platform/server/sdktools/sdk-data/emulator/vms/TV-12112026-01/vm_launch.conf`;
+ready launcher: `~/.tizen/scripts/launch-tv-emulator.sh` (if present).
+
 ## Scope: launch-emulator vs device-manager vs create-emulator
 
 | Task | Use this skill (`tizen-launch-emulator`) | Use `tizen-device-manager` | Use `tizen-create-emulator` |
