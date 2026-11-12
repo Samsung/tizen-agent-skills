@@ -473,6 +473,18 @@ that one stays a `tizen-download-emulator-package` reinstall. Escape hatch: sett
 `TIZEN_EMCLI_GATE=off` skips the pre-create probe gate and lets the create proceed
 warn-only (the create-time crash is still classified as `TIZEN_SDK_EXEC_E002`).
 
+## Apple Silicon (ARM64) Macs: TV emulator
+
+On Apple Silicon Macs (M1/M2/M3…) a TV (`tv-samsung`) emulator VM **can be created** through
+em-cli, but em-cli **cannot boot it**: `create --launch` and `tizen-launch-emulator` fail with
+`TIZEN_SDK_EMULATOR_E003` ("Your system cannot support HW virtualization"), because em-cli
+requires HAXM for image version >= 3.0 and HAXM is Intel-only. The image is fine.
+
+On an ARM Mac, create the TV VM **without `--launch`**, then boot it with the steps in
+[`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)
+(emulator-v2 QEMU with VirGL, started directly with `--conf`). Tell the user why: em-cli's HAXM
+check, not a missing image.
+
 ## Scope: create-emulator vs launch-emulator vs device-manager
 
 | Task                                        | Use this skill (`tizen-create-emulator`) | Use `tizen-launch-emulator` | Use `tizen-device-manager` |

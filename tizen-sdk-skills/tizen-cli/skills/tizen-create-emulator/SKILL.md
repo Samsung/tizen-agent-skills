@@ -209,6 +209,18 @@ tizen-cli tizen-sdk emulator-manager --action create-image --vm-name my-vm --out
 - Failure: em-cli errors — surface `message`; a missing `--size` returns `user_input_required` and an unsupported one returns `invalid_parameters`, both listing the supported sizes (ask the user, then retry); SDK not installed → run `sdk-install` first; TV SDK not installed → run `tizen-tv-sdk-install`.
 - `size_applied: false` means em-cli rejected the template and the VM was created at em-cli's own size — tell the user, and point at the `em-cli modify` command in the warnings.
 
+## Apple Silicon (ARM64) Macs: TV emulator
+
+On Apple Silicon Macs (M1/M2/M3…) a TV (`tv-samsung`) emulator VM **can be created** through
+em-cli, but em-cli **cannot boot it**: `create --launch` and `tizen-launch-emulator` fail with
+`TIZEN_SDK_EMULATOR_E003` ("Your system cannot support HW virtualization"), because em-cli
+requires HAXM for image version >= 3.0 and HAXM is Intel-only. The image is fine.
+
+On an ARM Mac, create the TV VM **without `--launch`**, then boot it with the steps in
+[`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)
+(emulator-v2 QEMU with VirGL, started directly with `--conf`). Tell the user why: em-cli's HAXM
+check, not a missing image.
+
 ## Scope: create-emulator vs launch-emulator vs device-manager
 
 | Task                                        | Use this skill (`tizen-create-emulator`) | Use `tizen-launch-emulator` | Use `tizen-device-manager` |

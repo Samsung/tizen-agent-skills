@@ -199,6 +199,92 @@ plus a guest reboot.
 | `TIZEN_HOMESCREEN_CHECK_TIMEOUT` | `30` | Seconds to poll for the crash signature after connect |
 | `TIZEN_HOMESCREEN_VERIFY_DELAY` | `20` | Seconds to poll for the home screen after starting it |
 
+## Apple Silicon (ARM64) Macs: TV emulator launch
+
+On Apple Silicon Macs (M1/M2/M3…) `tizen-launch-emulator` fails for TV (`tv-samsung`) VMs with
+`TIZEN_SDK_EMULATOR_E003` / "Your system cannot support HW virtualization. Try install KVM
+(ubuntu) or HAX (windows or Mac)". Root cause: em-cli's `checkVTProperty` (em-lib.jar, verified
+in bytecode) throws `CPUVT.Invalid` for image version >= 3.0 whenever HAXM is absent — and HAXM
+is Intel-only, so it is always absent on ARM Macs. `hwVirtualization=false` in the VM config does
+NOT bypass the check. This is NOT a missing/broken image: the TV image is genuinely x86_64
+(kernel `bzImage.x86_64` is an x86 boot image; `file` on the qcow2 only shows the container).
+
+The working path boots the VM with the platform's **emulator-v2 stack (QEMU 9.x with VirGL,
+universal x86_64+arm64 binary) directly via `--conf`**, so em-cli never runs. Tell the user why
+(HAXM enforcement in em-cli, not a missing image) before you start.
+
+**Verified only for Tizen 10.0 `tv-samsung`** on an M2 MacBook Pro (Darwin 24.2, arm64). For
+another platform version, first check that `<sdk>/platforms/tizen-<ver>/tv-samsung/emulator-v2/`
+exists; if it does not, this path is not available — say so instead of improvising.
+
+Placeholders: `<sdk>` = SDK root, `<ver>` = platform version (e.g. `10.0`), `<vm>` = VM name,
+`<vms>` = the em-cli VM directory (the folder that holds `<vm>/vm_launch.conf`),
+`<v2>` = `<sdk>/platforms/tizen-<ver>/tv-samsung/emulator-v2`. Resolve every placeholder to the
+real path before you run or show a command.
+
+1. **Create the VM without `--launch`** (`tizen-create-emulator`).
+
+2. **Rebase the VM's disk on the v2 base image.** em-cli creates the child image against the v1
+   base (`emulator-images/`); the v2 stack needs the base under `emulator-images-v2/`
+   (the `emulimg-*.x86_64` file in `<sdk>/platforms/tizen-<ver>/tv-samsung/emulator-images-v2/tv-samsung-<ver>-x86_64/`).
+   **This replaces the VM's disk with an empty one** — apps and data installed in that VM are
+   lost. For a VM you just created there is nothing to lose; for an existing VM, ask the user
+   before running it.
+
+   ```bash
+   "<sdk>/tools/emulator/bin/qemu-img" create -f qcow2 \
+     -b "<v2 base image>" -F qcow2 "<vms>/<vm>/emulimg-<vm>.x86_64"
+   ```
+
+3. **Generate a v2 launch conf from the template.** Do not edit em-cli's `vm_launch.conf`;
+   write a separate `<vms>/<vm>/vm_launch-v2.conf`.
+   The template ships with the plugin at
+   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template`. Resolve it from the `$CLI`
+   found above: `TEMPLATE="$(dirname "$CLI")/../../scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template"`.
+
+   ```bash
+   sed -e "s/__VM_NAME__/<vm>/g" \
+       -e "s|__SDK_PATH__|<sdk>|g" \
+       -e "s|__SDK_DATA_PATH__|<sdk-data>|g" \
+       "$TEMPLATE" > "<vms>/<vm>/vm_launch-v2.conf"
+   ```
+
+   `<sdk-data>` is the SDK data folder (the parent of `emulator/vms`). The template's paths,
+   `image_ver` and `platform_version` are for Tizen 10.0; for another version, change them as
+   [`vm-launch-tv-v2.md`](../../scripts/tizen-emulator-manager/vm-launch-tv-v2.md) describes. The template already contains the
+   options Apple Silicon needs: `-accel tcg,thread=multi`,
+   `-device virtio-vga-gl,xres=1920,yres=1080`, `-cpu max`, `-display sdl,gl=on`, and
+   `force_pat` in `append`. Do not remove `-cpu max`: the default `qemu64` model kernel-panics
+   the guest with "invalid opcode" in ld-linux, and even `-cpu Broadwell` still segfaults
+   launchpad.
+
+   The conf needs `swap-<vm>.img` and `tuner_default.cfg` in the VM folder. em-cli creates
+   both in step 1; if either is missing, create it as [`vm-launch-tv-v2.md`](../../scripts/tizen-emulator-manager/vm-launch-tv-v2.md) describes (the tuner table comes
+   from the platform's `emulator-resources/tuner-template/`).
+
+4. **Gatekeeper (only when needed, and only with the user's consent).** After a fresh SDK or
+   ZIP install the v2 binaries can still carry macOS's download quarantine, and the launch dies
+   with `zsh: killed` / `library load disallowed by system policy`. Check with
+   `xattr -l "<v2>/bin/emulator-x86_64.bin"`. If it lists `com.apple.quarantine`, explain that
+   clearing it removes a macOS security flag from the SDK's `emulator-v2` folder, and run this
+   only after the user agrees:
+
+   ```bash
+   chmod -R u+w "<v2>" && xattr -dr com.apple.quarantine "<v2>"
+   ```
+
+5. **Launch** (the wrapper re-execs the arm64 slice natively — no double emulation under Rosetta):
+
+   ```bash
+   nohup "<v2>/bin/emulator-x86_64" --conf "<vms>/<vm>/vm_launch-v2.conf" \
+     > "<vms>/<vm>/logs/qemu-v2.log" 2>&1 &
+   ```
+
+   Booting takes 1–2 minutes. Then confirm with `tizen-device-manager` that an
+   `emulator-NNNNN` device for `<vm>` is listed. em-cli is bypassed, so the launch-emulator checks above
+   (home-screen check, post-launch findings) do not run — read `qemu-v2.log` if the guest does
+   not appear.
+
 ## Scope: launch-emulator vs device-manager vs create-emulator
 
 | Task | Use this skill (`tizen-launch-emulator`) | Use `tizen-device-manager` | Use `tizen-create-emulator` |

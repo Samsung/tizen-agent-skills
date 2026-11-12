@@ -13,6 +13,17 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **Apple Silicon Mac에서 TV 에뮬레이터를 실행하는 방법을 안내합니다.** ARM Mac에서는 em-cli가 TV
+  (`tv-samsung`) VM을 부팅하지 못합니다. 이미지 버전 3.0 이상에서 HAXM을 요구하는데 HAXM은 Intel
+  전용이기 때문입니다. `tizen-launch-emulator`에 ARM Mac에서 동작하는 방법을 문서화했습니다.
+  플랫폼의 emulator-v2 QEMU 9.x(VirGL)를 `--conf`로 직접 실행하는 방식입니다. v2 기본 이미지로
+  디스크를 다시 만드는 방법, 새 템플릿
+  `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template`으로 실행 설정을 만드는 방법
+  (`-cpu max` 필수), 사용자 동의를 받은 뒤 Gatekeeper를 해제하는 방법을 담았습니다. `tizen-create-emulator`는 이 섹션을 안내합니다. M2 MacBook Pro의
+  Tizen 10.0에서 확인했습니다.
+
 ### 변경
 
 - **사전 확인이 설치기로 넘길 때 `status: "needs_action"`을 보고합니다.** 사전 확인은 통과했고
