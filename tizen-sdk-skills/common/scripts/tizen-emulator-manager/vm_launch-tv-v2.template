@@ -1,0 +1,91 @@
+# Tizen TV emulator launch conf template — Apple Silicon (TCG + VirGL)
+#
+# Derived from an em-cli-generated vm_launch.conf (T-samsung-10.0-x86_64,
+# TV SDK 10.0, verified booting on an arm64 Mac with the emulator-v2 stack).
+# Use this to bypass em-cli on Apple Silicon: em-cli's checkVTProperty throws
+# CPUVT.Invalid on macOS without HAXM (Intel-only), so the v2 QEMU stack must
+# be launched directly with -conf.
+#
+# Placeholders (substitute with sed before use):
+#   __VM_NAME__        VM name (e.g. TV-1080) — also used for image/log file names
+#   __SDK_PATH__       Tizen SDK path (e.g. /Users/<u>/tizen-sdk)
+#   __SDK_DATA_PATH__  Tizen SDK data path (e.g. /Users/<u>/tizen-sdk-data)
+#
+# See vm_launch-tv-v2.README.md for the full generation/launch procedure.
+
+# Character encoding : utf8
+
+[[VARIABLES]]
+studio_path="__SDK_PATH__"
+vm_name=__VM_NAME__
+vms_path="__SDK_DATA_PATH__/emulator/vms"
+image_arch=x86_64
+drive="file=${vms_path}/${vm_name}/emulimg-${vm_name}.${image_arch},if=none,index=0,cache.no-flush=on"
+swap="file=${vms_path}/${vm_name}/swap-${vm_name}.img,if=none,index=1"
+skin_path="__SDK_PATH__/platforms/tizen-10.0/tv-samsung/emulator-resources/skins/tv-1920x1080"
+display_resolution=1920x1080
+display_pixel_density=72
+process_num=2
+ram=1024
+max_point=10
+# network_proxy : use hosts proxy configuration
+# (only if VMs proxy option is set as using host proxy)
+network_proxy=""
+bios_path="__SDK_PATH__/platforms/tizen-10.0/tv-samsung/emulator-v2/data/bios"
+kernel="__SDK_PATH__/platforms/tizen-10.0/tv-samsung/emulator-v2/data/kernel/bzImage.${image_arch}"
+kernel_log="${vms_path}/${vm_name}/logs/emulator.klog"
+tuner_table_path="${vms_path}/${vm_name}/tuner_default.cfg"
+still_image_path="__SDK_PATH__/platforms/tizen-10.0/tv-samsung/emulator-resources/images"
+wsi=vigs_wsi
+host_ip=10.0.2.2
+image_ver=10.0.6
+profile=tv-samsung
+platform_version=tizen-10.0
+append="vm_name=${vm_name} video=LVDS-1:${display_resolution}-32@60 dpi=${display_pixel_density} clocksource=hpet consoleblank=0 ${network_proxy} host_ip=${host_ip} console=ttyS0 model=4ksero force_pat"
+
+[[SKIN_OPTIONS]]
+resolution=${display_resolution}
+skin.path=${skin_path}
+vm.path=${vms_path}/${vm_name}
+
+[[QEMU_OPTIONS]]
+-drive ${drive},id=drive
+-device virtio-blk-pci,drive=drive
+-drive ${swap},id=swap
+-device virtio-blk-pci,drive=swap
+-accel tcg,thread=multi
+-device virtio-vga-gl,xres=1920,yres=1080
+-smp ${process_num}
+-m ${ram}
+-netdev user,id=net0
+-device virtio-net-pci,netdev=net0
+-device maru-virtual-tuner,system=ATSC,country=USA,table=${tuner_table_path},stillimg=${still_image_path},wsi=${wsi}
+-chardev file,path=${kernel_log},id=con0
+-device isa-serial,chardev=con0
+-device virtio-serial
+-cpu max
+### virtual console for unix socket client
+#-chardev socket,path=/tmp/virtcon,server,nowait,id=virtcon0
+#-device virtconsole,chardev=virtcon0
+### virtual console for telnet client
+#-chardev socket,port=2222,host=0.0.0.0,server,nowait,id=virtcon1
+#-device virtconsole,chardev=virtcon1
+-L ${bios_path}
+-kernel ${kernel}
+-append ${append}
+-device virtio-maru-touchscreen-pci,max_point=${max_point}
+-nodefaults
+#-device virtio-maru-esm-pci
+-device virtio-maru-hwkey-pci
+-device virtio-maru-evdi-pci
+-device virtio-maru-motor-pci
+-device virtio-maru-keyboard-pci
+-rtc base=utc
+-M maru-x86-machine
+-audiodev coreaudio,id=snd0
+-device intel-hda
+-device hda-duplex,audiodev=snd0
+-usb
+-vga none
+-device maru-external-input-pci,stillimg=${still_image_path},wsi=${wsi}
+-display sdl,gl=on
