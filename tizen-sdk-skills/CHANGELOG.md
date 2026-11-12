@@ -14,6 +14,16 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Added
+
+- **TV emulator launch on Apple Silicon Macs.** em-cli cannot boot a TV (`tv-samsung`) VM on an
+  ARM Mac: it requires HAXM for image version 3.0 and later, and HAXM is Intel-only.
+  `tizen-launch-emulator` now documents a launch path that works there: the platform's
+  emulator-v2 QEMU 9.x with VirGL, started directly with `--conf`. It covers rebasing the disk
+  on the v2 base image, the launch conf changes (`-cpu max` is required), and clearing
+  Gatekeeper with the user's consent. `tizen-create-emulator` points to it. Verified for Tizen
+  10.0 on an M2 MacBook Pro.
+
 ### Fixed
 
 - **`sdb-helper` hands Korean device-list requests and `sdb devices` to
