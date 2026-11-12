@@ -473,6 +473,46 @@ that one stays a `tizen-download-emulator-package` reinstall. Escape hatch: sett
 `TIZEN_EMCLI_GATE=off` skips the pre-create probe gate and lets the create proceed
 warn-only (the create-time crash is still classified as `TIZEN_SDK_EXEC_E002`).
 
+## Apple Silicon (ARM64) Macs: TV emulator must use the v2 stack + VirGL (create + direct --conf launch)
+
+On Apple Silicon Macs (M1/M2/M3…) a TV (`tv-samsung`) emulator VM **can be created** through
+em-cli, but `create --launch` / `tizen-launch-emulator` **cannot boot it**: em-cli's
+`checkVTProperty` (em-lib.jar, verified in bytecode) throws `CPUVT.Invalid`
+("Your system cannot support HW virtualization. Try install KVM (ubuntu) or HAX (windows or Mac)")
+for image version >= 3.0 whenever HAXM is absent — and HAXM is Intel-only, so it is always
+absent on ARM Macs. `hwVirtualization=false` in the VM config does NOT bypass the check.
+The x86_64 TV image itself is fine (its kernel `bzImage.x86_64` is an x86 boot image; the
+qcow2 container simply does not show the arch to `file`).
+
+On ARM Macs, create the VM without `--launch`, then boot it with the platform's
+**emulator-v2 stack (QEMU 9.x with VirGL, universal x86_64+arm64 binary) directly via
+`--conf`** — em-cli never executes:
+
+- QEMU binary: `<sdk>/platforms/tizen-10.0/tv-samsung/emulator-v2/bin/emulator-x86_64`
+  (bash wrapper re-execs the arm64 slice natively — no double emulation under Rosetta)
+- Base image: `<sdk>/platforms/tizen-10.0/tv-samsung/emulator-images-v2/tv-samsung-10.0-x86_64/emulimg-10.0.x86_64`
+  (NOT the v1 `emulator-images/` dir). Recreate the child image against it:
+  `qemu-img create -f qcow2 -b <base> -F qcow2 ~/tizen-sdk-data/emulator/vms/<vm>/emulimg-<vm>.x86_64`
+- kernel/bios: `emulator-v2/data/kernel/bzImage.x86_64` + `emulator-v2/data/bios`
+- Required QEMU options (VirGL ON + TCG) in the `[[QEMU_OPTIONS]]` of the launch conf:
+  `-accel tcg,thread=multi`, `-device virtio-vga-gl,xres=1920,yres=1080`,
+  `-display sdl,gl=on`, `-cpu max`
+  (`-cpu max` is mandatory — the default `qemu64` model kernel-panics the guest with
+  "invalid opcode" in ld-linux; even `-cpu Broadwell` still segfaults launchpad.
+  `-cpu max` only exists in the v2 QEMU 9.x — the old 2.8 `emulator/` binary rejects it.)
+- `append` must keep `force_pat` (present in the working reference conf)
+- After a fresh SDK/ZIP install, clear Gatekeeper or the binary dies with `zsh: killed` /
+  `library load disallowed by system policy`:
+  `chmod -R u+w <emulator-v2 dir> && xattr -dr com.apple.quarantine <emulator-v2 dir>`
+
+Verified working on an M2 MacBook Pro (Darwin 24.2, arm64): guest boots to launchpad and
+`sdb devices` shows `emulator-NNNNN  device  <vm-name>`. A known-good reference launch conf
+lives at `~/.tizen-extension-platform/server/sdktools/sdk-data/emulator/vms/TV-12112026-01/vm_launch.conf`
+and a ready-to-run launcher at `~/.tizen/scripts/launch-tv-emulator.sh` (if present on the host).
+
+When the user asks to create/launch a TV emulator on an ARM Mac, follow this recipe instead
+of em-cli launch, and tell the user why (HAXM enforcement in em-cli, not a missing image).
+
 ## Scope: create-emulator vs launch-emulator vs device-manager
 
 | Task                                        | Use this skill (`tizen-create-emulator`) | Use `tizen-launch-emulator` | Use `tizen-device-manager` |
