@@ -153,11 +153,11 @@ node "<found-path>" --zip-path "C:\path\to\rootstrap.zip"
 Optional: 
 - `node "$CLI" --zip-path "/path/to/rootstrap.zip" --force` (force reinstall)
 
-Exit code: `0` = success (rootstrap already installed), `1` = failure (rootstrap not installed — proceed to Phase 2, or Tizen SDK not installed).
+Exit code: `0` = success (rootstrap already installed), `1` = `needs_action` (rootstrap not installed — proceed to Phase 2) or `failure` (Tizen SDK not installed).
 
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
-When the pre-check returns failure with `suggested_fix.command`, run that installer command. The install may take a minute or two. **실행 방법은 하네스에 따라 다릅니다:**
+When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer command. The install may take a minute or two. **실행 방법은 하네스에 따라 다릅니다:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)
 

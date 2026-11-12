@@ -218,6 +218,10 @@ console.log(JSON.stringify(response));
 }
 ```
 
+### 조치 필요 (status: 'needs_action')
+
+사전 확인은 통과했고 설치기 실행만 남은 경우입니다. 형태는 실패와 같고 `error_category`는 `install_required`입니다. `suggested_fix.command`를 실행하면 됩니다. `formatError(command, "install_required", …)`가 `Envelope.needsAction()`으로 만듭니다.
+
 ## PRD 요구사항 매핑
 
 | 요구사항                                | 파일                | 함수                     |

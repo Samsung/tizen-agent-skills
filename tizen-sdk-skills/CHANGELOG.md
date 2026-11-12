@@ -14,7 +14,20 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Pre-check installer hand-offs report `status: "needs_action"`.** When a pre-check passes and
+  only the installer still has to run (SDK, TV SDK, custom repository, emulator, platform, mobile
+  platform and rootstrap), the envelope used to say `failure` with `execution_error`. It now says
+  `needs_action` with the new `install_required` category (`TIZEN_SDK_PRECHECK_E001`). The
+  `errors[]` and `suggested_fix` shape is unchanged, and the exit code is still `1`. The skill
+  and agent docs say to run `suggested_fix.command` on `needs_action`.
+
 ### Fixed
+
+- **Platform install records with a UTF-8 BOM are read correctly on macOS.** The awk program
+  stripped the BOM with a regex octal escape, which only gawk supports, so BSD awk left the BOM
+  in place. It now compares the first three bytes as a string.
 
 - **`sdb-helper` hands Korean device-list requests and `sdb devices` to
   `tizen-device-manager`.** The `list-devices` intent matched English phrasings only, so

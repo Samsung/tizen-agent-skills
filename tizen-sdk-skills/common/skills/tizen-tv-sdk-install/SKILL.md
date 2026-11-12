@@ -81,11 +81,11 @@ node "<found-path>"
 
 Optional: `node "$CLI" --force` (force reinstall), `--download-jobs <1-8>` (concurrent download jobs, default 4)
 
-Exit code: `0` = success (TV SDK already installed), `1` = failure (TV SDK not installed — proceed to Phase 2, or Tizen SDK not installed).
+Exit code: `0` = success (TV SDK already installed), `1` = `needs_action` (TV SDK not installed — proceed to Phase 2) or `failure` (Tizen SDK not installed).
 
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
-When the pre-check returns failure with `suggested_fix.command`, run that installer
+When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer
 command. The install takes a few minutes. **실행 방법은 하네스에 따라 다릅니다:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)
