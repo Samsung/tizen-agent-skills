@@ -112,11 +112,11 @@ Optional:
 - `node "$CLI" --force` (force reinstall)
 - `node "$CLI" --download-jobs 4` (concurrent download jobs, 1-8, default 4)
 
-Exit code: `0` = success (Mobile platform already installed), `1` = failure (Mobile platform not installed — proceed to Phase 2, or Tizen SDK not installed).
+Exit code: `0` = success (Mobile platform already installed), `1` = `needs_action` (Mobile platform not installed — proceed to Phase 2) or `failure` (Tizen SDK not installed).
 
 ## Phase 2 — Download & Install (when Phase 1 says "not installed")
 
-When the pre-check returns failure with `suggested_fix.command`, run that installer command. The download may take a few minutes. **실행 방법은 하네스에 따라 다릅니다:**
+When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer command. The download may take a few minutes. **실행 방법은 하네스에 따라 다릅니다:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)
 

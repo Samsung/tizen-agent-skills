@@ -86,11 +86,11 @@ Optional: `--tv-version <X.Y>` (the TV platform version the ZIP is for, e.g. `9.
 
 Several TV versions install side by side from their ZIPs (TV 9.0, 10.0, 11.0): the installer skips only a TV version `.platform-installed` already records, so another version needs no `--force`. It reads the version from the inner ZIP names; when `--tv-version` disagrees with them, or neither gives one, it stops **before** extracting anything and says which `--tv-version` to pass. Each install appends a block (`Profile: tv-samsung`, `Source: <zip>`) to `.platform-installed`, so `sdk-install` / `platform-install --list` report that TV version afterwards.
 
-Exit code: `0` = success (TV SDK already installed), `1` = failure (TV SDK not installed — proceed to Phase 2, or Tizen SDK not installed, or zip-path missing).
+Exit code: `0` = success (TV SDK already installed), `1` = `needs_action` (TV SDK not installed — proceed to Phase 2) or `failure` (Tizen SDK not installed, or zip-path missing).
 
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
-When the pre-check returns failure with `suggested_fix.command`, run that installer
+When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer
 command. The install takes a few minutes. **실행 방법은 하네스에 따라 다릅니다:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)

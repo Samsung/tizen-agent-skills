@@ -109,14 +109,14 @@ rootstrap.zip
 }
 ```
 
-**Failure (needs install):**
+**Needs action (needs install):**
 ```json
 {
-  "status": "failure",
+  "status": "needs_action",
   "errors": [
     {
-      "error_code": "TIZEN_SDK_E006",
-      "error_category": "execution_error",
+      "error_code": "TIZEN_SDK_PRECHECK_E001",
+      "error_category": "install_required",
       "message": "Rootstrap is NOT installed. This pre-check CLI cannot install it. Run the suggested_fix command..."
     }
   ],

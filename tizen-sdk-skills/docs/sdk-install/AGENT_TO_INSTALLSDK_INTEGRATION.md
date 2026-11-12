@@ -87,7 +87,7 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
     // 4-4️⃣ Phase 2(백그라운드 설치)용 설치 명령 반환
     return formatError(
       command,
-      'execution_error',
+      'install_required',
       'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
         harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
         sdkPrecheckRerunHint('…'),    // 같은 버전으로, --force 없이 재실행하라는 안내

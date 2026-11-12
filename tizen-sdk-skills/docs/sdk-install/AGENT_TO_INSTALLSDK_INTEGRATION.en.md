@@ -87,7 +87,7 @@ async function installSdk(version = '', label = 'tizen', force = false, repoUrl 
     // 4-4️⃣ Return installer command for Phase 2 (background install)
     return formatError(
       command,
-      'execution_error',
+      'install_required',
       'SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). ' +
         harnessGuidance('detach') +   // 'Run the suggested_fix command per your harness: …'
         sdkPrecheckRerunHint('…'),    // re-run with the same version, without --force

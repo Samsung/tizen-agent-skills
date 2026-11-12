@@ -227,7 +227,7 @@ The version is the Tizen platform `X.Y` (e.g. `10.0`); omit it to install the ne
 version fails with `invalid_argument`; a valid one that is not installed fails with `platform_version_not_found`
 (never "already installed") — do not run an installer for those, show the message instead.
 
-Exit code: `0` = success (SDK already installed), `1` = failure (SDK not installed — proceed to Phase 2).
+Exit code: `0` = success (SDK already installed), `1` = `needs_action` (SDK not installed — proceed to Phase 2).
 
 Every installer run writes its own log to `<sdk-path>/.install.log` (overwritten per run) and records
 `EXIT=<code>` in `<sdk-path>/.install-result`. When an install fails, name that log file to the user — the
@@ -245,7 +245,7 @@ check and hands back the installer command again. If that re-run returns `platfo
 the SDK is installed without the requested platform: show the envelope and offer `suggested_fix.command`
 (`platform-install`), and do not re-run with `--force` (a full reinstall).
 
-When the pre-check returns failure with `suggested_fix.command`, run that installer
+When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer
 command. The install takes 10–15 minutes (~121 packages). **실행 방법은 하네스에 따라 다릅니다:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)

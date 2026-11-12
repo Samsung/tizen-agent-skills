@@ -104,7 +104,7 @@ tizen-cli tizen-sdk install-rootstrap --zip-path "C:\Downloads\custom-arm-rootst
 
 ```json
 {
-  "status": "error",
+  "status": "needs_action",
   "result": {
     "zip_path": "C:\\Downloads\\custom-arm-rootstrap.zip",
     "zip_exists": true,
@@ -113,8 +113,8 @@ tizen-cli tizen-sdk install-rootstrap --zip-path "C:\Downloads\custom-arm-rootst
   "warnings": [],
   "errors": [
     {
-      "error_code": "TIZEN_ROOTSTRAP_EXEC_E001",
-      "error_category": "execution_error",
+      "error_code": "TIZEN_SDK_PRECHECK_E001",
+      "error_category": "install_required",
       "message": "Rootstrap not installed yet. Run the suggested fix command to install.",
       "suggested_fix": {
         "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\<username>\\.cline\\plugins\\cache\\tizen-platform\\tizen-sdk-skills\\v1.2.3\\scripts\\tizen-install-rootstrap\\tizen-install-rootstrap.ps1\" --zip-path \"C:\\Downloads\\custom-arm-rootstrap.zip\"",

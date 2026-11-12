@@ -145,7 +145,7 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url "http://mirror.example.co
 
 ```json
 {
-  "status": "error",
+  "status": "needs_action",
   "result": {
     "sdk_root": null,
     "sdk_installed": false,
@@ -158,8 +158,8 @@ tizen-cli tizen-sdk sdk-install-custom-repo --repo-url "http://mirror.example.co
   "warnings": [],
   "errors": [
     {
-      "error_code": "TIZEN_SDK_EXEC_E001",
-      "error_category": "execution_error",
+      "error_code": "TIZEN_SDK_PRECHECK_E001",
+      "error_category": "install_required",
       "message": "SDK 가 아직 설치되지 않았습니다. 설치를 위해 suggested fix 명령을 실행하세요.",
       "suggested_fix": {
         "command": "powershell -ExecutionPolicy Bypass -File \"C:\\Users\\<username>\\.cline\\plugins\\cache\\tizen-platform\\tizen-sdk-skills\\v1.2.3\\scripts\\tizen-sdk-install-custom-repo\\tizen-sdk-install-custom-repo.ps1\" -RepoUrl \"http://mirror.example.com/packages/tizen_sdk_11.0\"",
