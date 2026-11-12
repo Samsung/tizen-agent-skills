@@ -172,10 +172,10 @@ function quiet(fn) {
   });
 
   console.log("\n--- non-pkg pre-check ---");
-  await test("no marker → failure envelope with the installer as suggested_fix", async () => {
+  await test("no marker → needs_action envelope with the installer as suggested_fix", async () => {
     fs.rmSync(MARKER, { force: true });
     const env = await quiet(() => installRootstrap(zipPath, false));
-    assert.strictEqual(env.status, "failure", JSON.stringify(env));
+    assert.strictEqual(env.status, "needs_action", JSON.stringify(env));
     assert.match(env.errors[0].message, /Rootstrap is NOT installed/);
     const fix = env.errors[0].suggested_fix;
     assert.ok(fix && fix.command, "errors[0].suggested_fix.command");
@@ -203,7 +203,7 @@ function quiet(fn) {
   await test("marker present + --force → installer hand-off with the force flag", async () => {
     fs.writeFileSync(MARKER, MARKER_TEXT);
     const env = await quiet(() => installRootstrap(zipPath, true));
-    assert.strictEqual(env.status, "failure", JSON.stringify(env));
+    assert.strictEqual(env.status, "needs_action", JSON.stringify(env));
     // The message must describe the real state: installed, reinstall requested.
     assert.match(
       env.errors[0].message,
@@ -218,7 +218,7 @@ function quiet(fn) {
   await test("no marker + --force → plain NOT installed hand-off with the force flag", async () => {
     fs.rmSync(MARKER, { force: true });
     const env = await quiet(() => installRootstrap(zipPath, true));
-    assert.strictEqual(env.status, "failure", JSON.stringify(env));
+    assert.strictEqual(env.status, "needs_action", JSON.stringify(env));
     assert.match(env.errors[0].message, /^Rootstrap is NOT installed/);
     assert.match(env.errors[0].suggested_fix.command, /-Force|--force/);
   });

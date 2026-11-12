@@ -1475,7 +1475,7 @@ async function installSdkSteps(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "SDK is NOT installed. This pre-check CLI cannot install it (10-15 min job). " +
           harnessGuidance("detach") +
           sdkPrecheckRerunHint(
@@ -2142,7 +2142,7 @@ async function installTvSdk(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "TV SDK is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("detach") +
           "Either way, afterwards re-run this CLI to verify the TV version is recorded in <sdk-path>/.platform-installed. " +
@@ -3116,7 +3116,7 @@ async function installSdkFromRepoSteps(
 
     return formatError(
       command,
-      "execution_error",
+      "install_required",
       `SDK is NOT installed. The repository ${normalizedUrl} is valid` +
         `${pkgListFile ? ` (${pkgListFile} found)` : ""}, but this pre-check CLI cannot install it (10-15 min job). ` +
         harnessGuidance("detach") +
@@ -3410,7 +3410,7 @@ async function downloadEmulatorPackage(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "Emulator package is NOT installed. This pre-check CLI cannot install it." +
           onDiskNote +
           " " +
@@ -3655,7 +3655,7 @@ async function installPlatform(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "Platform package is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("foreground") +
           `Either way, afterwards re-run this CLI to verify <sdk-path>/platforms/tizen-${platformVersion} exists and <sdk-path>/.platform-installing-${platformVersion} is gone. ` +
@@ -4004,7 +4004,7 @@ async function downloadMobilePlatform(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "Mobile platform package is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("foreground") +
           "Either way, afterwards re-run this CLI to verify <sdk-path>/.mobile-platform-installed exists. " +
@@ -4272,7 +4272,7 @@ async function installRootstrap(
         : "Rootstrap is NOT installed. ";
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         state +
           "This pre-check CLI cannot install it. " +
           harnessGuidance("foreground") +
@@ -4482,7 +4482,7 @@ async function installTvSdkFromZip(
 
       return formatError(
         command,
-        "execution_error",
+        "install_required",
         "TV SDK is NOT installed. This pre-check CLI cannot install it. " +
           harnessGuidance("detach") +
           "Either way, afterwards re-run this CLI with the same --zip-path (and --tv-version) to verify the TV version is recorded in <sdk-path>/.platform-installed. " +
