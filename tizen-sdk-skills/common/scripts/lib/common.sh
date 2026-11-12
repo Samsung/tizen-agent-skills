@@ -755,7 +755,10 @@ platform_record_blocks() {
       }
       ver = ""; prof = ""; target = ""; by = ""
     }
-    NR == 1 { sub(/^\357\273\277/, "") }
+    # Strip a UTF-8 BOM (PowerShell 5.1 Add-Content). String-compare with
+    # octal escapes instead of a regex: regex octal escapes are a gawk
+    # extension that BSD awk (macOS) silently does not match.
+    NR == 1 { if (substr($0, 1, 3) == "\357\273\277") $0 = substr($0, 4) }
     { sub(/\r$/, ""); sub(/^[ \t]+/, ""); sub(/[ \t]+$/, "") }
     /^Platform package installed at/ { flush(); inblock = 1; next }
     !inblock { next }
