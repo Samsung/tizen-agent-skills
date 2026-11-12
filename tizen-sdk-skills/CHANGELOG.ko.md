@@ -35,6 +35,15 @@
 
 ### 수정
 
+- **설치 스크립트가 macOS의 bash 3.2에서 `declare: -A: invalid option`으로 멈추지 않습니다**
+  (이슈 #127). 스크립트 7개(`tizen-platform-install`, `tizen-download-emulator-package`,
+  `tizen-download-mobile-platform`, `tizen-tv-sdk-install`, `tizen-tv-sdk-install-from-zip`,
+  `tizen-update-package`, `create-project-app`)가 bash 4 이상이 필요한 연관 배열을 씁니다. 이제
+  이 스크립트들은 먼저 `require_bash4`(`lib/common.sh`)를 호출합니다. bash 3.2이면 `PATH`를
+  바꾸지 않고 `PATH`에 있는 첫 bash 4+(MacPorts, Nix 등)나 Homebrew bash 4+
+  (`/opt/homebrew/bin/bash` 또는 `/usr/local/bin/bash`)로 스크립트를 다시 실행합니다. 하나도 없으면
+  아무것도 설치하기 전에 멈추고 `brew install bash`를 안내합니다.
+
 - **UTF-8 BOM이 있는 플랫폼 설치 기록을 macOS에서도 제대로 읽습니다.** UTF-8 로케일에서는
   BSD awk가 BOM 바이트를 매칭하지 못해 BOM이 남았습니다. 이제 awk 프로그램을 `LC_ALL=C`로 실행하고
   앞의 세 바이트를 문자열로 비교합니다.

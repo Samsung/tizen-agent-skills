@@ -23,6 +23,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Shared helpers: get_sdk_path, log_info/log_ok/log_warn/log_error, to_absolute_path.
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 
 # Defaults (SDK path resolution: TIZEN_SDK_PATH -> ~/.tizen.sdk.path.config -> ~/tizen-sdk)
 SDK_PATH="$(get_sdk_path)"

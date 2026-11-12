@@ -17,6 +17,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 
 # Package repository (base URL for pkg_list and binary zip)
 # Falls back to the official repo if repository.info is missing.

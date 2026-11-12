@@ -17,6 +17,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/common.sh
 source "$SCRIPT_DIR/../lib/common.sh"
+require_bash4 "$@"
 TIZEN_STUDIO_PATH="$(get_sdk_path)"
 
 # The tz binary is `tz` on Linux/macOS and `tz.exe` on Windows. Pick by OS,

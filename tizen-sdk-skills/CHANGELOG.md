@@ -36,6 +36,15 @@ below use those release tags.
 
 ### Fixed
 
+- **Installer scripts no longer stop with `declare: -A: invalid option` on macOS's bash 3.2**
+  (issue #127). Seven scripts use associative arrays, which need bash 4 or newer
+  (`tizen-platform-install`, `tizen-download-emulator-package`, `tizen-download-mobile-platform`,
+  `tizen-tv-sdk-install`, `tizen-tv-sdk-install-from-zip`, `tizen-update-package` and
+  `create-project-app`). They now call `require_bash4` (`lib/common.sh`) first. On bash 3.2 it
+  re-runs the script with the first bash 4+ on `PATH` (MacPorts, Nix, …) or at a Homebrew path
+  (`/opt/homebrew/bin/bash` or `/usr/local/bin/bash`), without changing `PATH`. If there is none,
+  it exits before installing anything and says to run `brew install bash`.
+
 - **Platform install records with a UTF-8 BOM are read correctly on macOS.** In a UTF-8
   locale BSD awk did not match the BOM bytes and left the BOM in place. The awk program now runs
   with `LC_ALL=C` and compares the first three bytes as a string.
