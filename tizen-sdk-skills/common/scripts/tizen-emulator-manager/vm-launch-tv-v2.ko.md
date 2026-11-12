@@ -94,8 +94,9 @@ swap 이미지, `tuner_default.cfg`를 만들어 두므로, 3·4단계는 해당
      --conf "<VM_DIR>/vm_launch-v2.conf" > "<VM_DIR>/logs/qemu-v2.log" 2>&1 &
    ```
 
-7. **부팅 확인.** TCG라서 부팅에 1~2분 걸립니다. `<SDK_PATH>/tools/sdb devices`에
-   `emulator-NNNNN  device  <VM>`이 보이면 부팅된 것입니다. 게스트 커널 로그는
+7. **부팅 확인.** TCG라서 부팅에 1~2분 걸립니다. `tizen-device-manager`
+   목록에 `<VM>`의 `emulator-NNNNN` 디바이스가 보이면 부팅된 것입니다(직접 확인:
+   `<SDK_PATH>/tools/sdb devices`). 게스트 커널 로그는
    `<VM_DIR>/logs/emulator.klog`에, QEMU 출력은 `<VM_DIR>/logs/qemu-v2.log`에 기록됩니다.
 
 ## 다른 Tizen 버전에 쓸 때

@@ -98,7 +98,8 @@ needed when one of those files is missing.
    ```
 
 7. **Check the boot.** With TCG, booting takes 1–2 minutes. The guest is up when
-   `<SDK_PATH>/tools/sdb devices` lists `emulator-NNNNN  device  <VM>`. The guest kernel log
+   `tizen-device-manager` lists an `emulator-NNNNN` device for `<VM>` (by hand:
+   `<SDK_PATH>/tools/sdb devices`). The guest kernel log
    is written to `<VM_DIR>/logs/emulator.klog`, and the QEMU output to
    `<VM_DIR>/logs/qemu-v2.log`.
 

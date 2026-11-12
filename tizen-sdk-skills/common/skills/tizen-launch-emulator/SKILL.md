@@ -280,8 +280,8 @@ real path before you run or show a command.
      > "<vms>/<vm>/logs/qemu-v2.log" 2>&1 &
    ```
 
-   Booting takes 1–2 minutes. Then `<sdk>/tools/sdb devices` shows
-   `emulator-NNNNN  device  <vm>`. em-cli is bypassed, so the launch-emulator checks above
+   Booting takes 1–2 minutes. Then confirm with `tizen-device-manager` that an
+   `emulator-NNNNN` device for `<vm>` is listed. em-cli is bypassed, so the launch-emulator checks above
    (home-screen check, post-launch findings) do not run — read `qemu-v2.log` if the guest does
    not appear.
 
