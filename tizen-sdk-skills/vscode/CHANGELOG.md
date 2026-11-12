@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.8.0] — 2026-11-14
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** pre-check installer hand-offs report `status: "needs_action"` (`install_required`) instead of `failure`, the emulator runner boots a TV emulator on Apple Silicon Macs with emulator-v2, TV SDK ZIP installs detect the TV version again and keep the emulator binaries executable, GBS builds find RPMs under a custom `buildroot`, detect a nested `CMakeLists.txt` and report `gbs_not_found` with the install command when GBS is missing, a failed or short-lived app launch points to `tizen-dlog-analyzer`, `list-templates` no longer lists the native `BasicUI` template, the bash installers re-run themselves with a bash 4+ on macOS's bash 3.2, `sdb-helper` hands Korean device-list requests and `sdb devices` to `tizen-device-manager`, and `remote-device scan --connected-only` / `--saved-only` probe only the user's own devices. See the project CHANGELOG for details.
+
 ## [1.7.0] — 2026-11-03
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** `sdk-install` / `platform-install --list` now report the platforms the user installed, read from `<sdk>/.platform-installed` (one `Tizen SDK X.Y` entry each), TV SDK ZIPs of different versions install side by side (`tv-sdk-install-from-zip --tv-version`), linked platform directories count, Cline in Ask / Plan mode asks for Act mode instead of handing over runner commands, and Node.js 22 or later is required. See the project CHANGELOG for details.
