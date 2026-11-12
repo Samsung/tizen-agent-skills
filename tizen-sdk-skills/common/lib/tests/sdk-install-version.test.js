@@ -504,11 +504,7 @@ console.error = () => {};
     console.log("\n--- not installed: re-run hint ---");
     {
       const env = precheckWithoutDiskCheck("sdk");
-      check(
-        "not installed → needs_action status",
-        env.status,
-        "needs_action",
-      );
+      check("not installed → needs_action status", env.status, "needs_action");
       check(
         "not installed → install_required category",
         env.errors?.[0]?.error_category,
