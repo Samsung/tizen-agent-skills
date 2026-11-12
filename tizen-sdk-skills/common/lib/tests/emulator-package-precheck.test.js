@@ -148,7 +148,9 @@ const ON_DISK_NOTE =
       assert.strictEqual(comparePlatformVersions("10.0", "10.0"), 0);
     });
 
-    console.log("\n=== marker missing → needs_action carries the on-disk scan ===");
+    console.log(
+      "\n=== marker missing → needs_action carries the on-disk scan ===",
+    );
 
     await test("status needs_action with suggested_fix, not failure", async () => {
       const env = await downloadEmulatorPackage("");
