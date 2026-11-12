@@ -66,12 +66,15 @@ format_duration() {
 # Scripts that use associative arrays (declare -A) need bash 4+, but macOS
 # ships bash 3.2 at /bin/bash (issue #127). Call right after sourcing this
 # file, before any declare -A: require_bash4 "$@"
-# On bash 3.2 it re-runs the script with a Homebrew bash 4+ when one exists
-# (PATH is left alone), otherwise it exits before anything is installed.
+# On bash 3.2 it re-runs the script with the first bash 4+ on PATH (MacPorts,
+# Nix, …) or at a Homebrew path, leaving PATH alone; otherwise it exits before
+# anything is installed. Candidates are collected first so exec never inherits
+# a loop's redirected stdin.
 require_bash4() {
   [ "${BASH_VERSINFO[0]}" -ge 4 ] && return 0
-  local b
-  for b in /opt/homebrew/bin/bash /usr/local/bin/bash; do
+  local b candidates=()
+  while IFS= read -r b; do candidates+=("$b"); done < <(type -ap bash)
+  for b in ${candidates[@]+"${candidates[@]}"} /opt/homebrew/bin/bash /usr/local/bin/bash; do
     if [ -x "$b" ] && "$b" -c '[ "${BASH_VERSINFO[0]}" -ge 4 ]' 2>/dev/null; then
       exec "$b" "$0" "$@"
     fi
