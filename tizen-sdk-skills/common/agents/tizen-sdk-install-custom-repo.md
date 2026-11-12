@@ -170,13 +170,13 @@ already installed, nothing was downloaded and the packages still come from the
 previously-recorded repository — say that, and offer `--force` to reinstall from the
 requested URL.
 
-Exit `1` → check `errors[0].error_category`:
+Exit `1` = not installed yet (`status: "needs_action"`) or URL rejected (`status: "failure"`). Check `errors[0].error_category`:
 
 | `error_category`       | Action                                                       |
 | ---------------------- | ------------------------------------------------------------ |
 | `repo_url_invalid`     | Report + ask the user for the repository **directory** URL     |
 | `repo_url_unreachable` | Report probed URLs; suggest VPN/proxy for internal mirrors     |
-| `execution_error`      | URL is valid, SDK not installed → run `suggested_fix.command` |
+| `install_required`     | URL is valid, SDK not installed → run `suggested_fix.command` |
 
 ### 2. Run installation in background (only when step 1 said "not installed")
 

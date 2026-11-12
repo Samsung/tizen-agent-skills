@@ -141,20 +141,12 @@ Install the Tizen SDK from http://mirror.example.com/packages/tizen_sdk_11.0
 tizen-cli tizen-sdk sdk-install-custom-repo --repo-url "http://mirror.example.com/packages/tizen_sdk_11.0"
 ```
 
-**Success check (SDK not installed yet):** the pre-check returns a `suggested_fix` command:
+**Pre-check result (SDK not installed yet):** the pre-check returns a `suggested_fix` command. `tizen-cli` reports every non-success status as `failure`; the plugin CLI reports this hand-off as `needs_action`:
 
 ```json
 {
-  "status": "needs_action",
-  "result": {
-    "sdk_root": null,
-    "sdk_installed": false,
-    "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
-    "repository_valid": true,
-    "pkg_list_file": "pkg_list_windows-64",
-    "disk_space_ok": true,
-    "available_space_gb": 150
-  },
+  "status": "failure",
+  "result": null,
   "warnings": [],
   "errors": [
     {
@@ -475,7 +467,7 @@ Free up disk space or change the SDK installation path
 | `TIZEN_SDK_REPO_E001` | `repo_url_invalid` | Missing/empty URL, non-`http(s)` scheme, or URL points at pkg_list file | Pass the **directory** URL containing the pkg_list |
 | `TIZEN_SDK_REPO_E002` | `repo_url_unreachable` | Well-formed URL, but no `pkg_list_{OS}-{64,32}` could be fetched | Wrong URL, or internal mirror unreachable without VPN/proxy |
 | `TIZEN_SDK_SCRIPT_E001` | `script_not_found` | Installer script missing from plugin cache | Re-run the setup script to sync `scripts/` |
-| `TIZEN_SDK_EXEC_E001` | `execution_error` | URL valid, SDK not installed (normal Phase-1 result) | Run `errors[0].suggested_fix.command` (Phase 2) |
+| `TIZEN_SDK_PRECHECK_E001` | `install_required` | URL valid, SDK not installed (normal Phase-1 result) | Run `errors[0].suggested_fix.command` (Phase 2) |
 
 ---
 

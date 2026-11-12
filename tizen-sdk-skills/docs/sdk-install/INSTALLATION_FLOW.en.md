@@ -229,7 +229,7 @@ tizen-sdk-install agent (Claude Code / Codex / Gemini CLI) or skill (Cline, in t
   ├─ Phase 1 — pre-check
   │    node sdk-install-cli.js 10.0  →  installSdk('10.0', 'tizen')
   │      version syntax → Node.js check → already installed? (no) → disk space (15 GB)
-  │    ← failure envelope (execution_error) with the installer in suggested_fix.command
+  │    ← needs_action envelope (install_required) with the installer in suggested_fix.command
   │
   ├─ Phase 2 — install, in the background (10–15 min, ~121 packages)
   │    the harness runs suggested_fix — tizen-sdk-install.sh --path "<sdk>" --platform "10.0" --download-jobs 4
@@ -255,7 +255,7 @@ Reply to the user: envelope JSON, then a 1–2 line summary (Step 8)
 ```
 t=0s          User input, agent starts
 t≈1s          Phase 1: installSdk() pre-check
-t≈2s            ← execution_error envelope with the installer command
+t≈2s            ← needs_action envelope with the installer command
 t≈2s          Phase 2: installer runs in the background
 t≈10–15 min     ← installer exits 0 (sdk.info written)
               Phase 3: installSdk() pre-check again
@@ -312,7 +312,7 @@ async function installSdk(version) {
   }
   // 3. Disk space check
   // 4. Not installed: return the installer command (Phase 2 runs it in the background)
-  return formatError('tizen-sdk sdk-install', 'execution_error', 'SDK is NOT installed…', installerCommand);
+  return formatError('tizen-sdk sdk-install', 'install_required', 'SDK is NOT installed…', installerCommand);
 }
 
 // ===== formatSdkInstall() (lib/envelope/response-formatter.js) =====

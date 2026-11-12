@@ -196,7 +196,7 @@ tizen-cli tizen-sdk sdk-repo-info
 | `TIZEN_SDK_REPO_E001`   | `repo_url_invalid`     | URL 누락/빈 값, `http(s)` 아닌 스킴, 형식 오류, 또는 `pkg_list` 파일을 가리킴      | pkg_list가 들어 있는 **디렉터리** URL을 전달              |
 | `TIZEN_SDK_REPO_E002`   | `repo_url_unreachable` | 형식은 맞지만 `pkg_list_{OS}-{64,32}`를 가져올 수 없음                            | 잘못된 URL이거나, VPN/프록시 없이는 접근 불가한 사내 미러 |
 | `TIZEN_SDK_SCRIPT_E001` | `script_not_found`     | 플러그인 캐시에 설치 스크립트가 없음                                              | setup 스크립트를 다시 실행해 `scripts/` 동기화            |
-| `TIZEN_SDK_EXEC_E001`   | `execution_error`      | URL은 유효하고 SDK가 미설치 (Phase 1의 정상 결과)                                 | `errors[0].suggested_fix.command` 실행 (Phase 2)          |
+| `TIZEN_SDK_PRECHECK_E001` | `install_required`     | URL은 유효하고 SDK가 미설치 (Phase 1의 정상 결과)                                 | `errors[0].suggested_fix.command` 실행 (Phase 2)          |
 
 `errors[0].details`에는 검증 시 시도한 모든 URL을 포함한 로그 마지막 줄들이 담깁니다.
 사용자에게 거부 사유를 보고할 때 이 내용을 인용하세요.

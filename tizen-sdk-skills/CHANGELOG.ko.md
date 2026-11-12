@@ -24,9 +24,9 @@
 
 ### 수정
 
-- **UTF-8 BOM이 있는 플랫폼 설치 기록을 macOS에서도 제대로 읽습니다.** awk 프로그램이 정규식 8진
-  이스케이프로 BOM을 지웠는데, 이는 gawk만 지원해서 BSD awk에서는 BOM이 남았습니다. 이제 앞의
-  세 바이트를 문자열로 비교합니다.
+- **UTF-8 BOM이 있는 플랫폼 설치 기록을 macOS에서도 제대로 읽습니다.** UTF-8 로케일에서는
+  BSD awk가 BOM 바이트를 매칭하지 못해 BOM이 남았습니다. 이제 awk 프로그램을 `LC_ALL=C`로 실행하고
+  앞의 세 바이트를 문자열로 비교합니다.
 
 - **`sdb-helper`가 한국어 디바이스 목록 요청과 `sdb devices`를 `tizen-device-manager`로 넘깁니다.**
   `list-devices` 의도가 영어 문장만 인식해서 "sdb로 디바이스 목록 보여줘"나 "sdb devices"는

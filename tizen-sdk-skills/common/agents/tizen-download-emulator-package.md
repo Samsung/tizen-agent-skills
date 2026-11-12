@@ -177,10 +177,10 @@ Optional arguments: `node "$CLI" --platform-version 10.0` (specify Tizen platfor
 
 - Run it in the FOREGROUND (it finishes in seconds) — **NEVER with `run_in_background: true`**
 - It NEVER installs anything by itself; `--force` only skips the already-installed check
-- The actual installer command comes back in the failure envelope's `suggested_fix.command` — run THAT in step 2
+- The actual installer command comes back in the `needs_action` envelope's `suggested_fix.command` — run THAT in step 2
 
 Exit code `0` = success envelope (e.g., emulator package already installed — STOP, report to user).
-Exit code `1` = failure envelope (emulator package not installed — run `suggested_fix.command` per step 2 below).
+Exit code `1` = `needs_action` envelope (`install_required`: emulator package not installed — run `suggested_fix.command` per step 2 below), or a `failure` envelope for a real error such as `sdk_path_invalid`.
 
 ### 2. Run installer in background (only when step 1 said "not installed")
 

@@ -100,16 +100,12 @@ Install the custom rootstrap from C:\Downloads\custom-arm-rootstrap.zip
 tizen-cli tizen-sdk install-rootstrap --zip-path "C:\Downloads\custom-arm-rootstrap.zip"
 ```
 
-**Success check (rootstrap not installed yet):** the pre-check returns a `suggested_fix` command:
+**Pre-check result (rootstrap not installed yet):** the pre-check returns a `suggested_fix` command. `tizen-cli` reports every non-success status as `failure`; the plugin CLI reports this hand-off as `needs_action`:
 
 ```json
 {
-  "status": "needs_action",
-  "result": {
-    "zip_path": "C:\\Downloads\\custom-arm-rootstrap.zip",
-    "zip_exists": true,
-    "rootstrap_installed": false
-  },
+  "status": "failure",
+  "result": null,
   "warnings": [],
   "errors": [
     {

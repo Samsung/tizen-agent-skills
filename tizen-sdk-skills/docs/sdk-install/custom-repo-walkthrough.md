@@ -141,20 +141,12 @@ http://mirror.example.com/packages/tizen_sdk_11.0 에서 Tizen SDK 를 설치해
 tizen-cli tizen-sdk sdk-install-custom-repo --repo-url "http://mirror.example.com/packages/tizen_sdk_11.0"
 ```
 
-**성공 확인 (SDK 미설치 상태):** 사전 확인이 `suggested_fix` 명령을 반환합니다:
+**사전 확인 결과 (SDK 미설치 상태):** 사전 확인이 `suggested_fix` 명령을 반환합니다. `tizen-cli`는 성공이 아닌 상태를 모두 `failure`로 보고하고, 플러그인 CLI는 이 인계를 `needs_action`으로 보고합니다:
 
 ```json
 {
-  "status": "needs_action",
-  "result": {
-    "sdk_root": null,
-    "sdk_installed": false,
-    "repository_url": "http://mirror.example.com/packages/tizen_sdk_11.0",
-    "repository_valid": true,
-    "pkg_list_file": "pkg_list_windows-64",
-    "disk_space_ok": true,
-    "available_space_gb": 150
-  },
+  "status": "failure",
+  "result": null,
   "warnings": [],
   "errors": [
     {
@@ -475,7 +467,7 @@ SDK 설치가 실패했습니다 — 재개 또는 재시도해줘
 | `TIZEN_SDK_REPO_E001` | `repo_url_invalid` | 누락/빈 URL, `http(s)` 아님, 또는 URL 이 pkg_list 파일을 가리킴 | pkg_list 를 포함하는 **디렉토리** URL 전달 |
 | `TIZEN_SDK_REPO_E002` | `repo_url_unreachable` | 올바른 URL 이나 `pkg_list_{OS}-{64,32}` 를 가져올 수 없음 | 잘못된 URL, 또는 VPN/프록시 없이 접근 불가한 내부 미러 |
 | `TIZEN_SDK_SCRIPT_E001` | `script_not_found` | 플러그인 캐시에서 설치기 스크립트 누락 | `scripts/` 동기화를 위해 설정 스크립트 재실행 |
-| `TIZEN_SDK_EXEC_E001` | `execution_error` | URL 유효함, SDK 미설치 (일반적인 1 단계 결과) | `errors[0].suggested_fix.command` 실행 (2 단계) |
+| `TIZEN_SDK_PRECHECK_E001` | `install_required` | URL 유효함, SDK 미설치 (일반적인 1 단계 결과) | `errors[0].suggested_fix.command` 실행 (2 단계) |
 
 ---
 

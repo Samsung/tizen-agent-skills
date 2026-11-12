@@ -197,7 +197,7 @@ tizen-sdk-install 에이전트
   ├─ Phase 1: node sdk-install-cli.js 10.0
   │    installSdk('10.0', 'tizen')      ← 호출자: CLI 러너
   │      버전 형식 → Node.js 확인 → 이미 설치됨? (아니오) → 디스크 공간
-  │    ← execution_error Envelope, suggested_fix.command = 설치 명령
+  │    ← needs_action Envelope (install_required), suggested_fix.command = 설치 명령
   │
   ├─ Phase 2: 백그라운드 설치 (10–15분) — Claude Code는 suggested_fix.command를
   │    run_in_background로 실행, Cline 등 완료 알림이 없는 호스트는 --detach / -Detach로
