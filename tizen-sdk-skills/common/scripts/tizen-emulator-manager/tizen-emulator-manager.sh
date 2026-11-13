@@ -32,6 +32,10 @@
 #   -C  Print only the VM count (list-vm only)
 #   -t  Seconds to wait for the emulator to connect on launch (default 300)
 #   -E  Directory of the emulator program (launch only)
+#   -Q  Apple Silicon TV launch: clear macOS's download quarantine from the
+#       platform's emulator-v2 folder (pass only after the user agreed)
+#   -B  Apple Silicon TV launch: recreate the VM's disk on the emulator-v2 base
+#       image, which discards its apps and data (pass only after the user agreed)
 #
 # Environment tuning:
 #   TIZEN_EMULATOR_DELETE_POLL_ATTEMPTS  Deletion-verify polls (default 20)
@@ -62,6 +66,10 @@
 #     warns; the two opt-out intents are still honoured (CHECK=off -> check off,
 #     AUTOFIX=0 -> report only) so an existing opt-out is never silently upgraded
 #     into the more invasive home screen fix.
+#   TIZEN_TV_V2_LAUNCH  auto (default) boots a tv-samsung VM with the platform's
+#     emulator-v2 stack instead of em-cli on an Apple Silicon Mac (macOS arm64),
+#     where em-cli cannot boot it; force does the same on any host (tests);
+#     off always uses em-cli. See tv_v2_applies.
 #   TIZEN_EMCLI_GATE  on (default) fails a create fast when the create's first
 #     em-cli call (the list-vm "already exists" check) shows a
 #     NoSuchFieldError/NoSuchMethodError version mismatch (emits EMCLI_MISMATCH=1
@@ -107,6 +115,16 @@
 #                              other sdb clients were reset by the restart (see
 #                              retry_serial_after_sdb_restart; surfaced as a
 #                              warning by lib/core/emulator.js launchEmulator).
+#   TV_V2_LAUNCH=<name>        The VM was started with emulator-v2 --conf, not
+#                              em-cli (Apple Silicon TV launch; see tv_v2_start).
+#   TV_V2_PREPARED=<name>      create made the VM's emulator-v2 disk and conf.
+#   TV_V2_NEEDS=<key>          The emulator-v2 launch needs the user's consent
+#                              first: clear_quarantine (-Q) or rebase_disk (-B).
+#                              One line per need; nothing was changed.
+#   TV_V2_UNAVAILABLE=<reason> No emulator-v2 path for this VM (missing stack or
+#                              base image, or an unverified platform version).
+#   TV_V2_EXITED=1             emulator-v2 exited right after it was started.
+#   TV_V2_DISK_REBASED=<name>  TV_V2_QUARANTINE_CLEARED=1
 #   LAUNCH_WARN=<key>          Non-fatal finding on an otherwise SUCCESSFUL
 #                              launch (currently virgl_scanout_failing — see
 #                              warn_if_virgl_scanout_failing). Deliberately a
@@ -158,11 +176,13 @@ DETAIL=false
 COUNT=false
 WAIT_TIMEOUT=300
 EMULATOR_PATH=""
+CLEAR_QUARANTINE=false
+REBASE_DISK=false
 
 # ---------------------------------------------------------------------------
 # Parse options
 # ---------------------------------------------------------------------------
-while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdCh" opt; do
+while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdCQBh" opt; do
   case "$opt" in
     a) ACTION="$OPTARG" ;;
     n) VM_NAME="$OPTARG" ;;
@@ -183,6 +203,8 @@ while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdCh" opt; do
     z) COMPRESS=true ;;
     d) DETAIL=true ;;
     C) COUNT=true ;;
+    Q) CLEAR_QUARANTINE=true ;;
+    B) REBASE_DISK=true ;;
     h)
       # Print the whole header comment — every line after the shebang up to the
       # first line of code. A fixed line range (the old `sed -n '2,45p'`) silently
@@ -1229,6 +1251,235 @@ assert_vm_exists() {
 }
 
 # ---------------------------------------------------------------------------
+# Apple Silicon TV launch: emulator-v2 started with --conf, em-cli bypassed
+# ---------------------------------------------------------------------------
+# em-cli's checkVTProperty (em-lib.jar) refuses image version >= 3.0 on macOS
+# without HAXM, and HAXM is Intel-only, so em-cli can never boot a tv-samsung VM
+# on an ARM Mac (TIZEN_SDK_EMULATOR_E003). The platform's emulator-v2 stack
+# (QEMU 9.x with VirGL, universal binary) boots it when started directly with a
+# conf generated from vm-launch-tv-v2.conf.template (see vm-launch-tv-v2.md).
+# Doing it here means no caller hand-types qemu-img / sed / nohup over the VM
+# folder — which the Bash hook (Rule 20) rightly denies.
+#
+# Two steps change things the user may not expect, so they run only when the
+# caller passed the user's consent: clearing macOS's download quarantine (-Q)
+# and recreating the disk of an existing VM on the v2 base image (-B). Without
+# it the launch stops BEFORE changing anything and prints TV_V2_NEEDS lines.
+# A VM this script just created has nothing to lose, so create rebases it
+# without asking.
+TV_V2_TEMPLATE="$SCRIPT_DIR/vm-launch-tv-v2.conf.template"
+# Platform versions the template (paths, image_ver, model) was verified on.
+TV_V2_VERIFIED_VERSIONS=" 10.0 "
+TV_V2_VM_DIR=""
+TV_V2_SDK=""
+TV_V2_VERSION=""
+TV_V2_DIR=""
+TV_V2_BASE=""
+TV_V2_QEMU_IMG=""
+USE_TV_V2=false
+
+# $1 = VM name. Returns 0 when this VM takes the emulator-v2 path, and sets the
+# TV_V2_* paths. Host gate: TIZEN_TV_V2_LAUNCH (auto = macOS arm64 only).
+tv_v2_applies() {
+  local vm="$1" mode="${TIZEN_TV_V2_LAUNCH:-auto}" d conf
+  case "$mode" in
+    off) return 1 ;;
+    force) ;;
+    *) [ "$OS" = "mac" ] && [ "$(uname -m 2>/dev/null)" = "arm64" ] || return 1 ;;
+  esac
+  TV_V2_VM_DIR=""
+  for d in "$(get_sdk_path)-data/emulator/vms/$vm" \
+           "$HOME/tizen-sdk-data/emulator/vms/$vm" \
+           "/opt/tizen-sdk-data/emulator/vms/$vm"; do
+    if [ -f "$d/vm_launch.conf" ]; then TV_V2_VM_DIR="$d"; break; fi
+  done
+  [ -n "$TV_V2_VM_DIR" ] || return 1
+  conf="$TV_V2_VM_DIR/vm_launch.conf"
+  grep -q '^profile=tv-samsung' "$conf" 2>/dev/null || return 1
+  TV_V2_VERSION=$(sed -n 's/^platform_version=tizen-//p' "$conf" | head -1)
+  [ -n "$TV_V2_VERSION" ] || return 1
+  # em-cli writes the SDK the VM was created with as studio_path.
+  TV_V2_SDK=$(sed -n 's/^studio_path="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$conf" | head -1)
+  [ -n "$TV_V2_SDK" ] || TV_V2_SDK="$(get_sdk_path)"
+  TV_V2_DIR="$TV_V2_SDK/platforms/tizen-$TV_V2_VERSION/tv-samsung/emulator-v2"
+  TV_V2_QEMU_IMG="$TV_V2_SDK/tools/emulator/bin/qemu-img"
+  return 0
+}
+
+# Everything the v2 launch reads must exist. Prints TV_V2_UNAVAILABLE and
+# returns 1 otherwise — em-cli is no fallback here, it cannot boot the VM.
+tv_v2_check_available() {
+  local f
+  if [ ! -x "$TV_V2_DIR/bin/emulator-x86_64" ] && [ ! -f "$TV_V2_DIR/bin/emulator-x86_64" ]; then
+    log_error "em-cli cannot boot TV VMs on Apple Silicon (it requires HAXM, which is Intel-only), and tizen-$TV_V2_VERSION has no emulator-v2 stack to boot it with: $TV_V2_DIR"
+    echo "TV_V2_UNAVAILABLE=no_emulator_v2"
+    return 1
+  fi
+  case "$TV_V2_VERIFIED_VERSIONS" in
+    *" $TV_V2_VERSION "*) ;;
+    *)
+      log_error "The emulator-v2 launch conf is verified only for TV$TV_V2_VERIFIED_VERSIONS(this VM is tizen-$TV_V2_VERSION). See vm-launch-tv-v2.md → Using another Tizen version."
+      echo "TV_V2_UNAVAILABLE=unverified_version"
+      return 1
+      ;;
+  esac
+  TV_V2_BASE=""
+  for f in "$TV_V2_SDK/platforms/tizen-$TV_V2_VERSION/tv-samsung/emulator-images-v2"/*/emulimg-*.x86_64; do
+    if [ -f "$f" ]; then TV_V2_BASE="$f"; break; fi
+  done
+  if [ -z "$TV_V2_BASE" ]; then
+    log_error "No emulator-v2 base image under $TV_V2_SDK/platforms/tizen-$TV_V2_VERSION/tv-samsung/emulator-images-v2/. Reinstall the TV SDK."
+    echo "TV_V2_UNAVAILABLE=no_base_image"
+    return 1
+  fi
+  if [ ! -x "$TV_V2_QEMU_IMG" ]; then
+    log_error "qemu-img not found at $TV_V2_QEMU_IMG. Reinstall the emulator package."
+    echo "TV_V2_UNAVAILABLE=no_qemu_img"
+    return 1
+  fi
+  return 0
+}
+
+# 0 when the VM's disk is NOT backed by the v2 base image (em-cli creates it on
+# the v1 one under emulator-images/, which the v2 stack cannot boot).
+tv_v2_disk_needs_rebase() {
+  local disk="$TV_V2_VM_DIR/emulimg-$1.x86_64" backing
+  [ -f "$disk" ] || return 0
+  backing=$("$TV_V2_QEMU_IMG" info "$disk" 2>/dev/null | sed -n 's/^backing file: //p' | head -1)
+  case "$backing" in
+    "$TV_V2_BASE"*) return 1 ;;
+  esac
+  return 0
+}
+
+# 0 when the emulator-v2 binary still carries macOS's download quarantine
+# (the launch would die with "library load disallowed by system policy").
+tv_v2_quarantined() {
+  command -v xattr >/dev/null 2>&1 || return 1
+  xattr -p com.apple.quarantine "$TV_V2_DIR/bin/emulator-x86_64.bin" >/dev/null 2>&1
+}
+
+# $1 = VM name, $2 = true when the disk may be recreated without asking (a VM
+# create just made). Prints one TV_V2_NEEDS line per missing consent and
+# returns 2 before anything is changed; 0 when the launch may proceed.
+tv_v2_check_consent() {
+  local vm="$1" fresh="${2:-false}" needs=0
+  if tv_v2_quarantined && [ "$CLEAR_QUARANTINE" != true ]; then
+    log_error "The emulator-v2 binaries still carry macOS's download quarantine, so macOS would refuse to run them."
+    log_error "Clearing it removes a macOS security flag from $TV_V2_DIR. Ask the user, then re-run with the clear-quarantine option."
+    echo "TV_V2_NEEDS=clear_quarantine"
+    needs=1
+  fi
+  # No disk at all means nothing to lose; prepare simply creates it.
+  if [ "$fresh" != true ] && [ "$REBASE_DISK" != true ] \
+      && [ -f "$TV_V2_VM_DIR/emulimg-$vm.x86_64" ] && tv_v2_disk_needs_rebase "$vm"; then
+    log_error "VM '$vm' has an em-cli (v1) disk; emulator-v2 boots only a disk on the v2 base image."
+    log_error "Recreating it DISCARDS the apps and data installed in '$vm'. Ask the user, then re-run with the rebase-disk option."
+    echo "TV_V2_NEEDS=rebase_disk"
+    needs=1
+  fi
+  [ "$needs" -eq 0 ] || return 2
+  return 0
+}
+
+# $1 = VM name. Make the files the v2 launch reads: the disk on the v2 base,
+# swap, tuner table, vm_launch-v2.conf, the execute bit on the v2 binaries, and
+# (with -Q) no quarantine. Call tv_v2_check_consent first.
+tv_v2_prepare() {
+  local vm="$1" conf="$TV_V2_VM_DIR/vm_launch.conf" v2conf="$TV_V2_VM_DIR/vm_launch-v2.conf"
+  local disk="$TV_V2_VM_DIR/emulimg-$1.x86_64" swap="$TV_V2_VM_DIR/swap-$1.img"
+  local tuner="$TV_V2_VM_DIR/tuner_default.cfg" data res skin ram f
+  local tuner_tpl="$TV_V2_SDK/platforms/tizen-$TV_V2_VERSION/tv-samsung/emulator-resources/tuner-template/tuner_default_template.cfg"
+
+  if tv_v2_disk_needs_rebase "$vm"; then
+    log_info "Recreating the disk of '$vm' on the emulator-v2 base image: $TV_V2_BASE"
+    if ! "$TV_V2_QEMU_IMG" create -f qcow2 -b "$TV_V2_BASE" -F qcow2 "$disk" >&2; then
+      log_error "qemu-img could not create $disk"
+      return 1
+    fi
+    echo "TV_V2_DISK_REBASED=$vm"
+  fi
+  if [ ! -f "$swap" ]; then
+    "$TV_V2_QEMU_IMG" create -f raw "$swap" 512M >&2 || { log_error "qemu-img could not create $swap"; return 1; }
+  fi
+  if [ ! -f "$tuner" ]; then
+    cp "$tuner_tpl" "$tuner" 2>/dev/null || { log_error "No tuner table at $tuner and no template at $tuner_tpl."; return 1; }
+  fi
+
+  # The template is the verified Apple Silicon conf; take the VM's own size,
+  # skin and RAM from em-cli's conf so a 3840x1080 VM is not booted at 1080.
+  data="${TV_V2_VM_DIR%/emulator/vms/*}"
+  res=$(sed -n 's/^display_resolution=//p' "$conf" | head -1)
+  skin=$(sed -n 's/^skin_path=//p' "$conf" | head -1)
+  ram=$(sed -n 's/^ram=//p' "$conf" | head -1)
+  mkdir -p "$TV_V2_VM_DIR/logs"
+  if ! sed -e "s|__VM_NAME__|$vm|g" \
+           -e "s|__SDK_PATH__|$TV_V2_SDK|g" \
+           -e "s|__SDK_DATA_PATH__|$data|g" "$TV_V2_TEMPLATE" > "$v2conf.tmp"; then
+    log_error "Could not write $v2conf from $TV_V2_TEMPLATE"
+    rm -f "$v2conf.tmp"
+    return 1
+  fi
+  if [[ "$res" =~ ^[0-9]+x[0-9]+$ ]]; then
+    sed -i.bak -e "s|^display_resolution=.*|display_resolution=$res|" \
+               -e "s|xres=[0-9]*,yres=[0-9]*|xres=${res%x*},yres=${res#*x}|" "$v2conf.tmp"
+  fi
+  [ -n "$skin" ] && sed -i.bak -e "s|^skin_path=.*|skin_path=$skin|" "$v2conf.tmp"
+  [[ "$ram" =~ ^[0-9]+$ ]] && sed -i.bak -e "s|^ram=.*|ram=$ram|" "$v2conf.tmp"
+  rm -f "$v2conf.tmp.bak"
+  mv "$v2conf.tmp" "$v2conf"
+  log_ok "Wrote emulator-v2 launch conf: $v2conf"
+
+  # Some TV SDK ZIPs store these without the execute bit ("Permission denied").
+  for f in "$TV_V2_DIR/bin/emulator-x86_64" "$TV_V2_DIR/bin/emulator-x86_64.bin"; do
+    if [ -f "$f" ] && [ ! -x "$f" ]; then
+      chmod +x "$f" && log_info "Restored the execute bit: $f"
+    fi
+  done
+
+  if [ "$CLEAR_QUARANTINE" = true ] && tv_v2_quarantined; then
+    log_info "Clearing macOS's download quarantine from $TV_V2_DIR (the user agreed)."
+    if chmod -R u+w "$TV_V2_DIR" && xattr -dr com.apple.quarantine "$TV_V2_DIR"; then
+      echo "TV_V2_QUARANTINE_CLEARED=1"
+    else
+      log_error "Could not clear the quarantine from $TV_V2_DIR"
+      return 1
+    fi
+  fi
+  return 0
+}
+
+# $1 = VM name. Start emulator-v2 in the background (output in
+# logs/qemu-v2.log) and fail fast when it dies right away.
+tv_v2_start() {
+  local vm="$1" log="$TV_V2_VM_DIR/logs/qemu-v2.log" pid
+  log_info "Starting emulator-v2 for '$vm' (TCG, VirGL): $TV_V2_DIR/bin/emulator-x86_64"
+  nohup "$TV_V2_DIR/bin/emulator-x86_64" --conf "$TV_V2_VM_DIR/vm_launch-v2.conf" \
+    > "$log" 2>&1 < /dev/null &
+  pid=$!
+  sleep "${TIZEN_TV_V2_START_CHECK:-3}"
+  if ! kill -0 "$pid" 2>/dev/null; then
+    log_error "emulator-v2 exited right after it was started. Last lines of $log:"
+    tail -n 20 "$log" 2>/dev/null | sed 's/^/  /' >&2 || true
+    echo "TV_V2_EXITED=1"
+    return 1
+  fi
+  echo "TV_V2_LAUNCH=$vm"
+  log_ok "emulator-v2 is running (PID $pid). TCG boot takes 1-2 minutes."
+  return 0
+}
+
+# Connect-timeout diagnosis: em-cli's own layers, plus the v2 QEMU log when the
+# VM was started with emulator-v2 (its errors land there, not in emulator.log).
+diagnose_connect_timeout() {
+  if [ "$USE_TV_V2" = true ]; then
+    log_error "emulator-v2 started but the VM never connected to sdb. Last lines of $TV_V2_VM_DIR/logs/qemu-v2.log:"
+    tail -n 20 "$TV_V2_VM_DIR/logs/qemu-v2.log" 2>/dev/null | sed 's/^/  /' >&2 || true
+  fi
+  diagnose_launch_failure "$1" "connect_timeout"
+}
+
+# ---------------------------------------------------------------------------
 # Action: list-platform
 # ---------------------------------------------------------------------------
 if [ "$ACTION" = "list-platform" ]; then
@@ -1597,7 +1848,18 @@ if [ "$ACTION" = "launch" ]; then
   LAUNCH_EXTRA_ARGS=()
   [ -n "$EMULATOR_PATH" ] && LAUNCH_EXTRA_ARGS+=(-p "$EMULATOR_PATH")
 
-  maybe_enable_hw_virtualization "$VM_NAME"
+  # Apple Silicon + TV VM: em-cli cannot boot it, emulator-v2 can (see
+  # tv_v2_applies). Check availability and the user's consent before changing
+  # anything, then prepare the v2 files; the sdb wait below is shared.
+  if tv_v2_applies "$VM_NAME"; then
+    USE_TV_V2=true
+    log_info "Apple Silicon Mac + TV VM: booting '$VM_NAME' with emulator-v2 instead of em-cli (em-cli requires HAXM, which is Intel-only)."
+    tv_v2_check_available || exit 1
+    tv_v2_check_consent "$VM_NAME" false || exit 1
+    tv_v2_prepare "$VM_NAME" || exit 1
+  fi
+
+  [ "$USE_TV_V2" = true ] || maybe_enable_hw_virtualization "$VM_NAME"
 
   # Capture pre-launch PIDs to identify the new emulator process
   # Use broad patterns: qemu process names vary by SDK version and may not include "tizen"
@@ -1609,7 +1871,11 @@ if [ "$ACTION" = "launch" ]; then
   fi
 
   log_info "Launching emulator VM: $VM_NAME"
-  launch_vm "$VM_NAME" "${LAUNCH_EXTRA_ARGS[@]+"${LAUNCH_EXTRA_ARGS[@]}"}" || exit 1
+  if [ "$USE_TV_V2" = true ]; then
+    tv_v2_start "$VM_NAME" || exit 1
+  else
+    launch_vm "$VM_NAME" "${LAUNCH_EXTRA_ARGS[@]+"${LAUNCH_EXTRA_ARGS[@]}"}" || exit 1
+  fi
 
   # Capture the new emulator PID and store it for later stop action
   # Wait for QEMU process to fully start (may take several seconds)
@@ -1749,7 +2015,7 @@ if [ "$ACTION" = "launch" ]; then
     fi
     log_error "New emulator did not connect within ${WAIT_TIMEOUT}s."
     log_error "Check Tizen Emulator Manager or try increasing the timeout with -t <seconds>."
-    diagnose_launch_failure "$VM_NAME" "connect_timeout"
+    diagnose_connect_timeout "$VM_NAME"
     exit 1
   elif command -v timeout &>/dev/null; then
     if timeout "$WAIT_TIMEOUT" "$SDB" -e wait-for-device 2>/dev/null; then
@@ -1765,7 +2031,7 @@ if [ "$ACTION" = "launch" ]; then
       fi
       log_error "Emulator did not connect within ${WAIT_TIMEOUT}s."
       log_error "Check Tizen Emulator Manager or try increasing the timeout with -t <seconds>."
-      diagnose_launch_failure "$VM_NAME" "connect_timeout"
+      diagnose_connect_timeout "$VM_NAME"
       exit 1
     fi
   else
@@ -1786,7 +2052,7 @@ if [ "$ACTION" = "launch" ]; then
       report_launch_success "$NEW_SERIAL"
     fi
     log_error "Emulator did not connect within ${WAIT_TIMEOUT}s."
-    diagnose_launch_failure "$VM_NAME" "connect_timeout"
+    diagnose_connect_timeout "$VM_NAME"
     exit 1
   fi
 fi
@@ -1979,14 +2245,40 @@ if [ "$ACTION" = "create" ]; then
   echo "$("$EMCLI" detail -n "$VM_NAME" 2>&1 || true)" | parse_detail_blocks "VM_DETAIL" \
     "Platform,Template,Resolution,RAM Size,CPU Arch,CPU count,Type,Skin Path"
 
+  # Apple Silicon + TV VM: em-cli cannot boot it, so make the emulator-v2 disk
+  # and conf now. The VM is brand new, so recreating its disk loses nothing.
+  # A failure here leaves the VM created (exit 0); launch retries the prepare.
+  if tv_v2_applies "$VM_NAME"; then
+    USE_TV_V2=true
+    log_info "Apple Silicon Mac + TV VM: preparing '$VM_NAME' for emulator-v2 (em-cli cannot boot it here; it requires HAXM, which is Intel-only)."
+    if tv_v2_check_available && tv_v2_prepare "$VM_NAME"; then
+      echo "TV_V2_PREPARED=$VM_NAME"
+    else
+      log_warn "VM '$VM_NAME' was created, but its emulator-v2 files could not be prepared; see the errors above."
+      USE_TV_V2=unavailable
+    fi
+  fi
+
   # Optionally launch
   if [ "$LAUNCH" = true ]; then
-    # em-cli writes hwVirtualization=false into the fresh profile when it could
-    # not use KVM at create time; heal it here too so create --launch benefits.
-    maybe_enable_hw_virtualization "$VM_NAME"
-
     log_info "Launching emulator VM: $VM_NAME"
-    launch_vm "$VM_NAME" || exit 1
+    if [ "$USE_TV_V2" = unavailable ]; then
+      log_warn "Not launching '$VM_NAME': emulator-v2 is not ready (see above), and em-cli cannot boot a TV VM on Apple Silicon."
+      exit 0
+    elif [ "$USE_TV_V2" = true ]; then
+      # The quarantine still needs the user's consent; the VM stays created.
+      if ! tv_v2_check_consent "$VM_NAME" true; then
+        log_warn "VM '$VM_NAME' was created but not launched; launch it once the user agreed."
+        exit 0
+      fi
+      tv_v2_prepare "$VM_NAME" || exit 1
+      tv_v2_start "$VM_NAME" || exit 1
+    else
+      # em-cli writes hwVirtualization=false into the fresh profile when it could
+      # not use KVM at create time; heal it here too so create --launch benefits.
+      maybe_enable_hw_virtualization "$VM_NAME"
+      launch_vm "$VM_NAME" || exit 1
+    fi
 
     # Wait for sdb connection
     SDB=$(find_tizen_tool sdb) || { log_error "sdb not found."; exit 1; }
@@ -2022,7 +2314,7 @@ if [ "$ACTION" = "create" ]; then
     log_warn "You can launch it manually later via Tizen Studio Emulator Manager."
     # Created-but-not-connected keeps exit 0; the diag lines flow into the
     # create envelope's warnings so the caller still sees why boot stalled.
-    diagnose_launch_failure "$VM_NAME" "connect_timeout"
+    diagnose_connect_timeout "$VM_NAME"
   fi
 
   exit 0

@@ -267,7 +267,13 @@ check(
 check(
   "a create --launch whose emulator never connected is status created_launch_timeout",
   /"created_launch_timeout"/.test(createBody) &&
-    /const launchTimedOut = launch && !launchedSerial/.test(createBody),
+    /const launchTimedOut =\s*launch &&\s*!launchedSerial/.test(createBody),
+  true,
+);
+check(
+  "a create --launch stopped for the user's emulator-v2 consent is not a timeout",
+  /"created_launch_needs_consent"/.test(createBody) &&
+    /tvV2Needs\.length === 0/.test(createBody),
   true,
 );
 

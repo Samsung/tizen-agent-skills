@@ -23,6 +23,18 @@
   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template`으로 실행 설정을 만드는 방법
   (`-cpu max` 필수), 사용자 동의를 받은 뒤 Gatekeeper를 해제하는 방법을 담았습니다. `tizen-create-emulator`는 이 섹션을 안내합니다. M2 MacBook Pro의
   Tizen 10.0에서 확인했습니다.
+- **Apple Silicon Mac에서 러너가 TV VM을 직접 부팅합니다.** macOS arm64에서 `tv-samsung` VM에
+  `emulator-manager-cli.js launch`(그리고 `create --launch`)를 실행하면 `tizen-emulator-manager.sh`가
+  emulator-v2 경로를 탑니다. 디스크를 rebase하고, VM의 해상도·스킨·RAM으로 `vm_launch-v2.conf`를
+  만들고(템플릿만 쓰면 항상 1920x1080으로 부팅됐습니다), v2 바이너리의 실행 권한을 되살린 뒤
+  emulator-v2를 시작하고 평소처럼 sdb 연결을 기다립니다. Envelope에는
+  `launch_method: "emulator-v2"`가 들어갑니다. 에이전트가 Bash 훅(Rule 20)이 막는 `qemu-img` /
+  `sed` / `nohup` 명령을 VM 폴더에 직접 입력할 필요가 없습니다. 기존 VM의 디스크를 다시 만드는 일과
+  macOS quarantine 해제는 사용자 동의가 필요합니다. 동의가 없으면 러너는 아무것도 바꾸지 않고
+  새 `--rebase-disk` / `--clear-quarantine` 플래그로 다시 실행할 명령과 함께
+  `user_input_required`를 돌려줍니다(`create --launch`는 부팅 시간 초과 대신
+  `status: created_launch_needs_consent`). `TIZEN_TV_V2_LAUNCH=off`로 em-cli를 유지할 수 있습니다.
+  macOS 전용이라 `tizen-emulator-manager.ps1`은 바꾸지 않았습니다.
 
 ### 변경
 

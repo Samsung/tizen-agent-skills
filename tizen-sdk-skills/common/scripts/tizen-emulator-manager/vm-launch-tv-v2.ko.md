@@ -8,6 +8,13 @@
 [`tizen-launch-emulator` skill](../../skills/tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)이
 이 템플릿을 사용하며, 이 문서는 같은 절차를 더 자세히 설명합니다.
 
+**이 단계는 러너가 직접 수행합니다.** Apple Silicon Mac에서 `tv-samsung` VM에
+`emulator-manager-cli.js launch`(그리고 `create` / `create --launch`)를 실행하면
+`tizen-emulator-manager.sh`(`tv_v2_*`)가 디스크를 rebase하고, VM의 해상도·스킨·RAM으로
+`vm_launch-v2.conf`를 만들고, v2 바이너리의 실행 권한을 되살린 뒤 emulator-v2를 시작합니다.
+기존 VM의 디스크 rebase(`--rebase-disk`)와 quarantine 해제(`--clear-quarantine`)는 사용자 동의를
+받은 뒤에만 합니다. 아래 수동 절차는 참고용이며, 부팅되지 않는 VM을 디버깅할 때 씁니다.
+
 ## em-cli를 거치지 않는 이유
 
 이미지 버전 3.0 이상에서 em-cli의 `checkVTProperty`(`em-lib.jar`)는 macOS에서
