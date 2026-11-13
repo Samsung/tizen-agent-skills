@@ -170,7 +170,8 @@ Exit code: `0` = success envelope (with `result.artifacts`), `1` = failure/error
 > `tizen_resource_project.yaml` → RPK (`tizen package -t rpk`); `tizen_dotnet_project.yaml` /
 > `*.csproj` → DotNET, `tizen_native_project.yaml` / `project_def.prop` → Native,
 > `config.xml` / `index.html` → WebApp (all three: `tz build` + `tz pack`);
-> `CMakeLists.txt` + `packaging/*.spec` → Platform (**GBS**, Linux only). **GBS is used ONLY
+> `packaging/*.spec` + `CMakeLists.txt` (at the root or nested, e.g. DALi's
+> `build/tizen/CMakeLists.txt`) → Platform (**GBS**, Linux only). **GBS is used ONLY
 > for Platform projects.** A Native/DotNET/WebApp/RPK build never runs GBS — `tizen-manifest.xml`
 > is present in every Native app and is not a Platform marker. A native build that takes a
 > minute is `tz build` compiling, not GBS; do not describe it as a GBS build.
@@ -213,7 +214,8 @@ node "$CLI" build --project "<platform-project>" --build-type Debug --arch armv7
   Prefer this over guessing from the device model.
 - **Only these four names are accepted.** `arm`, `arm64` or `armv7` are rejected with
   `invalid_parameters` before GBS runs — map them as in the table, do not retry the same value.
-- The RPMs land in `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`; `result.artifacts` already
+- The RPMs land in `<buildroot>/local/repos/<repo>/<arch>/RPMS/` — `buildroot` comes from
+  `TIZEN_BUILD_ROOT` or `.gbs.conf` and defaults to `~/GBS-ROOT`; `result.artifacts` already
   lists them, so report the arch from those paths.
 
 > **RPK:** A standalone resource project is marked by `tizen_resource_project.yaml` and
@@ -284,7 +286,8 @@ Rules:
   - RPK is resource-only: install the `.rpk` without `--run`. The runner internally uses
     direct `sdb install` for RPK; do not replace it with `tz install`.
   - Platform (GBS) builds produce `.rpm` packages (not `.tpk`/`.wgt`).
-    RPMs are output to `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/` and **can** be installed
+    RPMs are output to `<buildroot>/local/repos/<repo>/<arch>/RPMS/` (`buildroot` from
+    `.gbs.conf`, default `~/GBS-ROOT`) and **can** be installed
     via `tizen-install-app` (which supports `.rpm` — it handles `sdb root on`, `rpm -i`,
     and app execution as `owner` user with proper Wayland/DBus environment internally).
     **NEVER run `sdb` or `rpm` directly** — always use `tizen-install-app` for RPM installation.

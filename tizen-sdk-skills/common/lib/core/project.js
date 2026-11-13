@@ -63,13 +63,204 @@ const VALID_PROJECT_TYPES = [
   "platform",
 ];
 
+/**
+ * How deep below the project root a CMakeLists.txt may sit for a project with
+ * packaging/*.spec to count as a Platform (GBS) project. Depth 3 covers the
+ * DALi layout (build/tizen/CMakeLists.txt) without walking a whole tree.
+ * Mirrors has_gbs_layout() in tizen-build-project.sh.
+ */
+const PLATFORM_CMAKE_MAX_DEPTH = 3;
+const PLATFORM_CMAKE_SKIP_DIRS = new Set([".git", "node_modules"]);
+
+function hasCMakeListsWithin(dir, depth) {
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_e) {
+    return false;
+  }
+  if (entries.some((e) => e.isFile() && e.name === "CMakeLists.txt")) {
+    return true;
+  }
+  if (depth >= PLATFORM_CMAKE_MAX_DEPTH) return false;
+  return entries.some(
+    (e) =>
+      e.isDirectory() &&
+      !PLATFORM_CMAKE_SKIP_DIRS.has(e.name) &&
+      hasCMakeListsWithin(path.join(dir, e.name), depth + 1),
+  );
+}
+
+/**
+ * A Platform (GBS) project carries packaging/*.spec — the file `gbs build`
+ * actually builds from — and a CMakeLists.txt either at the root or a few
+ * levels down (DALi projects keep it in build/tizen/).
+ */
 function isPlatformProject(projectPath) {
   const packagingDir = path.join(projectPath, "packaging");
-  return (
-    fs.existsSync(path.join(projectPath, "CMakeLists.txt")) &&
-    fs.existsSync(packagingDir) &&
-    fs.readdirSync(packagingDir).some((entry) => entry.endsWith(".spec"))
+  let hasSpec;
+  try {
+    hasSpec = fs
+      .readdirSync(packagingDir)
+      .some((entry) => entry.endsWith(".spec"));
+  } catch (_e) {
+    return false;
+  }
+  return hasSpec && hasCMakeListsWithin(projectPath, 1);
+}
+
+/**
+ * Parse an ini-style gbs.conf into { section: { key: value } }. Comment lines
+ * (# or ;) are skipped; continuation lines are ignored — buildroot/profile are
+ * single-line values.
+ */
+function parseGbsConf(text) {
+  const sections = {};
+  let current = null;
+  for (const raw of String(text).split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#") || line.startsWith(";")) continue;
+    const section = /^\[([^\]]+)\]$/.exec(line);
+    if (section) {
+      current = section[1].trim();
+      sections[current] = sections[current] || {};
+      continue;
+    }
+    const kv = /^([^=:]+?)\s*[=:]\s*(.*)$/.exec(line);
+    if (kv && current && !/^\s/.test(raw)) {
+      sections[current][kv[1].trim().toLowerCase()] = kv[2].trim();
+    }
+  }
+  return sections;
+}
+
+/**
+ * gbs.conf layers in gbs's own priority order: the .gbs.conf at the top of a
+ * `repo`-managed tree, the one in the build directory, ~/.gbs.conf, then
+ * /etc/gbs.conf (gitbuildsys/conf.py _get_config_files()).
+ */
+function gbsConfLayers(projectPath) {
+  const files = [];
+  let cur = path.resolve(projectPath);
+  for (;;) {
+    if (
+      fs.existsSync(path.join(cur, ".repo")) &&
+      fs.existsSync(path.join(cur, ".gbs.conf"))
+    ) {
+      files.push(path.join(cur, ".gbs.conf"));
+      break;
+    }
+    const parent = path.dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  for (const f of [
+    path.join(path.resolve(projectPath), ".gbs.conf"),
+    path.join(os.homedir(), ".gbs.conf"),
+    "/etc/gbs.conf",
+  ]) {
+    if (!files.includes(f) && fs.existsSync(f)) files.push(f);
+  }
+  return files
+    .map((f) => {
+      try {
+        return parseGbsConf(fs.readFileSync(f, "utf-8"));
+      } catch (_e) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+/**
+ * The build root `gbs build` uses for a project, resolved the way
+ * gitbuildsys/cmd_build.py init_buildroot() does: TIZEN_BUILD_ROOT, then the
+ * current profile's buildroot, then [general] buildroot, then ~/GBS-ROOT/.
+ * ${profile} and ${tmpdir} are expanded like gbs does.
+ *
+ * @param {string} projectPath
+ * @returns {string} absolute build root path
+ */
+function resolveGbsBuildRoot(projectPath) {
+  const layers = gbsConfLayers(projectPath);
+  const lookup = (section, key) => {
+    for (const layer of layers) {
+      if (layer[section] && layer[section][key] !== undefined) {
+        return layer[section][key];
+      }
+    }
+    return undefined;
+  };
+  const profile = lookup("general", "profile") || "";
+  let buildRoot = process.env.TIZEN_BUILD_ROOT;
+  if (!buildRoot && profile) buildRoot = lookup(profile, "buildroot");
+  if (!buildRoot) buildRoot = lookup("general", "buildroot");
+  if (!buildRoot) buildRoot = "~/GBS-ROOT/";
+  const vars = {
+    profile: profile.replace(/[^a-zA-Z0-9:._-]/g, "_"),
+    tmpdir: lookup("general", "tmpdir") || "/var/tmp",
+  };
+  buildRoot = buildRoot.replace(/\$\{([^}]+)\}|%\(([^)]+)\)s/g, (m, a, b) =>
+    vars[a || b] !== undefined ? vars[a || b] : m,
   );
+  if (buildRoot === "~" || buildRoot.startsWith("~/")) {
+    buildRoot = path.join(os.homedir(), buildRoot.slice(1));
+  }
+  return path.resolve(projectPath, buildRoot);
+}
+
+/**
+ * The local repo directories depanneur printed after a successful build:
+ *   info: generated RPM packages can be found from local repo:
+ *        /path/to/buildroot/local/repos/<profile>/<arch>/RPMS
+ * The path is on the line after the message (older builds put it on the same
+ * line), and the line may carry ANSI colour codes.
+ *
+ * @param {string} output - build script stdout
+ * @returns {string[]} existing directories, in output order
+ */
+function parseGbsLocalRepoDirs(output) {
+  const lines = String(output || "")
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\[[0-9;]*m/g, "")
+    .split(/\r?\n/);
+  const dirs = [];
+  for (let i = 0; i < lines.length; i++) {
+    // Binary RPMs only — the "generated source RPM packages" line names SRPMS.
+    const m =
+      /generated RPM packages can be found from local repo:\s*(.*)$/.exec(
+        lines[i],
+      );
+    if (!m) continue;
+    const candidate = (m[1] || lines[i + 1] || "").trim();
+    if (
+      candidate &&
+      path.isAbsolute(candidate) &&
+      !dirs.includes(candidate) &&
+      fs.existsSync(candidate)
+    ) {
+      dirs.push(candidate);
+    }
+  }
+  return dirs;
+}
+
+/**
+ * Directories to search for GBS output, most specific first: the local repo
+ * paths gbs printed, the resolved build root's local/repos (or the build root
+ * itself), and ~/GBS-ROOT as a last resort.
+ */
+function gbsOutputDirs(projectPath, output) {
+  const dirs = parseGbsLocalRepoDirs(output);
+  const roots = [resolveGbsBuildRoot(projectPath)];
+  const defaultRoot = path.join(os.homedir(), "GBS-ROOT");
+  if (!roots.includes(defaultRoot)) roots.push(defaultRoot);
+  for (const root of roots) {
+    const repos = path.join(root, "local", "repos");
+    const dir = fs.existsSync(repos) ? repos : root;
+    if (fs.existsSync(dir) && !dirs.includes(dir)) dirs.push(dir);
+  }
+  return dirs;
 }
 
 /**
@@ -1492,13 +1683,13 @@ async function buildProject(
     }
 
     // Success validation: verify .tpk/.wgt/.rpk artifacts created/updated in this build
-    // For platform (GBS) builds, also check ~/GBS-ROOT for output artifacts
+    // For platform (GBS) builds, also check the GBS output: the local repo gbs
+    // printed, then the buildroot from TIZEN_BUILD_ROOT / gbs.conf, then ~/GBS-ROOT.
     let artifacts = findBuildArtifacts(normalizedProjectPath, startTime);
-    if (artifacts.length === 0) {
-      // Check GBS output directory (~/GBS-ROOT) for platform builds
-      const gbsRoot = path.join(os.homedir(), "GBS-ROOT");
-      if (fs.existsSync(gbsRoot)) {
-        artifacts = findBuildArtifacts(gbsRoot, startTime);
+    if (artifacts.length === 0 && platformProject) {
+      for (const dir of gbsOutputDirs(normalizedProjectPath, output)) {
+        artifacts = findBuildArtifacts(dir, startTime);
+        if (artifacts.length > 0) break;
       }
     }
     if (artifacts.length === 0) {
@@ -1511,7 +1702,12 @@ async function buildProject(
         command,
         "build_failed",
         formatBuildFailureMessage(
-          `Build script finished but no .tpk/.wgt/.rpk/.rpm artifact was produced under: ${normalizedProjectPath}.`,
+          `Build script finished but no .tpk/.wgt/.rpk/.rpm artifact was produced under: ${[
+            normalizedProjectPath,
+            ...(platformProject
+              ? gbsOutputDirs(normalizedProjectPath, output)
+              : []),
+          ].join(", ")}.`,
           diagnostics,
           logPath,
         ),
@@ -2570,6 +2766,9 @@ module.exports = {
   classifyInstallFailure,
   validatePackageId,
   isPlatformProject,
+  resolveGbsBuildRoot,
+  parseGbsLocalRepoDirs,
+  gbsOutputDirs,
   createProject,
   importWgt,
   deleteProject,

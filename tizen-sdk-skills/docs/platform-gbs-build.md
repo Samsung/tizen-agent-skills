@@ -198,7 +198,8 @@ gbs build -A x86_64 --include-all
 
 ## 빌드 산출물
 
-GBS 빌드가 성공하면 다음 위치에 `.rpm` 패키지가 생성됩니다:
+GBS 빌드가 성공하면 GBS 빌드 루트 아래에 `.rpm` 패키지가 생성됩니다.
+`TIZEN_BUILD_ROOT`나 `.gbs.conf`의 `buildroot`가 지정되지 않으면 빌드 루트는 `~/GBS-ROOT`입니다:
 
 ```
 ~/GBS-ROOT/local/repos/<arch>/RPMS/
@@ -245,12 +246,12 @@ GBS 빌드가 성공하면 다음 위치에 `.rpm` 패키지가 생성됩니다:
 
 `tizen-build-project.sh` 스크립트의 Platform 빌드 흐름:
 
-1. **프로젝트 타입 감지** — `CMakeLists.txt` + `packaging/*.spec` 존재 확인 → Platform (`tizen-manifest.xml`은 일반 Native 앱에도 있으므로 Platform 마커가 아님)
+1. **프로젝트 타입 감지** — `packaging/*.spec`과 루트 또는 3단계 이내 하위 경로의 `CMakeLists.txt`(DALi: `build/tizen/CMakeLists.txt`) 존재 확인 → Platform (`tizen-manifest.xml`은 일반 Native 앱에도 있으므로 Platform 마커가 아님)
 2. **DALi C++17 프리플라이트** — `dali2-*` 의존성이 있으면 C++17 설정 확인, 없으면 exit 4로 즉시 중단
 3. **GBS 실행 파일 확인** — 3단계 fallback (tizen-cli 플러그인 → 시스템 gbs → 에러)
 4. **Git 저장소 확인** — `.git`이 없으면 자동 초기화
 5. **GBS 빌드 실행** — `gbs build -A <arch> --include-all`
-6. **산출물 검색** — 프로젝트 디렉토리 및 `~/GBS-ROOT`에서 `.tpk`/`.wgt`/`.rpm` 파일 검색
+6. **산출물 검색** — 프로젝트 디렉토리, `gbs build`가 출력한 로컬 저장소(`generated RPM packages can be found from local repo:`), 빌드 루트(`TIZEN_BUILD_ROOT`, 그다음 `.gbs.conf`의 프로필 또는 `[general]` `buildroot`), 마지막으로 `~/GBS-ROOT` 순서로 `.tpk`/`.wgt`/`.rpm` 파일 검색
 7. **결과 반환** — Standard JSON Envelope로 빌드 결과 전달
 
 ---

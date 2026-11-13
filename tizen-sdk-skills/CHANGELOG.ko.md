@@ -61,6 +61,17 @@
 
 ### 수정
 
+- **사용자 지정 `buildroot`를 쓰는 GBS 빌드가 더 이상 "Package file not found"로 실패하지
+  않습니다.** `gbs build` 후 RPM 탐색이 `~/GBS-ROOT`만 확인해서, `~/.gbs.conf`에 `buildroot`를
+  지정하면 성공한 빌드도 실패로 보고됐습니다. 이제 `tizen-build-project.sh`와 `buildProject()`는
+  `gbs build`가 출력한 로컬 저장소(`generated RPM packages can be found from local repo:`)를 먼저
+  찾고, 다음으로 gbs와 같은 방식으로 결정한 빌드 루트(`TIZEN_BUILD_ROOT`, 현재 프로필의
+  `buildroot`, `[general] buildroot`, `${profile}` / `${tmpdir}` 치환, 프로젝트 `.gbs.conf`가
+  `~/.gbs.conf`·`/etc/gbs.conf`보다 우선)를 찾은 뒤, 마지막으로 `~/GBS-ROOT`를 찾습니다.
+- **루트에 `CMakeLists.txt`가 없는 Platform 프로젝트도 감지합니다.** `packaging/*.spec`이 있고
+  `CMakeLists.txt`가 3단계 이내 하위 경로에 있는 프로젝트(DALi demo의
+  `build/tizen/CMakeLists.txt` 등)는 "Not a valid Tizen project"로 거부됐습니다. 이제
+  `isPlatformProject()`와 `has_project_config()` / `detect_project_type()`가 이를 인식합니다.
 - **Apple Silicon Mac에서 TV 에뮬레이터 생성이 더 이상 실패하지 않습니다.**
   `tizen-emulator-manager.sh`는 bash 4 이상으로 자신을 다시 실행하는데(`require_bash4`), Intel
   Homebrew를 쓰는 Mac에서는 Rosetta로 도는 `/usr/local/bin/bash`가 선택되어 `uname -m`이
