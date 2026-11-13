@@ -62,6 +62,19 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
 
 ### Fixed
 
+- **A GBS build with a custom `buildroot` no longer fails with "Package file not found".**
+  The RPM lookup after `gbs build` searched only `~/GBS-ROOT`, so a `buildroot` set in
+  `~/.gbs.conf` made a successful build look failed. `tizen-build-project.sh` and
+  `buildProject()` now search the local repo `gbs build` prints
+  (`generated RPM packages can be found from local repo:`), then the build root resolved
+  the way gbs resolves it (`TIZEN_BUILD_ROOT`, the current profile's `buildroot`,
+  `[general] buildroot`, with `${profile}` / `${tmpdir}` expanded, project `.gbs.conf`
+  ahead of `~/.gbs.conf` and `/etc/gbs.conf`), and only then `~/GBS-ROOT`. Source RPMs
+  (`*.src.rpm`) are not reported as build artifacts.
+- **Platform projects whose `CMakeLists.txt` is not at the root are detected.** A project with
+  `packaging/*.spec` and a `CMakeLists.txt` up to three levels down — DALi demo keeps it in
+  `build/tizen/CMakeLists.txt` — was rejected as "Not a valid Tizen project". `isPlatformProject()`
+  and `has_project_config()` / `detect_project_type()` now accept it.
 - **TV emulator create on Apple Silicon Macs no longer fails.** `tizen-emulator-manager.sh`
   re-runs itself with a bash 4+ (`require_bash4`), and on a Mac with Intel Homebrew that is
   `/usr/local/bin/bash` under Rosetta, where `uname -m` says `x86_64`. The emulator-v2 gate then

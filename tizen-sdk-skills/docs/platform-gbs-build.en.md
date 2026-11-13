@@ -198,7 +198,8 @@ gbs build -A x86_64 --include-all
 
 ## Build Artifacts
 
-When the GBS build succeeds, `.rpm` packages are generated at:
+When the GBS build succeeds, `.rpm` packages are generated under the GBS build root —
+`~/GBS-ROOT` unless `TIZEN_BUILD_ROOT` or `buildroot` in `.gbs.conf` says otherwise:
 
 ```
 ~/GBS-ROOT/local/repos/<arch>/RPMS/
@@ -245,12 +246,12 @@ When the GBS build succeeds, `.rpm` packages are generated at:
 
 The Platform build flow in `tizen-build-project.sh`:
 
-1. **Detect project type** — check for `CMakeLists.txt` + `packaging/*.spec` → Platform (`tizen-manifest.xml` is not a Platform marker; ordinary Native apps have one too)
+1. **Detect project type** — check for `packaging/*.spec` + a `CMakeLists.txt` at the root or up to three levels down (DALi: `build/tizen/CMakeLists.txt`) → Platform (`tizen-manifest.xml` is not a Platform marker; ordinary Native apps have one too)
 2. **DALi C++17 preflight** — if a `dali2-*` dependency is present, verify C++17 is selected; exit 4 if not
 3. **Resolve GBS executable** — 3-level fallback (tizen-cli plugin → system gbs → error)
 4. **Verify Git repository** — auto-initialize if `.git` is missing
 5. **Run GBS build** — `gbs build -A <arch> --include-all`
-6. **Search for artifacts** — look for `.tpk`/`.wgt`/`.rpm` files in project dir and `~/GBS-ROOT`
+6. **Search for artifacts** — look for `.tpk`/`.wgt`/`.rpm` files in the project dir, the local repo `gbs build` prints (`generated RPM packages can be found from local repo:`), the build root (`TIZEN_BUILD_ROOT`, then the profile's or `[general]` `buildroot` in `.gbs.conf`), and finally `~/GBS-ROOT`
 7. **Return result** — Standard JSON Envelope with build results
 
 ---

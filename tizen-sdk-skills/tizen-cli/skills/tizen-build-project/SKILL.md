@@ -90,7 +90,7 @@ The command auto-detects the project type:
 | DotNET   | `tizen_dotnet_project.yaml` or `*.csproj`         | `tz build` + `tz pack`    |
 | WebApp   | `config.xml` or `index.html`                      | `tz build` + `tz pack`    |
 | RPK      | `tizen_resource_project.yaml`                     | `tizen package -t rpk` (see below) |
-| Platform | `CMakeLists.txt` + `packaging/*.spec`             | **GBS build** (see below) |
+| Platform | `packaging/*.spec` + `CMakeLists.txt` (root or nested) | **GBS build** (see below) |
 
 Detection runs top-down, so a project with `tizen_native_project.yaml` is Native even if it also
 has a `CMakeLists.txt`. `tizen-manifest.xml` is **not** a Platform marker — every Native app has
@@ -117,7 +117,7 @@ The build script automatically:
 - Preflights the DALi C++17 requirement (see below) and exits 4 before GBS if unmet
 - Initializes a git repository if one doesn't exist (GBS requires git)
 - Runs `gbs build -A <arch> --include-all` from the project directory
-- Searches for `.tpk`/`.wgt`/`.rpm` artifacts in both the project dir and `~/GBS-ROOT`
+- Searches for `.tpk`/`.wgt`/`.rpm` artifacts in the project dir, the local repo `gbs build` reports, and the GBS build root (`TIZEN_BUILD_ROOT`, then `buildroot` in `.gbs.conf`, default `~/GBS-ROOT`)
 
 ### Target architecture (`--arch`)
 
@@ -161,7 +161,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 ## Output
 
-- Success `result.artifacts`: array of `{ path, format, size_bytes }` — the produced `.tpk`/`.wgt`/`.rpk`/`.rpm` package paths. For Platform (GBS) builds, artifacts are `.rpm` files under `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`. `warnings` may carry a build-output summary.
+- Success `result.artifacts`: array of `{ path, format, size_bytes }` — the produced `.tpk`/`.wgt`/`.rpk`/`.rpm` package paths. For Platform (GBS) builds, artifacts are `.rpm` files under `<buildroot>/local/repos/<repo>/<arch>/RPMS/` (`buildroot` from `.gbs.conf`, default `~/GBS-ROOT`). `warnings` may carry a build-output summary.
 - Failure: the envelope already contains the compile diagnostics — `errors[0].message` carries the headline, the diagnostic lines (compiler errors first) and the full-log path; `errors[0].details` carries the same diagnostic lines as a string array. Read the host log file only when `details` is empty or insufficient.
 
 ### On failure — read the errors before retrying

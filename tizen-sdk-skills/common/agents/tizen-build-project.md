@@ -187,7 +187,8 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    "Final message — envelope JSON ONLY" below; the caller writes the user-facing summary).
    Success: `result.artifacts` contains the produced `.tpk`/`.wgt`/`.rpm` path(s) — the CLI
    already verified they exist. For Platform (GBS) builds, artifacts are `.rpm` files under
-   `~/GBS-ROOT/local/repos/<repo>/<arch>/RPMS/`. Failure: the JSON already carries
+   `<buildroot>/local/repos/<repo>/<arch>/RPMS/` (`buildroot` from `TIZEN_BUILD_ROOT` or
+   `.gbs.conf`, default `~/GBS-ROOT`). Failure: the JSON already carries
    `errors[0].message` (exit code, key error lines, full-log path) — keep it intact.
 
 > **ℹ️ Signing profile (default certificates):** When no signing profile is specified and no

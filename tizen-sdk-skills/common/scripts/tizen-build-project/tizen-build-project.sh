@@ -116,15 +116,25 @@ fi
 # Utility Functions
 # ============================================================================
 
+# GBS platform project: packaging/*.spec (what `gbs build` builds from) plus a
+# CMakeLists.txt at the root or up to three levels down — DALi projects keep it in
+# build/tizen/CMakeLists.txt. Mirrors isPlatformProject() in lib/core/project.js.
+has_gbs_layout() {
+    local path="$1"
+    [[ -d "$path/packaging" && -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]] || return 1
+    [[ -f "$path/CMakeLists.txt" ]] && return 0
+    [[ -n "$(find "$path" -maxdepth 3 \( -name .git -o -name node_modules \) -prune -o -type f -name CMakeLists.txt -print -quit 2>/dev/null)" ]]
+}
+
 has_project_config() {
     local path="$1"
     # Standard Tizen SDK project types — every marker detect_project_type() can classify
     # (project_def.prop is the Tizen Studio native marker; index.html alone is too loose).
     [[ -f "$path/tizen_native_project.yaml" || -f "$path/tizen_dotnet_project.yaml" || -f "$path/tizen_resource_project.yaml" || -f "$path/project_def.prop" || -f "$path/config.xml" || -n "$(ls "$path"/*.csproj 2>/dev/null)" ]] && return 0
-    # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject).
-    # tizen-manifest.xml + CMakeLists.txt alone is NOT a marker — ordinary Native apps
-    # also carry tizen-manifest.xml, and only packaging/*.spec makes a project GBS-buildable.
-    [[ -f "$path/CMakeLists.txt" && -d "$path/packaging" && -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]] && return 0
+    # GBS platform project (no .project/.tproject). tizen-manifest.xml + CMakeLists.txt
+    # alone is NOT a marker — ordinary Native apps also carry tizen-manifest.xml, and
+    # only packaging/*.spec makes a project GBS-buildable.
+    has_gbs_layout "$path" && return 0
     return 1
 }
 
@@ -174,8 +184,8 @@ detect_project_type() {
         echo "Native"
     elif [[ -f "$path/config.xml" ]] || [[ -f "$path/index.html" ]]; then
         echo "WebApp"
-    elif [[ -f "$path/CMakeLists.txt" ]] && [[ -d "$path/packaging" ]] && [[ -n "$(ls "$path/packaging/"*.spec 2>/dev/null)" ]]; then
-        # GBS platform project: CMakeLists.txt + packaging/*.spec (no .project/.tproject).
+    elif has_gbs_layout "$path"; then
+        # GBS platform project: packaging/*.spec + CMakeLists.txt (no .project/.tproject).
         # This is the ONLY route to a GBS build; it mirrors isPlatformProject() in
         # lib/core/project.js. Native/DotNET/WebApp/RPK never use GBS.
         echo "Platform"
@@ -385,14 +395,17 @@ build_platform_project() {
     fi
 
     echo "" >&2
-    echo "Running: $gbs_cmd build -A $arch --include-all ${gbs_extra_args[*]} (in $project_path)" >&2
+    echo "Running: $gbs_cmd build -A $arch --include-all ${gbs_extra_args[*]:-} (in $project_path)" >&2
     echo "" >&2
 
     local prev_dir
     prev_dir=$(pwd)
     cd "$project_path"
 
-    if $gbs_cmd build -A "$arch" --include-all ${gbs_extra_args[@]+"${gbs_extra_args[@]}"}; then
+    # Keep a copy of gbs stdout: depanneur prints the local repo that holds the
+    # RPMs there, and find_gbs_package_file reads it back. pipefail (set above)
+    # keeps the gbs exit status, not tee's.
+    if $gbs_cmd build -A "$arch" --include-all ${gbs_extra_args[@]+"${gbs_extra_args[@]}"} | tee "${GBS_BUILD_LOG:-/dev/null}"; then
         cd "$prev_dir"
         log_ok "GBS build completed successfully"
         return 0
@@ -405,32 +418,151 @@ build_platform_project() {
 }
 
 
+# gbs.conf files in gbs's own priority order (gitbuildsys/conf.py): the .gbs.conf
+# at the top of a `repo`-managed tree, the build directory's .gbs.conf,
+# ~/.gbs.conf, then /etc/gbs.conf. One path per line.
+gbs_conf_files() {
+    local project_path="$1"
+    local cur="$project_path"
+    local seen=""
+    while :; do
+        if [[ -e "$cur/.repo" && -f "$cur/.gbs.conf" ]]; then
+            echo "$cur/.gbs.conf"
+            seen="$cur/.gbs.conf"
+            break
+        fi
+        [[ "$cur" == "/" || -z "$cur" ]] && break
+        cur=$(dirname "$cur")
+    done
+    local f
+    for f in "$project_path/.gbs.conf" "$HOME/.gbs.conf" /etc/gbs.conf; do
+        [[ -f "$f" && "$f" != "$seen" ]] && echo "$f"
+    done
+    return 0
+}
+
+# Print the first non-empty value of <key> in [<section>] across the given files.
+gbs_conf_get() {
+    local section="$1" key="$2"
+    shift 2
+    local f value
+    for f in "$@"; do
+        value=$(awk -v s="$section" -v k="$key" '
+            { sub(/\r$/, "") }
+            /^[ \t]*[#;]/ { next }
+            /^[ \t]*\[.*\][ \t]*$/ { cur = $0; gsub(/^[ \t]*\[[ \t]*|[ \t]*\][ \t]*$/, "", cur); next }
+            cur == s && /^[^ \t]/ {
+                i = match($0, /[=:]/)
+                if (i == 0) next
+                name = substr($0, 1, i - 1); gsub(/[ \t]+$/, "", name)
+                if (tolower(name) != k) next
+                val = substr($0, i + 1); gsub(/^[ \t]+|[ \t]+$/, "", val)
+                print val; exit
+            }' "$f" 2>/dev/null) || true
+        if [[ -n "$value" ]]; then
+            echo "$value"
+            return 0
+        fi
+    done
+    return 0
+}
+
+# The build root `gbs build` uses, resolved like gitbuildsys/cmd_build.py
+# init_buildroot(): TIZEN_BUILD_ROOT, then the current profile's buildroot, then
+# [general] buildroot, then ~/GBS-ROOT/. ${profile} and ${tmpdir} are expanded
+# the way gbs expands them. Mirrors resolveGbsBuildRoot() in lib/core/project.js.
+gbs_build_root() {
+    local project_path="$1"
+    local files=() f
+    while IFS= read -r f; do
+        [[ -n "$f" ]] && files+=("$f")
+    done < <(gbs_conf_files "$project_path")
+
+    local profile="" root="" tmpdir=""
+    if [[ ${#files[@]} -gt 0 ]]; then
+        profile=$(gbs_conf_get general profile "${files[@]}")
+        tmpdir=$(gbs_conf_get general tmpdir "${files[@]}")
+    fi
+    root="${TIZEN_BUILD_ROOT:-}"
+    if [[ -z "$root" && -n "$profile" && ${#files[@]} -gt 0 ]]; then
+        root=$(gbs_conf_get "$profile" buildroot "${files[@]}")
+    fi
+    if [[ -z "$root" && ${#files[@]} -gt 0 ]]; then
+        root=$(gbs_conf_get general buildroot "${files[@]}")
+    fi
+    [[ -n "$root" ]] || root="~/GBS-ROOT/"
+
+    local safe_profile="${profile//[^a-zA-Z0-9:._-]/_}"
+    tmpdir="${tmpdir:-/var/tmp}"
+    root="${root//\$\{profile\}/$safe_profile}"
+    root="${root//%(profile)s/$safe_profile}"
+    root="${root//\$\{tmpdir\}/$tmpdir}"
+    root="${root//%(tmpdir)s/$tmpdir}"
+    # shellcheck disable=SC2088  # a literal "~" from gbs.conf, expanded here
+    if [[ "$root" == "~" || "$root" == "~/"* ]]; then
+        root="$HOME${root:1}"
+    fi
+    [[ "$root" == /* ]] || root="$project_path/$root"
+    echo "${root%/}"
+}
+
+# The local repo depanneur reports after a successful build:
+#   info: generated RPM packages can be found from local repo:
+#        /path/to/buildroot/local/repos/<profile>/<arch>/RPMS
+# The path is on the next line (or the same line in older gbs); ANSI colour codes
+# are stripped first.
+gbs_local_repo_from_log() {
+    local log_file="$1"
+    [[ -s "$log_file" ]] || return 0
+    sed 's/\x1b\[[0-9;]*m//g' "$log_file" | awk '
+        /generated RPM packages can be found from local repo:/ {
+            line = $0; sub(/.*local repo:[ \t]*/, "", line); gsub(/[ \t\r]+$/, "", line)
+            if (line == "" && (getline nxt) > 0) { line = nxt; gsub(/^[ \t]+|[ \t\r]+$/, "", line) }
+            if (line != "") { print line; exit }
+        }' || true
+}
+
 # Find package produced by GBS build.
-# GBS platform builds produce .rpm files (not .tpk).
-# GBS typically outputs to ~/GBS-ROOT/local/repos/<arch>/RPMS/.
-# Some platform projects may also produce .tpk — search for both.
-# Uses a timestamp file created before the build to reliably detect
-# newly generated artifacts (avoids issues with source files being
-# newer than build output when templates are copied just before build).
+# GBS platform builds produce .rpm files (not .tpk); some platform projects may
+# also produce .tpk — search for both. Search order: the project directory, the
+# local repo gbs printed, the build root from TIZEN_BUILD_ROOT / gbs.conf
+# (buildroot = ...), then ~/GBS-ROOT. Uses a timestamp file created before the
+# build to reliably detect newly generated artifacts (avoids issues with source
+# files being newer than build output when templates are copied just before build).
 find_gbs_package_file() {
     local project_path="$1"
     local timestamp_file="$2"
+    local log_file="${3:-}"
     local package=""
 
-    # Search project directory for .tpk or .rpm
-    package=$(find "$project_path" \( -name "*.tpk" -o -name "*.rpm" \) -newer "$timestamp_file" 2>/dev/null | head -n1)
+    local dirs=("$project_path")
+    local repo_dir
+    repo_dir=$(gbs_local_repo_from_log "$log_file")
+    [[ -n "$repo_dir" ]] && dirs+=("$repo_dir")
 
-    if [[ -z "$package" ]]; then
-        local gbs_root="${HOME}/GBS-ROOT"
-        if [[ -d "$gbs_root" ]]; then
-            # Search for .rpm files (standard GBS output) or .tpk files
-            package=$(find "$gbs_root" \( -name "*.rpm" -o -name "*.tpk" \) -newer "$timestamp_file" 2>/dev/null | head -n1)
+    local root
+    for root in "$(gbs_build_root "$project_path")" "${HOME}/GBS-ROOT"; do
+        # local/repos holds the RPMs; searching it skips the multi-GB chroots
+        # under local/BUILD-ROOTS.
+        if [[ -d "$root/local/repos" ]]; then
+            dirs+=("$root/local/repos")
+        else
+            dirs+=("$root")
         fi
-    fi
+    done
 
-    if [[ -n "$package" ]]; then
-        echo "$package"
-    fi
+    local d
+    for d in "${dirs[@]}"; do
+        [[ -d "$d" ]] || continue
+        package=$(find "$d" \( -name "*.rpm" -o -name "*.tpk" \) ! -name "*.src.rpm" -newer "$timestamp_file" 2>/dev/null | head -n1) || true
+        if [[ -n "$package" ]]; then
+            echo "$package"
+            return 0
+        fi
+    done
+
+    log_error "No new .rpm/.tpk found in: ${dirs[*]}"
+    return 0
 }
 
 build_project() {
@@ -557,14 +689,15 @@ if [[ "$PROJECT_TYPE" == "Platform" ]]; then
 
     # Create a timestamp file before build to reliably detect newly generated artifacts
     BUILD_TIMESTAMP_FILE=$(mktemp)
+    GBS_BUILD_LOG=$(mktemp)
 
     # Build with GBS
-    build_platform_project "$PROJECT" "$ARCH" || { rm -f "$BUILD_TIMESTAMP_FILE"; exit 1; }
+    build_platform_project "$PROJECT" "$ARCH" || { rm -f "$BUILD_TIMESTAMP_FILE" "$GBS_BUILD_LOG"; exit 1; }
 
     # Find and report package
     log_section "Locating generated package"
-    PACKAGE_FILE=$(find_gbs_package_file "$PROJECT" "$BUILD_TIMESTAMP_FILE")
-    rm -f "$BUILD_TIMESTAMP_FILE"
+    PACKAGE_FILE=$(find_gbs_package_file "$PROJECT" "$BUILD_TIMESTAMP_FILE" "$GBS_BUILD_LOG")
+    rm -f "$BUILD_TIMESTAMP_FILE" "$GBS_BUILD_LOG"
 
     if [[ -n "$PACKAGE_FILE" ]]; then
         log_ok "Package file generated: $PACKAGE_FILE"
