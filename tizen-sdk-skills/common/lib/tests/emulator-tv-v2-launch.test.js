@@ -468,6 +468,31 @@ console.log("\n--- TIZEN_TV_V2_LAUNCH=off ---");
   cleanup(tree);
 }
 
+// --- 6b. VM already running: nothing is prepared or started ---------------
+console.log("\n--- VM already running ---");
+{
+  const tree = makeTree({ v1Disk: true });
+  fs.writeFileSync(path.join(tree.state, "launched"), "");
+  const r = run(tree, ["-a", "launch", "-n", "tv", "-t", "5"]);
+  check("launch exits 0", r.code === 0, r.output);
+  check(
+    "the running VM's serial is reported",
+    /^DEVICE_SERIAL=emulator-26101$/m.test(r.output),
+    r.output,
+  );
+  check(
+    "no consent is asked and nothing is started",
+    !/^TV_V2_/m.test(r.output) && !r.stubLog.includes("emulator-v2 "),
+    r.output,
+  );
+  // launchedResult reports launch_method "none" from this log line.
+  check(
+    "the script says the VM is already running",
+    /is already running and connected/.test(r.output),
+  );
+  cleanup(tree);
+}
+
 // --- 7. Quarantine (macOS only: needs xattr) --------------------------------
 if (canQuarantine) {
   console.log("\n--- consent gate: clear_quarantine ---");

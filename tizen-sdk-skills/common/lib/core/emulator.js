@@ -2407,8 +2407,13 @@ function launchedResult(output, { vmName, timeout, command, startTime }) {
     waited_ms: Date.now() - startTime,
     emulator_keeps_running: true,
     // em-cli, or the platform's emulator-v2 started with --conf (Apple
-    // Silicon TV launch, where em-cli cannot boot the VM).
-    launch_method: /^TV_V2_LAUNCH=/m.test(output) ? "emulator-v2" : "em-cli",
+    // Silicon TV launch, where em-cli cannot boot the VM); "none" when the VM
+    // was already running and nothing was started.
+    launch_method: /is already running and connected/.test(output)
+      ? "none"
+      : /^TV_V2_LAUNCH=/m.test(output)
+        ? "emulator-v2"
+        : "em-cli",
   };
   if (homescreenStatus) data.homescreen_fix = homescreenStatus;
 
