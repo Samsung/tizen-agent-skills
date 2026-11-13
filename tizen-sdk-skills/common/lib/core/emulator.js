@@ -141,6 +141,7 @@ const MACHINE_LINE =
 const TV_V2_CONSENT = Object.freeze({
   clear_quarantine: {
     flag: "--clear-quarantine",
+    opt: "clearQuarantine",
     ask:
       "the SDK's emulator-v2 binaries still carry macOS's download quarantine, so macOS " +
       "would refuse to run them. Clearing it makes the platform's emulator-v2 folder " +
@@ -149,6 +150,7 @@ const TV_V2_CONSENT = Object.freeze({
   },
   rebase_disk: {
     flag: "--rebase-disk",
+    opt: "rebaseDisk",
     ask:
       "the VM has an em-cli (v1) disk, and emulator-v2 boots only a disk on the v2 base " +
       "image. Recreating it DISCARDS every app and file installed in the VM",
@@ -162,10 +164,26 @@ function parseTvV2Needs(output) {
     .filter((key) => TV_V2_CONSENT[key]);
 }
 
+/**
+ * The consent flags for a re-run: the ones `needs` asks for plus the ones the
+ * user already granted in `granted` (the runner opts, e.g. { rebaseDisk: true }).
+ * Dropping a granted flag sends the user round in circles: the re-run stops on
+ * the consent it no longer carries, and asks for it again.
+ */
+function tvV2ConsentFlags(needs, granted = {}) {
+  return Object.keys(TV_V2_CONSENT)
+    .filter(
+      (key) =>
+        needs.includes(key) ||
+        isTrue(granted && granted[TV_V2_CONSENT[key].opt]),
+    )
+    .map((key) => TV_V2_CONSENT[key].flag);
+}
+
 /** Message + command for TV_V2_NEEDS, re-running `base` with the consent flags. */
-function tvV2ConsentRequest(needs, base) {
+function tvV2ConsentRequest(needs, base, granted = {}) {
   const asks = needs.map((key) => TV_V2_CONSENT[key].ask);
-  const flags = needs.map((key) => TV_V2_CONSENT[key].flag);
+  const flags = tvV2ConsentFlags(needs, granted);
   return {
     message:
       "This TV VM boots on Apple Silicon only through emulator-v2, and the user must agree first: " +
@@ -2013,6 +2031,9 @@ function parseCreateMarkers(state, output) {
     launchTimedOut,
     tvV2Needs: launch ? tvV2Needs : [],
     tvV2Unavailable,
+    // --launch was asked for, but emulator-v2 could not be used: the VM
+    // exists and was not started. Not a timeout, and not a plain create.
+    launchBlocked: Boolean(launch && tvV2Unavailable && !launchedSerial),
     tvV2Prepared: /^TV_V2_PREPARED=/m.test(output),
     // The script dropped the template and retried (TV profile), so the VM
     // exists but not at the requested size.
@@ -2021,7 +2042,7 @@ function parseCreateMarkers(state, output) {
   };
 }
 
-function pushCreateWarnings(state, output, markers) {
+function pushCreateWarnings(state, output, markers, opts = {}) {
   const { createdVmName, fallbackMatch } = markers;
   const warnings = state.sizeWarnings;
 
@@ -2049,10 +2070,22 @@ function pushCreateWarnings(state, output, markers) {
             `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
     );
   }
+  // create without --launch: the VM is prepared, but a leftover emulator-v2
+  // of the same name would make the next launch wait for the wrong VM.
+  if (/^TV_V2_LEFTOVER_RUNNING=/m.test(output)) {
+    warnings.push(
+      `An emulator-v2 for '${createdVmName}' is still running, left over from an earlier VM of this ` +
+        `name (deleting a VM does not stop its emulator-v2). Stop it (tizen-device-manager stop — this ` +
+        `stops every running emulator) before you launch '${createdVmName}'.`,
+    );
+  }
   if (markers.tvV2Needs.length > 0) {
+    // create rebased the new VM's disk already; only a quarantine consent
+    // given to create carries over to the launch.
     const ask = tvV2ConsentRequest(
       markers.tvV2Needs,
       `node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+      { clearQuarantine: opts.clearQuarantine },
     );
     warnings.push(
       `VM '${createdVmName}' was created but not launched. ${ask.message} Launch: ${ask.command}`,
@@ -2083,6 +2116,7 @@ function pushCreateWarnings(state, output, markers) {
 function createStatus(markers) {
   if (markers.cleanupMatch) return "create_failed_cleaned_up";
   if (markers.tvV2Needs.length > 0) return "created_launch_needs_consent";
+  if (markers.launchBlocked) return "created_launch_blocked";
   return markers.launchTimedOut ? "created_launch_timeout" : "created";
 }
 
@@ -2126,7 +2160,7 @@ function createdVmData(state, opts, output, markers) {
     raw_image_path: opts.rawImagePath || null,
     // Apple Silicon TV VM: launch boots it with emulator-v2, not em-cli. With
     // --launch, "emulator-v2" only when this run actually started it.
-    ...(markers.tvV2Prepared
+    ...(markers.tvV2Prepared || markers.launchBlocked
       ? {
           launch_method:
             !state.launch || /^TV_V2_LAUNCH=/m.test(output)
@@ -2141,7 +2175,7 @@ function createdVmData(state, opts, output, markers) {
 
 function createVmResult(state, opts, output, command, startTime) {
   const markers = parseCreateMarkers(state, output);
-  pushCreateWarnings(state, output, markers);
+  pushCreateWarnings(state, output, markers, opts);
   return successEnvelope(
     command,
     startTime,
@@ -2305,7 +2339,14 @@ function autoSelectLaunchVm(scriptPath, profile, command, startTime) {
  * Surface the actionable launch failures by name, otherwise the caller only
  * sees "Command failed: bash … > /tmp/tizen-plugin-*.out".
  */
-function launchFailureError(error, vmName, timeout, command, startTime) {
+function launchFailureError(
+  error,
+  vmName,
+  timeout,
+  command,
+  startTime,
+  granted = {},
+) {
   const combined = scriptOutputOf(error);
 
   const notFound = combined.match(/VM '(.+?)' not found/i);
@@ -2336,7 +2377,10 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
         `is on the emulator-v2 base image. Check the file's permissions first. If the disk is ` +
         `corrupt, recreating it with --rebase-disk DISCARDS every app and file installed in the VM. ` +
         `Ask the user; only once they agree, re-run with --rebase-disk. Nothing was changed.`,
-      `node emulator-manager-cli.js launch --vm-name ${vmName} --rebase-disk`,
+      `node emulator-manager-cli.js launch --vm-name ${vmName} ${tvV2ConsentFlags(
+        ["rebase_disk"],
+        granted,
+      ).join(" ")}`,
       startTime,
       rawOutputTail(combined),
     );
@@ -2357,6 +2401,7 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
     const ask = tvV2ConsentRequest(
       needs,
       `node emulator-manager-cli.js launch --vm-name ${vmName}`,
+      granted,
     );
     return formatError(
       command,
@@ -2568,7 +2613,10 @@ async function launchEmulator(
         rebaseDisk: opts.rebaseDisk,
       });
     } catch (error) {
-      return launchFailureError(error, vmName, timeout, command, startTime);
+      return launchFailureError(error, vmName, timeout, command, startTime, {
+        clearQuarantine: opts.clearQuarantine,
+        rebaseDisk: opts.rebaseDisk,
+      });
     }
 
     return launchedResult(output, { vmName, timeout, command, startTime });
@@ -3153,6 +3201,7 @@ module.exports = {
   pickPlatform,
   TV_V2_CONSENT,
   parseTvV2Needs,
+  tvV2ConsentFlags,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,
   tvV2FailureMessage,

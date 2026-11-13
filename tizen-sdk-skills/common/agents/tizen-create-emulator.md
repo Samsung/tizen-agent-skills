@@ -182,7 +182,9 @@ needs HAXM, which is Intel-only) and reports `result.launch_method: "emulator-v2
 macOS's download quarantine still blocks those binaries, `result.status` is
 `created_launch_needs_consent` and a warning carries the launch command with
 `--clear-quarantine`: return it to the caller to ask the user — never add the flag
-yourself.
+yourself. When an emulator-v2 of an earlier VM of the same name is still running,
+`result.status` is `created_launch_blocked`: the VM exists but was not started; report the
+warning (stop that emulator, then launch) and do not report the VM as launched.
 
 `--platform` may be omitted: the runner resolves it from `list-platform` (first image for
 the profile) so `--size` still applies — it no longer falls back to em-cli's 720p default.

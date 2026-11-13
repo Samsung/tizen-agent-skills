@@ -2346,18 +2346,28 @@ if [ "$ACTION" = "create" ]; then
   if tv_v2_applies "$VM_NAME"; then
     USE_TV_V2=true
     log_info "Apple Silicon Mac + TV VM: preparing '$VM_NAME' for emulator-v2 (em-cli cannot boot it here; it requires HAXM, which is Intel-only)."
-    if tv_v2_running; then
-      # Left over from a deleted VM of the same name (em-cli does not know
-      # about emulator-v2, so deleting the VM does not stop it). Waiting for it
-      # would never boot this new VM; it has to be stopped first.
-      log_error "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it first (tizen-device-manager stop), then launch '$VM_NAME'."
-      echo "TV_V2_UNAVAILABLE=still_running"
-      USE_TV_V2=unavailable
-    elif tv_v2_check_available && tv_v2_prepare "$VM_NAME" true; then
+    # An emulator-v2 for this name can only be left over from a deleted VM of
+    # the same name (em-cli does not know about emulator-v2, so deleting the
+    # VM does not stop it). It holds the deleted disk, not this one, so the
+    # new VM is still prepared — while it is brand new and has nothing to lose.
+    TV_V2_LEFTOVER=false
+    if tv_v2_running; then TV_V2_LEFTOVER=true; fi
+    if tv_v2_check_available && tv_v2_prepare "$VM_NAME" true; then
       echo "TV_V2_PREPARED=$VM_NAME"
     else
       log_warn "VM '$VM_NAME' was created, but its emulator-v2 files could not be prepared; see the errors above."
       USE_TV_V2=unavailable
+    fi
+    if [ "$TV_V2_LEFTOVER" = true ]; then
+      if [ "$LAUNCH" = true ]; then
+        # Waiting for it would never boot this new VM.
+        log_error "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it first (tizen-device-manager stop), then launch '$VM_NAME'."
+        echo "TV_V2_UNAVAILABLE=still_running"
+        USE_TV_V2=unavailable
+      else
+        log_warn "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it (tizen-device-manager stop) before you launch '$VM_NAME'."
+        echo "TV_V2_LEFTOVER_RUNNING=$VM_NAME"
+      fi
     fi
   fi
 

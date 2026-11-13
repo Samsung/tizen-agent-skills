@@ -243,7 +243,8 @@ path (the runner logs a warning).
 | `--clear-quarantine` | The v2 binaries still carry macOS's download quarantine (the launch would die with `zsh: killed` / `library load disallowed by system policy`) | Makes the platform's `emulator-v2` folder writable for the user (`chmod -R u+w`), then removes the `com.apple.quarantine` flag from it (`xattr -dr`). Tell the user both. |
 
 Show the envelope, ask the user with AskUserQuestion, and run `suggested_fix.command` only after
-they agree. Never add these flags on your own.
+they agree. Never add these flags on your own. When a second consent follows the first,
+`suggested_fix.command` already keeps the flag the user gave; run it as it is.
 
 ```bash
 node "$CLI" launch --vm-name my-tv-vm                      # → user_input_required
@@ -262,7 +263,8 @@ Failures are `emulator_boot_failed`:
   recreates it, which **discards everything installed in the VM** — run it only after the
   user agreed.
 - `create --launch` while an emulator-v2 of an earlier, deleted VM of the same name still runs
-  (`still_running`): the VM is created but not launched, with a warning. Stop that emulator
+  (`still_running`): the VM is created and prepared but not launched (`result.status:
+  created_launch_blocked`, with a warning). A plain `create` only warns. Stop that emulator
   (`tizen-device-manager stop`, which stops every running emulator), then `launch` the VM.
 - After `create --launch`, the message says the VM **was created**: relaunch it with
   `suggested_fix.command` (`launch --vm-name …`), never re-create it.

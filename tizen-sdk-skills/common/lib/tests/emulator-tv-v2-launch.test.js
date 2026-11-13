@@ -20,6 +20,7 @@ const { spawnSync } = require("child_process");
 const {
   TV_V2_CONSENT,
   parseTvV2Needs,
+  tvV2ConsentFlags,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,
   tvV2FailureMessage,
@@ -169,6 +170,44 @@ console.log("--- TV_V2 parsing ---");
       ) &&
       !/--clear-quarantine/.test(JSON.stringify(diskEnv)),
     JSON.stringify(diskEnv),
+  );
+  // A retry command keeps the consents this run already had; otherwise the
+  // user is asked again for one they gave and the flow loops.
+  const retryCommand = (stdout, granted) =>
+    (
+      (
+        (launchFailureError(
+          { message: "Command failed", stdout, stderr: "" },
+          "tv",
+          5,
+          "launch",
+          Date.now(),
+          granted,
+        ).errors || [])[0] || {}
+      ).suggested_fix || {}
+    ).command || "";
+  check(
+    "tvV2ConsentFlags: fixed order, needs plus granted, no duplicates",
+    tvV2ConsentFlags(["rebase_disk"], { clearQuarantine: true }).join(" ") ===
+      "--clear-quarantine --rebase-disk" &&
+      tvV2ConsentFlags(["rebase_disk"], { rebaseDisk: true }).join(" ") ===
+        "--rebase-disk" &&
+      tvV2ConsentFlags([], {}).length === 0,
+  );
+  check(
+    "a quarantine request after a granted --rebase-disk keeps it",
+    /launch --vm-name tv --clear-quarantine --rebase-disk$/.test(
+      retryCommand("TV_V2_NEEDS=clear_quarantine\n", { rebaseDisk: true }),
+    ),
+    retryCommand("TV_V2_NEEDS=clear_quarantine\n", { rebaseDisk: true }),
+  );
+  check(
+    "a disk_info_failed fix after a granted --clear-quarantine keeps it",
+    /launch --vm-name tv --clear-quarantine --rebase-disk$/.test(
+      retryCommand("TV_V2_UNAVAILABLE=disk_info_failed\n", {
+        clearQuarantine: true,
+      }),
+    ),
   );
   const otherEnv = launchFailureError(
     {
@@ -916,11 +955,32 @@ console.log("\n--- qemu-img info fails ---");
   cleanup(tree);
 }
 
-// --- 6i. create --launch with a leftover emulator-v2 for the same name ------
+// --- 6i. create with a leftover emulator-v2 for the same name ---------------
 // Deleting a VM with em-cli leaves its emulator-v2 running. Waiting for that
-// process would never boot the new VM: stop with a clear message instead.
-console.log("\n--- create --launch, leftover emulator-v2 running ---");
-{
+// process would never boot the new VM. The new VM is still prepared (it is
+// brand new), and only the launch half is refused.
+const CREATE_ARGS = [
+  "-a",
+  "create",
+  "-n",
+  "tv",
+  "-p",
+  "tv",
+  "-P",
+  "tv-samsung-10.0-x86_64",
+];
+const createEnvelope = (launch, output) =>
+  createVmResult(
+    { action: "create", launch, vmName: "tv", sizeWarnings: [], profile: "tv" },
+    {},
+    output,
+    "create",
+    Date.now(),
+  );
+for (const launch of [true, false]) {
+  console.log(
+    `\n--- create${launch ? " --launch" : ""}, leftover emulator-v2 running ---`,
+  );
   const tree = makeTree({ noVm: true });
   const bootState = path.join(tree.root, "boot-state");
   fs.mkdirSync(bootState);
@@ -943,56 +1003,74 @@ console.log("\n--- create --launch, leftover emulator-v2 running ---");
   );
   leftover.unref();
   spawnSync("sleep", ["1"]);
-  const r = run(
-    tree,
-    [
-      "-a",
-      "create",
-      "-n",
-      "tv",
-      "-p",
-      "tv",
-      "-P",
-      "tv-samsung-10.0-x86_64",
-      "-l",
-      "-t",
-      "5",
-    ],
-    { STUB_NO_VM: "1" },
-  );
+  const r = run(tree, [...CREATE_ARGS, ...(launch ? ["-l", "-t", "5"] : [])], {
+    STUB_NO_VM: "1",
+  });
   check("create exits 0 (the VM exists)", r.code === 0, r.output);
   check(
-    "TV_V2_UNAVAILABLE=still_running; nothing is prepared, started or waited for",
-    /^TV_V2_UNAVAILABLE=still_running$/m.test(r.output) &&
-      !/^TV_V2_PREPARED=/m.test(r.output) &&
+    "the new VM is still prepared on the v2 base, and nothing is started",
+    /^TV_V2_PREPARED=tv$/m.test(r.output) &&
+      r.diskBacking === tree.base &&
       !/^TV_V2_ALREADY_RUNNING=/m.test(r.output) &&
-      !r.stubLog.includes("emulator-v2 ") &&
-      r.diskBacking === null,
+      !r.stubLog.includes("emulator-v2 "),
     r.output,
   );
-  const env = createVmResult(
-    {
-      action: "create",
-      launch: true,
-      vmName: "tv",
-      sizeWarnings: [],
-      profile: "tv",
-    },
-    {},
-    r.output,
-    "create",
-    Date.now(),
-  );
-  check(
-    "the create envelope says to stop the leftover emulator-v2 first",
-    env.result.status === "created" &&
-      (env.warnings || []).some((w) => /Stop it first/.test(w)),
-    JSON.stringify(env).slice(0, 800),
-  );
+  const env = createEnvelope(launch, r.output);
+  const warned = (env.warnings || []).join("\n");
+  if (launch) {
+    check(
+      "--launch: still_running → created_launch_blocked, launch_method none, stop it first",
+      /^TV_V2_UNAVAILABLE=still_running$/m.test(r.output) &&
+        env.result.status === "created_launch_blocked" &&
+        env.result.launch_method === "none" &&
+        /Stop it first/.test(warned),
+      JSON.stringify(env).slice(0, 900),
+    );
+  } else {
+    check(
+      "no --launch: a plain created VM, warned to stop the leftover before launching",
+      /^TV_V2_LEFTOVER_RUNNING=tv$/m.test(r.output) &&
+        !/^TV_V2_UNAVAILABLE=/m.test(r.output) &&
+        env.result.status === "created" &&
+        /before you launch/.test(warned) &&
+        !/not launched/.test(warned),
+      JSON.stringify(env).slice(0, 900),
+    );
+  }
   try {
     process.kill(-leftover.pid);
   } catch {
     /* already gone */
+  }
+  cleanup(tree);
+}
+
+// --- 6j. create on an unreadable disk: a new VM has nothing to lose --------
+for (const launch of [false, true]) {
+  console.log(
+    `\n--- create${launch ? " --launch" : ""}, qemu-img info fails ---`,
+  );
+  const tree = makeTree({ noVm: true });
+  const r = run(tree, [...CREATE_ARGS, ...(launch ? ["-l", "-t", "20"] : [])], {
+    STUB_NO_VM: "1",
+    STUB_QEMU_INFO_FAILS: "1",
+  });
+  check(
+    "the new VM's unreadable disk is recreated without asking",
+    r.code === 0 &&
+      /^TV_V2_DISK_REBASED=tv$/m.test(r.output) &&
+      /^TV_V2_PREPARED=tv$/m.test(r.output) &&
+      !/^TV_V2_UNAVAILABLE=/m.test(r.output) &&
+      r.diskBacking === tree.base,
+    r.output,
+  );
+  if (launch) {
+    check(
+      "and create --launch boots it",
+      /^TV_V2_LAUNCH=tv$/m.test(r.output) &&
+        /^VM_LAUNCHED=emulator-26101$/m.test(r.output),
+      r.output,
+    );
   }
   cleanup(tree);
 }
@@ -1081,6 +1159,43 @@ if (canQuarantine) {
       /^TV_V2_UNAVAILABLE=disk_info_failed$/m.test(r3.output) &&
         !/^TV_V2_NEEDS=/m.test(r3.output),
       r3.output,
+    );
+    // Follow the suggested fixes round by round, as an agent would: each
+    // retry must carry the consents already given, and the flow must end.
+    const fixFor = (out, granted) =>
+      (
+        (
+          (launchFailureError(
+            { message: "Command failed", stdout: out, stderr: "" },
+            "tv",
+            5,
+            "launch",
+            Date.now(),
+            granted,
+          ).errors || [])[0] || {}
+        ).suggested_fix || {}
+      ).command || "";
+    const fix1 = fixFor(r3.output, {});
+    const r4 = run(both, ["-a", "launch", "-n", "tv", "-t", "20", "-B"], {
+      STUB_QEMU_INFO_FAILS: "1",
+    });
+    const fix2 = fixFor(r4.output, { rebaseDisk: true });
+    check(
+      "round 2 (-B) asks for the quarantine and keeps --rebase-disk",
+      /--rebase-disk$/.test(fix1) &&
+        /^TV_V2_NEEDS=clear_quarantine$/m.test(r4.output) &&
+        /--clear-quarantine --rebase-disk$/.test(fix2),
+      `${fix1}\n${fix2}\n${r4.output}`,
+    );
+    const r5 = run(both, ["-a", "launch", "-n", "tv", "-t", "20", "-B", "-Q"], {
+      STUB_QEMU_INFO_FAILS: "1",
+    });
+    check(
+      "round 3 (-B -Q) boots the VM",
+      r5.code === 0 &&
+        /^TV_V2_LAUNCH=tv$/m.test(r5.output) &&
+        /^DEVICE_SERIAL=emulator-26101$/m.test(r5.output),
+      r5.output,
     );
     cleanup(both);
   }

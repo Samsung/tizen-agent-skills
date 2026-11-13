@@ -488,8 +488,10 @@ yourself. Tell the user why: em-cli's HAXM check, not a missing image.
 
 If the v2 binaries still carry macOS's download quarantine, `create --launch` creates the VM but
 does not start it: `result.status` is `created_launch_needs_consent` and a warning carries the
-launch command with `--clear-quarantine`. Ask the user and run it only after they agree. Details
-and the remaining failure cases:
+launch command with `--clear-quarantine`. Ask the user and run it only after they agree. When an
+emulator-v2 of an earlier VM of the same name is still running, `create --launch` does not start
+the new VM: `result.status` is `created_launch_blocked`, and a warning says to stop that emulator
+first. Details and the remaining failure cases:
 [`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch).
 
 ## Scope: create-emulator vs launch-emulator vs device-manager
