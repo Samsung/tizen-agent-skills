@@ -177,6 +177,13 @@ If the emulator never connects, the create still succeeds (the VM exists) but th
 says so honestly: `result.launched: false`, `result.status: "created_launch_timeout"`, plus
 a warning with the relaunch command. Do not report such a VM as launched.
 
+Apple Silicon Mac + TV VM: the runner boots it with the platform's emulator-v2 (em-cli
+needs HAXM, which is Intel-only) and reports `result.launch_method: "emulator-v2"`. When
+macOS's download quarantine still blocks those binaries, `result.status` is
+`created_launch_needs_consent` and a warning carries the launch command with
+`--clear-quarantine`: return it to the caller to ask the user — never add the flag
+yourself.
+
 `--platform` may be omitted: the runner resolves it from `list-platform` (first image for
 the profile) so `--size` still applies — it no longer falls back to em-cli's 720p default.
 

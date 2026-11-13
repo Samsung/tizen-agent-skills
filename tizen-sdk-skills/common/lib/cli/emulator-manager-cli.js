@@ -70,6 +70,12 @@
  *                           (1-540; default 300). Returns as soon as it connects; does NOT
  *                           stop the emulator when the time is up (issue #98)
  *   --emulator-path <path>  Directory of the emulator program (launch only)
+ *   --clear-quarantine      Apple Silicon TV VM (launch, create --launch): clear macOS's
+ *                           download quarantine from the platform's emulator-v2 folder.
+ *                           Pass it only after the user agreed (a TV_V2 consent request).
+ *   --rebase-disk           Apple Silicon TV VM (launch): rebase an existing VM's disk
+ *                           on the emulator-v2 base image. This REPLACES the disk with
+ *                           an empty one; pass it only after the user agreed.
  *
  * This file is in a version directory, so sdk-commands is loaded with relative paths.
  * Exit code: success=0, failure/error=1
@@ -89,9 +95,10 @@ const USAGE =
   "[--platform <name>] [--template <name>] [--profile tizen|tv] [--launch] " +
   "[--skin 1|2] [--ram-size 512|768|1024] [--file-sharing-path <path>] " +
   "[--hw-virtualization yes|no] [--hw-gl-acceleration yes|no] " +
-  "[--custom-path <path>] [--raw-image-path <path>] | " +
+  "[--custom-path <path>] [--raw-image-path <path>] [--clear-quarantine] | " +
   "delete --vm-name <name> | " +
-  "launch [--vm-name <name>] [--profile tizen|tv] [--timeout <sec>] [--emulator-path <path>] | " +
+  "launch [--vm-name <name>] [--profile tizen|tv] [--timeout <sec>] [--emulator-path <path>] " +
+  "[--clear-quarantine] [--rebase-disk] | " +
   "list-vm [--detail] [--count] [--platform <name>] [--profile tizen|tv] | " +
   "list-platform|list-template [--detail] [--profile tizen|tv] [--platform <name>] | " +
   "detail [--vm-name <name>] | " +
@@ -129,6 +136,8 @@ const BOOLEAN_FLAGS = {
   "--confirm": "confirm",
   "--detail": "detail",
   "--count": "count",
+  "--clear-quarantine": "clearQuarantine",
+  "--rebase-disk": "rebaseDisk",
 };
 
 const { options, positional } = parseArgsOrExit(

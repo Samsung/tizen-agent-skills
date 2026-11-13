@@ -24,6 +24,18 @@ below use those release tags.
   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template` (`-cpu max` is required), and
   clearing Gatekeeper with the user's consent. `tizen-create-emulator` points to it. Verified for Tizen
   10.0 on an M2 MacBook Pro.
+- **The runner now boots a TV VM on Apple Silicon Macs by itself.** `emulator-manager-cli.js
+launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the emulator-v2 path
+  in `tizen-emulator-manager.sh`: it rebases the disk, writes `vm_launch-v2.conf` with the VM's
+  own resolution, skin and RAM (the template alone always booted at 1920x1080), restores the
+  execute bit on the v2 binaries, starts emulator-v2 and waits for sdb as usual. The envelope
+  reports `launch_method: "emulator-v2"`. Agents no longer type `qemu-img` / `sed` / `nohup` over
+  the VM folder, which the Bash hook (Rule 20) denies. Recreating an existing VM's disk and
+  clearing macOS's quarantine need the user's consent: without it the runner changes nothing and
+  returns `user_input_required` with the command to re-run with the new `--rebase-disk` /
+  `--clear-quarantine` flags (`create --launch` returns `status: created_launch_needs_consent`
+  instead of a boot timeout). `TIZEN_TV_V2_LAUNCH=off` keeps em-cli. macOS-only, so
+  `tizen-emulator-manager.ps1` is unchanged.
 
 ### Changed
 

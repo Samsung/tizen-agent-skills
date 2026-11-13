@@ -129,7 +129,72 @@ function validatePassThroughOptions(opts, command) {
  * evidence line.
  */
 const MACHINE_LINE =
-  /^(EMULATOR_|VM_|PLATFORM_|TEMPLATE_|LAUNCH_DIAG=|LAUNCH_WARN=|HOMESCREEN_STATUS=|HW_VIRT_AUTOFIX=|SDB_SERVER_RESTARTED=|EMCLI_MISMATCH=|EMCLI_EXIT=|EMCLI_OUTPUT_BEGIN|EMCLI_OUTPUT_END|VM_LIST|PLATFORM_LIST|TEMPLATE_LIST)/;
+  /^(EMULATOR_|VM_|PLATFORM_|TEMPLATE_|LAUNCH_DIAG=|LAUNCH_WARN=|HOMESCREEN_STATUS=|HW_VIRT_AUTOFIX=|SDB_SERVER_RESTARTED=|EMCLI_MISMATCH=|EMCLI_EXIT=|EMCLI_OUTPUT_BEGIN|EMCLI_OUTPUT_END|TV_V2_|VM_LIST|PLATFORM_LIST|TEMPLATE_LIST)/;
+
+/**
+ * Apple Silicon TV launch (tv_v2_* in tizen-emulator-manager.sh): em-cli cannot
+ * boot a tv-samsung VM on an ARM Mac, so the script starts the platform's
+ * emulator-v2 with a generated --conf. Two of its steps need the user's
+ * consent and are only taken with the matching runner flag; without it the
+ * script prints TV_V2_NEEDS=<key> and changes nothing.
+ */
+const TV_V2_CONSENT = Object.freeze({
+  clear_quarantine: {
+    flag: "--clear-quarantine",
+    ask:
+      "the SDK's emulator-v2 binaries still carry macOS's download quarantine, so macOS " +
+      "would refuse to run them. Clearing it removes a macOS security flag from the " +
+      "platform's emulator-v2 folder",
+  },
+  rebase_disk: {
+    flag: "--rebase-disk",
+    ask:
+      "the VM has an em-cli (v1) disk, and emulator-v2 boots only a disk on the v2 base " +
+      "image. Recreating it DISCARDS every app and file installed in the VM",
+  },
+});
+
+/** @returns {string[]} the TV_V2_NEEDS keys in the script output, in order */
+function parseTvV2Needs(output) {
+  return [...String(output || "").matchAll(/^TV_V2_NEEDS=(\S+)$/gm)]
+    .map((m) => m[1])
+    .filter((key) => TV_V2_CONSENT[key]);
+}
+
+/** Message + command for TV_V2_NEEDS, re-running `base` with the consent flags. */
+function tvV2ConsentRequest(needs, base) {
+  const asks = needs.map((key) => TV_V2_CONSENT[key].ask);
+  const flags = needs.map((key) => TV_V2_CONSENT[key].flag);
+  return {
+    message:
+      "This TV VM boots on Apple Silicon only through emulator-v2, and the user must agree first: " +
+      `${asks.join("; and ")}. Ask the user; once they agree, re-run with ${flags.join(" ")}. ` +
+      "Nothing was changed.",
+    command: `${base} ${flags.join(" ")}`,
+  };
+}
+
+/** Warnings for what a successful emulator-v2 launch changed or did. */
+function tvV2LaunchWarnings(output) {
+  const warnings = [];
+  if (!/^TV_V2_LAUNCH=/m.test(output)) return warnings;
+  warnings.push(
+    "Started with the platform's emulator-v2 (QEMU with TCG and VirGL) instead of em-cli: " +
+      "em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only). " +
+      "Its output is in <vm folder>/logs/qemu-v2.log.",
+  );
+  if (/^TV_V2_DISK_REBASED=/m.test(output)) {
+    warnings.push(
+      "The VM's disk was recreated on the emulator-v2 base image; apps and data installed before are gone.",
+    );
+  }
+  if (/^TV_V2_QUARANTINE_CLEARED=1$/m.test(output)) {
+    warnings.push(
+      "macOS's download quarantine was cleared from the platform's emulator-v2 folder, as the user agreed.",
+    );
+  }
+  return warnings;
+}
 
 /**
  * Summarize em-cli output for envelope warnings
@@ -693,6 +758,8 @@ function buildEmulatorArgs({
   count,
   timeoutSec,
   emulatorPath,
+  clearQuarantine,
+  rebaseDisk,
 }) {
   const winArgs = [`-Action ${action}`, `-Profile ${profile}`];
   const unixArgs = [`-a ${action}`, `-p ${profile}`];
@@ -765,6 +832,10 @@ function buildEmulatorArgs({
     winArgs.push(`-EmulatorPath "${emulatorPath}"`);
     unixArgs.push(`-E "${emulatorPath}"`);
   }
+  // Apple Silicon TV launch consents (tv_v2_* in the bash script). Unix only:
+  // the path exists only on macOS, and the .ps1 has no such parameters.
+  if (isTrue(clearQuarantine)) unixArgs.push(`-Q`);
+  if (isTrue(rebaseDisk)) unixArgs.push(`-B`);
 
   return { winArgs, unixArgs };
 }
@@ -1398,6 +1469,9 @@ async function createEmulator(
         hwGlAcceleration: opts.hwGlAcceleration,
         customPath: opts.customPath,
         rawImagePath: opts.rawImagePath,
+        // create --launch of a TV VM on Apple Silicon (emulator-v2). The disk
+        // of a VM create just made is rebased without asking — nothing to lose.
+        clearQuarantine: opts.clearQuarantine,
       });
     } catch (error) {
       return createFailureError(state, opts, error, command, startTime);
@@ -1867,13 +1941,26 @@ function parseCreateMarkers(state, output) {
   // with a warning (the VM exists), but reporting `launched: true` with no
   // serial made a boot timeout read as a success (issue #48).
   const launch = state.launch;
-  const launchTimedOut = launch && !launchedSerial && !cleanupMatch;
+  // Apple Silicon TV VM: create --launch stopped before starting emulator-v2
+  // because the user's consent is missing, or emulator-v2 is not available.
+  // The VM exists; that is not a boot timeout.
+  const tvV2Needs = parseTvV2Needs(output);
+  const tvV2Unavailable = /^TV_V2_UNAVAILABLE=/m.test(output);
+  const launchTimedOut =
+    launch &&
+    !launchedSerial &&
+    !cleanupMatch &&
+    tvV2Needs.length === 0 &&
+    !tvV2Unavailable;
 
   return {
     createdVmName: createdMatch ? createdMatch[1].trim() : state.vmName,
     launchedSerial,
     cleanupMatch,
     launchTimedOut,
+    tvV2Needs: launch ? tvV2Needs : [],
+    tvV2Unavailable,
+    tvV2Prepared: /^TV_V2_PREPARED=/m.test(output),
     // The script dropped the template and retried (TV profile), so the VM
     // exists but not at the requested size.
     fallbackMatch: output.match(/^TEMPLATE_FALLBACK=(.+)$/m),
@@ -1891,6 +1978,29 @@ function pushCreateWarnings(state, output, markers) {
         `${state.launchTimeoutSec || 300}s launch wait — it may still be booting (a fresh image's first ` +
         `boot can take longer; pass --timeout <seconds> up to 540 to wait longer), or the boot ` +
         `failed. Check or relaunch with: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+    );
+  }
+
+  if (markers.tvV2Prepared) {
+    warnings.push(
+      `VM '${createdVmName}' was prepared for emulator-v2: em-cli cannot boot a TV VM on Apple Silicon ` +
+        `(it requires HAXM, which is Intel-only), so launch starts it with the platform's emulator-v2 ` +
+        `instead: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+    );
+  }
+  if (markers.tvV2Unavailable) {
+    warnings.push(
+      `VM '${createdVmName}' was created, but it cannot be booted on this Apple Silicon Mac: em-cli ` +
+        `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
+    );
+  }
+  if (markers.tvV2Needs.length > 0) {
+    const ask = tvV2ConsentRequest(
+      markers.tvV2Needs,
+      `node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+    );
+    warnings.push(
+      `VM '${createdVmName}' was created but not launched. ${ask.message} Launch: ${ask.command}`,
     );
   }
 
@@ -1917,6 +2027,7 @@ function pushCreateWarnings(state, output, markers) {
 
 function createStatus(markers) {
   if (markers.cleanupMatch) return "create_failed_cleaned_up";
+  if (markers.tvV2Needs.length > 0) return "created_launch_needs_consent";
   return markers.launchTimedOut ? "created_launch_timeout" : "created";
 }
 
@@ -1958,6 +2069,8 @@ function createdVmData(state, opts, output, markers) {
     launched: Boolean(launchedSerial),
     device_serial: launchedSerial,
     raw_image_path: opts.rawImagePath || null,
+    // Apple Silicon TV VM: launch boots it with emulator-v2, not em-cli.
+    ...(markers.tvV2Prepared ? { launch_method: "emulator-v2" } : {}),
     status: createStatus(markers),
     ...(homescreenStatus ? { homescreen_fix: homescreenStatus } : {}),
   };
@@ -1970,7 +2083,11 @@ function createVmResult(state, opts, output, command, startTime) {
     command,
     startTime,
     createdVmData(state, opts, output, markers),
-    [...state.sizeWarnings, ...summarizeEmulatorOutput(output)],
+    [
+      ...state.sizeWarnings,
+      ...tvV2LaunchWarnings(output),
+      ...summarizeEmulatorOutput(output),
+    ],
   );
 }
 
@@ -2142,6 +2259,37 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
     return noVmsError(command, startTime);
   }
 
+  // Apple Silicon TV launch (emulator-v2): the user's consent is missing, or
+  // the v2 path is not available / died at once. em-cli is no fallback there.
+  const needs = parseTvV2Needs(combined);
+  if (needs.length > 0) {
+    const ask = tvV2ConsentRequest(
+      needs,
+      `node emulator-manager-cli.js launch --vm-name ${vmName}`,
+    );
+    return formatError(
+      command,
+      "user_input_required",
+      ask.message,
+      ask.command,
+      startTime,
+    );
+  }
+  const unavailable = combined.match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
+  if (unavailable || /^TV_V2_EXITED=1$/m.test(combined)) {
+    return formatError(
+      command,
+      "emulator_boot_failed",
+      unavailable
+        ? `em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only), ` +
+            `and the emulator-v2 path is not available for '${vmName}' (${unavailable[1]}). See details.`
+        : `emulator-v2 exited right after it was started for '${vmName}'. See details for its log.`,
+      null,
+      startTime,
+      rawOutputTail(combined),
+    );
+  }
+
   // The script ran diagnose_launch_failure() — turn its LAUNCH_DIAG lines
   // into a structured boot-failure envelope instead of a bare exec error.
   const diag = parseLaunchDiagnostics(combined);
@@ -2167,7 +2315,10 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
  * @returns {{warnings: string[], homescreenStatus: string|null}}
  */
 function collectLaunchWarnings(output, serial, vmName) {
-  const warnings = summarizeEmulatorOutput(output);
+  const warnings = [
+    ...tvV2LaunchWarnings(output),
+    ...summarizeEmulatorOutput(output),
+  ];
 
   // Pre-launch auto-heal: the script re-enabled hwVirtualization on a VM
   // whose profile disabled it — report what happened and that it stuck.
@@ -2255,6 +2406,9 @@ function launchedResult(output, { vmName, timeout, command, startTime }) {
     timeout_sec: timeout,
     waited_ms: Date.now() - startTime,
     emulator_keeps_running: true,
+    // em-cli, or the platform's emulator-v2 started with --conf (Apple
+    // Silicon TV launch, where em-cli cannot boot the VM).
+    launch_method: /^TV_V2_LAUNCH=/m.test(output) ? "emulator-v2" : "em-cli",
   };
   if (homescreenStatus) data.homescreen_fix = homescreenStatus;
 
@@ -2326,6 +2480,8 @@ async function launchEmulator(
         vmName,
         timeoutSec: timeout,
         emulatorPath: opts.emulatorPath,
+        clearQuarantine: opts.clearQuarantine,
+        rebaseDisk: opts.rebaseDisk,
       });
     } catch (error) {
       return launchFailureError(error, vmName, timeout, command, startTime);
@@ -2911,4 +3067,8 @@ module.exports = {
   matchTemplateForSize,
   parsePlatformList,
   pickPlatform,
+  TV_V2_CONSENT,
+  parseTvV2Needs,
+  tvV2ConsentRequest,
+  tvV2LaunchWarnings,
 };
