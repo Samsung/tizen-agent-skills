@@ -387,8 +387,11 @@ console.log("\nTest 6: invalid-parameter envelopes");
     env.PATH = home;
     const script = [
       "const rd = require(process.argv[1]);",
-      "rd.scanRemoteDevices(undefined, undefined, 1000, 'scan', { savedOnly: true })",
-      "  .then((e) => process.stdout.write(JSON.stringify(e)));",
+      "Promise.all([",
+      "  rd.scanRemoteDevices(undefined, undefined, 1000, 'scan', { savedOnly: true }),",
+      "  rd.scanRemoteDevices(undefined, 26102, 1000, 'scan', { savedOnly: true }),",
+      "  rd.scanRemoteDevices(undefined, undefined, 1000, 'scan', { connectedOnly: true }),",
+      "]).then((e) => process.stdout.write(JSON.stringify(e)));",
     ].join("\n");
     const stdout = await new Promise((resolve) => {
       execFile(
@@ -400,13 +403,34 @@ console.log("\nTest 6: invalid-parameter envelopes");
     });
     open.close();
     fs.rmSync(home, { recursive: true, force: true });
-    let envelope = {};
+    let envelopes = [];
     try {
-      envelope = JSON.parse(stdout);
+      envelopes = JSON.parse(stdout);
     } catch (_e) {
       console.log(`  child stdout was not JSON: ${stdout}`);
     }
+    const [envelope = {}, withPort = {}, connectedNoSdb = {}] = envelopes;
     check("  saved-only: success", envelope.status, "success");
+    check(
+      "  saved-only: default port gives no --port warning",
+      (envelope.warnings || []).some((w) => /--port/.test(w)),
+      false,
+    );
+    check(
+      "  saved-only --port 26102: ignored with a warning",
+      (withPort.warnings || []).some((w) => /--port 26102 was ignored/.test(w)),
+      true,
+    );
+    check(
+      "  connected-only without sdb: failure",
+      connectedNoSdb.status,
+      "failure",
+    );
+    check(
+      "  connected-only without sdb: sdk_path_not_set",
+      connectedNoSdb.errors?.[0]?.error_category,
+      "sdk_path_not_set",
+    );
     check(
       "  saved-only: both bookmarks probed",
       envelope.result?.hosts_probed,

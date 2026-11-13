@@ -169,8 +169,9 @@ async function sweepSubnet(subnet, port, timeoutMs) {
 
 /**
  * Best-effort read of current remote connections from `sdb devices`.
- * Returns { connections, warning } — never throws. The scan itself does not
- * need the SDK, so a missing/failing sdb only degrades status info.
+ * Returns { connections, warning, category } — never throws. The scan itself
+ * does not need the SDK, so a missing/failing sdb only degrades status info;
+ * `category` is the error category to use when the caller needs the list.
  */
 function readRemoteConnections() {
   const resolved = resolveSdbBinary();
@@ -178,6 +179,7 @@ function readRemoteConnections() {
     return {
       connections: [],
       warning: `sdb unavailable — connection status not checked (${resolved.error})`,
+      category: "sdk_path_not_set",
     };
   }
   try {
@@ -189,6 +191,7 @@ function readRemoteConnections() {
     return {
       connections: [],
       warning: `sdb devices failed — connection status not checked (${error.message})`,
+      category: "io_error",
     };
   }
 }
@@ -225,11 +228,21 @@ function collectScanTargets({ connections = [], saved = [], subnet }) {
 async function scanKnownDevices(
   command,
   startTime,
-  { subnet, timeout, connectedOnly, savedOnly },
+  { subnet, port, timeout, connectedOnly, savedOnly },
 ) {
   const warnings = [];
-  const { connections, warning } = readRemoteConnections();
+  const { connections, warning, category } = readRemoteConnections();
+  // --connected-only alone needs the sdb list; without it "0 devices" would
+  // read as "none of my devices are up".
+  if (warning && connectedOnly && !savedOnly) {
+    return formatError(command, category, warning, null, startTime);
+  }
   if (warning) warnings.push(warning);
+  if (port !== DEFAULT_SDB_PORT) {
+    warnings.push(
+      `--port ${port} was ignored: --connected-only / --saved-only probe each host on its own port.`,
+    );
+  }
 
   let saved = [];
   if (savedOnly) {
@@ -287,7 +300,8 @@ async function scanKnownDevices(
  *
  * With options.connectedOnly and/or options.savedOnly, only the hosts sdb is
  * connected to and/or the bookmarked hosts are probed (each on its own port,
- * so `port` is not used) — no other address on the network is touched.
+ * so a non-default `port` is reported as ignored) — no other address on the
+ * network is touched. `--connected-only` alone fails when sdb is unavailable.
  *
  * @param {string} [subnet] - /24 prefix like "192.168.1"; omit to scan all local interface subnets
  * @param {number|string} [port=26101] - SDB port to probe
@@ -334,6 +348,7 @@ async function scanRemoteDevices(
     if (connectedOnly || savedOnly) {
       return await scanKnownDevices(command, startTime, {
         subnet,
+        port: portNum,
         timeout,
         connectedOnly,
         savedOnly,

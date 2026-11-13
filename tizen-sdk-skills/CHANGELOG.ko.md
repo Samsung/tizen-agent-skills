@@ -54,9 +54,10 @@
   일반 `scan`은 로컬 /24 대역의 모든 주소를 훑어 이웃의 기기를 포함해 개발자 모드 Tizen
   기기를 모두 보고합니다. `--connected-only`는 `sdb devices`에 `device`로 나오는 원격
   기기만, `--saved-only`는 북마크 목록(`remote_device_scan.list`, SDK 경로 필요)만 확인하며,
-  둘을 함께 쓰면 둘 다 확인합니다. 각 호스트는 자기 포트로 확인하고 다른 주소는 건드리지
-  않으며, `result`에 `only`, `hosts_probed`, 북마크 `name`이 담깁니다. `tizen-cli`에도 같은
-  두 플래그가 추가됩니다.
+  둘을 함께 쓰면 둘 다 확인합니다. 각 호스트는 자기 포트로 확인하고(기본값이 아닌 `--port`는
+  경고와 함께 무시) 다른 주소는 건드리지 않으며, `result`에 `only`, `hosts_probed`, 북마크
+  `name`이 담깁니다. `--connected-only`만 쓸 때 sdb를 쓸 수 없으면 기기 없음으로 보고하지 않고
+  `sdk_path_not_set`으로 실패합니다. `tizen-cli`에도 같은 두 플래그가 추가됩니다.
 
 ### 변경
 

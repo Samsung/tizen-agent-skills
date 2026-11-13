@@ -47,7 +47,7 @@ tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|re
 `edit` needs at least one of `--name` / `--new-ip` / `--new-port`.
 
 ## Output
-- `scan` success `result`: `subnets_scanned`, `port`, `device_count`, `devices[]` (`ip`, `port`, `status: connected|disconnected`). A whole-subnet scan takes ~3 seconds and finds every developer-mode device on the subnet. With `--connected-only` / `--saved-only` only those hosts are probed (each on its own port, so `--port` is unused), and `result` has `only`, `hosts_probed`, `device_count` and `devices[]` (bookmarks add `name`) instead of `subnets_scanned` / `port`.
+- `scan` success `result`: `subnets_scanned`, `port`, `device_count`, `devices[]` (`ip`, `port`, `status: connected|disconnected`). A whole-subnet scan takes ~3 seconds and finds every developer-mode device on the subnet. With `--connected-only` / `--saved-only` only those hosts are probed (each on its own port; a non-default `--port` is ignored with a warning). `--connected-only` alone fails with `sdk_path_not_set` when sdb is unavailable. `result` has `only`, `hosts_probed`, `device_count` and `devices[]` (bookmarks add `name`) instead of `subnets_scanned` / `port`.
 - `connect` success `result`: `device_serial` (`<ip>:<port>` — pass this as `--serial` to other commands), `status: connected`, `attempts`.
 - `add`/`remove`/`edit` success `result`: `device_count` (entries remaining in the bookmark list), `list_path` (resolved path to Device Manager's `remote_device_scan.list`), `sdk_root` (the SDK that path was derived from). `edit` also returns the updated `name`/`ip`/`port` and a `previous` object with the values before the change.
 

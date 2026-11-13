@@ -33,7 +33,7 @@
  *   --timeout  - scan only (optional): per-host TCP timeout in ms (default 3000)
  *   --connected-only - scan only: probe the remote devices sdb is connected to instead of the subnet
  *   --saved-only     - scan only: probe the bookmarked devices instead of the subnet
- *                      (both together probe both; each host on its own port, so --port is unused)
+ *                      (both together probe both; each host on its own port; a non-default --port is ignored with a warning)
  *   --name     - add (required) / edit (optional): display name to bookmark the device under
  *   --new-ip   - edit only (optional): move the bookmark to this IPv4 address
  *   --new-port - edit only (optional): move the bookmark to this SDB port
