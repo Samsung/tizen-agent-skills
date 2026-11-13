@@ -23,6 +23,32 @@
   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template`으로 실행 설정을 만드는 방법
   (`-cpu max` 필수), 사용자 동의를 받은 뒤 Gatekeeper를 해제하는 방법을 담았습니다. `tizen-create-emulator`는 이 섹션을 안내합니다. M2 MacBook Pro의
   Tizen 10.0에서 확인했습니다.
+- **Apple Silicon Mac에서 러너가 TV VM을 직접 부팅합니다.** macOS arm64에서 `tv-samsung` VM에
+  `emulator-manager-cli.js launch`(그리고 `create --launch`)를 실행하면 `tizen-emulator-manager.sh`가
+  emulator-v2 경로를 탑니다. 디스크를 rebase하고, VM의 해상도·스킨·RAM으로 `vm_launch-v2.conf`를
+  만들고(템플릿만 쓰면 항상 1920x1080으로 부팅됐습니다), v2 바이너리의 실행 권한을 되살린 뒤
+  emulator-v2를 시작하고 평소처럼 sdb 연결을 기다립니다. Envelope에는
+  `launch_method: "emulator-v2"`가 들어갑니다. 에이전트가 Bash 훅(Rule 20)이 막는 `qemu-img` /
+  `sed` / `nohup` 명령을 VM 폴더에 직접 입력할 필요가 없습니다. 기존 VM의 디스크를 다시 만드는 일과
+  macOS quarantine 해제는 사용자 동의가 필요합니다. 동의가 없으면 러너는 아무것도 바꾸지 않고
+  새 `--rebase-disk` / `--clear-quarantine` 플래그로 다시 실행할 명령과 함께
+  `user_input_required`를 돌려줍니다(`create --launch`는 부팅 시간 초과 대신
+  `status: created_launch_needs_consent`). 아직 부팅 중인 emulator-v2가 있는 VM에는 두 번째
+  emulator-v2를 띄우지 않고 그 프로세스를 기다리며 PID를 기록합니다(`launch_method: "none"`).
+  emulator-v2를 쓸 수 없으면 `create --launch`는 VM을 남겨 두고 시작하지 않으며, 이유와 함께
+  `status: created_launch_blocked`를 돌려줍니다. v2 파일을 쓰지 못한 경우도 그런 이유
+  중 하나이며(`TV_V2_UNAVAILABLE=prepare_failed`), 부팅 시간 초과로 보고하지 않습니다. 같은 이름의
+  이전 VM이 남긴 emulator-v2가 실행 중이어도 `create`는 새 VM을 준비합니다. 다른 문제 없이
+  emulator-v2를 쓸 수 있으면 `create --launch`는 `still_running`으로 멈추고, 그 밖의 모든 경우에는
+  `create`가(`--launch` 여부와 관계없이) 그 에뮬레이터를 먼저 멈추라고 경고합니다
+  (`TV_V2_LEFTOVER_RUNNING`). 나중에 실행할 때 그 에뮬레이터를 새 VM의 것으로 알고 기다리게 되기
+  때문입니다.
+  `qemu-img`가 읽지 못한 디스크는 "rebase 필요"로 보지 않고, 다른 동의보다 먼저
+  `user_input_required`(`disk_info_failed`)로 보고하며, `--rebase-disk`를 주거나 `create`가 방금
+  만든 VM일 때만 다시 만듭니다. 다시 실행할 명령에는 이미 받은 동의 플래그와 기본값이 아닌
+  `--timeout`이 모두 남으므로, 두 번째 동의를 받을 때 첫 번째 동의가 빠지지 않습니다.
+  `create --launch` 뒤 v2 실행이 실패하면 VM은 만들어졌으니 다시 실행하라고 안내합니다.
+  `TIZEN_TV_V2_LAUNCH=off`로 em-cli를 유지할 수 있습니다. macOS 전용이라 `tizen-emulator-manager.ps1`은 바꾸지 않았습니다.
 
 ### 변경
 
@@ -35,6 +61,24 @@
 
 ### 수정
 
+- **Apple Silicon Mac에서 TV 에뮬레이터 생성이 더 이상 실패하지 않습니다.**
+  `tizen-emulator-manager.sh`는 bash 4 이상으로 자신을 다시 실행하는데(`require_bash4`), Intel
+  Homebrew를 쓰는 Mac에서는 Rosetta로 도는 `/usr/local/bin/bash`가 선택되어 `uname -m`이
+  `x86_64`를 돌려줍니다. 그래서 emulator-v2 경로 대신 em-cli가 선택되어
+  `TIZEN_SDK_EMULATOR_E003`(HAXM)으로 실패했습니다. 이제 `sysctl hw.optional.arm64`도 확인합니다.
+  `create --launch`에서 em-cli가 실행을 거부하면 `SDB: unbound variable`로 죽던 문제와, 연결된
+  시리얼을 실행 후에야 기록해서 빨리 연결된 VM을 새 VM으로 알아보지 못하던 문제도 고쳤습니다.
+- **`tizen-tv-sdk-install-from-zip`이 최신 번들에서 TV 버전을 다시 감지합니다.** 내부 ZIP 이름의
+  마지막 `_` 뒤를 버전으로 읽었는데, 이름 형식이 `<이름>_<버전>_<os>-<bits>`
+  (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`)라서 `macos-64`를 읽었습니다. 그래서 버전을 찾지 못하고
+  `--tv-version`을 요구하며 멈췄습니다. 이제 두 설치기(`.sh`, `.ps1`) 모두 패키지 이름 바로 다음
+  필드를 버전으로 읽습니다.
+- **ZIP으로 설치한 TV 에뮬레이터 바이너리의 실행 권한이 유지됩니다(Linux / macOS).**
+  `tv-samsung-emulator-qemu-x86-v2_9.3.4.7_macos-64.zip`이 `emulator-v2/bin/emulator-x86_64`와
+  `emulator-x86_64.bin`을 실행 비트 없이 담고 있어서, TV 에뮬레이터를 실행하면
+  `Permission denied`로 실패했습니다. 이제 bash 설치기가 설치된 TV 플랫폼의 `bin/` 폴더에 있는
+  ELF, Mach-O, `#!` 파일에 `+x`를 붙이고 데이터 파일은 그대로 둡니다. Windows에는 실행 비트가
+  없으므로 `.ps1` 설치기는 이 부분을 바꾸지 않았습니다.
 - **설치 스크립트가 macOS의 bash 3.2에서 `declare: -A: invalid option`으로 멈추지 않습니다**
   (이슈 #127). 스크립트 7개(`tizen-platform-install`, `tizen-download-emulator-package`,
   `tizen-download-mobile-platform`, `tizen-tv-sdk-install`, `tizen-tv-sdk-install-from-zip`,

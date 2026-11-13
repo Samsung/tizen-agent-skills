@@ -8,6 +8,14 @@ Apple Silicon (ARM64) Mac. The
 [`tizen-launch-emulator` skill](../../skills/tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)
 uses it. This file describes the same procedure in more detail.
 
+**The runner does these steps itself.** On an Apple Silicon Mac, `emulator-manager-cli.js
+launch` for a `tv-samsung` VM (and `create` / `create --launch`) runs them in
+`tizen-emulator-manager.sh` (`tv_v2_*`): it rebases the disk, writes `vm_launch-v2.conf` with
+the VM's own resolution, skin and RAM, restores the execute bit on the v2 binaries, and starts
+emulator-v2. Rebasing an existing VM's disk (`--rebase-disk`) and clearing the quarantine
+(`--clear-quarantine`) wait for the user's consent. The manual procedure below is for
+reference and for debugging a VM that does not boot.
+
 ## Why em-cli is bypassed
 
 For image version 3.0 and later, em-cli's `checkVTProperty` (in `em-lib.jar`) throws

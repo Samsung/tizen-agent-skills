@@ -24,6 +24,32 @@ below use those release tags.
   `scripts/tizen-emulator-manager/vm-launch-tv-v2.conf.template` (`-cpu max` is required), and
   clearing Gatekeeper with the user's consent. `tizen-create-emulator` points to it. Verified for Tizen
   10.0 on an M2 MacBook Pro.
+- **The runner now boots a TV VM on Apple Silicon Macs by itself.** `emulator-manager-cli.js
+launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the emulator-v2 path
+  in `tizen-emulator-manager.sh`: it rebases the disk, writes `vm_launch-v2.conf` with the VM's
+  own resolution, skin and RAM (the template alone always booted at 1920x1080), restores the
+  execute bit on the v2 binaries, starts emulator-v2 and waits for sdb as usual. The envelope
+  reports `launch_method: "emulator-v2"`. Agents no longer type `qemu-img` / `sed` / `nohup` over
+  the VM folder, which the Bash hook (Rule 20) denies. Recreating an existing VM's disk and
+  clearing macOS's quarantine need the user's consent: without it the runner changes nothing and
+  returns `user_input_required` with the command to re-run with the new `--rebase-disk` /
+  `--clear-quarantine` flags (`create --launch` returns `status: created_launch_needs_consent`
+  instead of a boot timeout). A launch never starts a second emulator-v2 on a VM whose
+  emulator-v2 is still booting: it waits for that one (`launch_method: "none"`) and records its
+  PID. When emulator-v2 cannot be used, `create --launch` keeps the VM, does not start it and
+  returns `status: created_launch_blocked` with the reason. A failed write of the v2 files is
+  one such reason (`TV_V2_UNAVAILABLE=prepare_failed`), never a boot timeout. When an
+  emulator-v2 of an earlier VM of the same name is still running, `create` still prepares the
+  new VM. If emulator-v2 is otherwise usable, `create --launch` stops with `still_running`;
+  in every other case `create` (with or without `--launch`) warns to stop that emulator first
+  (`TV_V2_LEFTOVER_RUNNING`), because a later launch would wait for it as if it were the new
+  VM's. A disk that `qemu-img` cannot read is never treated as "needs rebase": the
+  runner returns `user_input_required` (`disk_info_failed`, reported before any other consent),
+  and only `--rebase-disk`, or `create` for its own new VM, recreates it. Every retry command
+  keeps the consent flags already given and a non-default `--timeout`, so a second consent
+  never drops the first. A v2 failure after `create --launch` says the VM was created and to
+  relaunch it. `TIZEN_TV_V2_LAUNCH=off` keeps em-cli. macOS-only, so
+  `tizen-emulator-manager.ps1` is unchanged.
 
 ### Changed
 
@@ -36,6 +62,24 @@ below use those release tags.
 
 ### Fixed
 
+- **TV emulator create on Apple Silicon Macs no longer fails.** `tizen-emulator-manager.sh`
+  re-runs itself with a bash 4+ (`require_bash4`), and on a Mac with Intel Homebrew that is
+  `/usr/local/bin/bash` under Rosetta, where `uname -m` says `x86_64`. The emulator-v2 gate then
+  picked em-cli, which fails with `TIZEN_SDK_EMULATOR_E003` (HAXM). The gate now also reads
+  `sysctl hw.optional.arm64`. `create --launch` also crashed with `SDB: unbound variable`
+  when em-cli refused the launch, and snapshotted the connected serials only after the launch,
+  so a VM that connected quickly was never seen as new; both are fixed.
+- **`tizen-tv-sdk-install-from-zip` detects the TV version from current bundles again.** It read
+  the version from the field after the last `_` of each inner ZIP name, but names are
+  `<name>_<version>_<os>-<bits>` (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`), so it read
+  `macos-64`, found no version and stopped asking for `--tv-version`. Both installers (`.sh`
+  and `.ps1`) now read the field after the package name.
+- **TV emulator binaries keep their execute bit after a ZIP install (Linux / macOS).**
+  `tv-samsung-emulator-qemu-x86-v2_9.3.4.7_macos-64.zip` stores `emulator-v2/bin/emulator-x86_64`
+  and `emulator-x86_64.bin` without the execute bit, so launching the TV emulator failed with
+  `Permission denied`. The bash installer now sets `+x` on every ELF, Mach-O or `#!` file in a
+  `bin/` folder of the installed TV platform and leaves data files alone. Windows has no execute
+  bit, so the `.ps1` installer is unchanged here.
 - **Installer scripts no longer stop with `declare: -A: invalid option` on macOS's bash 3.2**
   (issue #127). Seven scripts use associative arrays, which need bash 4 or newer
   (`tizen-platform-install`, `tizen-download-emulator-package`, `tizen-download-mobile-platform`,

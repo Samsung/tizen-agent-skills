@@ -129,7 +129,145 @@ function validatePassThroughOptions(opts, command) {
  * evidence line.
  */
 const MACHINE_LINE =
-  /^(EMULATOR_|VM_|PLATFORM_|TEMPLATE_|LAUNCH_DIAG=|LAUNCH_WARN=|HOMESCREEN_STATUS=|HW_VIRT_AUTOFIX=|SDB_SERVER_RESTARTED=|EMCLI_MISMATCH=|EMCLI_EXIT=|EMCLI_OUTPUT_BEGIN|EMCLI_OUTPUT_END|VM_LIST|PLATFORM_LIST|TEMPLATE_LIST)/;
+  /^(EMULATOR_|VM_|PLATFORM_|TEMPLATE_|LAUNCH_DIAG=|LAUNCH_WARN=|HOMESCREEN_STATUS=|HW_VIRT_AUTOFIX=|SDB_SERVER_RESTARTED=|EMCLI_MISMATCH=|EMCLI_EXIT=|EMCLI_OUTPUT_BEGIN|EMCLI_OUTPUT_END|TV_V2_|VM_LIST|PLATFORM_LIST|TEMPLATE_LIST)/;
+
+/**
+ * Apple Silicon TV launch (tv_v2_* in tizen-emulator-manager.sh): em-cli cannot
+ * boot a tv-samsung VM on an ARM Mac, so the script starts the platform's
+ * emulator-v2 with a generated --conf. Two of its steps need the user's
+ * consent and are only taken with the matching runner flag; without it the
+ * script prints TV_V2_NEEDS=<key> and changes nothing.
+ */
+const TV_V2_CONSENT = Object.freeze({
+  clear_quarantine: {
+    flag: "--clear-quarantine",
+    opt: "clearQuarantine",
+    ask:
+      "the SDK's emulator-v2 binaries still carry macOS's download quarantine, so macOS " +
+      "would refuse to run them. Clearing it makes the platform's emulator-v2 folder " +
+      "writable for the user (chmod -R u+w) and removes that macOS security flag from it " +
+      "(xattr -dr com.apple.quarantine)",
+  },
+  rebase_disk: {
+    flag: "--rebase-disk",
+    opt: "rebaseDisk",
+    ask:
+      "the VM has an em-cli (v1) disk, and emulator-v2 boots only a disk on the v2 base " +
+      "image. Recreating it DISCARDS every app and file installed in the VM",
+  },
+});
+
+/** @returns {string[]} the TV_V2_NEEDS keys in the script output, in order */
+function parseTvV2Needs(output) {
+  return [...String(output || "").matchAll(/^TV_V2_NEEDS=(\S+)$/gm)]
+    .map((m) => m[1])
+    .filter((key) => TV_V2_CONSENT[key]);
+}
+
+/**
+ * The consent flags for a re-run: the ones `needs` asks for plus the ones the
+ * user already granted in `granted` (the runner opts, e.g. { rebaseDisk: true }).
+ * Dropping a granted flag sends the user round in circles: the re-run stops on
+ * the consent it no longer carries, and asks for it again.
+ */
+function tvV2ConsentFlags(needs, granted = {}) {
+  return Object.keys(TV_V2_CONSENT)
+    .filter(
+      (key) =>
+        needs.includes(key) ||
+        isTrue(granted && granted[TV_V2_CONSENT[key].opt]),
+    )
+    .map((key) => TV_V2_CONSENT[key].flag);
+}
+
+/**
+ * The launch command to re-run for `vmName`. Keeps a non-default --timeout:
+ * a user who asked for a longer wait gets it on the retry as well.
+ */
+function launchRetryCommand(vmName, timeout) {
+  const base = `node emulator-manager-cli.js launch --vm-name ${vmName}`;
+  const sec = parseInt(timeout, 10);
+  return Number.isInteger(sec) && sec !== 300
+    ? `${base} --timeout ${sec}`
+    : base;
+}
+
+/** Message + command for TV_V2_NEEDS, re-running `base` with the consent flags. */
+function tvV2ConsentRequest(needs, base, granted = {}) {
+  const asks = needs.map((key) => TV_V2_CONSENT[key].ask);
+  const flags = tvV2ConsentFlags(needs, granted);
+  return {
+    message:
+      "This TV VM boots on Apple Silicon only through emulator-v2, and the user must agree first: " +
+      `${asks.join("; and ")}. Ask the user; once they agree, re-run with ${flags.join(" ")}. ` +
+      "Nothing was changed.",
+    command: `${base} ${flags.join(" ")}`,
+  };
+}
+
+/**
+ * Why the emulator-v2 path failed (TV_V2_UNAVAILABLE / TV_V2_EXITED), or null
+ * when the output shows neither.
+ */
+function tvV2FailureMessage(output, vmName) {
+  const unavailable = String(output || "").match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
+  if (unavailable && unavailable[1] === "prepare_failed") {
+    return (
+      `The emulator-v2 files for '${vmName}' could not be written (see details for the failing ` +
+      `step, for example a disk, conf or permission error), so emulator-v2 was not started. ` +
+      `Fix that, then launch '${vmName}' again.`
+    );
+  }
+  if (unavailable && unavailable[1] === "still_running") {
+    return (
+      `An emulator-v2 for '${vmName}' is still running, left over from an earlier VM of this name ` +
+      `(deleting a VM does not stop its emulator-v2). Waiting for it would never boot the new VM. ` +
+      `Stop it first (tizen-device-manager stop — this stops every running emulator), then launch '${vmName}'.`
+    );
+  }
+  if (unavailable) {
+    return (
+      `em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only), ` +
+      `and the emulator-v2 path is not available for '${vmName}' (${unavailable[1]}). See details.`
+    );
+  }
+  if (/^TV_V2_EXITED=1$/m.test(String(output || ""))) {
+    return `emulator-v2 exited right after it was started for '${vmName}'. See details for its log.`;
+  }
+  return null;
+}
+
+/**
+ * Warnings for what a successful emulator-v2 run did: how the VM was booted,
+ * and each change it made (reported whether or not a new emulator started).
+ */
+function tvV2LaunchWarnings(output) {
+  const warnings = [];
+  if (/^TV_V2_ALREADY_RUNNING=/m.test(output)) {
+    warnings.push(
+      "emulator-v2 was already running for this VM (still booting), so the runner waited for it " +
+        "instead of starting a second emulator on the same disk.",
+    );
+  } else if (/^TV_V2_LAUNCH=/m.test(output)) {
+    warnings.push(
+      "Started with the platform's emulator-v2 (QEMU with TCG and VirGL) instead of em-cli: " +
+        "em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only). " +
+        "Its output is in <vm folder>/logs/qemu-v2.log.",
+    );
+  }
+  // A VM created in the same run had nothing installed to lose.
+  if (/^TV_V2_DISK_REBASED=/m.test(output) && !/^VM_CREATED=/m.test(output)) {
+    warnings.push(
+      "The VM's disk was recreated on the emulator-v2 base image; apps and data installed before are gone.",
+    );
+  }
+  if (/^TV_V2_QUARANTINE_CLEARED=1$/m.test(output)) {
+    warnings.push(
+      "macOS's download quarantine was cleared from the platform's emulator-v2 folder, as the user agreed.",
+    );
+  }
+  return warnings;
+}
 
 /**
  * Summarize em-cli output for envelope warnings
@@ -693,6 +831,8 @@ function buildEmulatorArgs({
   count,
   timeoutSec,
   emulatorPath,
+  clearQuarantine,
+  rebaseDisk,
 }) {
   const winArgs = [`-Action ${action}`, `-Profile ${profile}`];
   const unixArgs = [`-a ${action}`, `-p ${profile}`];
@@ -765,6 +905,10 @@ function buildEmulatorArgs({
     winArgs.push(`-EmulatorPath "${emulatorPath}"`);
     unixArgs.push(`-E "${emulatorPath}"`);
   }
+  // Apple Silicon TV launch consents (tv_v2_* in the bash script). Unix only:
+  // the path exists only on macOS, and the .ps1 has no such parameters.
+  if (isTrue(clearQuarantine)) unixArgs.push(`-Q`);
+  if (isTrue(rebaseDisk)) unixArgs.push(`-B`);
 
   return { winArgs, unixArgs };
 }
@@ -1398,6 +1542,9 @@ async function createEmulator(
         hwGlAcceleration: opts.hwGlAcceleration,
         customPath: opts.customPath,
         rawImagePath: opts.rawImagePath,
+        // create --launch of a TV VM on Apple Silicon (emulator-v2). The disk
+        // of a VM create just made is rebased without asking — nothing to lose.
+        clearQuarantine: opts.clearQuarantine,
       });
     } catch (error) {
       return createFailureError(state, opts, error, command, startTime);
@@ -1755,10 +1902,27 @@ function createFailureError(state, opts, error, command, startTime) {
       "emulator_boot_failed",
       `VM '${createdVm}' was created, but launching it failed. The VM exists — after fixing ` +
         `the host (see details), relaunch it instead of re-creating: ` +
-        `node emulator-manager-cli.js launch --vm-name ${createdVm}.`,
+        `${launchRetryCommand(createdVm, state.launchTimeoutSec)}.`,
       launchDiagnosisSuggestedFix(diag, createdVm),
       startTime,
       launchDiagnosisDetails(diag, scriptOutput),
+    );
+  }
+
+  // create --launch on Apple Silicon: the VM was created, but emulator-v2 was
+  // not available or died at once. Same rule — relaunch, never re-create.
+  const v2Failure =
+    createdMatch && tvV2FailureMessage(scriptOutput, createdMatch[1].trim());
+  if (v2Failure) {
+    const createdVm = createdMatch[1].trim();
+    return formatError(
+      command,
+      "emulator_boot_failed",
+      `VM '${createdVm}' was created, but launching it failed: ${v2Failure} The VM exists — ` +
+        `relaunch it instead of re-creating: ${launchRetryCommand(createdVm, state.launchTimeoutSec)}.`,
+      launchRetryCommand(createdVm, state.launchTimeoutSec),
+      startTime,
+      rawOutputTail(scriptOutput),
     );
   }
 
@@ -1867,13 +2031,29 @@ function parseCreateMarkers(state, output) {
   // with a warning (the VM exists), but reporting `launched: true` with no
   // serial made a boot timeout read as a success (issue #48).
   const launch = state.launch;
-  const launchTimedOut = launch && !launchedSerial && !cleanupMatch;
+  // Apple Silicon TV VM: create --launch stopped before starting emulator-v2
+  // because the user's consent is missing, or emulator-v2 is not available.
+  // The VM exists; that is not a boot timeout.
+  const tvV2Needs = parseTvV2Needs(output);
+  const tvV2Unavailable = /^TV_V2_UNAVAILABLE=/m.test(output);
+  const launchTimedOut =
+    launch &&
+    !launchedSerial &&
+    !cleanupMatch &&
+    tvV2Needs.length === 0 &&
+    !tvV2Unavailable;
 
   return {
     createdVmName: createdMatch ? createdMatch[1].trim() : state.vmName,
     launchedSerial,
     cleanupMatch,
     launchTimedOut,
+    tvV2Needs: launch ? tvV2Needs : [],
+    tvV2Unavailable,
+    // --launch was asked for, but emulator-v2 could not be used: the VM
+    // exists and was not started. Not a timeout, and not a plain create.
+    launchBlocked: Boolean(launch && tvV2Unavailable && !launchedSerial),
+    tvV2Prepared: /^TV_V2_PREPARED=/m.test(output),
     // The script dropped the template and retried (TV profile), so the VM
     // exists but not at the requested size.
     fallbackMatch: output.match(/^TEMPLATE_FALLBACK=(.+)$/m),
@@ -1881,7 +2061,7 @@ function parseCreateMarkers(state, output) {
   };
 }
 
-function pushCreateWarnings(state, output, markers) {
+function pushCreateWarnings(state, output, markers, opts = {}) {
   const { createdVmName, fallbackMatch } = markers;
   const warnings = state.sizeWarnings;
 
@@ -1890,7 +2070,59 @@ function pushCreateWarnings(state, output, markers) {
       `VM '${createdVmName}' was created, but the emulator did not connect to sdb within the ` +
         `${state.launchTimeoutSec || 300}s launch wait — it may still be booting (a fresh image's first ` +
         `boot can take longer; pass --timeout <seconds> up to 540 to wait longer), or the boot ` +
-        `failed. Check or relaunch with: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+        `failed. Check or relaunch with: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`,
+    );
+  }
+
+  // "launch starts it" only when nothing else says otherwise: a blocked
+  // launch carries the relaunch command in its own warning below, and a
+  // pending consent carries it in the consent command.
+  if (
+    markers.tvV2Prepared &&
+    !markers.launchBlocked &&
+    markers.tvV2Needs.length === 0
+  ) {
+    warnings.push(
+      `VM '${createdVmName}' was prepared for emulator-v2: em-cli cannot boot a TV VM on Apple Silicon ` +
+        `(it requires HAXM, which is Intel-only), so launch starts it with the platform's emulator-v2 ` +
+        `instead: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`,
+    );
+  }
+  if (markers.tvV2Unavailable) {
+    // The same reason text either way: a prepare_failed is a write error
+    // the next launch retries, not "cannot be booted".
+    // A prepared VM whose launch was blocked (still_running, or the second
+    // prepare failed) is launchable once the cause is fixed: keep the
+    // relaunch command, with --timeout, here.
+    const relaunch =
+      state.launch && markers.tvV2Prepared
+        ? ` Relaunch with: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`
+        : "";
+    warnings.push(
+      `VM '${createdVmName}' was created${state.launch ? " but not launched" : ""}. ` +
+        tvV2FailureMessage(output, createdVmName) +
+        relaunch,
+    );
+  }
+  // create without --launch: the VM is prepared, but a leftover emulator-v2
+  // of the same name would make the next launch wait for the wrong VM.
+  if (/^TV_V2_LEFTOVER_RUNNING=/m.test(output)) {
+    warnings.push(
+      `An emulator-v2 for '${createdVmName}' is still running, left over from an earlier VM of this ` +
+        `name (deleting a VM does not stop its emulator-v2). Stop it (tizen-device-manager stop — this ` +
+        `stops every running emulator) before you launch '${createdVmName}'.`,
+    );
+  }
+  if (markers.tvV2Needs.length > 0) {
+    // create rebased the new VM's disk already; only a quarantine consent
+    // given to create carries over to the launch.
+    const ask = tvV2ConsentRequest(
+      markers.tvV2Needs,
+      launchRetryCommand(createdVmName, state.launchTimeoutSec),
+      { clearQuarantine: opts.clearQuarantine },
+    );
+    warnings.push(
+      `VM '${createdVmName}' was created but not launched. ${ask.message} Launch: ${ask.command}`,
     );
   }
 
@@ -1917,6 +2149,8 @@ function pushCreateWarnings(state, output, markers) {
 
 function createStatus(markers) {
   if (markers.cleanupMatch) return "create_failed_cleaned_up";
+  if (markers.tvV2Needs.length > 0) return "created_launch_needs_consent";
+  if (markers.launchBlocked) return "created_launch_blocked";
   return markers.launchTimedOut ? "created_launch_timeout" : "created";
 }
 
@@ -1958,6 +2192,16 @@ function createdVmData(state, opts, output, markers) {
     launched: Boolean(launchedSerial),
     device_serial: launchedSerial,
     raw_image_path: opts.rawImagePath || null,
+    // Apple Silicon TV VM: launch boots it with emulator-v2, not em-cli. With
+    // --launch, "emulator-v2" only when this run actually started it.
+    ...(markers.tvV2Prepared || markers.launchBlocked
+      ? {
+          launch_method:
+            !state.launch || /^TV_V2_LAUNCH=/m.test(output)
+              ? "emulator-v2"
+              : "none",
+        }
+      : {}),
     status: createStatus(markers),
     ...(homescreenStatus ? { homescreen_fix: homescreenStatus } : {}),
   };
@@ -1965,12 +2209,16 @@ function createdVmData(state, opts, output, markers) {
 
 function createVmResult(state, opts, output, command, startTime) {
   const markers = parseCreateMarkers(state, output);
-  pushCreateWarnings(state, output, markers);
+  pushCreateWarnings(state, output, markers, opts);
   return successEnvelope(
     command,
     startTime,
     createdVmData(state, opts, output, markers),
-    [...state.sizeWarnings, ...summarizeEmulatorOutput(output)],
+    [
+      ...state.sizeWarnings,
+      ...tvV2LaunchWarnings(output),
+      ...summarizeEmulatorOutput(output),
+    ],
   );
 }
 
@@ -2027,7 +2275,7 @@ function validateLaunchOptions(opts, { vmName, timeout, timeoutSec }, command) {
  *
  * @returns {{vmName?: string, error?: object}}
  */
-function selectLaunchVm(listOutput, profile, command, startTime) {
+function selectLaunchVm(listOutput, profile, command, startTime, timeout) {
   // VM_LIST= is the authoritative "do VMs exist" answer: the script prints
   // it from `em-cli list-vm`, while the VM_DETAIL records come from a second
   // `list-vm -d` whose failure is swallowed. Names without records must not
@@ -2045,7 +2293,7 @@ function selectLaunchVm(listOutput, profile, command, startTime) {
         "execution_error",
         `em-cli listed ${vmNames.length} VM(s) (${vmNames.join(", ")}) but returned no platform details, ` +
           `so the '${profile}' profile VM cannot be identified. Pass --vm-name <name> to launch one of them.`,
-        `node emulator-manager-cli.js launch --vm-name ${vmNames[0]}`,
+        launchRetryCommand(vmNames[0], timeout),
         startTime,
         rawOutputTail(listOutput),
       ),
@@ -2088,7 +2336,7 @@ function selectLaunchVm(listOutput, profile, command, startTime) {
  *
  * @returns {{vmName?: string, error?: object}}
  */
-function autoSelectLaunchVm(scriptPath, profile, command, startTime) {
+function autoSelectLaunchVm(scriptPath, profile, command, startTime, timeout) {
   console.error(
     `[tizen-emulator] No VM name given — listing VMs to select a '${profile}' profile VM...`,
   );
@@ -2118,14 +2366,21 @@ function autoSelectLaunchVm(scriptPath, profile, command, startTime) {
       ),
     };
   }
-  return selectLaunchVm(listOutput, profile, command, startTime);
+  return selectLaunchVm(listOutput, profile, command, startTime, timeout);
 }
 
 /**
  * Surface the actionable launch failures by name, otherwise the caller only
  * sees "Command failed: bash … > /tmp/tizen-plugin-*.out".
  */
-function launchFailureError(error, vmName, timeout, command, startTime) {
+function launchFailureError(
+  error,
+  vmName,
+  timeout,
+  command,
+  startTime,
+  granted = {},
+) {
   const combined = scriptOutputOf(error);
 
   const notFound = combined.match(/VM '(.+?)' not found/i);
@@ -2140,6 +2395,55 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
   }
   if (/No emulator VMs found/i.test(combined)) {
     return noVmsError(command, startTime);
+  }
+
+  // Apple Silicon TV launch (emulator-v2): the user's consent is missing, or
+  // the v2 path is not available / died at once. em-cli is no fallback there.
+  // A blocking failure goes first: asking for a consent the launch would then
+  // not get past is a wasted round trip with the user.
+  if (/^TV_V2_UNAVAILABLE=disk_info_failed$/m.test(combined)) {
+    // Recreating the disk is the cure for a corrupt one, and it is the
+    // user's call: it discards everything installed in the VM.
+    return formatError(
+      command,
+      "user_input_required",
+      `qemu-img could not read the disk of '${vmName}' (see details), so it is unknown whether it ` +
+        `is on the emulator-v2 base image. Check the file's permissions first. If the disk is ` +
+        `corrupt, recreating it with --rebase-disk DISCARDS every app and file installed in the VM. ` +
+        `Ask the user; only once they agree, re-run with --rebase-disk. Nothing was changed.`,
+      `${launchRetryCommand(vmName, timeout)} ${tvV2ConsentFlags(
+        ["rebase_disk"],
+        granted,
+      ).join(" ")}`,
+      startTime,
+      rawOutputTail(combined),
+    );
+  }
+  const v2Failure = tvV2FailureMessage(combined, vmName);
+  if (v2Failure) {
+    return formatError(
+      command,
+      "emulator_boot_failed",
+      v2Failure,
+      null,
+      startTime,
+      rawOutputTail(combined),
+    );
+  }
+  const needs = parseTvV2Needs(combined);
+  if (needs.length > 0) {
+    const ask = tvV2ConsentRequest(
+      needs,
+      launchRetryCommand(vmName, timeout),
+      granted,
+    );
+    return formatError(
+      command,
+      "user_input_required",
+      ask.message,
+      ask.command,
+      startTime,
+    );
   }
 
   // The script ran diagnose_launch_failure() — turn its LAUNCH_DIAG lines
@@ -2167,7 +2471,10 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
  * @returns {{warnings: string[], homescreenStatus: string|null}}
  */
 function collectLaunchWarnings(output, serial, vmName) {
-  const warnings = summarizeEmulatorOutput(output);
+  const warnings = [
+    ...tvV2LaunchWarnings(output),
+    ...summarizeEmulatorOutput(output),
+  ];
 
   // Pre-launch auto-heal: the script re-enabled hwVirtualization on a VM
   // whose profile disabled it — report what happened and that it stuck.
@@ -2255,6 +2562,16 @@ function launchedResult(output, { vmName, timeout, command, startTime }) {
     timeout_sec: timeout,
     waited_ms: Date.now() - startTime,
     emulator_keeps_running: true,
+    // em-cli, or the platform's emulator-v2 started with --conf (Apple
+    // Silicon TV launch, where em-cli cannot boot the VM); "none" when the VM
+    // was already running and nothing was started.
+    launch_method:
+      /is already running and connected/.test(output) ||
+      /^TV_V2_ALREADY_RUNNING=/m.test(output)
+        ? "none"
+        : /^TV_V2_LAUNCH=/m.test(output)
+          ? "emulator-v2"
+          : "em-cli",
   };
   if (homescreenStatus) data.homescreen_fix = homescreenStatus;
 
@@ -2306,6 +2623,7 @@ async function launchEmulator(
         opts.profile || "tizen",
         command,
         startTime,
+        timeout,
       );
       if (selection.error) return selection.error;
       vmName = selection.vmName;
@@ -2326,9 +2644,14 @@ async function launchEmulator(
         vmName,
         timeoutSec: timeout,
         emulatorPath: opts.emulatorPath,
+        clearQuarantine: opts.clearQuarantine,
+        rebaseDisk: opts.rebaseDisk,
       });
     } catch (error) {
-      return launchFailureError(error, vmName, timeout, command, startTime);
+      return launchFailureError(error, vmName, timeout, command, startTime, {
+        clearQuarantine: opts.clearQuarantine,
+        rebaseDisk: opts.rebaseDisk,
+      });
     }
 
     return launchedResult(output, { vmName, timeout, command, startTime });
@@ -2911,4 +3234,14 @@ module.exports = {
   matchTemplateForSize,
   parsePlatformList,
   pickPlatform,
+  TV_V2_CONSENT,
+  parseTvV2Needs,
+  launchRetryCommand,
+  tvV2ConsentFlags,
+  tvV2ConsentRequest,
+  tvV2LaunchWarnings,
+  tvV2FailureMessage,
+  createFailureError,
+  createVmResult,
+  launchFailureError,
 };

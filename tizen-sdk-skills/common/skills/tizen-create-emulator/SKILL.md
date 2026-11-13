@@ -480,10 +480,20 @@ em-cli, but em-cli **cannot boot it**: `create --launch` and `tizen-launch-emula
 `TIZEN_SDK_EMULATOR_E003` ("Your system cannot support HW virtualization"), because em-cli
 requires HAXM for image version >= 3.0 and HAXM is Intel-only. The image is fine.
 
-On an ARM Mac, create the TV VM **without `--launch`**, then boot it with the steps in
-[`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch)
-(emulator-v2 QEMU with VirGL, started directly with `--conf`). Tell the user why: em-cli's HAXM
-check, not a missing image.
+On an ARM Mac the runner handles this itself: `create` for a TV VM also prepares it for the
+platform's emulator-v2 stack (disk on the v2 base image, `vm_launch-v2.conf` with the chosen
+size), reports `result.launch_method: "emulator-v2"`, and `launch` (or `create --launch`) boots
+it with emulator-v2 instead of em-cli. Do not run `qemu-img`, `sed` or `nohup` over the VM folder
+yourself. Tell the user why: em-cli's HAXM check, not a missing image.
+
+If the v2 binaries still carry macOS's download quarantine, `create --launch` creates the VM but
+does not start it: `result.status` is `created_launch_needs_consent` and a warning carries the
+launch command with `--clear-quarantine`. Ask the user and run it only after they agree. When
+emulator-v2 cannot be used for the new VM, `create --launch` does not start it:
+`result.status` is `created_launch_blocked`, and a warning says why (for example a missing
+emulator-v2 stack, or an emulator-v2 of an earlier VM of the same name that is still running and
+must be stopped first). Details and the remaining failure cases:
+[`tizen-launch-emulator` → Apple Silicon (ARM64) Macs: TV emulator launch](../tizen-launch-emulator/SKILL.md#apple-silicon-arm64-macs-tv-emulator-launch).
 
 ## Scope: create-emulator vs launch-emulator vs device-manager
 
