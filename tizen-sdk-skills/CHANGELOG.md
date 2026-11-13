@@ -51,6 +51,16 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   relaunch it. `TIZEN_TV_V2_LAUNCH=off` keeps em-cli. macOS-only, so
   `tizen-emulator-manager.ps1` is unchanged.
 
+- **`remote-device scan --connected-only` / `--saved-only` probe only your own devices.**
+  A plain `scan` sweeps every address of each local /24 subnet and reports every
+  developer-mode Tizen device on it, the neighbours' included. `--connected-only` probes only
+  the remote devices `sdb devices` lists as `device`, and `--saved-only` only the bookmarked
+  list (`remote_device_scan.list`, so it needs the SDK path); together they probe both. Each
+  host is probed on its own port (a non-default `--port` is ignored with a warning), no other
+  address is touched, and `result` reports `only`, `hosts_probed` and bookmark `name`s.
+  `--connected-only` alone fails with `sdk_path_not_set` when sdb is unavailable instead of
+  reporting no devices. `tizen-cli` gains the same two flags.
+
 ### Changed
 
 - **Pre-check installer hand-offs report `status: "needs_action"`.** When a pre-check passes and

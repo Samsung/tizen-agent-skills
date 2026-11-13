@@ -12,6 +12,8 @@
  *   node .../remote-device-cli.js scan                          # sweep all local /24 subnets, port 26101
  *   node .../remote-device-cli.js scan 192.168.1                # sweep a specific subnet
  *   node .../remote-device-cli.js scan 192.168.1 --port 26101 --timeout 3000
+ *   node .../remote-device-cli.js scan --connected-only         # probe only devices sdb is connected to
+ *   node .../remote-device-cli.js scan --saved-only             # probe only bookmarked devices
  *   node .../remote-device-cli.js connect 192.168.1.100         # sdb connect 192.168.1.100:26101
  *   node .../remote-device-cli.js connect 192.168.1.100 --port 26102
  *   node .../remote-device-cli.js disconnect 192.168.1.100
@@ -29,13 +31,17 @@
  *                (for edit this is the CURRENT address, used to find the bookmark)
  *   --port     - SDB port (optional, default 26101); for edit, the bookmark's current port
  *   --timeout  - scan only (optional): per-host TCP timeout in ms (default 3000)
+ *   --connected-only - scan only: probe the remote devices sdb is connected to instead of the subnet
+ *   --saved-only     - scan only: probe the bookmarked devices instead of the subnet
+ *                      (both together probe both; each host on its own port; a non-default --port is ignored with a warning)
  *   --name     - add (required) / edit (optional): display name to bookmark the device under
  *   --new-ip   - edit only (optional): move the bookmark to this IPv4 address
  *   --new-port - edit only (optional): move the bookmark to this SDB port
  *
  * `edit` needs at least one of --name / --new-ip / --new-port.
  *
- * Note: `scan` needs no SDK (pure TCP sweep); connect/disconnect/list need
+ * Note: `scan` needs no SDK (pure TCP sweep), except `--saved-only`, which
+ * reads the bookmarked list and so needs the SDK path; connect/disconnect/list need
  * sdb, i.e. an installed SDK with tizen-sdk-init done. `add`/`remove`/`edit`/
  * `list-saved` read/write Device Manager's remote_device_scan.list directly and
  * do not need sdb.
@@ -59,7 +65,7 @@ const COMMAND = "tizen-sdk remote-device";
 
 const USAGE =
   "Usage: node remote-device-cli.js <scan|connect|disconnect|list|add|remove|edit|list-saved> [subnet|ip] " +
-  "[--port N] [--timeout MS] [--name NAME] [--new-ip IP] [--new-port N]";
+  "[--port N] [--timeout MS] [--connected-only] [--saved-only] [--name NAME] [--new-ip IP] [--new-port N]";
 
 const usageError = (message) => exitWithUsageError(COMMAND, USAGE, message);
 
@@ -71,14 +77,20 @@ const OPTION_FLAGS = {
   "--new-port": "newPort",
 };
 
+const BOOLEAN_FLAGS = {
+  "--connected-only": "connectedOnly",
+  "--saved-only": "savedOnly",
+};
+
 const { options, positional } = parseArgsOrExit(
   COMMAND,
   USAGE,
   process.argv.slice(2),
   OPTION_FLAGS,
+  BOOLEAN_FLAGS,
 );
 let { port } = options;
-const { timeout, name, newIp, newPort } = options;
+const { timeout, name, newIp, newPort, connectedOnly, savedOnly } = options;
 
 let [action, target] = positional;
 
@@ -101,6 +113,10 @@ switch (action) {
         port === undefined ? undefined : port,
         timeout === undefined ? undefined : timeout,
         "tizen-sdk remote-device scan",
+        {
+          connectedOnly: Boolean(connectedOnly),
+          savedOnly: Boolean(savedOnly),
+        },
       ),
     );
     break;

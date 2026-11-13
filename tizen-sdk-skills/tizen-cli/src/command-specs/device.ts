@@ -483,6 +483,16 @@ export const DEVICE_SPECS: CommandSpec[] = [
         default: "3000",
       },
       {
+        flags: "--connected-only",
+        description:
+          "Probe only the remote devices sdb is connected to instead of sweeping the subnet (scan only)",
+      },
+      {
+        flags: "--saved-only",
+        description:
+          "Probe only the bookmarked devices instead of sweeping the subnet (scan only; needs the SDK path)",
+      },
+      {
         flags: "--name <name>",
         description:
           "Display name to bookmark the device under (required for add; the new name for edit)",
@@ -544,6 +554,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
             o.port,
             o.timeout,
             "tizen-sdk remote-device scan",
+            { connectedOnly: !!o.connectedOnly, savedOnly: !!o.savedOnly },
           );
       }
     },

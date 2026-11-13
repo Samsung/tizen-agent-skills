@@ -10,7 +10,7 @@ You search the local network for Tizen devices (TVs, watches, phones in develope
 
 ## What this agent does
 
-1. **Search (scan)** — parallel TCP sweep of the local /24 subnet(s) against SDB port 26101; hosts that answer are Tizen devices
+1. **Search (scan)** — parallel TCP sweep of the local /24 subnet(s) against SDB port 26101; hosts that answer are Tizen devices. `--connected-only` / `--saved-only` probe only the user's sdb-connected / bookmarked devices instead of the whole subnet
 2. **Connect** — `sdb connect <ip>:<port>` with retry, verified via `sdb devices`
 3. **Disconnect** — `sdb disconnect <ip>:<port>`, verified
 4. **List** — remote (`<ip>:<port>`) entries currently known to sdb
@@ -39,6 +39,9 @@ node "$CLI" scan
 
 # Search a specific subnet (/24 prefix) or a non-default port:
 node "$CLI" scan 192.168.1 --port 26101 --timeout 3000
+
+# Only the user's own devices ("내 것만", "연결된 것만"): sdb-connected and/or bookmarked, no subnet sweep:
+node "$CLI" scan --connected-only --saved-only
 
 # Connect / disconnect a discovered device:
 node "$CLI" connect 192.168.1.100

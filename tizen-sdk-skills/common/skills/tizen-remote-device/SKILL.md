@@ -82,6 +82,7 @@ with escalated permissions; do not retry inside the sandbox and do not fall back
 
 ```
 node "$CLI" scan [subnet] [--port N] [--timeout MS]       # search network for Tizen devices
+node "$CLI" scan [--connected-only] [--saved-only]         # probe only this PC's sdb-connected / bookmarked devices
 node "$CLI" connect <ip[:port]> [--port N]                # sdb connect over network
 node "$CLI" disconnect <ip[:port]> [--port N]              # sdb disconnect
 node "$CLI" list                                           # remote (<ip>:<port>) sdb connections
@@ -91,7 +92,7 @@ node "$CLI" edit <ip[:port]> [--name N] [--new-ip IP] [--new-port N]   # change 
 node "$CLI" list-saved                                      # read back the bookmarked list
 ```
 
-1. **scan** — sweeps every local /24 subnet (or the given `subnet` prefix like `192.168.1`) with parallel TCP probes against SDB port 26101 (default). Devices answering are Tizen devices in developer mode. Takes ~3 seconds. Works **without** the SDK installed.
+1. **scan** — sweeps every local /24 subnet (or the given `subnet` prefix like `192.168.1`) with parallel TCP probes against SDB port 26101 (default). Devices answering are Tizen devices in developer mode. Takes ~3 seconds. Works **without** the SDK installed. A sweep finds every such device on the subnet, not just the user's: when the user wants only their own devices ("내 것만", "연결된 것만", "my devices"), pass `--connected-only` (the remote devices `sdb devices` lists as `device`) and/or `--saved-only` (the bookmarked list; needs the SDK path). Then only those hosts are probed, each on its own port (a non-default `--port` is ignored with a warning), and no other address is touched; `--connected-only` alone fails with `sdk_path_not_set` when sdb is unavailable; `result` carries `only`, `hosts_probed`, `device_count` and `devices[]` (bookmarks add `name`).
 2. **connect** — `sdb connect <ip>:<port>` with retry + verification via `sdb devices` (entry must be `device`, not `offline`). Requires SDK (`tizen-sdk-init`).
 3. **disconnect** — `sdb disconnect <ip>:<port>`, verified.
 4. **list** — remote entries of `sdb devices` (serials shaped `<ip>:<port>`).
