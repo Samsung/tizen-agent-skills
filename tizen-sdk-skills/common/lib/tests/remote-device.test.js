@@ -9,6 +9,7 @@
  *   - computeSubnets: /24 prefix derivation from injected interface data
  *   - parseRemoteConnections: extracting <ip>:<port> entries from `sdb devices`
  *   - scanRemoteDevices / connectRemoteDevice: invalid-parameter envelopes
+ *   - collectScanTargets and scan --saved-only: only known hosts are probed
  */
 
 const {
@@ -17,6 +18,7 @@ const {
   isValidPort,
   computeSubnets,
   parseRemoteConnections,
+  collectScanTargets,
   parseDeviceListLine,
   scanRemoteDevices,
   connectRemoteDevice,
@@ -300,6 +302,124 @@ console.log("\nTest 6: invalid-parameter envelopes");
         false,
       );
     }
+  }
+
+  // Test 8: filtered scan — collectScanTargets picks only known hosts, and
+  // scan --saved-only probes just the bookmarks (each on its own port).
+  console.log("\nTest 8: scan --connected-only / --saved-only");
+  {
+    const connections = [
+      { ip: "192.0.2.100", port: 26101, state: "device" },
+      { ip: "192.0.2.101", port: 26101, state: "offline" },
+      { ip: "198.51.100.5", port: 26102, state: "device" },
+    ];
+    const saved = [
+      { name: "Living Room TV", ip: "192.0.2.100", port: 26101 },
+      { name: "Office TV", ip: "192.0.2.42", port: 26101 },
+    ];
+    check(
+      "  connected: state 'device' only",
+      collectScanTargets({ connections }),
+      [
+        { ip: "192.0.2.100", port: 26101 },
+        { ip: "198.51.100.5", port: 26102 },
+      ],
+    );
+    check(
+      "  connected + saved: deduped by ip:port, bookmark name kept",
+      collectScanTargets({ connections, saved }),
+      [
+        { ip: "192.0.2.100", port: 26101, name: "Living Room TV" },
+        { ip: "198.51.100.5", port: 26102 },
+        { ip: "192.0.2.42", port: 26101, name: "Office TV" },
+      ],
+    );
+    check(
+      "  subnet limits the targets",
+      collectScanTargets({ connections, saved, subnet: "198.51.100" }),
+      [{ ip: "198.51.100.5", port: 26102 }],
+    );
+
+    // End to end in a child with an empty HOME: an SDK path config whose
+    // bookmark list names one listening and one closed 127.0.0.1 port.
+    const { execFile } = require("child_process");
+    const fs = require("fs");
+    const net = require("net");
+    const os = require("os");
+    const pathMod = require("path");
+    const listen = () =>
+      new Promise((resolve) => {
+        const server = net.createServer((s) => s.destroy());
+        server.listen(0, "127.0.0.1", () => resolve(server));
+      });
+    const open = await listen();
+    const closedServer = await listen();
+    const closedPort = closedServer.address().port;
+    await new Promise((resolve) => closedServer.close(resolve));
+
+    const home = fs.mkdtempSync(pathMod.join(os.tmpdir(), "rd-saved-"));
+    const sdkRoot = pathMod.join(home, "tizen-sdk");
+    const dataPath = pathMod.join(home, "tizen-sdk-data");
+    fs.mkdirSync(sdkRoot);
+    fs.writeFileSync(
+      pathMod.join(sdkRoot, "sdk.info"),
+      `TIZEN_SDK_DATA_PATH=${dataPath}\n`,
+    );
+    fs.writeFileSync(pathMod.join(home, ".tizen.sdk.path.config"), sdkRoot);
+    const listFile = pathMod.join(
+      dataPath,
+      "device-manager",
+      "config",
+      "remote_device_scan.list",
+    );
+    fs.mkdirSync(pathMod.dirname(listFile), { recursive: true });
+    fs.writeFileSync(
+      listFile,
+      `Open TV/127.0.0.1/${open.address().port}\r\nClosed TV/127.0.0.1/${closedPort}\r\n`,
+    );
+    const env = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (/^path$/i.test(key) || /^TIZEN_SDK/i.test(key)) continue;
+      env[key] = value;
+    }
+    env.USERPROFILE = home;
+    env.HOME = home;
+    env.PATH = home;
+    const script = [
+      "const rd = require(process.argv[1]);",
+      "rd.scanRemoteDevices(undefined, undefined, 1000, 'scan', { savedOnly: true })",
+      "  .then((e) => process.stdout.write(JSON.stringify(e)));",
+    ].join("\n");
+    const stdout = await new Promise((resolve) => {
+      execFile(
+        process.execPath,
+        ["-e", script, pathMod.resolve(__dirname, "../core/remote-device.js")],
+        { env, timeout: 30000 },
+        (_err, out) => resolve(out),
+      );
+    });
+    open.close();
+    fs.rmSync(home, { recursive: true, force: true });
+    let envelope = {};
+    try {
+      envelope = JSON.parse(stdout);
+    } catch (_e) {
+      console.log(`  child stdout was not JSON: ${stdout}`);
+    }
+    check("  saved-only: success", envelope.status, "success");
+    check(
+      "  saved-only: both bookmarks probed",
+      envelope.result?.hosts_probed,
+      2,
+    );
+    check(
+      "  saved-only: only the listening bookmark is reported",
+      (envelope.result?.devices || []).map((d) => d.name),
+      ["Open TV"],
+    );
+    check("  saved-only: only names the filter", envelope.result?.only, [
+      "saved",
+    ]);
   }
 
   // Source guard: every sdb-backed function starts the sdb server once

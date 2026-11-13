@@ -28,7 +28,7 @@ Any request to find Tizen devices (TVs, watches, phones in developer mode) on th
 ## Command
 
 ```
-tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|remove|edit|list-saved>] [--ip <ip>] [--subnet <prefix>] [--port <port>] [--timeout <ms>] [--name <name>] [--new-ip <ip>] [--new-port <port>]
+tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|remove|edit|list-saved>] [--ip <ip>] [--subnet <prefix>] [--port <port>] [--timeout <ms>] [--connected-only] [--saved-only] [--name <name>] [--new-ip <ip>] [--new-port <port>]
 ```
 
 | Option | Required | Default | Description |
@@ -38,6 +38,8 @@ tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|re
 | `--subnet` | no | all local subnets | Subnet /24 prefix to scan, e.g. `192.168.1` (scan only) |
 | `--port` | no | `26101` | SDB port; for `edit`, the bookmark's **current** port |
 | `--timeout` | no | `3000` | Per-host TCP timeout in ms (scan only, 100–30000) |
+| `--connected-only` | no | — | Probe only the remote devices sdb is connected to, instead of sweeping the subnet (scan only) |
+| `--saved-only` | no | — | Probe only the bookmarked devices, instead of sweeping the subnet (scan only; needs the SDK path). With `--connected-only`, both sets are probed |
 | `--name` | add: **yes** | — | Display name to bookmark the device under; for `edit`, the new name |
 | `--new-ip` | no | — | Move the bookmark to this IPv4 address (edit only) |
 | `--new-port` | no | — | Move the bookmark to this SDB port (edit only) |
@@ -45,7 +47,7 @@ tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|re
 `edit` needs at least one of `--name` / `--new-ip` / `--new-port`.
 
 ## Output
-- `scan` success `result`: `subnets_scanned`, `port`, `device_count`, `devices[]` (`ip`, `port`, `status: connected|disconnected`). A whole-subnet scan takes ~3 seconds.
+- `scan` success `result`: `subnets_scanned`, `port`, `device_count`, `devices[]` (`ip`, `port`, `status: connected|disconnected`). A whole-subnet scan takes ~3 seconds and finds every developer-mode device on the subnet. With `--connected-only` / `--saved-only` only those hosts are probed (each on its own port, so `--port` is unused), and `result` has `only`, `hosts_probed`, `device_count` and `devices[]` (bookmarks add `name`) instead of `subnets_scanned` / `port`.
 - `connect` success `result`: `device_serial` (`<ip>:<port>` — pass this as `--serial` to other commands), `status: connected`, `attempts`.
 - `add`/`remove`/`edit` success `result`: `device_count` (entries remaining in the bookmark list), `list_path` (resolved path to Device Manager's `remote_device_scan.list`), `sdk_root` (the SDK that path was derived from). `edit` also returns the updated `name`/`ip`/`port` and a `previous` object with the values before the change.
 
@@ -64,6 +66,9 @@ tizen-cli tizen-sdk remote-device
 
 # Search a specific subnet
 tizen-cli tizen-sdk remote-device --action scan --subnet 192.168.1
+
+# Check only your own devices: the ones sdb is connected to, and the bookmarked ones
+tizen-cli tizen-sdk remote-device --action scan --connected-only --saved-only
 
 # Connect to a discovered device
 tizen-cli tizen-sdk remote-device --action connect --ip 192.168.1.100

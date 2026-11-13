@@ -1001,7 +1001,7 @@ node <plugin>/lib/cli/file-transfer-cli.js pull - "/path/on/device"
 **CLI 러너:**
 
 ```
-node <plugin>/lib/cli/remote-device-cli.js <scan|connect|disconnect|list|add|remove|edit|list-saved> [subnet|ip] [--port N] [--timeout MS] [--name NAME] [--new-ip IP] [--new-port N]
+node <plugin>/lib/cli/remote-device-cli.js <scan|connect|disconnect|list|add|remove|edit|list-saved> [subnet|ip] [--port N] [--timeout MS] [--connected-only] [--saved-only] [--name NAME] [--new-ip IP] [--new-port N]
 ```
 
 **참고:** `scan`은 SDK 없이 동작하는 순수 TCP 스윕이며, `connect`/`disconnect`/`list`는 sdb(설치된 SDK + `tizen-sdk-init`)가 필요합니다. `add`/`remove`/`edit`/`list-saved`는 Device Manager의 `remote_device_scan.list`를 직접 읽고 쓰므로 sdb가 필요 없습니다.

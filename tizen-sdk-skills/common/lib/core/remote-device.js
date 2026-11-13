@@ -194,11 +194,106 @@ function readRemoteConnections() {
 }
 
 /**
+ * Hosts a filtered scan probes: the remote devices sdb is connected to
+ * (state "device") and/or the bookmarked list, each with its own port,
+ * optionally limited to one /24 prefix. Deduplicated by <ip>:<port>; a
+ * bookmark's name is kept.
+ *
+ * @param {{connections?: Array<{ip: string, port: number, state: string}>, saved?: Array<{name: string, ip: string, port: number}>, subnet?: string}} sources
+ * @returns {Array<{ip: string, port: number, name?: string}>}
+ */
+function collectScanTargets({ connections = [], saved = [], subnet }) {
+  const targets = new Map();
+  for (const c of connections) {
+    if (c.state === "device") {
+      targets.set(`${c.ip}:${c.port}`, { ip: c.ip, port: c.port });
+    }
+  }
+  for (const s of saved) {
+    targets.set(`${s.ip}:${s.port}`, { ip: s.ip, port: s.port, name: s.name });
+  }
+  return [...targets.values()].filter(
+    (t) => !subnet || t.ip.startsWith(`${subnet}.`),
+  );
+}
+
+/**
+ * Filtered scan: probe only the hosts this PC already knows — sdb-connected
+ * remote devices (connectedOnly) and/or the bookmarked list (savedOnly) —
+ * instead of sweeping every address of the local /24 subnets.
+ */
+async function scanKnownDevices(
+  command,
+  startTime,
+  { subnet, timeout, connectedOnly, savedOnly },
+) {
+  const warnings = [];
+  const { connections, warning } = readRemoteConnections();
+  if (warning) warnings.push(warning);
+
+  let saved = [];
+  if (savedOnly) {
+    const location = resolveDeviceListPath();
+    if (location.error) {
+      return formatError(command, "sdk_path_not_set", location.error);
+    }
+    saved = readDeviceListFile(location.listPath);
+  }
+
+  const targets = collectScanTargets({
+    connections: connectedOnly ? connections : [],
+    saved,
+    subnet,
+  });
+  const only = [connectedOnly && "connected", savedOnly && "saved"].filter(
+    Boolean,
+  );
+  console.error(
+    `[tizen-remote-device] Probing ${targets.length} known host(s) (${only.join(", ")}${subnet ? `, ${subnet}.0/24` : ""}; timeout ${timeout}ms per host)`,
+  );
+
+  const reachable = await Promise.all(
+    targets.map((t) =>
+      isPortReachable(t.ip, t.port, timeout).then((ok) => (ok ? t : null)),
+    ),
+  );
+  const connectedSet = new Set(
+    connections
+      .filter((c) => c.state === "device")
+      .map((c) => `${c.ip}:${c.port}`),
+  );
+  const devices = reachable.filter(Boolean).map((t) => ({
+    ...t,
+    status: connectedSet.has(`${t.ip}:${t.port}`)
+      ? "connected"
+      : "disconnected",
+  }));
+
+  const envelope = new Envelope(command);
+  envelope.startTime = startTime;
+  return envelope.success(
+    {
+      only,
+      hosts_probed: targets.length,
+      device_count: devices.length,
+      devices,
+    },
+    { warnings },
+  );
+}
+
+/**
  * Search the local network for Tizen devices (SDB port sweep).
+ *
+ * With options.connectedOnly and/or options.savedOnly, only the hosts sdb is
+ * connected to and/or the bookmarked hosts are probed (each on its own port,
+ * so `port` is not used) — no other address on the network is touched.
  *
  * @param {string} [subnet] - /24 prefix like "192.168.1"; omit to scan all local interface subnets
  * @param {number|string} [port=26101] - SDB port to probe
  * @param {number|string} [timeoutMs=3000] - per-host TCP connect timeout
+ * @param {string} [command]
+ * @param {{connectedOnly?: boolean, savedOnly?: boolean}} [options]
  * @returns {Promise<object>} Standard JSON Envelope — result.devices lists discovered hosts
  */
 async function scanRemoteDevices(
@@ -206,6 +301,7 @@ async function scanRemoteDevices(
   port = DEFAULT_SDB_PORT,
   timeoutMs = DEFAULT_SCAN_TIMEOUT_MS,
   command = "tizen-sdk remote-device scan",
+  options = {},
 ) {
   const startTime = Date.now();
   try {
@@ -226,15 +322,26 @@ async function scanRemoteDevices(
       );
     }
 
+    if (subnet && !isValidSubnet(subnet)) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Invalid subnet: ${subnet}. Use a /24 prefix like "192.168.1".`,
+      );
+    }
+
+    const { connectedOnly = false, savedOnly = false } = options;
+    if (connectedOnly || savedOnly) {
+      return await scanKnownDevices(command, startTime, {
+        subnet,
+        timeout,
+        connectedOnly,
+        savedOnly,
+      });
+    }
+
     let subnets;
     if (subnet) {
-      if (!isValidSubnet(subnet)) {
-        return formatError(
-          command,
-          "invalid_parameters",
-          `Invalid subnet: ${subnet}. Use a /24 prefix like "192.168.1".`,
-        );
-      }
       subnets = [subnet];
     } else {
       subnets = computeSubnets();
@@ -937,6 +1044,7 @@ module.exports = {
   isValidPort,
   computeSubnets,
   parseRemoteConnections,
+  collectScanTargets,
   parseDeviceListLine,
   resolveDeviceListPath,
   DEFAULT_SDB_PORT,

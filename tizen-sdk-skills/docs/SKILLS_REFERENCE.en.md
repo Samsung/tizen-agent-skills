@@ -1048,7 +1048,7 @@ node <plugin>/lib/cli/file-transfer-cli.js pull - "/path/on/device"
 **CLI Runner:**
 
 ```
-node <plugin>/lib/cli/remote-device-cli.js <scan|connect|disconnect|list|add|remove|edit|list-saved> [subnet|ip] [--port N] [--timeout MS] [--name NAME] [--new-ip IP] [--new-port N]
+node <plugin>/lib/cli/remote-device-cli.js <scan|connect|disconnect|list|add|remove|edit|list-saved> [subnet|ip] [--port N] [--timeout MS] [--connected-only] [--saved-only] [--name NAME] [--new-ip IP] [--new-port N]
 ```
 
 **Note:** `scan` is a pure TCP sweep and needs no SDK; `connect`/`disconnect`/`list` need sdb (an installed SDK + `tizen-sdk-init`). `add`/`remove`/`edit`/`list-saved` read/write Device Manager's `remote_device_scan.list` directly and do not need sdb.
