@@ -244,32 +244,37 @@ path (the runner logs a warning).
 
 Show the envelope, ask the user with AskUserQuestion, and run `suggested_fix.command` only after
 they agree. Never add these flags on your own. When a second consent follows the first,
-`suggested_fix.command` already keeps the flag the user gave; run it as it is.
+`suggested_fix.command` already keeps the flag the user gave (and a non-default `--timeout`); run
+it as it is.
 
 ```bash
 node "$CLI" launch --vm-name my-tv-vm                      # → user_input_required
 node "$CLI" launch --vm-name my-tv-vm --rebase-disk        # after the user agreed
 ```
 
+`qemu-img` could not read the VM's disk (`disk_info_failed`): this is also
+`user_input_required`, reported before any other consent. Have the user check the disk file's
+permissions first. If the disk is corrupt, `suggested_fix.command` (`--rebase-disk`) recreates
+it, which **discards everything installed in the VM** — run it only after the user agreed.
+
 Failures are `emulator_boot_failed`:
 
 - `TV_V2_UNAVAILABLE=<reason>` in the details: the platform has no `emulator-v2` stack
   (`no_emulator_v2`), the version is not verified (`unverified_version` — only Tizen 10.0 is),
-  or the v2 base image or `qemu-img` is missing. em-cli is no fallback here; say so instead of
-  improvising.
-- `qemu-img` could not read the VM's disk (`disk_info_failed`): this one is
-  `user_input_required`, reported before any other consent. Have the user check the disk
-  file's permissions first. If the disk is corrupt, `suggested_fix.command` (`--rebase-disk`)
-  recreates it, which **discards everything installed in the VM** — run it only after the
-  user agreed.
-- `create --launch` while an emulator-v2 of an earlier, deleted VM of the same name still runs
-  (`still_running`): the VM is created and prepared but not launched (`result.status:
-  created_launch_blocked`, with a warning). A plain `create` only warns. Stop that emulator
-  (`tizen-device-manager stop`, which stops every running emulator), then `launch` the VM.
+  the v2 base image or `qemu-img` is missing, or writing the v2 files failed
+  (`prepare_failed` — the details name the failing step). em-cli is no fallback here; say so
+  instead of improvising.
 - After `create --launch`, the message says the VM **was created**: relaunch it with
   `suggested_fix.command` (`launch --vm-name …`), never re-create it.
 - `TV_V2_EXITED=1`: emulator-v2 died right after it started; the details carry the tail of
   `qemu-v2.log`.
+
+`create --launch` reports the same `TV_V2_UNAVAILABLE` reasons in a success envelope, since the
+VM exists: `result.status` is `created_launch_blocked` and a warning says why it was not started.
+One reason only `create --launch` has: `still_running`, an emulator-v2 of an earlier, deleted VM
+of the same name still runs. The new VM is created and prepared but not started, and a plain
+`create` only warns. Stop that emulator (`tizen-device-manager stop`, which stops every running
+emulator), then `launch` the VM.
 
 Host gate: `TIZEN_TV_V2_LAUNCH` = `auto` (default, macOS arm64 only), `force` (any host, used by
 the tests) or `off` (always em-cli).

@@ -180,6 +180,18 @@ function tvV2ConsentFlags(needs, granted = {}) {
     .map((key) => TV_V2_CONSENT[key].flag);
 }
 
+/**
+ * The launch command to re-run for `vmName`. Keeps a non-default --timeout:
+ * a user who asked for a longer wait gets it on the retry as well.
+ */
+function launchRetryCommand(vmName, timeout) {
+  const base = `node emulator-manager-cli.js launch --vm-name ${vmName}`;
+  const sec = parseInt(timeout, 10);
+  return Number.isInteger(sec) && sec !== 300
+    ? `${base} --timeout ${sec}`
+    : base;
+}
+
 /** Message + command for TV_V2_NEEDS, re-running `base` with the consent flags. */
 function tvV2ConsentRequest(needs, base, granted = {}) {
   const asks = needs.map((key) => TV_V2_CONSENT[key].ask);
@@ -199,6 +211,13 @@ function tvV2ConsentRequest(needs, base, granted = {}) {
  */
 function tvV2FailureMessage(output, vmName) {
   const unavailable = String(output || "").match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
+  if (unavailable && unavailable[1] === "prepare_failed") {
+    return (
+      `The emulator-v2 files for '${vmName}' could not be written (see details for the failing ` +
+      `step, for example a disk, conf or permission error), so emulator-v2 was not started. ` +
+      `Fix that, then launch '${vmName}' again.`
+    );
+  }
   if (unavailable && unavailable[1] === "still_running") {
     return (
       `An emulator-v2 for '${vmName}' is still running, left over from an earlier VM of this name ` +
@@ -1900,8 +1919,8 @@ function createFailureError(state, opts, error, command, startTime) {
       command,
       "emulator_boot_failed",
       `VM '${createdVm}' was created, but launching it failed: ${v2Failure} The VM exists — ` +
-        `relaunch it instead of re-creating: node emulator-manager-cli.js launch --vm-name ${createdVm}.`,
-      `node emulator-manager-cli.js launch --vm-name ${createdVm}`,
+        `relaunch it instead of re-creating: ${launchRetryCommand(createdVm, state.launchTimeoutSec)}.`,
+      launchRetryCommand(createdVm, state.launchTimeoutSec),
       startTime,
       rawOutputTail(scriptOutput),
     );
@@ -2051,7 +2070,7 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
       `VM '${createdVmName}' was created, but the emulator did not connect to sdb within the ` +
         `${state.launchTimeoutSec || 300}s launch wait — it may still be booting (a fresh image's first ` +
         `boot can take longer; pass --timeout <seconds> up to 540 to wait longer), or the boot ` +
-        `failed. Check or relaunch with: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+        `failed. Check or relaunch with: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`,
     );
   }
 
@@ -2064,7 +2083,7 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
   }
   if (markers.tvV2Unavailable) {
     warnings.push(
-      /^TV_V2_UNAVAILABLE=still_running$/m.test(output)
+      state.launch
         ? `VM '${createdVmName}' was created but not launched. ${tvV2FailureMessage(output, createdVmName)}`
         : `VM '${createdVmName}' was created, but it cannot be booted on this Apple Silicon Mac: em-cli ` +
             `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
@@ -2084,7 +2103,7 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
     // given to create carries over to the launch.
     const ask = tvV2ConsentRequest(
       markers.tvV2Needs,
-      `node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+      launchRetryCommand(createdVmName, state.launchTimeoutSec),
       { clearQuarantine: opts.clearQuarantine },
     );
     warnings.push(
@@ -2377,7 +2396,7 @@ function launchFailureError(
         `is on the emulator-v2 base image. Check the file's permissions first. If the disk is ` +
         `corrupt, recreating it with --rebase-disk DISCARDS every app and file installed in the VM. ` +
         `Ask the user; only once they agree, re-run with --rebase-disk. Nothing was changed.`,
-      `node emulator-manager-cli.js launch --vm-name ${vmName} ${tvV2ConsentFlags(
+      `${launchRetryCommand(vmName, timeout)} ${tvV2ConsentFlags(
         ["rebase_disk"],
         granted,
       ).join(" ")}`,
@@ -2400,7 +2419,7 @@ function launchFailureError(
   if (needs.length > 0) {
     const ask = tvV2ConsentRequest(
       needs,
-      `node emulator-manager-cli.js launch --vm-name ${vmName}`,
+      launchRetryCommand(vmName, timeout),
       granted,
     );
     return formatError(
@@ -3201,6 +3220,7 @@ module.exports = {
   pickPlatform,
   TV_V2_CONSENT,
   parseTvV2Needs,
+  launchRetryCommand,
   tvV2ConsentFlags,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,

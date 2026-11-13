@@ -121,8 +121,11 @@
 #   TV_V2_NEEDS=<key>          The emulator-v2 launch needs the user's consent
 #                              first: clear_quarantine (-Q) or rebase_disk (-B).
 #                              One line per need; nothing was changed.
-#   TV_V2_UNAVAILABLE=<reason> No emulator-v2 path for this VM (missing stack or
-#                              base image, or an unverified platform version).
+#   TV_V2_UNAVAILABLE=<reason> No emulator-v2 path for this VM: no_emulator_v2,
+#                              unverified_version, no_base_image, no_qemu_img,
+#                              disk_info_failed, prepare_failed (writing the v2
+#                              files failed), still_running (create --launch
+#                              with a leftover emulator-v2 of the same name).
 #   TV_V2_EXITED=1             emulator-v2 exited right after it was started.
 #   TV_V2_DISK_REBASED=<name>  TV_V2_QUARANTINE_CLEARED=1
 #   LAUNCH_WARN=<key>          Non-fatal finding on an otherwise SUCCESSFUL
@@ -1433,8 +1436,17 @@ tv_v2_check_consent() {
 # $1 = VM name, $2 = true for a VM create just made (its disk holds nothing
 # to lose). Make the files the v2 launch reads: the disk on the v2 base,
 # swap, tuner table, vm_launch-v2.conf, the execute bit on the v2 binaries, and
-# (with -Q) no quarantine. Call tv_v2_check_consent first.
+# (with -Q) no quarantine. Call tv_v2_check_consent first. Every failure
+# prints one TV_V2_UNAVAILABLE line, so the caller never reads a failed
+# prepare as a boot that did not connect in time.
 tv_v2_prepare() {
+  TV_V2_FAILURE_MARKED=false
+  tv_v2_prepare_files "$@" && return 0
+  [ "$TV_V2_FAILURE_MARKED" = true ] || echo "TV_V2_UNAVAILABLE=prepare_failed"
+  return 1
+}
+
+tv_v2_prepare_files() {
   local vm="$1" fresh="${2:-false}" conf="$TV_V2_VM_DIR/vm_launch.conf" v2conf="$TV_V2_VM_DIR/vm_launch-v2.conf"
   local disk="$TV_V2_VM_DIR/emulimg-$1.x86_64" swap="$TV_V2_VM_DIR/swap-$1.img"
   local tuner="$TV_V2_VM_DIR/tuner_default.cfg" data res skin ram f rc=0
@@ -1453,6 +1465,7 @@ tv_v2_prepare() {
       rc=0
     else
       echo "TV_V2_UNAVAILABLE=disk_info_failed"
+      TV_V2_FAILURE_MARKED=true
       return 1
     fi
   fi
@@ -2358,7 +2371,9 @@ if [ "$ACTION" = "create" ]; then
       log_warn "VM '$VM_NAME' was created, but its emulator-v2 files could not be prepared; see the errors above."
       USE_TV_V2=unavailable
     fi
-    if [ "$TV_V2_LEFTOVER" = true ]; then
+    # Only once emulator-v2 is usable: otherwise that failure is the one to
+    # report, and a second TV_V2_UNAVAILABLE line would hide it.
+    if [ "$TV_V2_LEFTOVER" = true ] && [ "$USE_TV_V2" = true ]; then
       if [ "$LAUNCH" = true ]; then
         # Waiting for it would never boot this new VM.
         log_error "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it first (tizen-device-manager stop), then launch '$VM_NAME'."

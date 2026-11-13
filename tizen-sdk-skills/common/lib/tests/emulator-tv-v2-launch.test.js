@@ -20,6 +20,7 @@ const { spawnSync } = require("child_process");
 const {
   TV_V2_CONSENT,
   parseTvV2Needs,
+  launchRetryCommand,
   tvV2ConsentFlags,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,
@@ -155,7 +156,7 @@ console.log("--- TV_V2 parsing ---");
       stderr: "",
     },
     "tv",
-    5,
+    300,
     "launch",
     Date.now(),
   );
@@ -179,7 +180,7 @@ console.log("--- TV_V2 parsing ---");
         (launchFailureError(
           { message: "Command failed", stdout, stderr: "" },
           "tv",
-          5,
+          300,
           "launch",
           Date.now(),
           granted,
@@ -207,6 +208,66 @@ console.log("--- TV_V2 parsing ---");
       retryCommand("TV_V2_UNAVAILABLE=disk_info_failed\n", {
         clearQuarantine: true,
       }),
+    ),
+  );
+  // The granted flags only help if launchEmulator hands them over: every
+  // launchFailureError call in it must pass both options.
+  {
+    const src = fs.readFileSync(
+      path.join(__dirname, "..", "core", "emulator.js"),
+      "utf8",
+    );
+    const body = src.slice(
+      src.indexOf("async function launchEmulator("),
+      src.indexOf("\n}\n", src.indexOf("async function launchEmulator(")),
+    );
+    const calls = body.match(/launchFailureError\([^;]*?\}\)/gs) || [];
+    check(
+      "launchEmulator passes clearQuarantine and rebaseDisk to every launchFailureError call",
+      calls.length > 0 &&
+        (body.match(/launchFailureError\(/g) || []).length === calls.length &&
+        calls.every(
+          (c) =>
+            /clearQuarantine: opts\.clearQuarantine/.test(c) &&
+            /rebaseDisk: opts\.rebaseDisk/.test(c),
+        ),
+      calls.join("\n---\n") || "launchEmulator not found",
+    );
+  }
+  // A retry keeps a non-default --timeout, and the default stays implicit.
+  check(
+    "retry commands keep --timeout 540 and omit the default 300",
+    launchRetryCommand("tv", 540) ===
+      "node emulator-manager-cli.js launch --vm-name tv --timeout 540" &&
+      launchRetryCommand("tv", 300) ===
+        "node emulator-manager-cli.js launch --vm-name tv" &&
+      launchRetryCommand("tv", undefined) ===
+        "node emulator-manager-cli.js launch --vm-name tv",
+  );
+  check(
+    "a consent retry after launch --timeout 540 waits 540 s again",
+    /launch --vm-name tv --timeout 540 --clear-quarantine$/.test(
+      (
+        (
+          (launchFailureError(
+            {
+              message: "Command failed",
+              stdout: "TV_V2_NEEDS=clear_quarantine\n",
+              stderr: "",
+            },
+            "tv",
+            540,
+            "launch",
+            Date.now(),
+          ).errors || [])[0] || {}
+        ).suggested_fix || {}
+      ).command || "",
+    ),
+  );
+  check(
+    "prepare_failed has its own message",
+    /could not be written/.test(
+      tvV2FailureMessage("TV_V2_UNAVAILABLE=prepare_failed", "tv") || "",
     ),
   );
   const otherEnv = launchFailureError(
@@ -1075,6 +1136,113 @@ for (const launch of [false, true]) {
   cleanup(tree);
 }
 
+// --- 6k. A failed prepare is a marked failure, never a boot timeout --------
+// No tuner table and no template: writing the v2 files fails part-way.
+for (const action of ["launch", "create --launch"]) {
+  console.log(`\n--- ${action}, the v2 files cannot be written ---`);
+  const creating = action !== "launch";
+  const tree = makeTree({ noVm: creating });
+  fs.rmSync(
+    path.join(
+      tree.sdk,
+      "platforms",
+      "tizen-10.0",
+      "tv-samsung",
+      "emulator-resources",
+      "tuner-template",
+      "tuner_default_template.cfg",
+    ),
+  );
+  const r = creating
+    ? run(tree, [...CREATE_ARGS, "-l", "-t", "5"], {
+        STUB_NO_VM: "1",
+      })
+    : run(tree, ["-a", "launch", "-n", "tv", "-t", "5"]);
+  check(
+    "TV_V2_UNAVAILABLE=prepare_failed, once, and emulator-v2 is not started",
+    (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
+      /^TV_V2_UNAVAILABLE=prepare_failed$/m.test(r.output) &&
+      !r.stubLog.includes("emulator-v2 "),
+    r.output,
+  );
+  if (creating) {
+    const env = createEnvelope(true, r.output);
+    const warned = (env.warnings || []).join("\n");
+    check(
+      "create --launch: created_launch_blocked with the prepare message, not a timeout",
+      r.code === 0 &&
+        env.result.status === "created_launch_blocked" &&
+        /could not be written/.test(warned) &&
+        !/did not connect/.test(warned),
+      JSON.stringify(env).slice(0, 900),
+    );
+  } else {
+    const err =
+      (launchFailureError(
+        { message: "Command failed", stdout: r.output, stderr: "" },
+        "tv",
+        5,
+        "launch",
+        Date.now(),
+      ).errors || [])[0] || {};
+    check(
+      "launch: emulator_boot_failed that names the failed prepare",
+      r.code !== 0 &&
+        err.error_category === "emulator_boot_failed" &&
+        /could not be written/.test(err.message),
+      JSON.stringify(err).slice(0, 900),
+    );
+  }
+  cleanup(tree);
+}
+
+// --- 6l. A leftover emulator-v2 plus a v2 path that is not usable ----------
+// The v2 failure is the one reported; a second TV_V2_UNAVAILABLE line
+// (still_running) would hide it.
+{
+  console.log(
+    "\n--- create --launch, leftover running and no v2 base image ---",
+  );
+  const tree = makeTree({ noVm: true });
+  fs.mkdirSync(path.join(tree.root, "boot-state"));
+  const leftover = require("child_process").spawn(
+    "bash",
+    [
+      path.join(tree.v2, "bin", "emulator-x86_64"),
+      "--conf",
+      path.join(tree.vmDir, "vm_launch-v2.conf"),
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        STUB_LOG: path.join(tree.root, "leftover.log"),
+        STUB_STATE: path.join(tree.root, "boot-state"),
+      },
+    },
+  );
+  leftover.unref();
+  spawnSync("sleep", ["1"]);
+  fs.rmSync(tree.base);
+  const r = run(tree, [...CREATE_ARGS, "-l", "-t", "5"], { STUB_NO_VM: "1" });
+  const env = createEnvelope(true, r.output);
+  check(
+    "only no_base_image is reported, and the warning names it",
+    (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
+      /^TV_V2_UNAVAILABLE=no_base_image$/m.test(r.output) &&
+      env.result.status === "created_launch_blocked" &&
+      /no_base_image/.test((env.warnings || []).join("\n")),
+    `${r.output}\n${JSON.stringify(env).slice(0, 600)}`,
+  );
+  try {
+    process.kill(-leftover.pid);
+  } catch {
+    /* already gone */
+  }
+  cleanup(tree);
+}
+
 // --- 6h. SDK path with sed metacharacters; --emulator-path is ignored ------
 console.log("\n--- SDK path with & and | ---");
 {
@@ -1168,7 +1336,7 @@ if (canQuarantine) {
           (launchFailureError(
             { message: "Command failed", stdout: out, stderr: "" },
             "tv",
-            5,
+            20,
             "launch",
             Date.now(),
             granted,
@@ -1187,11 +1355,23 @@ if (canQuarantine) {
         /--clear-quarantine --rebase-disk$/.test(fix2),
       `${fix1}\n${fix2}\n${r4.output}`,
     );
-    const r5 = run(both, ["-a", "launch", "-n", "tv", "-t", "20", "-B", "-Q"], {
+    // Run round 2's suggested fix as given (it carries --timeout 20 too):
+    // its CLI options, mapped to the script's own.
+    const SCRIPT_FLAG = {
+      "--vm-name": "-n",
+      "--timeout": "-t",
+      "--rebase-disk": "-B",
+      "--clear-quarantine": "-Q",
+    };
+    const fix2Args = fix2
+      .replace(/^node emulator-manager-cli\.js launch /, "")
+      .split(/\s+/)
+      .map((t) => SCRIPT_FLAG[t] || t);
+    const r5 = run(both, ["-a", "launch", ...fix2Args], {
       STUB_QEMU_INFO_FAILS: "1",
     });
     check(
-      "round 3 (-B -Q) boots the VM",
+      "round 3 (round 2's suggested fix) boots the VM",
       r5.code === 0 &&
         /^TV_V2_LAUNCH=tv$/m.test(r5.output) &&
         /^DEVICE_SERIAL=emulator-26101$/m.test(r5.output),
