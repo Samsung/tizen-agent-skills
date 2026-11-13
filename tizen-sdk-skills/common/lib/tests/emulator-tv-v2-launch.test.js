@@ -297,6 +297,54 @@ console.log("--- TV_V2 parsing ---");
       cmds.join("\n"),
     );
   }
+  {
+    // A pending consent has its own launch command (with the flag); the
+    // plain "launch starts it" command would only hit the gate again.
+    const env = createVmResult(
+      {
+        action: "create",
+        launch: true,
+        vmName: "tv",
+        sizeWarnings: [],
+        profile: "tv",
+      },
+      {},
+      "VM_CREATED=tv\nTV_V2_PREPARED=tv\nTV_V2_NEEDS=clear_quarantine\n",
+      "create",
+      Date.now(),
+    );
+    const warned = (env.warnings || []).join("\n");
+    check(
+      "a create --launch waiting for consent gives only the consent's launch command",
+      env.result.status === "created_launch_needs_consent" &&
+        !/was prepared for emulator-v2/.test(warned) &&
+        (warned.match(/launch --vm-name tv/g) || []).length === 1 &&
+        /launch --vm-name tv --clear-quarantine/.test(warned),
+      warned,
+    );
+  }
+  {
+    // create --launch whose em-cli launch failed (host diagnosis): the
+    // relaunch in the message keeps --timeout 540 as well.
+    const env = createFailureError(
+      { action: "create", launch: true, launchTimeoutSec: 540 },
+      {},
+      {
+        message: "Command failed",
+        stdout: "VM_CREATED=tv\nLAUNCH_DIAG=phase|launch\nLAUNCH_DIAG=vm|tv\n",
+        stderr: "",
+      },
+      "create",
+      Date.now(),
+    );
+    const err = (env.errors || [])[0] || {};
+    check(
+      "createFailureError's host-diagnosis relaunch keeps --timeout 540",
+      /was created, but launching it failed/.test(err.message || "") &&
+        /launch --vm-name tv --timeout 540\b/.test(err.message || ""),
+      JSON.stringify(err).slice(0, 600),
+    );
+  }
   check(
     "prepare_failed has its own message",
     /could not be written/.test(
@@ -620,6 +668,8 @@ function run(tree, args, env = {}) {
     output: `${result.stdout || ""}${result.stderr || ""}`,
     stubLog: fs.readFileSync(tree.log, "utf8"),
     state: fs.readdirSync(tree.state),
+    // What the runner sees: execPluginScript returns stdout only.
+    stdout: result.stdout || "",
     v2conf: fs.existsSync(v2conf) ? fs.readFileSync(v2conf, "utf8") : null,
     diskBacking: (() => {
       try {
@@ -1109,7 +1159,7 @@ for (const launch of [true, false]) {
       !r.stubLog.includes("emulator-v2 "),
     r.output,
   );
-  const env = createEnvelope(launch, r.output);
+  const env = createEnvelope(launch, r.stdout);
   const warned = (env.warnings || []).join("\n");
   if (launch) {
     check(
@@ -1117,7 +1167,8 @@ for (const launch of [true, false]) {
       /^TV_V2_UNAVAILABLE=still_running$/m.test(r.output) &&
         env.result.status === "created_launch_blocked" &&
         env.result.launch_method === "none" &&
-        /Stop it first/.test(warned),
+        /Stop it first/.test(warned) &&
+        !/was prepared for emulator-v2/.test(warned),
       JSON.stringify(env).slice(0, 900),
     );
   } else {
@@ -1199,7 +1250,7 @@ for (const action of ["launch", "create --launch"]) {
     r.output,
   );
   if (creating) {
-    const env = createEnvelope(true, r.output);
+    const env = createEnvelope(true, r.stdout);
     const warned = (env.warnings || []).join("\n");
     check(
       "create --launch: created_launch_blocked with the prepare message, not a timeout",
@@ -1256,7 +1307,7 @@ for (const action of ["launch", "create --launch"]) {
     PATH: `${mvBin}:${process.env.PATH}`,
     MV_COUNT: path.join(tree.root, "mv-count"),
   });
-  const env = createEnvelope(true, r.output);
+  const env = createEnvelope(true, r.stdout);
   check(
     "prepared, then a blocked launch: exit 0, created_launch_blocked, nothing started",
     r.code === 0 &&
@@ -1266,8 +1317,16 @@ for (const action of ["launch", "create --launch"]) {
       !r.stubLog.includes("emulator-v2 ") &&
       env.result.status === "created_launch_blocked" &&
       env.result.launch_method === "none" &&
-      /could not be written/.test((env.warnings || []).join("\n")),
+      /could not be written/.test((env.warnings || []).join("\n")) &&
+      !/was prepared for emulator-v2/.test((env.warnings || []).join("\n")),
     `${r.output}\n${JSON.stringify(env).slice(0, 600)}`,
+  );
+  check(
+    "the failed mv leaves no temp file, and the first prepare's conf is kept",
+    !fs.existsSync(path.join(tree.vmDir, "vm_launch-v2.conf.tmp")) &&
+      r.v2conf !== null &&
+      !/__VM_NAME__|__SDK_PATH__/.test(r.v2conf),
+    String(r.v2conf).slice(0, 300),
   );
   cleanup(tree);
 }
@@ -1305,7 +1364,7 @@ for (const launch of [true, false]) {
   const r = run(tree, [...CREATE_ARGS, ...(launch ? ["-l", "-t", "5"] : [])], {
     STUB_NO_VM: "1",
   });
-  const env = createEnvelope(launch, r.output);
+  const env = createEnvelope(launch, r.stdout);
   const warned = (env.warnings || []).join("\n");
   check(
     "the leftover is detected and reported, and only no_base_image is UNAVAILABLE",

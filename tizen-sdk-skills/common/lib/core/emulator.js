@@ -2074,7 +2074,13 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
     );
   }
 
-  if (markers.tvV2Prepared) {
+  // "launch starts it" only when nothing else says otherwise: a blocked
+  // launch or a pending consent has its own warning and command.
+  if (
+    markers.tvV2Prepared &&
+    !markers.launchBlocked &&
+    markers.tvV2Needs.length === 0
+  ) {
     warnings.push(
       `VM '${createdVmName}' was prepared for emulator-v2: em-cli cannot boot a TV VM on Apple Silicon ` +
         `(it requires HAXM, which is Intel-only), so launch starts it with the platform's emulator-v2 ` +
@@ -2260,7 +2266,7 @@ function validateLaunchOptions(opts, { vmName, timeout, timeoutSec }, command) {
  *
  * @returns {{vmName?: string, error?: object}}
  */
-function selectLaunchVm(listOutput, profile, command, startTime) {
+function selectLaunchVm(listOutput, profile, command, startTime, timeout) {
   // VM_LIST= is the authoritative "do VMs exist" answer: the script prints
   // it from `em-cli list-vm`, while the VM_DETAIL records come from a second
   // `list-vm -d` whose failure is swallowed. Names without records must not
@@ -2278,7 +2284,7 @@ function selectLaunchVm(listOutput, profile, command, startTime) {
         "execution_error",
         `em-cli listed ${vmNames.length} VM(s) (${vmNames.join(", ")}) but returned no platform details, ` +
           `so the '${profile}' profile VM cannot be identified. Pass --vm-name <name> to launch one of them.`,
-        `node emulator-manager-cli.js launch --vm-name ${vmNames[0]}`,
+        launchRetryCommand(vmNames[0], timeout),
         startTime,
         rawOutputTail(listOutput),
       ),
@@ -2321,7 +2327,7 @@ function selectLaunchVm(listOutput, profile, command, startTime) {
  *
  * @returns {{vmName?: string, error?: object}}
  */
-function autoSelectLaunchVm(scriptPath, profile, command, startTime) {
+function autoSelectLaunchVm(scriptPath, profile, command, startTime, timeout) {
   console.error(
     `[tizen-emulator] No VM name given — listing VMs to select a '${profile}' profile VM...`,
   );
@@ -2351,7 +2357,7 @@ function autoSelectLaunchVm(scriptPath, profile, command, startTime) {
       ),
     };
   }
-  return selectLaunchVm(listOutput, profile, command, startTime);
+  return selectLaunchVm(listOutput, profile, command, startTime, timeout);
 }
 
 /**
@@ -2608,6 +2614,7 @@ async function launchEmulator(
         opts.profile || "tizen",
         command,
         startTime,
+        timeout,
       );
       if (selection.error) return selection.error;
       vmName = selection.vmName;
