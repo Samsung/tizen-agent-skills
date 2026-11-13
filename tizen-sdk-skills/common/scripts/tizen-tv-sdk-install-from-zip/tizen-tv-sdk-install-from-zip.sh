@@ -249,8 +249,12 @@ for zip in "${INNER_ZIPS[@]}"; do
     if [[ -z "$pkg_name" ]]; then
         continue
     fi
-    # Extract version (after last _)
-    version_part="${basename##*_}"
+    # Extract version: the field after the package name. Names are
+    # <name>_<version>_<os>-<bits> (TV-SAMSUNG-Public_10.0.0_macos-64), so the
+    # field after the LAST "_" is the OS tag, not the version; older bundles
+    # drop the OS tag (<name>_<version>), which this reads the same way.
+    version_part="${basename#*_}"
+    version_part="${version_part%%_*}"
     # Extract major.minor (first two numeric parts)
     milestone="$(echo "$version_part" | grep -oE '^[0-9]+\.[0-9]+' || true)"
     if [[ -n "$milestone" ]]; then
@@ -367,6 +371,41 @@ if [[ $FAIL -gt 0 ]]; then
     log_error "Some packages failed to install. Not creating .tv-sdk-installed marker."
     rm -rf "$WORKDIR"
     exit 1
+fi
+
+# -----------------------------------------------------------------------------
+# Restore execute bits the inner ZIPs dropped
+# -----------------------------------------------------------------------------
+# Some packages store executables without the execute bit (real case:
+# tv-samsung-emulator-qemu-x86-v2_9.3.4.7_macos-64.zip ships
+# emulator-v2/bin/emulator-x86_64 and emulator-x86_64.bin as -rw-rw-r--), so
+# launching the emulator fails with "Permission denied". Set +x on every file in
+# a bin/ folder of this TV version that is an executable by content: ELF,
+# Mach-O (thin or universal) or a "#!" script. Data files are left alone.
+is_executable_content() {
+    local magic
+    magic="$(head -c 4 "$1" 2>/dev/null | od -An -tx1 | tr -d ' \n')" || return 1
+    case "$magic" in
+        7f454c46|feedface|feedfacf|cefaedfe|cffaedfe|cafebabe) return 0 ;;
+        2321*) return 0 ;;
+    esac
+    return 1
+}
+
+FIXED_EXEC=0
+while IFS= read -r -d '' f; do
+    if is_executable_content "$f"; then
+        if chmod +x "$f" 2>/dev/null; then
+            FIXED_EXEC=$((FIXED_EXEC+1))
+            log_info "Restored execute bit: ${f#"$SDK_PATH"/}"
+        else
+            log_warn "Could not set execute bit: $f"
+        fi
+    fi
+done < <(find "$SDK_PATH/platforms/tizen-$TV_VERSION" -path '*/tv-samsung*/*' -path '*/bin/*' \
+            -type f ! -perm -u+x -print0 2>/dev/null)
+if [[ $FIXED_EXEC -gt 0 ]]; then
+    log_ok "Restored the execute bit on $FIXED_EXEC file(s) the ZIP stored without it"
 fi
 
 # -----------------------------------------------------------------------------

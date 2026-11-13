@@ -35,6 +35,17 @@
 
 ### 수정
 
+- **`tizen-tv-sdk-install-from-zip`이 최신 번들에서 TV 버전을 다시 감지합니다.** 내부 ZIP 이름의
+  마지막 `_` 뒤를 버전으로 읽었는데, 이름 형식이 `<이름>_<버전>_<os>-<bits>`
+  (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`)라서 `macos-64`를 읽었습니다. 그래서 버전을 찾지 못하고
+  `--tv-version`을 요구하며 멈췄습니다. 이제 두 설치기(`.sh`, `.ps1`) 모두 패키지 이름 바로 다음
+  필드를 버전으로 읽습니다.
+- **ZIP으로 설치한 TV 에뮬레이터 바이너리의 실행 권한이 유지됩니다(Linux / macOS).**
+  `tv-samsung-emulator-qemu-x86-v2_9.3.4.7_macos-64.zip`이 `emulator-v2/bin/emulator-x86_64`와
+  `emulator-x86_64.bin`을 실행 비트 없이 담고 있어서, TV 에뮬레이터를 실행하면
+  `Permission denied`로 실패했습니다. 이제 bash 설치기가 설치된 TV 플랫폼의 `bin/` 폴더에 있는
+  ELF, Mach-O, `#!` 파일에 `+x`를 붙이고 데이터 파일은 그대로 둡니다. Windows에는 실행 비트가
+  없으므로 `.ps1` 설치기는 이 부분을 바꾸지 않았습니다.
 - **설치 스크립트가 macOS의 bash 3.2에서 `declare: -A: invalid option`으로 멈추지 않습니다**
   (이슈 #127). 스크립트 7개(`tizen-platform-install`, `tizen-download-emulator-package`,
   `tizen-download-mobile-platform`, `tizen-tv-sdk-install`, `tizen-tv-sdk-install-from-zip`,
