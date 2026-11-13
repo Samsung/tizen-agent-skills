@@ -34,9 +34,12 @@
   새 `--rebase-disk` / `--clear-quarantine` 플래그로 다시 실행할 명령과 함께
   `user_input_required`를 돌려줍니다(`create --launch`는 부팅 시간 초과 대신
   `status: created_launch_needs_consent`). 아직 부팅 중인 emulator-v2가 있는 VM에는 두 번째
-  emulator-v2를 띄우지 않고 그 프로세스를 기다립니다(`launch_method: "none"`). `qemu-img`가 읽지
-  못한 디스크는 rebase를 제안하지 않고 `TV_V2_UNAVAILABLE=disk_info_failed`로 보고하며,
-  `create --launch` 뒤 v2 실행이 실패하면 VM은 만들어졌으니 다시 실행하라고 안내합니다.
+  emulator-v2를 띄우지 않고 그 프로세스를 기다리며 PID를 기록합니다(`launch_method: "none"`).
+  같은 이름의 이전 VM이 남긴 emulator-v2가 실행 중이면 `create --launch`는 기다리지 않고
+  `TV_V2_UNAVAILABLE=still_running`으로 멈춥니다. `qemu-img`가 읽지 못한 디스크는 "rebase 필요"로
+  보지 않고, 다른 동의보다 먼저 `user_input_required`(`disk_info_failed`)로 보고하며
+  `--rebase-disk`를 줄 때만 다시 만듭니다. `create --launch` 뒤 v2 실행이 실패하면 VM은
+  만들어졌으니 다시 실행하라고 안내합니다.
   `TIZEN_TV_V2_LAUNCH=off`로 em-cli를 유지할 수 있습니다. macOS 전용이라 `tizen-emulator-manager.ps1`은 바꾸지 않았습니다.
 
 ### 변경

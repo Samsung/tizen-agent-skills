@@ -24,6 +24,8 @@ const {
   tvV2LaunchWarnings,
   tvV2FailureMessage,
   createFailureError,
+  createVmResult,
+  launchFailureError,
   buildEmulatorArgs,
 } = require("../core/emulator");
 
@@ -81,8 +83,18 @@ console.log("--- TV_V2 parsing ---");
   );
 
   check(
-    "no warnings without TV_V2_LAUNCH",
-    tvV2LaunchWarnings("TV_V2_DISK_REBASED=tv").length === 0,
+    "no warnings without any TV_V2 line",
+    tvV2LaunchWarnings("DEVICE_SERIAL=emulator-26101").length === 0,
+  );
+  const waitedAndCleared = tvV2LaunchWarnings(
+    "TV_V2_QUARANTINE_CLEARED=1\nTV_V2_ALREADY_RUNNING=tv\n",
+  );
+  check(
+    "a change made in the same run is still reported when emulator-v2 was already running",
+    waitedAndCleared.length === 2 &&
+      /already running/.test(waitedAndCleared[0]) &&
+      /quarantine/.test(waitedAndCleared[1]),
+    JSON.stringify(waitedAndCleared),
   );
   const w = tvV2LaunchWarnings(
     "TV_V2_DISK_REBASED=tv\nTV_V2_QUARANTINE_CLEARED=1\nTV_V2_LAUNCH=tv\n",
@@ -124,6 +136,85 @@ console.log("--- TV_V2 parsing ---");
         tvV2FailureMessage("TV_V2_EXITED=1", "tv") || "",
       ) &&
       tvV2FailureMessage("VM_CREATED=tv", "tv") === null,
+  );
+  check(
+    "still_running says to stop the leftover emulator-v2 first",
+    /Stop it first/.test(
+      tvV2FailureMessage("TV_V2_UNAVAILABLE=still_running", "tv") || "",
+    ),
+  );
+
+  // An unreadable disk blocks the launch, so it is reported before any
+  // consent request, as a consent of its own (recreating it loses data).
+  const diskEnv = launchFailureError(
+    {
+      message: "Command failed",
+      stdout:
+        "TV_V2_NEEDS=clear_quarantine\nTV_V2_UNAVAILABLE=disk_info_failed\n",
+      stderr: "",
+    },
+    "tv",
+    5,
+    "launch",
+    Date.now(),
+  );
+  const diskErr = (diskEnv.errors || [])[0] || {};
+  check(
+    "disk_info_failed wins over a pending consent and asks before --rebase-disk",
+    diskErr.error_category === "user_input_required" &&
+      /could not read the disk/.test(diskErr.message) &&
+      /DISCARDS/.test(diskErr.message) &&
+      /launch --vm-name tv --rebase-disk$/.test(
+        (diskErr.suggested_fix || {}).command || "",
+      ) &&
+      !/--clear-quarantine/.test(JSON.stringify(diskEnv)),
+    JSON.stringify(diskEnv),
+  );
+  const otherEnv = launchFailureError(
+    {
+      message: "Command failed",
+      stdout: "TV_V2_NEEDS=clear_quarantine\nTV_V2_EXITED=1\n",
+      stderr: "",
+    },
+    "tv",
+    5,
+    "launch",
+    Date.now(),
+  );
+  check(
+    "any v2 failure is reported before a consent request",
+    ((otherEnv.errors || [])[0] || {}).error_category ===
+      "emulator_boot_failed",
+    JSON.stringify(otherEnv),
+  );
+
+  // create's launch_method: "emulator-v2" only when this run started it.
+  const createMethod = (launch, output) =>
+    createVmResult(
+      {
+        action: "create",
+        launch,
+        vmName: "tv",
+        sizeWarnings: [],
+        profile: "tv",
+      },
+      {},
+      output,
+      "create",
+      Date.now(),
+    ).result.launch_method;
+  check(
+    "create launch_method: emulator-v2 when started or not launching, none otherwise",
+    createMethod(
+      true,
+      "VM_CREATED=tv\nTV_V2_PREPARED=tv\nTV_V2_LAUNCH=tv\n",
+    ) === "emulator-v2" &&
+      createMethod(false, "VM_CREATED=tv\nTV_V2_PREPARED=tv\n") ===
+        "emulator-v2" &&
+      createMethod(
+        true,
+        "VM_CREATED=tv\nTV_V2_PREPARED=tv\nTV_V2_NEEDS=clear_quarantine\n",
+      ) === "none",
   );
 
   // create --launch: the create half succeeded, emulator-v2 then died. The
@@ -771,6 +862,15 @@ console.log("\n--- emulator-v2 already running, not yet in sdb ---");
     /^DEVICE_SERIAL=emulator-26101$/m.test(r.output),
     r.output,
   );
+  const pidFile = path.join(tree.root, "tizen-emulator-tv.pid");
+  const storedPid = fs.existsSync(pidFile)
+    ? fs.readFileSync(pidFile, "utf8").trim()
+    : null;
+  check(
+    "the PID file names the running emulator-v2, not a guess",
+    storedPid === String(earlier.pid),
+    `stored ${storedPid}, emulator-v2 ${earlier.pid}`,
+  );
   try {
     process.kill(-earlier.pid);
   } catch {
@@ -794,17 +894,106 @@ console.log("\n--- qemu-img info fails ---");
     r.output,
   );
 
-  const r2 = run(tree, ["-a", "launch", "-n", "tv", "-t", "5", "-B"], {
+  check(
+    "the unreadable disk was not touched without consent",
+    r.diskBacking === null && !r.stubLog.includes("emulator-v2 "),
+    r.stubLog,
+  );
+
+  // A corrupt disk is cured by recreating it — once the user agreed (-B).
+  const r2 = run(tree, ["-a", "launch", "-n", "tv", "-t", "20", "-B"], {
     STUB_QEMU_INFO_FAILS: "1",
   });
   check(
-    "even with -B the unreadable disk is not recreated",
-    r2.code !== 0 &&
-      r2.diskBacking === null &&
-      !/^TV_V2_DISK_REBASED=/m.test(r2.output) &&
-      !r2.stubLog.includes("emulator-v2 "),
+    "with -B the unreadable disk is recreated and the VM boots",
+    r2.code === 0 &&
+      r2.diskBacking === tree.base &&
+      /^TV_V2_DISK_REBASED=tv$/m.test(r2.output) &&
+      !/^TV_V2_UNAVAILABLE=/m.test(r2.output) &&
+      /^TV_V2_LAUNCH=tv$/m.test(r2.output),
     r2.output,
   );
+  cleanup(tree);
+}
+
+// --- 6i. create --launch with a leftover emulator-v2 for the same name ------
+// Deleting a VM with em-cli leaves its emulator-v2 running. Waiting for that
+// process would never boot the new VM: stop with a clear message instead.
+console.log("\n--- create --launch, leftover emulator-v2 running ---");
+{
+  const tree = makeTree({ noVm: true });
+  const bootState = path.join(tree.root, "boot-state");
+  fs.mkdirSync(bootState);
+  const leftover = require("child_process").spawn(
+    "bash",
+    [
+      path.join(tree.v2, "bin", "emulator-x86_64"),
+      "--conf",
+      path.join(tree.vmDir, "vm_launch-v2.conf"),
+    ],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        STUB_LOG: path.join(tree.root, "leftover.log"),
+        STUB_STATE: bootState,
+      },
+    },
+  );
+  leftover.unref();
+  spawnSync("sleep", ["1"]);
+  const r = run(
+    tree,
+    [
+      "-a",
+      "create",
+      "-n",
+      "tv",
+      "-p",
+      "tv",
+      "-P",
+      "tv-samsung-10.0-x86_64",
+      "-l",
+      "-t",
+      "5",
+    ],
+    { STUB_NO_VM: "1" },
+  );
+  check("create exits 0 (the VM exists)", r.code === 0, r.output);
+  check(
+    "TV_V2_UNAVAILABLE=still_running; nothing is prepared, started or waited for",
+    /^TV_V2_UNAVAILABLE=still_running$/m.test(r.output) &&
+      !/^TV_V2_PREPARED=/m.test(r.output) &&
+      !/^TV_V2_ALREADY_RUNNING=/m.test(r.output) &&
+      !r.stubLog.includes("emulator-v2 ") &&
+      r.diskBacking === null,
+    r.output,
+  );
+  const env = createVmResult(
+    {
+      action: "create",
+      launch: true,
+      vmName: "tv",
+      sizeWarnings: [],
+      profile: "tv",
+    },
+    {},
+    r.output,
+    "create",
+    Date.now(),
+  );
+  check(
+    "the create envelope says to stop the leftover emulator-v2 first",
+    env.result.status === "created" &&
+      (env.warnings || []).some((w) => /Stop it first/.test(w)),
+    JSON.stringify(env).slice(0, 800),
+  );
+  try {
+    process.kill(-leftover.pid);
+  } catch {
+    /* already gone */
+  }
   cleanup(tree);
 }
 
@@ -881,6 +1070,19 @@ if (canQuarantine) {
       "the quarantine is gone",
       spawnSync("xattr", ["-p", "com.apple.quarantine", binPath]).status !== 0,
     );
+
+    // An unreadable disk is reported first, not after a quarantine consent.
+    const both = makeTree({ quarantine: true, v1Disk: true });
+    const r3 = run(both, ["-a", "launch", "-n", "tv", "-t", "5"], {
+      STUB_QEMU_INFO_FAILS: "1",
+    });
+    check(
+      "disk_info_failed comes without a clear_quarantine request",
+      /^TV_V2_UNAVAILABLE=disk_info_failed$/m.test(r3.output) &&
+        !/^TV_V2_NEEDS=/m.test(r3.output),
+      r3.output,
+    );
+    cleanup(both);
   }
   cleanup(tree);
 } else {

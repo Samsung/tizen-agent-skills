@@ -181,6 +181,13 @@ function tvV2ConsentRequest(needs, base) {
  */
 function tvV2FailureMessage(output, vmName) {
   const unavailable = String(output || "").match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
+  if (unavailable && unavailable[1] === "still_running") {
+    return (
+      `An emulator-v2 for '${vmName}' is still running, left over from an earlier VM of this name ` +
+      `(deleting a VM does not stop its emulator-v2). Waiting for it would never boot the new VM. ` +
+      `Stop it first (tizen-device-manager stop — this stops every running emulator), then launch '${vmName}'.`
+    );
+  }
   if (unavailable) {
     return (
       `em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only), ` +
@@ -193,7 +200,10 @@ function tvV2FailureMessage(output, vmName) {
   return null;
 }
 
-/** Warnings for what a successful emulator-v2 launch changed or did. */
+/**
+ * Warnings for what a successful emulator-v2 run did: how the VM was booted,
+ * and each change it made (reported whether or not a new emulator started).
+ */
 function tvV2LaunchWarnings(output) {
   const warnings = [];
   if (/^TV_V2_ALREADY_RUNNING=/m.test(output)) {
@@ -201,14 +211,13 @@ function tvV2LaunchWarnings(output) {
       "emulator-v2 was already running for this VM (still booting), so the runner waited for it " +
         "instead of starting a second emulator on the same disk.",
     );
-    return warnings;
+  } else if (/^TV_V2_LAUNCH=/m.test(output)) {
+    warnings.push(
+      "Started with the platform's emulator-v2 (QEMU with TCG and VirGL) instead of em-cli: " +
+        "em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only). " +
+        "Its output is in <vm folder>/logs/qemu-v2.log.",
+    );
   }
-  if (!/^TV_V2_LAUNCH=/m.test(output)) return warnings;
-  warnings.push(
-    "Started with the platform's emulator-v2 (QEMU with TCG and VirGL) instead of em-cli: " +
-      "em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only). " +
-      "Its output is in <vm folder>/logs/qemu-v2.log.",
-  );
   // A VM created in the same run had nothing installed to lose.
   if (/^TV_V2_DISK_REBASED=/m.test(output) && !/^VM_CREATED=/m.test(output)) {
     warnings.push(
@@ -2034,8 +2043,10 @@ function pushCreateWarnings(state, output, markers) {
   }
   if (markers.tvV2Unavailable) {
     warnings.push(
-      `VM '${createdVmName}' was created, but it cannot be booted on this Apple Silicon Mac: em-cli ` +
-        `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
+      /^TV_V2_UNAVAILABLE=still_running$/m.test(output)
+        ? `VM '${createdVmName}' was created but not launched. ${tvV2FailureMessage(output, createdVmName)}`
+        : `VM '${createdVmName}' was created, but it cannot be booted on this Apple Silicon Mac: em-cli ` +
+            `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
     );
   }
   if (markers.tvV2Needs.length > 0) {
@@ -2113,8 +2124,16 @@ function createdVmData(state, opts, output, markers) {
     launched: Boolean(launchedSerial),
     device_serial: launchedSerial,
     raw_image_path: opts.rawImagePath || null,
-    // Apple Silicon TV VM: launch boots it with emulator-v2, not em-cli.
-    ...(markers.tvV2Prepared ? { launch_method: "emulator-v2" } : {}),
+    // Apple Silicon TV VM: launch boots it with emulator-v2, not em-cli. With
+    // --launch, "emulator-v2" only when this run actually started it.
+    ...(markers.tvV2Prepared
+      ? {
+          launch_method:
+            !state.launch || /^TV_V2_LAUNCH=/m.test(output)
+              ? "emulator-v2"
+              : "none",
+        }
+      : {}),
     status: createStatus(markers),
     ...(homescreenStatus ? { homescreen_fix: homescreenStatus } : {}),
   };
@@ -2305,6 +2324,34 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
 
   // Apple Silicon TV launch (emulator-v2): the user's consent is missing, or
   // the v2 path is not available / died at once. em-cli is no fallback there.
+  // A blocking failure goes first: asking for a consent the launch would then
+  // not get past is a wasted round trip with the user.
+  if (/^TV_V2_UNAVAILABLE=disk_info_failed$/m.test(combined)) {
+    // Recreating the disk is the cure for a corrupt one, and it is the
+    // user's call: it discards everything installed in the VM.
+    return formatError(
+      command,
+      "user_input_required",
+      `qemu-img could not read the disk of '${vmName}' (see details), so it is unknown whether it ` +
+        `is on the emulator-v2 base image. Check the file's permissions first. If the disk is ` +
+        `corrupt, recreating it with --rebase-disk DISCARDS every app and file installed in the VM. ` +
+        `Ask the user; only once they agree, re-run with --rebase-disk. Nothing was changed.`,
+      `node emulator-manager-cli.js launch --vm-name ${vmName} --rebase-disk`,
+      startTime,
+      rawOutputTail(combined),
+    );
+  }
+  const v2Failure = tvV2FailureMessage(combined, vmName);
+  if (v2Failure) {
+    return formatError(
+      command,
+      "emulator_boot_failed",
+      v2Failure,
+      null,
+      startTime,
+      rawOutputTail(combined),
+    );
+  }
   const needs = parseTvV2Needs(combined);
   if (needs.length > 0) {
     const ask = tvV2ConsentRequest(
@@ -2317,17 +2364,6 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
       ask.message,
       ask.command,
       startTime,
-    );
-  }
-  const v2Failure = tvV2FailureMessage(combined, vmName);
-  if (v2Failure) {
-    return formatError(
-      command,
-      "emulator_boot_failed",
-      v2Failure,
-      null,
-      startTime,
-      rawOutputTail(combined),
     );
   }
 
@@ -3121,4 +3157,6 @@ module.exports = {
   tvV2LaunchWarnings,
   tvV2FailureMessage,
   createFailureError,
+  createVmResult,
+  launchFailureError,
 };

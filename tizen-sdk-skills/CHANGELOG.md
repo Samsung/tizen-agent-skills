@@ -35,10 +35,12 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   returns `user_input_required` with the command to re-run with the new `--rebase-disk` /
   `--clear-quarantine` flags (`create --launch` returns `status: created_launch_needs_consent`
   instead of a boot timeout). A launch never starts a second emulator-v2 on a VM whose
-  emulator-v2 is still booting: it waits for that one (`launch_method: "none"`). A disk that
-  `qemu-img` cannot read is reported as `TV_V2_UNAVAILABLE=disk_info_failed` instead of being
-  offered for a rebase, and a v2 failure after `create --launch` says the VM was created and to
-  relaunch it. `TIZEN_TV_V2_LAUNCH=off` keeps em-cli. macOS-only, so
+  emulator-v2 is still booting: it waits for that one (`launch_method: "none"`) and records its
+  PID. `create --launch` instead stops with `TV_V2_UNAVAILABLE=still_running` when an
+  emulator-v2 of an earlier VM of the same name is still running. A disk that `qemu-img` cannot
+  read is never treated as "needs rebase": the runner returns `user_input_required`
+  (`disk_info_failed`, reported before any other consent), and only `--rebase-disk` recreates
+  it. A v2 failure after `create --launch` says the VM was created and to relaunch it. `TIZEN_TV_V2_LAUNCH=off` keeps em-cli. macOS-only, so
   `tizen-emulator-manager.ps1` is unchanged.
 
 ### Changed

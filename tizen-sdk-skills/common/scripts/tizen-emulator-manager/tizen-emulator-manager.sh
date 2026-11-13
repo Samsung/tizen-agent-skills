@@ -1351,16 +1351,15 @@ tv_v2_check_available() {
 
 # 0 when the VM's disk is NOT backed by the v2 base image (em-cli creates it on
 # the v1 one under emulator-images/, which the v2 stack cannot boot), 1 when it
-# is, and 2 (after printing TV_V2_UNAVAILABLE=disk_info_failed) when qemu-img
-# cannot read the disk. An unreadable disk must never read as "needs rebase":
-# that would offer to wipe a VM that may already be on the v2 base.
+# is, and 2 when qemu-img cannot read the disk. An unreadable disk must never
+# read as "needs rebase": that would offer to wipe a VM that may already be on
+# the v2 base. The callers decide (only an explicit rebase consent recreates it).
 tv_v2_disk_needs_rebase() {
   local disk="$TV_V2_VM_DIR/emulimg-$1.x86_64" info backing
   [ -f "$disk" ] || return 0
   # -U: read the header even while a running emulator holds the image lock.
   if ! info=$("$TV_V2_QEMU_IMG" info -U "$disk" 2>&1); then
     log_error "qemu-img could not read $disk, so it is unknown which base image it is on: $(printf '%s\n' "$info" | tail -n 1)"
-    echo "TV_V2_UNAVAILABLE=disk_info_failed"
     return 2
   fi
   backing=$(printf '%s\n' "$info" | sed -n 's/^backing file: //p' | head -1)
@@ -1373,12 +1372,15 @@ tv_v2_disk_needs_rebase() {
 # 0 when an emulator-v2 process for this VM's conf is already running — for
 # example one still booting after an earlier launch timed out. Starting a
 # second one would put two writers on the same qcow2 disk.
+# Sets TV_V2_PID to that process.
 tv_v2_running() {
   local pattern
+  TV_V2_PID=""
   command -v pgrep >/dev/null 2>&1 || return 1
   # pgrep takes a regular expression; match the conf path literally.
   pattern=$(printf '%s' "--conf $TV_V2_VM_DIR/vm_launch-v2.conf" | sed -e 's/[][\\.*^$+?(){}|]/\\&/g')
-  pgrep -f -- "$pattern" >/dev/null 2>&1
+  TV_V2_PID=$(pgrep -f -- "$pattern" 2>/dev/null | head -1) || TV_V2_PID=""
+  [ -n "$TV_V2_PID" ]
 }
 
 # Escape a value for the replacement side of a sed s|…|…| command.
@@ -1395,17 +1397,13 @@ tv_v2_quarantined() {
 
 # $1 = VM name, $2 = true when the disk may be recreated without asking (a VM
 # create just made). Prints one TV_V2_NEEDS line per missing consent and
-# returns 2 before anything is changed; 1 when the disk cannot be read; 0 when
-# the launch may proceed.
+# returns 2 before anything is changed; 1 (after TV_V2_UNAVAILABLE=
+# disk_info_failed, and before any TV_V2_NEEDS) when the disk cannot be read;
+# 0 when the launch may proceed.
 tv_v2_check_consent() {
   local vm="$1" fresh="${2:-false}" needs=0 rc=0
-  if tv_v2_quarantined && [ "$CLEAR_QUARANTINE" != true ]; then
-    log_error "The emulator-v2 binaries still carry macOS's download quarantine, so macOS would refuse to run them."
-    log_error "Clearing it makes $TV_V2_DIR writable for you (chmod -R u+w) and removes that macOS security flag from it (xattr -dr com.apple.quarantine). Ask the user, then re-run with the clear-quarantine option."
-    echo "TV_V2_NEEDS=clear_quarantine"
-    needs=1
-  fi
-  # No disk at all means nothing to lose; prepare simply creates it.
+  # The disk first: asking for a quarantine consent would be pointless when
+  # the launch then stops on an unreadable disk anyway.
   if [ "$fresh" != true ] && [ "$REBASE_DISK" != true ] && [ -f "$TV_V2_VM_DIR/emulimg-$vm.x86_64" ]; then
     tv_v2_disk_needs_rebase "$vm" || rc=$?
     case "$rc" in
@@ -1415,23 +1413,49 @@ tv_v2_check_consent() {
         echo "TV_V2_NEEDS=rebase_disk"
         needs=1
         ;;
-      2) return 1 ;;
+      2)
+        log_error "Check the disk's permissions. If it is corrupt, recreating it (the rebase-disk option) DISCARDS the apps and data installed in '$vm' — only with the user's consent."
+        echo "TV_V2_UNAVAILABLE=disk_info_failed"
+        return 1
+        ;;
     esac
+  fi
+  if tv_v2_quarantined && [ "$CLEAR_QUARANTINE" != true ]; then
+    log_error "The emulator-v2 binaries still carry macOS's download quarantine, so macOS would refuse to run them."
+    log_error "Clearing it makes $TV_V2_DIR writable for you (chmod -R u+w) and removes that macOS security flag from it (xattr -dr com.apple.quarantine). Ask the user, then re-run with the clear-quarantine option."
+    echo "TV_V2_NEEDS=clear_quarantine"
+    needs=1
   fi
   [ "$needs" -eq 0 ] || return 2
   return 0
 }
 
-# $1 = VM name. Make the files the v2 launch reads: the disk on the v2 base,
+# $1 = VM name, $2 = true for a VM create just made (its disk holds nothing
+# to lose). Make the files the v2 launch reads: the disk on the v2 base,
 # swap, tuner table, vm_launch-v2.conf, the execute bit on the v2 binaries, and
 # (with -Q) no quarantine. Call tv_v2_check_consent first.
 tv_v2_prepare() {
-  local vm="$1" conf="$TV_V2_VM_DIR/vm_launch.conf" v2conf="$TV_V2_VM_DIR/vm_launch-v2.conf"
+  local vm="$1" fresh="${2:-false}" conf="$TV_V2_VM_DIR/vm_launch.conf" v2conf="$TV_V2_VM_DIR/vm_launch-v2.conf"
   local disk="$TV_V2_VM_DIR/emulimg-$1.x86_64" swap="$TV_V2_VM_DIR/swap-$1.img"
   local tuner="$TV_V2_VM_DIR/tuner_default.cfg" data res skin ram f rc=0
   local tuner_tpl="$TV_V2_SDK/platforms/tizen-$TV_V2_VERSION/tv-samsung/emulator-resources/tuner-template/tuner_default_template.cfg"
 
   tv_v2_disk_needs_rebase "$vm" || rc=$?
+  if [ "$rc" -eq 2 ]; then
+    # Unreadable (for example corrupt): recreating it is the cure, but only
+    # when the user agreed to lose its contents or the VM is brand new.
+    if [ "$REBASE_DISK" = true ] || [ "$fresh" = true ]; then
+      if [ "$fresh" = true ]; then
+        log_warn "Recreating the unreadable disk of '$vm' (a VM just created; nothing to lose)."
+      else
+        log_warn "Recreating the unreadable disk of '$vm' (the user agreed to the rebase)."
+      fi
+      rc=0
+    else
+      echo "TV_V2_UNAVAILABLE=disk_info_failed"
+      return 1
+    fi
+  fi
   case "$rc" in
     0)
       log_info "Recreating the disk of '$vm' on the emulator-v2 base image: $TV_V2_BASE"
@@ -1441,7 +1465,6 @@ tv_v2_prepare() {
       fi
       echo "TV_V2_DISK_REBASED=$vm"
       ;;
-    2) return 1 ;;
   esac
   if [ ! -f "$swap" ]; then
     "$TV_V2_QEMU_IMG" create -f raw "$swap" 512M >&2 || { log_error "qemu-img could not create $swap"; return 1; }
@@ -1517,6 +1540,8 @@ tv_v2_start() {
     echo "TV_V2_EXITED=1"
     return 1
   fi
+  # The wrapper execs the binary, so this PID is the emulator itself.
+  TV_V2_PID="$pid"
   echo "TV_V2_LAUNCH=$vm"
   log_ok "emulator-v2 is running (PID $pid). TCG boot takes 1-2 minutes."
   return 0
@@ -1955,7 +1980,12 @@ if [ "$ACTION" = "launch" ]; then
   fi
   
   EMULATOR_PID=""
-  if command -v pgrep &>/dev/null && [ -n "$PRE_PIDS" ]; then
+  if [ "$USE_TV_V2" = true ] && [ -n "${TV_V2_PID:-}" ]; then
+    # emulator-v2 (started now, or already running): its PID is known
+    # exactly. The guesses below could name another VM's emulator.
+    EMULATOR_PID="$TV_V2_PID"
+    log_info "emulator-v2 PID for '$VM_NAME': $EMULATOR_PID"
+  elif command -v pgrep &>/dev/null && [ -n "$PRE_PIDS" ]; then
     # Find NEW qemu process that wasn't running before launch
     POST_PIDS=$(pgrep -f 'qemu-system|qemu\.exe|emulator.*vm' 2>/dev/null | tr '\n' ' ' || true)
     log_info "Post-launch QEMU PIDs: ${POST_PIDS:-none}"
@@ -2316,7 +2346,14 @@ if [ "$ACTION" = "create" ]; then
   if tv_v2_applies "$VM_NAME"; then
     USE_TV_V2=true
     log_info "Apple Silicon Mac + TV VM: preparing '$VM_NAME' for emulator-v2 (em-cli cannot boot it here; it requires HAXM, which is Intel-only)."
-    if tv_v2_check_available && tv_v2_prepare "$VM_NAME"; then
+    if tv_v2_running; then
+      # Left over from a deleted VM of the same name (em-cli does not know
+      # about emulator-v2, so deleting the VM does not stop it). Waiting for it
+      # would never boot this new VM; it has to be stopped first.
+      log_error "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it first (tizen-device-manager stop), then launch '$VM_NAME'."
+      echo "TV_V2_UNAVAILABLE=still_running"
+      USE_TV_V2=unavailable
+    elif tv_v2_check_available && tv_v2_prepare "$VM_NAME" true; then
       echo "TV_V2_PREPARED=$VM_NAME"
     else
       log_warn "VM '$VM_NAME' was created, but its emulator-v2 files could not be prepared; see the errors above."
@@ -2334,11 +2371,6 @@ if [ "$ACTION" = "create" ]; then
     if [ "$USE_TV_V2" = unavailable ]; then
       log_warn "Not launching '$VM_NAME': emulator-v2 is not ready (see above), and em-cli cannot boot a TV VM on Apple Silicon."
       exit 0
-    elif [ "$USE_TV_V2" = true ] && tv_v2_running; then
-      # Left over from an earlier VM of the same name; never start a second
-      # emulator on the same disk.
-      log_info "emulator-v2 is already running for '$VM_NAME'; waiting for it instead of starting another one."
-      echo "TV_V2_ALREADY_RUNNING=$VM_NAME"
     elif [ "$USE_TV_V2" = true ]; then
       # The quarantine still needs the user's consent; the VM stays created.
       CONSENT_RC=0
@@ -2348,7 +2380,7 @@ if [ "$ACTION" = "create" ]; then
         exit 0
       fi
       [ "$CONSENT_RC" -eq 0 ] || exit 1
-      tv_v2_prepare "$VM_NAME" || exit 1
+      tv_v2_prepare "$VM_NAME" true || exit 1
       tv_v2_start "$VM_NAME" || exit 1
     else
       # em-cli writes hwVirtualization=false into the fresh profile when it could
