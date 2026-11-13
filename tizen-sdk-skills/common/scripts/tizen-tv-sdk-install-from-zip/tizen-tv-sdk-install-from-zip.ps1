@@ -281,8 +281,12 @@ foreach ($zipFile in $innerZips) {
         if ($baseName -like "$excl*") { $excluded = $true; break }
     }
     if ($excluded) { continue }
-    # Extract version (after last _)
-    $versionPart = $baseName.Substring($baseName.LastIndexOf('_') + 1)
+    # Extract version: the field after the package name. Names are
+    # <name>_<version>_<os>-<bits> (TV-SAMSUNG-Public_10.0.0_windows-64), so the
+    # field after the LAST "_" is the OS tag, not the version; older bundles
+    # drop the OS tag (<name>_<version>), which this reads the same way.
+    $fields = $baseName.Split('_')
+    $versionPart = if ($fields.Count -ge 2) { $fields[1] } else { "" }
     if ($versionPart -match '^(\d+\.\d+)') {
         $milestone = $Matches[1]
         if ($versionCounts.ContainsKey($milestone)) {

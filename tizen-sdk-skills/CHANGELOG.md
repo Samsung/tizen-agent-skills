@@ -36,6 +36,17 @@ below use those release tags.
 
 ### Fixed
 
+- **`tizen-tv-sdk-install-from-zip` detects the TV version from current bundles again.** It read
+  the version from the field after the last `_` of each inner ZIP name, but names are
+  `<name>_<version>_<os>-<bits>` (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`), so it read
+  `macos-64`, found no version and stopped asking for `--tv-version`. Both installers (`.sh`
+  and `.ps1`) now read the field after the package name.
+- **TV emulator binaries keep their execute bit after a ZIP install (Linux / macOS).**
+  `tv-samsung-emulator-qemu-x86-v2_9.3.4.7_macos-64.zip` stores `emulator-v2/bin/emulator-x86_64`
+  and `emulator-x86_64.bin` without the execute bit, so launching the TV emulator failed with
+  `Permission denied`. The bash installer now sets `+x` on every ELF, Mach-O or `#!` file in a
+  `bin/` folder of the installed TV platform and leaves data files alone. Windows has no execute
+  bit, so the `.ps1` installer is unchanged here.
 - **Installer scripts no longer stop with `declare: -A: invalid option` on macOS's bash 3.2**
   (issue #127). Seven scripts use associative arrays, which need bash 4 or newer
   (`tizen-platform-install`, `tizen-download-emulator-package`, `tizen-download-mobile-platform`,
