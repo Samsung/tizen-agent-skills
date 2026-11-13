@@ -22,6 +22,8 @@ const {
   parseTvV2Needs,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,
+  tvV2FailureMessage,
+  createFailureError,
   buildEmulatorArgs,
 } = require("../core/emulator");
 
@@ -93,6 +95,61 @@ console.log("--- TV_V2 parsing ---");
       /quarantine/.test(w[2]),
     JSON.stringify(w),
   );
+  const fresh = tvV2LaunchWarnings(
+    "VM_CREATED=tv\nTV_V2_DISK_REBASED=tv\nTV_V2_LAUNCH=tv\n",
+  );
+  check(
+    "a VM created in the same run gets no 'apps and data are gone' warning",
+    fresh.length === 1 && !fresh.some((x) => /gone/.test(x)),
+    JSON.stringify(fresh),
+  );
+  const waited = tvV2LaunchWarnings("TV_V2_ALREADY_RUNNING=tv\n");
+  check(
+    "an emulator-v2 that was already running is reported, not a new start",
+    waited.length === 1 && /already running/.test(waited[0]),
+    JSON.stringify(waited),
+  );
+  check(
+    "the quarantine consent names the chmod as well as the xattr",
+    /chmod -R u\+w/.test(TV_V2_CONSENT.clear_quarantine.ask) &&
+      /xattr -dr/.test(TV_V2_CONSENT.clear_quarantine.ask),
+  );
+
+  check(
+    "tvV2FailureMessage covers UNAVAILABLE and EXITED, and nothing else",
+    /disk_info_failed/.test(
+      tvV2FailureMessage("TV_V2_UNAVAILABLE=disk_info_failed", "tv") || "",
+    ) &&
+      /exited right after/.test(
+        tvV2FailureMessage("TV_V2_EXITED=1", "tv") || "",
+      ) &&
+      tvV2FailureMessage("VM_CREATED=tv", "tv") === null,
+  );
+
+  // create --launch: the create half succeeded, emulator-v2 then died. The
+  // envelope must say the VM exists and point at launch, not re-create.
+  for (const marker of ["TV_V2_EXITED=1", "TV_V2_UNAVAILABLE=no_emulator_v2"]) {
+    const env = createFailureError(
+      { action: "create" },
+      {},
+      {
+        message: "Command failed",
+        stdout: `VM_CREATED=tv\nTV_V2_PREPARED=tv\n${marker}\n`,
+        stderr: "",
+      },
+      "create",
+      Date.now(),
+    );
+    const text = JSON.stringify(env);
+    check(
+      `create --launch + ${marker} is emulator_boot_failed with a relaunch fix`,
+      /emulator_boot_failed/.test(text) &&
+        /VM 'tv' was created/.test(text) &&
+        /launch --vm-name tv/.test(text) &&
+        !/execution_error/.test(text),
+      text,
+    );
+  }
 
   const argsOf = (opts) => {
     const built = buildEmulatorArgs({
@@ -195,6 +252,7 @@ const STUB_QEMU_IMG = `#!/usr/bin/env bash
 printf 'qemu-img %s\\n' "$*" >> "$STUB_LOG"
 case "\${1:-}" in
   info)
+    if [ "\${STUB_QEMU_INFO_FAILS:-0}" = "1" ]; then echo "qemu-img: Could not open the image: Permission denied" >&2; exit 1; fi
     for a; do disk="$a"; done
     if [ -f "$disk.backing" ]; then echo "backing file: $(cat "$disk.backing")"
     else echo "backing file: /sdk/platforms/tizen-10.0/tv-samsung/emulator-images/v1/emulimg-v1.x86_64"; fi
@@ -224,9 +282,10 @@ function makeTree({
   v1Disk = false,
   withV2 = true,
   noVm = false,
+  sdkName = "sdk",
 } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-tv-v2-test-"));
-  const sdk = path.join(root, "sdk");
+  const sdk = path.join(root, sdkName);
   const home = path.join(root, "home");
   const emBin = path.join(sdk, "tools", "emulator", "bin");
   fs.mkdirSync(emBin, { recursive: true });
@@ -653,6 +712,132 @@ console.log("\n--- create --launch, em-cli launch fails ---");
   check(
     "the launch failure is reported without 'SDB: unbound variable'",
     !/unbound variable/.test(r.output) && /Failed to launch/.test(r.output),
+    r.output,
+  );
+  cleanup(tree);
+}
+
+// --- 6f. emulator-v2 still booting (not in sdb yet): no second start --------
+// A launch that timed out leaves emulator-v2 running; a retry must wait for it,
+// not start a second QEMU on the same qcow2 disk.
+console.log("\n--- emulator-v2 already running, not yet in sdb ---");
+{
+  const tree = makeTree({ v1Disk: true });
+  const v2conf = path.join(tree.vmDir, "vm_launch-v2.conf");
+  const bootState = path.join(tree.root, "boot-state");
+  fs.mkdirSync(bootState);
+  // The earlier emulator-v2, with the same --conf the script would pass.
+  const earlier = require("child_process").spawn(
+    "bash",
+    [path.join(tree.v2, "bin", "emulator-x86_64"), "--conf", v2conf],
+    {
+      detached: true,
+      stdio: "ignore",
+      env: {
+        ...process.env,
+        STUB_LOG: path.join(tree.root, "earlier.log"),
+        STUB_STATE: bootState,
+      },
+    },
+  );
+  earlier.unref();
+  // It connects to sdb a few seconds into the retry.
+  const connect = require("child_process").spawn(
+    "bash",
+    ["-c", `sleep 4; touch "${path.join(tree.state, "launched")}"`],
+    { detached: true, stdio: "ignore" },
+  );
+  connect.unref();
+  spawnSync("sleep", ["1"]);
+  const r = run(tree, ["-a", "launch", "-n", "tv", "-t", "30"]);
+  check("launch exits 0", r.code === 0, r.output);
+  check(
+    "TV_V2_ALREADY_RUNNING is printed",
+    /^TV_V2_ALREADY_RUNNING=tv$/m.test(r.output),
+    r.output,
+  );
+  check(
+    "no second emulator-v2 was started",
+    !r.stubLog.includes("emulator-v2 ") && !/^TV_V2_LAUNCH=/m.test(r.output),
+    r.stubLog,
+  );
+  check(
+    "the running VM is not prepared again (no consent asked, disk untouched)",
+    !/^TV_V2_NEEDS=/m.test(r.output) && r.diskBacking === null,
+    r.output,
+  );
+  check(
+    "the VM's serial is reported once it connects",
+    /^DEVICE_SERIAL=emulator-26101$/m.test(r.output),
+    r.output,
+  );
+  try {
+    process.kill(-earlier.pid);
+  } catch {
+    /* already gone */
+  }
+  cleanup(tree);
+}
+
+// --- 6g. qemu-img info fails: never read as "needs rebase" -----------------
+console.log("\n--- qemu-img info fails ---");
+{
+  const tree = makeTree({ v1Disk: true });
+  const r = run(tree, ["-a", "launch", "-n", "tv", "-t", "5"], {
+    STUB_QEMU_INFO_FAILS: "1",
+  });
+  check("launch exits non-zero", r.code !== 0);
+  check(
+    "TV_V2_UNAVAILABLE=disk_info_failed, and no rebase_disk consent is asked",
+    /^TV_V2_UNAVAILABLE=disk_info_failed$/m.test(r.output) &&
+      !/^TV_V2_NEEDS=rebase_disk$/m.test(r.output),
+    r.output,
+  );
+
+  const r2 = run(tree, ["-a", "launch", "-n", "tv", "-t", "5", "-B"], {
+    STUB_QEMU_INFO_FAILS: "1",
+  });
+  check(
+    "even with -B the unreadable disk is not recreated",
+    r2.code !== 0 &&
+      r2.diskBacking === null &&
+      !/^TV_V2_DISK_REBASED=/m.test(r2.output) &&
+      !r2.stubLog.includes("emulator-v2 "),
+    r2.output,
+  );
+  cleanup(tree);
+}
+
+// --- 6h. SDK path with sed metacharacters; --emulator-path is ignored ------
+console.log("\n--- SDK path with & and | ---");
+{
+  const tree = makeTree({ sdkName: "sdk&co|x" });
+  const r = run(tree, [
+    "-a",
+    "launch",
+    "-n",
+    "tv",
+    "-t",
+    "20",
+    "-E",
+    "/some/emulator",
+  ]);
+  check("launch exits 0", r.code === 0, r.output);
+  const conf = r.v2conf || "";
+  check(
+    "the conf carries the SDK path literally",
+    conf.includes(`${tree.sdk}/platforms/tizen-10.0/tv-samsung`) &&
+      !conf.includes("__SDK_PATH__"),
+    conf.slice(0, 400),
+  );
+  check(
+    "the skin path keeps its & and |",
+    conf.includes(`skin_path=${tree.sdk}/platforms/`),
+    conf,
+  );
+  check(
+    "--emulator-path is reported as ignored on the emulator-v2 path",
+    /Ignoring the emulator path option \(\/some\/emulator\)/.test(r.output),
     r.output,
   );
   cleanup(tree);

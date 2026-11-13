@@ -143,8 +143,9 @@ const TV_V2_CONSENT = Object.freeze({
     flag: "--clear-quarantine",
     ask:
       "the SDK's emulator-v2 binaries still carry macOS's download quarantine, so macOS " +
-      "would refuse to run them. Clearing it removes a macOS security flag from the " +
-      "platform's emulator-v2 folder",
+      "would refuse to run them. Clearing it makes the platform's emulator-v2 folder " +
+      "writable for the user (chmod -R u+w) and removes that macOS security flag from it " +
+      "(xattr -dr com.apple.quarantine)",
   },
   rebase_disk: {
     flag: "--rebase-disk",
@@ -174,16 +175,42 @@ function tvV2ConsentRequest(needs, base) {
   };
 }
 
+/**
+ * Why the emulator-v2 path failed (TV_V2_UNAVAILABLE / TV_V2_EXITED), or null
+ * when the output shows neither.
+ */
+function tvV2FailureMessage(output, vmName) {
+  const unavailable = String(output || "").match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
+  if (unavailable) {
+    return (
+      `em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only), ` +
+      `and the emulator-v2 path is not available for '${vmName}' (${unavailable[1]}). See details.`
+    );
+  }
+  if (/^TV_V2_EXITED=1$/m.test(String(output || ""))) {
+    return `emulator-v2 exited right after it was started for '${vmName}'. See details for its log.`;
+  }
+  return null;
+}
+
 /** Warnings for what a successful emulator-v2 launch changed or did. */
 function tvV2LaunchWarnings(output) {
   const warnings = [];
+  if (/^TV_V2_ALREADY_RUNNING=/m.test(output)) {
+    warnings.push(
+      "emulator-v2 was already running for this VM (still booting), so the runner waited for it " +
+        "instead of starting a second emulator on the same disk.",
+    );
+    return warnings;
+  }
   if (!/^TV_V2_LAUNCH=/m.test(output)) return warnings;
   warnings.push(
     "Started with the platform's emulator-v2 (QEMU with TCG and VirGL) instead of em-cli: " +
       "em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only). " +
       "Its output is in <vm folder>/logs/qemu-v2.log.",
   );
-  if (/^TV_V2_DISK_REBASED=/m.test(output)) {
+  // A VM created in the same run had nothing installed to lose.
+  if (/^TV_V2_DISK_REBASED=/m.test(output) && !/^VM_CREATED=/m.test(output)) {
     warnings.push(
       "The VM's disk was recreated on the emulator-v2 base image; apps and data installed before are gone.",
     );
@@ -1836,6 +1863,23 @@ function createFailureError(state, opts, error, command, startTime) {
     );
   }
 
+  // create --launch on Apple Silicon: the VM was created, but emulator-v2 was
+  // not available or died at once. Same rule — relaunch, never re-create.
+  const v2Failure =
+    createdMatch && tvV2FailureMessage(scriptOutput, createdMatch[1].trim());
+  if (v2Failure) {
+    const createdVm = createdMatch[1].trim();
+    return formatError(
+      command,
+      "emulator_boot_failed",
+      `VM '${createdVm}' was created, but launching it failed: ${v2Failure} The VM exists — ` +
+        `relaunch it instead of re-creating: node emulator-manager-cli.js launch --vm-name ${createdVm}.`,
+      `node emulator-manager-cli.js launch --vm-name ${createdVm}`,
+      startTime,
+      rawOutputTail(scriptOutput),
+    );
+  }
+
   const gateRefused = /^EMCLI_MISMATCH=1$/m.test(scriptOutput);
   if (
     gateRefused ||
@@ -2275,15 +2319,12 @@ function launchFailureError(error, vmName, timeout, command, startTime) {
       startTime,
     );
   }
-  const unavailable = combined.match(/^TV_V2_UNAVAILABLE=(\S+)$/m);
-  if (unavailable || /^TV_V2_EXITED=1$/m.test(combined)) {
+  const v2Failure = tvV2FailureMessage(combined, vmName);
+  if (v2Failure) {
     return formatError(
       command,
       "emulator_boot_failed",
-      unavailable
-        ? `em-cli cannot boot a TV VM on Apple Silicon (it requires HAXM, which is Intel-only), ` +
-            `and the emulator-v2 path is not available for '${vmName}' (${unavailable[1]}). See details.`
-        : `emulator-v2 exited right after it was started for '${vmName}'. See details for its log.`,
+      v2Failure,
       null,
       startTime,
       rawOutputTail(combined),
@@ -2409,11 +2450,13 @@ function launchedResult(output, { vmName, timeout, command, startTime }) {
     // em-cli, or the platform's emulator-v2 started with --conf (Apple
     // Silicon TV launch, where em-cli cannot boot the VM); "none" when the VM
     // was already running and nothing was started.
-    launch_method: /is already running and connected/.test(output)
-      ? "none"
-      : /^TV_V2_LAUNCH=/m.test(output)
-        ? "emulator-v2"
-        : "em-cli",
+    launch_method:
+      /is already running and connected/.test(output) ||
+      /^TV_V2_ALREADY_RUNNING=/m.test(output)
+        ? "none"
+        : /^TV_V2_LAUNCH=/m.test(output)
+          ? "emulator-v2"
+          : "em-cli",
   };
   if (homescreenStatus) data.homescreen_fix = homescreenStatus;
 
@@ -3076,4 +3119,6 @@ module.exports = {
   parseTvV2Needs,
   tvV2ConsentRequest,
   tvV2LaunchWarnings,
+  tvV2FailureMessage,
+  createFailureError,
 };

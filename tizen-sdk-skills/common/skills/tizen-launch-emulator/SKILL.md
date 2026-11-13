@@ -227,7 +227,11 @@ On an Apple Silicon Mac, `launch` for a `tv-samsung` VM:
    `<vm folder>/logs/qemu-v2.log`) and waits for the VM in `sdb devices` as usual.
 
 The success envelope then carries `result.launch_method: "emulator-v2"` and a warning saying so.
-A TCG boot takes 1–2 minutes.
+A TCG boot takes 1–2 minutes. If emulator-v2 is already running for the VM but not yet in
+`sdb devices` (an earlier launch timed out while it was still booting), the runner starts
+nothing and waits for that one: `launch_method: "none"`, with a warning saying so. Re-running
+the launch is therefore safe. `--emulator-path` is an em-cli option and is ignored on this
+path (the runner logs a warning).
 
 **Two steps need the user's consent.** Without it the runner changes nothing and returns
 `error_category: user_input_required`, whose message says what is needed and whose
@@ -236,7 +240,7 @@ A TCG boot takes 1–2 minutes.
 | Flag | Asked when | What it does |
 | ---- | ---------- | ------------ |
 | `--rebase-disk` | An existing VM's disk is still on em-cli's v1 base image | Recreates the disk on the v2 base image. **All apps and data installed in the VM are lost.** A VM `create` just made, or one with no disk yet, is rebased without asking — there is nothing to lose. |
-| `--clear-quarantine` | The v2 binaries still carry macOS's download quarantine (the launch would die with `zsh: killed` / `library load disallowed by system policy`) | Removes the `com.apple.quarantine` flag from the platform's `emulator-v2` folder. |
+| `--clear-quarantine` | The v2 binaries still carry macOS's download quarantine (the launch would die with `zsh: killed` / `library load disallowed by system policy`) | Makes the platform's `emulator-v2` folder writable for the user (`chmod -R u+w`), then removes the `com.apple.quarantine` flag from it (`xattr -dr`). Tell the user both. |
 
 Show the envelope, ask the user with AskUserQuestion, and run `suggested_fix.command` only after
 they agree. Never add these flags on your own.
@@ -250,8 +254,11 @@ Failures are `emulator_boot_failed`:
 
 - `TV_V2_UNAVAILABLE=<reason>` in the details: the platform has no `emulator-v2` stack
   (`no_emulator_v2`), the version is not verified (`unverified_version` — only Tizen 10.0 is),
-  or the v2 base image or `qemu-img` is missing. em-cli is no fallback here; say so instead of
-  improvising.
+  or the v2 base image or `qemu-img` is missing, or `qemu-img` could not read the VM's disk
+  (`disk_info_failed` — the runner then never offers `--rebase-disk`, because the disk may
+  already be on the v2 base). em-cli is no fallback here; say so instead of improvising.
+- After `create --launch`, the message says the VM **was created**: relaunch it with
+  `suggested_fix.command` (`launch --vm-name …`), never re-create it.
 - `TV_V2_EXITED=1`: emulator-v2 died right after it started; the details carry the tail of
   `qemu-v2.log`.
 

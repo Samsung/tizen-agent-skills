@@ -33,8 +33,11 @@
   macOS quarantine 해제는 사용자 동의가 필요합니다. 동의가 없으면 러너는 아무것도 바꾸지 않고
   새 `--rebase-disk` / `--clear-quarantine` 플래그로 다시 실행할 명령과 함께
   `user_input_required`를 돌려줍니다(`create --launch`는 부팅 시간 초과 대신
-  `status: created_launch_needs_consent`). `TIZEN_TV_V2_LAUNCH=off`로 em-cli를 유지할 수 있습니다.
-  macOS 전용이라 `tizen-emulator-manager.ps1`은 바꾸지 않았습니다.
+  `status: created_launch_needs_consent`). 아직 부팅 중인 emulator-v2가 있는 VM에는 두 번째
+  emulator-v2를 띄우지 않고 그 프로세스를 기다립니다(`launch_method: "none"`). `qemu-img`가 읽지
+  못한 디스크는 rebase를 제안하지 않고 `TV_V2_UNAVAILABLE=disk_info_failed`로 보고하며,
+  `create --launch` 뒤 v2 실행이 실패하면 VM은 만들어졌으니 다시 실행하라고 안내합니다.
+  `TIZEN_TV_V2_LAUNCH=off`로 em-cli를 유지할 수 있습니다. macOS 전용이라 `tizen-emulator-manager.ps1`은 바꾸지 않았습니다.
 
 ### 변경
 
