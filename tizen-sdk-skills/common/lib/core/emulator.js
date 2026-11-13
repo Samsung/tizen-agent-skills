@@ -2075,7 +2075,8 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
   }
 
   // "launch starts it" only when nothing else says otherwise: a blocked
-  // launch or a pending consent has its own warning and command.
+  // launch carries the relaunch command in its own warning below, and a
+  // pending consent carries it in the consent command.
   if (
     markers.tvV2Prepared &&
     !markers.launchBlocked &&
@@ -2090,9 +2091,17 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
   if (markers.tvV2Unavailable) {
     // The same reason text either way: a prepare_failed is a write error
     // the next launch retries, not "cannot be booted".
+    // A prepared VM whose launch was blocked (still_running, or the second
+    // prepare failed) is launchable once the cause is fixed: keep the
+    // relaunch command, with --timeout, here.
+    const relaunch =
+      state.launch && markers.tvV2Prepared
+        ? ` Relaunch with: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`
+        : "";
     warnings.push(
       `VM '${createdVmName}' was created${state.launch ? " but not launched" : ""}. ` +
-        tvV2FailureMessage(output, createdVmName),
+        tvV2FailureMessage(output, createdVmName) +
+        relaunch,
     );
   }
   // create without --launch: the VM is prepared, but a leftover emulator-v2

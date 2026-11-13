@@ -668,7 +668,9 @@ function run(tree, args, env = {}) {
     output: `${result.stdout || ""}${result.stderr || ""}`,
     stubLog: fs.readFileSync(tree.log, "utf8"),
     state: fs.readdirSync(tree.state),
-    // What the runner sees: execPluginScript returns stdout only.
+    // The script's machine lines without its log_* lines (stderr). In
+    // production the runner sees both merged; envelope checks use stdout so
+    // the warnings they match come from the runner's own text.
     stdout: result.stdout || "",
     v2conf: fs.existsSync(v2conf) ? fs.readFileSync(v2conf, "utf8") : null,
     diskBacking: (() => {
@@ -1113,9 +1115,16 @@ const CREATE_ARGS = [
   "-P",
   "tv-samsung-10.0-x86_64",
 ];
-const createEnvelope = (launch, output) =>
+const createEnvelope = (launch, output, launchTimeoutSec) =>
   createVmResult(
-    { action: "create", launch, vmName: "tv", sizeWarnings: [], profile: "tv" },
+    {
+      action: "create",
+      launch,
+      vmName: "tv",
+      sizeWarnings: [],
+      profile: "tv",
+      launchTimeoutSec,
+    },
     {},
     output,
     "create",
@@ -1159,16 +1168,21 @@ for (const launch of [true, false]) {
       !r.stubLog.includes("emulator-v2 "),
     r.output,
   );
-  const env = createEnvelope(launch, r.stdout);
+  const env = createEnvelope(launch, r.stdout, launch ? 540 : undefined);
   const warned = (env.warnings || []).join("\n");
   if (launch) {
     check(
-      "--launch: still_running → created_launch_blocked, launch_method none, stop it first",
+      "--launch: still_running → created_launch_blocked, launch_method none, stop it first, one relaunch command with --timeout",
       /^TV_V2_UNAVAILABLE=still_running$/m.test(r.output) &&
         env.result.status === "created_launch_blocked" &&
         env.result.launch_method === "none" &&
         /Stop it first/.test(warned) &&
-        !/was prepared for emulator-v2/.test(warned),
+        !/was prepared for emulator-v2/.test(warned) &&
+        (
+          JSON.stringify(env).match(
+            /launch --vm-name tv --timeout 540(?![\w-])/g,
+          ) || []
+        ).length === 1,
       JSON.stringify(env).slice(0, 900),
     );
   } else {
@@ -1307,9 +1321,9 @@ for (const action of ["launch", "create --launch"]) {
     PATH: `${mvBin}:${process.env.PATH}`,
     MV_COUNT: path.join(tree.root, "mv-count"),
   });
-  const env = createEnvelope(true, r.stdout);
+  const env = createEnvelope(true, r.stdout, 540);
   check(
-    "prepared, then a blocked launch: exit 0, created_launch_blocked, nothing started",
+    "prepared, then a blocked launch: exit 0, created_launch_blocked, nothing started, one relaunch command with --timeout",
     r.code === 0 &&
       /^TV_V2_PREPARED=tv$/m.test(r.output) &&
       (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
@@ -1318,7 +1332,12 @@ for (const action of ["launch", "create --launch"]) {
       env.result.status === "created_launch_blocked" &&
       env.result.launch_method === "none" &&
       /could not be written/.test((env.warnings || []).join("\n")) &&
-      !/was prepared for emulator-v2/.test((env.warnings || []).join("\n")),
+      !/was prepared for emulator-v2/.test((env.warnings || []).join("\n")) &&
+      (
+        JSON.stringify(env).match(
+          /launch --vm-name tv --timeout 540(?![\w-])/g,
+        ) || []
+      ).length === 1,
     `${r.output}\n${JSON.stringify(env).slice(0, 600)}`,
   );
   check(
