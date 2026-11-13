@@ -1452,6 +1452,26 @@ function findBuildArtifacts(rootDir, newerThan) {
 }
 
 /**
+ * GBS build output from the first directory in gbsOutputDirs() that holds any.
+ * Source RPMs are skipped, as find_gbs_package_file() in tizen-build-project.sh
+ * does: a build root's local/repos also holds <profile>/src/SRPMS.
+ *
+ * @param {string} projectPath
+ * @param {string} output - build script stdout
+ * @param {number} newerThan - only files modified after this time (Date.now() value)
+ * @returns {Array<{path: string, format: string, size: number}>}
+ */
+function findGbsArtifacts(projectPath, output, newerThan) {
+  for (const dir of gbsOutputDirs(projectPath, output)) {
+    const artifacts = findBuildArtifacts(dir, newerThan).filter(
+      (a) => !/\.src\.rpm$/i.test(a.path),
+    );
+    if (artifacts.length > 0) return artifacts;
+  }
+  return [];
+}
+
+/**
  * Extract only key lines from build script stdout for envelope warnings
  * (warning/error lines only instead of hundreds-thousands of toolchain output, max 10 lines)
  */
@@ -1687,10 +1707,7 @@ async function buildProject(
     // printed, then the buildroot from TIZEN_BUILD_ROOT / gbs.conf, then ~/GBS-ROOT.
     let artifacts = findBuildArtifacts(normalizedProjectPath, startTime);
     if (artifacts.length === 0 && platformProject) {
-      for (const dir of gbsOutputDirs(normalizedProjectPath, output)) {
-        artifacts = findBuildArtifacts(dir, startTime);
-        if (artifacts.length > 0) break;
-      }
+      artifacts = findGbsArtifacts(normalizedProjectPath, output, startTime);
     }
     if (artifacts.length === 0) {
       // Exit code 0 with no package usually means the toolchain reported the real
@@ -2769,6 +2786,7 @@ module.exports = {
   resolveGbsBuildRoot,
   parseGbsLocalRepoDirs,
   gbsOutputDirs,
+  findGbsArtifacts,
   createProject,
   importWgt,
   deleteProject,

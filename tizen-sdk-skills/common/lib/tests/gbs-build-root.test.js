@@ -12,7 +12,9 @@
  *     project's .gbs.conf ahead of ~/.gbs.conf
  *   - parseGbsLocalRepoDirs(): the path depanneur prints on the line after
  *     "generated RPM packages can be found from local repo:", ANSI codes and all
- *   - tizen-build-project.sh (Linux/macOS): a stubbed `gbs` that writes its RPM
+ *   - findGbsArtifacts(): a build root's local/repos yields the binary RPM, not
+ *     the src/SRPMS source RPM
+ *   - tizen-build-project.sh (Linux only): a stubbed `gbs` that writes its RPM
  *     into a custom buildroot is found, and a nested-CMakeLists project is
  *     detected as Platform
  *
@@ -46,6 +48,7 @@ const {
   isPlatformProject,
   resolveGbsBuildRoot,
   parseGbsLocalRepoDirs,
+  findGbsArtifacts,
 } = require("../core/project");
 
 function mk(file, content = "") {
@@ -173,11 +176,33 @@ try {
     0,
   );
 
+  // --- findGbsArtifacts ---
+  console.log("\n--- findGbsArtifacts ---");
+  {
+    const proj = path.join(tmp, "artifacts-proj");
+    const gbsRoot = path.join(tmp, "artifacts-root");
+    mk(path.join(proj, ".gbs.conf"), `[general]\nbuildroot = ${gbsRoot}\n`);
+    const repos = path.join(gbsRoot, "local", "repos", "tizen");
+    mk(path.join(repos, "src", "SRPMS", "app-1.0-1.src.rpm"));
+    mk(path.join(repos, "x86_64", "RPMS", "app-1.0-1.x86_64.rpm"));
+    const found = findGbsArtifacts(proj, "", 0).map((a) =>
+      path.basename(a.path),
+    );
+    check(
+      "binary RPM only, no log line",
+      found.join("|"),
+      "app-1.0-1.x86_64.rpm",
+    );
+  }
+
   // --- tizen-build-project.sh with a stubbed gbs ---
   console.log("\n--- tizen-build-project.sh (stub gbs) ---");
   const gitCheck = spawnSync("git", ["--version"]);
-  if (process.platform === "win32" || gitCheck.status !== 0) {
-    console.log("SKIP shell end-to-end (needs bash and git)");
+  if (process.platform !== "linux" || gitCheck.status !== 0) {
+    // The stub PATH below resolves macOS /bin/bash 3.2; GBS itself is Linux-only.
+    console.log(
+      "SKIP shell end-to-end (GBS is Linux-only; needs bash and git)",
+    );
   } else {
     const script = path.resolve(
       __dirname,

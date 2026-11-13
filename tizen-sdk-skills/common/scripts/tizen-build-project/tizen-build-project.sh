@@ -395,7 +395,7 @@ build_platform_project() {
     fi
 
     echo "" >&2
-    echo "Running: $gbs_cmd build -A $arch --include-all ${gbs_extra_args[*]} (in $project_path)" >&2
+    echo "Running: $gbs_cmd build -A $arch --include-all ${gbs_extra_args[*]:-} (in $project_path)" >&2
     echo "" >&2
 
     local prev_dir

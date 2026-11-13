@@ -76,7 +76,7 @@ function Test-HasProjectConfig {
     # Detect-ProjectType can classify (yaml / project_def.prop / config.xml / *.csproj).
     # tizen-manifest.xml + CMakeLists.txt is deliberately NOT a marker: ordinary Native
     # apps carry tizen-manifest.xml too, and GBS (Platform) builds are Linux-only — the
-    # .sh counterpart recognises them by CMakeLists.txt + packaging/*.spec.
+    # .sh counterpart recognises them by packaging/*.spec + CMakeLists.txt (root or nested).
     # Always return a real [bool]: a bare Get-ChildItem result would make the function
     # yield nothing (empty) or a FileInfo array instead of $false / $true.
     $hasCsproj = [bool](Get-ChildItem -Path $Path -Filter "*.csproj" -File -ErrorAction SilentlyContinue |

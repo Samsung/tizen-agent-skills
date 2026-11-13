@@ -68,6 +68,7 @@
   찾고, 다음으로 gbs와 같은 방식으로 결정한 빌드 루트(`TIZEN_BUILD_ROOT`, 현재 프로필의
   `buildroot`, `[general] buildroot`, `${profile}` / `${tmpdir}` 치환, 프로젝트 `.gbs.conf`가
   `~/.gbs.conf`·`/etc/gbs.conf`보다 우선)를 찾은 뒤, 마지막으로 `~/GBS-ROOT`를 찾습니다.
+  소스 RPM(`*.src.rpm`)은 빌드 산출물로 보고하지 않습니다.
 - **루트에 `CMakeLists.txt`가 없는 Platform 프로젝트도 감지합니다.** `packaging/*.spec`이 있고
   `CMakeLists.txt`가 3단계 이내 하위 경로에 있는 프로젝트(DALi demo의
   `build/tizen/CMakeLists.txt` 등)는 "Not a valid Tizen project"로 거부됐습니다. 이제
