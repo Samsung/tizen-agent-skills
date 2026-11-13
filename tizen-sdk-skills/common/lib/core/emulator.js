@@ -1902,7 +1902,7 @@ function createFailureError(state, opts, error, command, startTime) {
       "emulator_boot_failed",
       `VM '${createdVm}' was created, but launching it failed. The VM exists — after fixing ` +
         `the host (see details), relaunch it instead of re-creating: ` +
-        `node emulator-manager-cli.js launch --vm-name ${createdVm}.`,
+        `${launchRetryCommand(createdVm, state.launchTimeoutSec)}.`,
       launchDiagnosisSuggestedFix(diag, createdVm),
       startTime,
       launchDiagnosisDetails(diag, scriptOutput),
@@ -2078,15 +2078,15 @@ function pushCreateWarnings(state, output, markers, opts = {}) {
     warnings.push(
       `VM '${createdVmName}' was prepared for emulator-v2: em-cli cannot boot a TV VM on Apple Silicon ` +
         `(it requires HAXM, which is Intel-only), so launch starts it with the platform's emulator-v2 ` +
-        `instead: node emulator-manager-cli.js launch --vm-name ${createdVmName}`,
+        `instead: ${launchRetryCommand(createdVmName, state.launchTimeoutSec)}`,
     );
   }
   if (markers.tvV2Unavailable) {
+    // The same reason text either way: a prepare_failed is a write error
+    // the next launch retries, not "cannot be booted".
     warnings.push(
-      state.launch
-        ? `VM '${createdVmName}' was created but not launched. ${tvV2FailureMessage(output, createdVmName)}`
-        : `VM '${createdVmName}' was created, but it cannot be booted on this Apple Silicon Mac: em-cli ` +
-            `requires HAXM (Intel-only) and the emulator-v2 path is not available for it. See the errors below.`,
+      `VM '${createdVmName}' was created${state.launch ? " but not launched" : ""}. ` +
+        tvV2FailureMessage(output, createdVmName),
     );
   }
   // create without --launch: the VM is prepared, but a leftover emulator-v2

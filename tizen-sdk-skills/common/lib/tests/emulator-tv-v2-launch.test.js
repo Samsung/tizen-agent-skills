@@ -221,9 +221,14 @@ console.log("--- TV_V2 parsing ---");
       src.indexOf("async function launchEmulator("),
       src.indexOf("\n}\n", src.indexOf("async function launchEmulator(")),
     );
-    const calls = body.match(/launchFailureError\([^;]*?\}\)/gs) || [];
+    // Anchored on the full argument list: the run's own timeout and start
+    // time come first, then the granted consents as the sixth argument.
+    const calls =
+      body.match(
+        /launchFailureError\(\s*error,\s*vmName,\s*timeout,\s*command,\s*startTime,\s*\{[^}]*\}\s*,?\s*\)/g,
+      ) || [];
     check(
-      "launchEmulator passes clearQuarantine and rebaseDisk to every launchFailureError call",
+      "launchEmulator passes timeout, startTime and both consents to every launchFailureError call",
       calls.length > 0 &&
         (body.match(/launchFailureError\(/g) || []).length === calls.length &&
         calls.every(
@@ -264,6 +269,34 @@ console.log("--- TV_V2 parsing ---");
       ).command || "",
     ),
   );
+  {
+    // create --launch --timeout 540: every relaunch command in the envelope
+    // waits 540 s, not only the timeout warning's.
+    const env = createVmResult(
+      {
+        action: "create",
+        launch: true,
+        launchTimeoutSec: 540,
+        vmName: "tv",
+        sizeWarnings: [],
+        profile: "tv",
+      },
+      {},
+      "VM_CREATED=tv\nTV_V2_PREPARED=tv\n",
+      "create",
+      Date.now(),
+    );
+    const cmds =
+      (env.warnings || [])
+        .join("\n")
+        .match(/node emulator-manager-cli\.js launch --vm-name tv[^\n.]*/g) ||
+      [];
+    check(
+      "create --launch --timeout 540: every relaunch command keeps --timeout 540",
+      cmds.length >= 2 && cmds.every((c) => /--timeout 540\b/.test(c)),
+      cmds.join("\n"),
+    );
+  }
   check(
     "prepare_failed has its own message",
     /could not be written/.test(
@@ -1196,12 +1229,56 @@ for (const action of ["launch", "create --launch"]) {
   cleanup(tree);
 }
 
+// --- 6k2. The second prepare of create --launch fails ----------------------
+// The first prepare succeeds; the one after the consent check cannot move
+// the new conf into place (a PATH stub for mv fails its second such call).
+{
+  console.log("\n--- create --launch, the second prepare fails ---");
+  const tree = makeTree({ noVm: true });
+  const mvBin = path.join(tree.root, "mv-bin");
+  fs.mkdirSync(mvBin);
+  fs.writeFileSync(
+    path.join(mvBin, "mv"),
+    [
+      "#!/bin/bash",
+      'case "$*" in',
+      "  *vm_launch-v2.conf*)",
+      '    n=$(cat "$MV_COUNT" 2>/dev/null || echo 0); n=$((n + 1)); echo "$n" > "$MV_COUNT"',
+      '    [ "$n" -lt 2 ] || exit 1 ;;',
+      "esac",
+      'exec /bin/mv "$@"',
+      "",
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const r = run(tree, [...CREATE_ARGS, "-l", "-t", "5"], {
+    STUB_NO_VM: "1",
+    PATH: `${mvBin}:${process.env.PATH}`,
+    MV_COUNT: path.join(tree.root, "mv-count"),
+  });
+  const env = createEnvelope(true, r.output);
+  check(
+    "prepared, then a blocked launch: exit 0, created_launch_blocked, nothing started",
+    r.code === 0 &&
+      /^TV_V2_PREPARED=tv$/m.test(r.output) &&
+      (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
+      /^TV_V2_UNAVAILABLE=prepare_failed$/m.test(r.output) &&
+      !r.stubLog.includes("emulator-v2 ") &&
+      env.result.status === "created_launch_blocked" &&
+      env.result.launch_method === "none" &&
+      /could not be written/.test((env.warnings || []).join("\n")),
+    `${r.output}\n${JSON.stringify(env).slice(0, 600)}`,
+  );
+  cleanup(tree);
+}
+
 // --- 6l. A leftover emulator-v2 plus a v2 path that is not usable ----------
 // The v2 failure is the one reported; a second TV_V2_UNAVAILABLE line
-// (still_running) would hide it.
-{
+// (still_running) would hide it. The leftover is still reported: a later
+// launch would wait for it as if it were this VM's.
+for (const launch of [true, false]) {
   console.log(
-    "\n--- create --launch, leftover running and no v2 base image ---",
+    `\n--- create${launch ? " --launch" : ""}, leftover running and no v2 base image ---`,
   );
   const tree = makeTree({ noVm: true });
   fs.mkdirSync(path.join(tree.root, "boot-state"));
@@ -1225,15 +1302,21 @@ for (const action of ["launch", "create --launch"]) {
   leftover.unref();
   spawnSync("sleep", ["1"]);
   fs.rmSync(tree.base);
-  const r = run(tree, [...CREATE_ARGS, "-l", "-t", "5"], { STUB_NO_VM: "1" });
-  const env = createEnvelope(true, r.output);
+  const r = run(tree, [...CREATE_ARGS, ...(launch ? ["-l", "-t", "5"] : [])], {
+    STUB_NO_VM: "1",
+  });
+  const env = createEnvelope(launch, r.output);
+  const warned = (env.warnings || []).join("\n");
   check(
-    "only no_base_image is reported, and the warning names it",
-    (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
+    "the leftover is detected and reported, and only no_base_image is UNAVAILABLE",
+    /^TV_V2_LEFTOVER_RUNNING=tv$/m.test(r.output) &&
+      (r.output.match(/^TV_V2_UNAVAILABLE=/gm) || []).length === 1 &&
       /^TV_V2_UNAVAILABLE=no_base_image$/m.test(r.output) &&
-      env.result.status === "created_launch_blocked" &&
-      /no_base_image/.test((env.warnings || []).join("\n")),
-    `${r.output}\n${JSON.stringify(env).slice(0, 600)}`,
+      env.result.status === (launch ? "created_launch_blocked" : "created") &&
+      /no_base_image/.test(warned) &&
+      /before you launch/.test(warned) &&
+      !/cannot be booted/.test(warned),
+    `${r.output}\n${JSON.stringify(env).slice(0, 900)}`,
   );
   try {
     process.kill(-leftover.pid);
@@ -1349,10 +1432,12 @@ if (canQuarantine) {
     });
     const fix2 = fixFor(r4.output, { rebaseDisk: true });
     check(
-      "round 2 (-B) asks for the quarantine and keeps --rebase-disk",
-      /--rebase-disk$/.test(fix1) &&
+      "round 2 (-B) asks for the quarantine and keeps --rebase-disk and --timeout 20",
+      /launch --vm-name tv --timeout 20 --rebase-disk$/.test(fix1) &&
         /^TV_V2_NEEDS=clear_quarantine$/m.test(r4.output) &&
-        /--clear-quarantine --rebase-disk$/.test(fix2),
+        /launch --vm-name tv --timeout 20 --clear-quarantine --rebase-disk$/.test(
+          fix2,
+        ),
       `${fix1}\n${fix2}\n${r4.output}`,
     );
     // Run round 2's suggested fix as given (it carries --timeout 20 too):

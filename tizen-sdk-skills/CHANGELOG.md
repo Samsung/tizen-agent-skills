@@ -41,7 +41,8 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   one such reason (`TV_V2_UNAVAILABLE=prepare_failed`), never a boot timeout. When an
   emulator-v2 of an earlier VM of the same name is still running, `create` still prepares the
   new VM, `create --launch` stops with `still_running`, and a plain `create` warns to stop that
-  emulator first. A disk that `qemu-img` cannot read is never treated as "needs rebase": the
+  emulator first. The warning is given even when emulator-v2 cannot be used yet, because a later
+  launch would wait for that emulator as if it were the new VM's. A disk that `qemu-img` cannot read is never treated as "needs rebase": the
   runner returns `user_input_required` (`disk_info_failed`, reported before any other consent),
   and only `--rebase-disk`, or `create` for its own new VM, recreates it. Every retry command
   keeps the consent flags already given and a non-default `--timeout`, so a second consent

@@ -2371,10 +2371,12 @@ if [ "$ACTION" = "create" ]; then
       log_warn "VM '$VM_NAME' was created, but its emulator-v2 files could not be prepared; see the errors above."
       USE_TV_V2=unavailable
     fi
-    # Only once emulator-v2 is usable: otherwise that failure is the one to
-    # report, and a second TV_V2_UNAVAILABLE line would hide it.
-    if [ "$TV_V2_LEFTOVER" = true ] && [ "$USE_TV_V2" = true ]; then
-      if [ "$LAUNCH" = true ]; then
+    # A launch cannot tell this leftover from its own VM's emulator (it would
+    # wait for it), so it is always reported. still_running only when
+    # emulator-v2 is usable: otherwise that failure is the reason to report,
+    # and a second TV_V2_UNAVAILABLE line would hide it.
+    if [ "$TV_V2_LEFTOVER" = true ]; then
+      if [ "$LAUNCH" = true ] && [ "$USE_TV_V2" = true ]; then
         # Waiting for it would never boot this new VM.
         log_error "An emulator-v2 for '$VM_NAME' is still running (PID $TV_V2_PID), left over from an earlier VM of this name. Stop it first (tizen-device-manager stop), then launch '$VM_NAME'."
         echo "TV_V2_UNAVAILABLE=still_running"
@@ -2405,7 +2407,12 @@ if [ "$ACTION" = "create" ]; then
         exit 0
       fi
       [ "$CONSENT_RC" -eq 0 ] || exit 1
-      tv_v2_prepare "$VM_NAME" true || exit 1
+      # The VM exists either way: a failed prepare (TV_V2_UNAVAILABLE line
+      # above) is a blocked launch, reported like the first prepare's.
+      if ! tv_v2_prepare "$VM_NAME" true; then
+        log_warn "Not launching '$VM_NAME': its emulator-v2 files could not be prepared (see above)."
+        exit 0
+      fi
       tv_v2_start "$VM_NAME" || exit 1
     else
       # em-cli writes hwVirtualization=false into the fresh profile when it could

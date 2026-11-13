@@ -40,6 +40,8 @@
   중 하나이며(`TV_V2_UNAVAILABLE=prepare_failed`), 부팅 시간 초과로 보고하지 않습니다. 같은 이름의
   이전 VM이 남긴 emulator-v2가 실행 중이어도 `create`는 새 VM을 준비하지만, `create --launch`는
   `still_running`으로 멈추고, `--launch` 없는 `create`는 그 에뮬레이터를 먼저 멈추라고 경고합니다.
+  나중에 실행할 때 그 에뮬레이터를 새 VM의 것으로 알고 기다리게 되므로, emulator-v2를 아직 쓸 수
+  없을 때도 이 경고를 냅니다.
   `qemu-img`가 읽지 못한 디스크는 "rebase 필요"로 보지 않고, 다른 동의보다 먼저
   `user_input_required`(`disk_info_failed`)로 보고하며, `--rebase-disk`를 주거나 `create`가 방금
   만든 VM일 때만 다시 만듭니다. 다시 실행할 명령에는 이미 받은 동의 플래그와 기본값이 아닌
