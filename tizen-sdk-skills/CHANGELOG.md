@@ -48,6 +48,13 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
 
 ### Fixed
 
+- **TV emulator create on Apple Silicon Macs no longer fails.** `tizen-emulator-manager.sh`
+  re-runs itself with a bash 4+ (`require_bash4`), and on a Mac with Intel Homebrew that is
+  `/usr/local/bin/bash` under Rosetta, where `uname -m` says `x86_64`. The emulator-v2 gate then
+  picked em-cli, which fails with `TIZEN_SDK_EMULATOR_E003` (HAXM). The gate now also reads
+  `sysctl hw.optional.arm64`. `create --launch` also crashed with `SDB: unbound variable`
+  when em-cli refused the launch, and snapshotted the connected serials only after the launch,
+  so a VM that connected quickly was never seen as new; both are fixed.
 - **`tizen-tv-sdk-install-from-zip` detects the TV version from current bundles again.** It read
   the version from the field after the last `_` of each inner ZIP name, but names are
   `<name>_<version>_<os>-<bits>` (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`), so it read

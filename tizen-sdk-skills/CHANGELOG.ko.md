@@ -47,6 +47,13 @@
 
 ### 수정
 
+- **Apple Silicon Mac에서 TV 에뮬레이터 생성이 더 이상 실패하지 않습니다.**
+  `tizen-emulator-manager.sh`는 bash 4 이상으로 자신을 다시 실행하는데(`require_bash4`), Intel
+  Homebrew를 쓰는 Mac에서는 Rosetta로 도는 `/usr/local/bin/bash`가 선택되어 `uname -m`이
+  `x86_64`를 돌려줍니다. 그래서 emulator-v2 경로 대신 em-cli가 선택되어
+  `TIZEN_SDK_EMULATOR_E003`(HAXM)으로 실패했습니다. 이제 `sysctl hw.optional.arm64`도 확인합니다.
+  `create --launch`에서 em-cli가 실행을 거부하면 `SDB: unbound variable`로 죽던 문제와, 연결된
+  시리얼을 실행 후에야 기록해서 빨리 연결된 VM을 새 VM으로 알아보지 못하던 문제도 고쳤습니다.
 - **`tizen-tv-sdk-install-from-zip`이 최신 번들에서 TV 버전을 다시 감지합니다.** 내부 ZIP 이름의
   마지막 `_` 뒤를 버전으로 읽었는데, 이름 형식이 `<이름>_<버전>_<os>-<bits>`
   (`TV-SAMSUNG-Public_10.0.0_macos-64.zip`)라서 `macos-64`를 읽었습니다. 그래서 버전을 찾지 못하고

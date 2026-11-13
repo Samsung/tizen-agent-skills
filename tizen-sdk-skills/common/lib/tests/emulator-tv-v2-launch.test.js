@@ -134,10 +134,48 @@ const SCRIPT_PATH = path.resolve(
 const STUB_EM_CLI = `#!/usr/bin/env bash
 printf 'em-cli %s\\n' "$*" >> "$STUB_LOG"
 case "\${1:-}" in
-  list-vm) echo "tv            stopped" ;;
-  launch) echo "em-cli launch must not run on the emulator-v2 path"; touch "$STUB_STATE/emcli_launch" ;;
+  list-vm)
+    if [ "\${STUB_NO_VM:-0}" != "1" ] || [ -f "$STUB_STATE/created" ]; then echo "tv            stopped"; fi
+    ;;
+  launch)
+    touch "$STUB_STATE/emcli_launch"
+    # em-cli on Apple Silicon: HAXM is missing; error on stdout, exit 0.
+    if [ "\${STUB_EMCLI_LAUNCH_FAILS:-0}" = "1" ]; then
+      echo "Error: Failed to start this VM."
+      echo "Your system cannot support HW virtualization."
+    fi
+    ;;
+  create)
+    # What em-cli makes: the VM folder, its conf and a disk on the v1 base.
+    mkdir -p "$STUB_VM_DIR"
+    printf '%s' "$STUB_VM_CONF" > "$STUB_VM_DIR/vm_launch.conf"
+    : > "$STUB_VM_DIR/emulimg-tv.x86_64"
+    touch "$STUB_STATE/created"
+    echo "New virtual machine is created"
+    ;;
+  detail)
+    echo "tv"
+    echo "  Platform          : tv-samsung-10.0-x86_64"
+    echo "  Template          : HD1080 TV"
+    echo "  Resolution        : 1920x1080"
+    ;;
 esac
 exit 0
+`;
+
+// An Apple Silicon Mac seen from an Intel (Rosetta) bash, which is what
+// require_bash4's re-exec with /usr/local/bin/bash gives: uname -m says
+// x86_64, sysctl hw.optional.arm64 still says 1.
+const STUB_UNAME = `#!/usr/bin/env bash
+case "\${1:-}" in
+  -m) echo x86_64 ;;
+  *) echo Darwin ;;
+esac
+`;
+const STUB_SYSCTL = `#!/usr/bin/env bash
+case "$*" in
+  *hw.optional.arm64*) echo "\${STUB_HW_ARM64:-1}" ;;
+esac
 `;
 
 // Reports the VM only once the stub emulator-v2 recorded its start.
@@ -181,7 +219,12 @@ touch "$STUB_STATE/launched"
 sleep 20
 `;
 
-function makeTree({ quarantine = false, v1Disk = false, withV2 = true } = {}) {
+function makeTree({
+  quarantine = false,
+  v1Disk = false,
+  withV2 = true,
+  noVm = false,
+} = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "tizen-tv-v2-test-"));
   const sdk = path.join(root, "sdk");
   const home = path.join(root, "home");
@@ -217,21 +260,30 @@ function makeTree({ quarantine = false, v1Disk = false, withV2 = true } = {}) {
   );
 
   const vmDir = path.join(home, "tizen-sdk-data", "emulator", "vms", "tv");
-  fs.mkdirSync(vmDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(vmDir, "vm_launch.conf"),
-    [
-      "[[Emulator]]",
-      `studio_path="${sdk}"`,
-      "profile=tv-samsung",
-      "platform_version=tizen-10.0",
-      "display_resolution=3840x1080",
-      `skin_path=${tv}/emulator-resources/skins/tv-3840x1080`,
-      "ram=2048",
-      "",
-    ].join("\n"),
-  );
-  if (v1Disk) fs.writeFileSync(path.join(vmDir, "emulimg-tv.x86_64"), "");
+  const vmConf = [
+    "[[Emulator]]",
+    `studio_path="${sdk}"`,
+    "profile=tv-samsung",
+    "platform_version=tizen-10.0",
+    "display_resolution=3840x1080",
+    `skin_path=${tv}/emulator-resources/skins/tv-3840x1080`,
+    "ram=2048",
+    "",
+  ].join("\n");
+  // noVm: the VM does not exist yet; the stub em-cli create makes it.
+  if (!noVm) {
+    fs.mkdirSync(vmDir, { recursive: true });
+    fs.writeFileSync(path.join(vmDir, "vm_launch.conf"), vmConf);
+    if (v1Disk) fs.writeFileSync(path.join(vmDir, "emulimg-tv.x86_64"), "");
+  }
+
+  // PATH-prepended uname / sysctl stubs, used only by the Rosetta tests.
+  const rosettaBin = path.join(root, "rosetta-bin");
+  fs.mkdirSync(rosettaBin);
+  fs.writeFileSync(path.join(rosettaBin, "uname"), STUB_UNAME, { mode: 0o755 });
+  fs.writeFileSync(path.join(rosettaBin, "sysctl"), STUB_SYSCTL, {
+    mode: 0o755,
+  });
 
   if (quarantine && withV2) {
     spawnSync("xattr", [
@@ -251,6 +303,8 @@ function makeTree({ quarantine = false, v1Disk = false, withV2 = true } = {}) {
     v2,
     base,
     vmDir,
+    vmConf,
+    rosettaBin,
     state,
     log: path.join(root, "log"),
   };
@@ -268,6 +322,8 @@ function run(tree, args, env = {}) {
       TIZEN_SDK_PATH: tree.sdk,
       STUB_LOG: tree.log,
       STUB_STATE: tree.state,
+      STUB_VM_DIR: tree.vmDir,
+      STUB_VM_CONF: tree.vmConf,
       TIZEN_TV_V2_LAUNCH: "force",
       TIZEN_TV_V2_START_CHECK: "1",
       TIZEN_HOMESCREEN_CHECK: "off",
@@ -489,6 +545,115 @@ console.log("\n--- VM already running ---");
   check(
     "the script says the VM is already running",
     /is already running and connected/.test(r.output),
+  );
+  cleanup(tree);
+}
+
+// --- 6c. Apple Silicon detected under a Rosetta (Intel) bash ----------------
+// require_bash4 re-execs with /usr/local/bin/bash, an Intel binary on a Mac
+// with Intel Homebrew; `uname -m` then says x86_64 and the auto gate used to
+// pick em-cli, which cannot boot the VM (HAXM).
+console.log("\n--- auto gate under Rosetta ---");
+{
+  const tree = makeTree({ v1Disk: true });
+  const env = {
+    PATH: `${tree.rosettaBin}:${process.env.PATH}`,
+    TIZEN_TV_V2_LAUNCH: "auto",
+  };
+  const r = run(tree, ["-a", "launch", "-n", "tv", "-t", "5"], env);
+  check(
+    "uname -m x86_64 + hw.optional.arm64=1 takes the emulator-v2 path",
+    /^TV_V2_NEEDS=rebase_disk$/m.test(r.output) &&
+      !r.state.includes("emcli_launch"),
+    r.output,
+  );
+  cleanup(tree);
+
+  const intel = makeTree({ v1Disk: true });
+  const r2 = run(intel, ["-a", "launch", "-n", "tv", "-t", "1"], {
+    ...env,
+    PATH: `${intel.rosettaBin}:${process.env.PATH}`,
+    STUB_HW_ARM64: "0",
+  });
+  check(
+    "an Intel Mac (hw.optional.arm64=0) keeps em-cli",
+    r2.state.includes("emcli_launch") && !/^TV_V2_/m.test(r2.output),
+    r2.output,
+  );
+  cleanup(intel);
+}
+
+// --- 6d. create --launch of a new TV VM: no consent, boots with emulator-v2 -
+console.log("\n--- create --launch (Apple Silicon) ---");
+{
+  const tree = makeTree({ noVm: true });
+  const r = run(
+    tree,
+    [
+      "-a",
+      "create",
+      "-n",
+      "tv",
+      "-p",
+      "tv",
+      "-P",
+      "tv-samsung-10.0-x86_64",
+      "-l",
+      "-t",
+      "20",
+    ],
+    { STUB_NO_VM: "1" },
+  );
+  check("create --launch exits 0", r.code === 0, r.output);
+  check(
+    "the new VM's disk is rebased without asking (nothing to lose)",
+    r.diskBacking === tree.base && !/^TV_V2_NEEDS=/m.test(r.output),
+    r.output,
+  );
+  check(
+    "TV_V2_PREPARED and TV_V2_LAUNCH are printed",
+    /^TV_V2_PREPARED=tv$/m.test(r.output) &&
+      /^TV_V2_LAUNCH=tv$/m.test(r.output),
+    r.output,
+  );
+  check("em-cli launch was not run", !r.state.includes("emcli_launch"));
+  check(
+    "the new emulator is reported (serial snapshot taken before the launch)",
+    /^VM_LAUNCHED=emulator-26101$/m.test(r.output),
+    r.output,
+  );
+  cleanup(tree);
+}
+
+// --- 6e. create --launch whose em-cli launch fails: no unbound $SDB --------
+console.log("\n--- create --launch, em-cli launch fails ---");
+{
+  const tree = makeTree({ noVm: true });
+  const r = run(
+    tree,
+    [
+      "-a",
+      "create",
+      "-n",
+      "tv",
+      "-p",
+      "tv",
+      "-P",
+      "tv-samsung-10.0-x86_64",
+      "-l",
+      "-t",
+      "1",
+    ],
+    {
+      STUB_NO_VM: "1",
+      TIZEN_TV_V2_LAUNCH: "off",
+      STUB_EMCLI_LAUNCH_FAILS: "1",
+    },
+  );
+  check(
+    "the launch failure is reported without 'SDB: unbound variable'",
+    !/unbound variable/.test(r.output) && /Failed to launch/.test(r.output),
+    r.output,
   );
   cleanup(tree);
 }

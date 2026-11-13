@@ -1103,8 +1103,9 @@ launch_vm() {
     # em-cli refuses to start a VM that is already running. If sdb now shows
     # that VM online (its name resolved while em-cli was failing), that is the
     # outcome the caller wanted — report it as success.
-    local running_serial
-    running_serial=$("$SDB" devices 2>/dev/null | grep -E '[[:space:]]device([[:space:]]|$)' | awk -v vm="$vm" '$3 == vm {print $1; exit}' || true)
+    local running_serial="" sdb="${SDB:-}"
+    [ -n "$sdb" ] || sdb=$(find_tizen_tool sdb 2>/dev/null) || sdb=""
+    [ -n "$sdb" ] && running_serial=$("$sdb" devices 2>/dev/null | grep -E '[[:space:]]device([[:space:]]|$)' | awk -v vm="$vm" '$3 == vm {print $1; exit}' || true)
     if [ -n "$running_serial" ]; then
       log_warn "em-cli refused the launch, but VM '$vm' is already running and connected: $running_serial"
       echo "DEVICE_SERIAL=$running_serial"
@@ -1280,12 +1281,20 @@ USE_TV_V2=false
 
 # $1 = VM name. Returns 0 when this VM takes the emulator-v2 path, and sets the
 # TV_V2_* paths. Host gate: TIZEN_TV_V2_LAUNCH (auto = macOS arm64 only).
+# Apple Silicon, also when this script runs under Rosetta: require_bash4 may
+# re-exec it with an Intel Homebrew bash (/usr/local/bin/bash), where
+# `uname -m` says x86_64. hw.optional.arm64 reports the hardware.
+is_apple_silicon() {
+  [ "$(uname -m 2>/dev/null)" = "arm64" ] && return 0
+  [ "$(sysctl -n hw.optional.arm64 2>/dev/null)" = "1" ]
+}
+
 tv_v2_applies() {
   local vm="$1" mode="${TIZEN_TV_V2_LAUNCH:-auto}" d conf
   case "$mode" in
     off) return 1 ;;
     force) ;;
-    *) [ "$OS" = "mac" ] && [ "$(uname -m 2>/dev/null)" = "arm64" ] || return 1 ;;
+    *) [ "$OS" = "mac" ] && is_apple_silicon || return 1 ;;
   esac
   TV_V2_VM_DIR=""
   for d in "$(get_sdk_path)-data/emulator/vms/$vm" \
@@ -2261,6 +2270,10 @@ if [ "$ACTION" = "create" ]; then
 
   # Optionally launch
   if [ "$LAUNCH" = true ]; then
+    SDB=$(find_tizen_tool sdb) || { log_error "sdb not found."; exit 1; }
+    # Snapshot the connected serials BEFORE launching, so a VM that connects
+    # quickly is still recognised as the new one.
+    PREVIOUS_SERIALS=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' | awk '{print $1}' | sort | tr '\n' ' ' || true)
     log_info "Launching emulator VM: $VM_NAME"
     if [ "$USE_TV_V2" = unavailable ]; then
       log_warn "Not launching '$VM_NAME': emulator-v2 is not ready (see above), and em-cli cannot boot a TV VM on Apple Silicon."
@@ -2281,10 +2294,7 @@ if [ "$ACTION" = "create" ]; then
     fi
 
     # Wait for sdb connection
-    SDB=$(find_tizen_tool sdb) || { log_error "sdb not found."; exit 1; }
     log_info "Waiting for emulator to connect to sdb..."
-
-    PREVIOUS_SERIALS=$("$SDB" devices 2>/dev/null | grep -v '^List' | grep -v '^$' | grep -E '[[:space:]]device([[:space:]]|$)' | awk '{print $1}' | sort | tr '\n' ' ' || true)
 
     ELAPSED=0
     INTERVAL=3
