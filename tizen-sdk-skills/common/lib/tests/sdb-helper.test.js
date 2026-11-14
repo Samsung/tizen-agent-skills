@@ -525,6 +525,13 @@ console.log("\nTest 6b: launch falls back to the Samsung TV launcher");
     launch.accept("app_id[orgXtizenXdali-demo] launched"),
     false,
   );
+  check(
+    "  launch: failure hint points to tizen-dlog-analyzer with the app id",
+    /tizen-dlog-analyzer.*app-launch org\.tizen\.dali-demo/.test(
+      launch.failureHint || "",
+    ),
+    true,
+  );
 }
 
 // runWithFallbacks: callers that pass no accept predicate (screenshot chain)

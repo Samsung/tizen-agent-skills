@@ -148,6 +148,21 @@ returns the result as a Standard JSON Envelope. See the
 [Usage Scenarios & Walkthrough Guide](usage/usage.en.md) for end-to-end examples and the
 [Skills Reference](docs/SKILLS_REFERENCE.en.md) for the full list of trigger phrases.
 
+### When an app does not start or crashes
+
+If an app fails to launch, exits right after starting, freezes or misbehaves, describe the
+symptom and the `tizen-dlog-analyzer` skill collects the device logs, relaunches the app while
+you reproduce the problem, and reports the crash or error with a suggested cause:
+
+```
+The app closes right after it starts — find out why
+org.example.myapp crashes when I press OK, analyse the logs
+앱이 실행되자마자 꺼져요, 원인 분석해줘
+```
+
+After `install-app --run` or a `launch` request, the assistant offers this log analysis on its
+own when the launch failed or the app did not keep running.
+
 ### Updating to a new release
 
 When a new session starts, the setup-installed hook checks GitHub for a newer

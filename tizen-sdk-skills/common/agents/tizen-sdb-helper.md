@@ -151,6 +151,7 @@ command (serial, arguments) between preview and execution.
 | `io_error` mentioning sdb not found | SDK may not be installed → `tizen-sdk-install` |
 | `io_error` "Remote shell command exited with code N" | The device-side command failed; relay `errors[0].message` verbatim |
 | `io_error` "All methods failed" (screenshot) | Screenshot fallback chain exhausted → hand off to `tizen-screenshot` |
+| `io_error` "All methods failed" (launch) naming `tizen-dlog-analyzer` | The app did not launch → report it and offer the log analysis unasked; on agreement hand off to `tizen-dlog-analyzer`'s startup flow from the message |
 
 ## Intent quick reference
 

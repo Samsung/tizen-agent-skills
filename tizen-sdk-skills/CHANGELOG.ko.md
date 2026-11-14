@@ -75,6 +75,13 @@
   `docs/platform-gbs-build.md`의 문제 해결 섹션도 Tizen Studio 설치 페이지나 단순한
   `apt-get install gbs` 대신 이 저장소(HTTPS)를 알려 주며, tizen-cli GBS 플러그인을 확인하라는
   안내는 뺐습니다.
+- **앱 실행이 실패하거나 바로 꺼지면 `tizen-dlog-analyzer`를 안내합니다.** `install-app --run`이
+  앱을 실행하지 못했거나 앱이 실행 직후 꺼지면(`app_running: false`), envelope의 `warnings`에
+  `tizen-dlog-analyzer`와 시작 단계 흐름(`start start-monitoring` → `app-launch <app-id>` → 재현 →
+  `stop` → `check`, 앱 ID가 없는 `.rpm`은 `install-app --run`으로 다시 실행)을 알려 주는 줄이 들어갑니다. `sdb-helper`의 `launch`가 실패해도 오류 메시지에
+  같은 줄이 붙습니다. install-app과 sdb-helper의 skill·agent 문서는 이때 사용자가 묻지 않아도 로그
+  분석을 제안하라고 안내하고, README와 quick guide에는 예시 요청과 함께 "앱이 실행되지 않거나 죽을
+  때" 항목을 추가했습니다.
 
 ### 수정
 

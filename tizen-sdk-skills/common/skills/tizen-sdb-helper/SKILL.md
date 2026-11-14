@@ -208,6 +208,7 @@ Handoff:
 | `multiple_devices` | 2+ devices | Ask which serial, re-run with `--serial`. |
 | `sdk_path_not_set` | SDK path missing | `tizen-sdk-init`. |
 | `io_error` mentioning sdb not found | SDK not installed | `tizen-sdk-install`. |
+| `io_error` on `launch` whose message names `tizen-dlog-analyzer` | The app did not launch | Report the failure and offer the log analysis without waiting to be asked; on agreement run `tizen-dlog-analyzer`'s startup flow from the message (`start start-monitoring` → `app-launch <app-id>` → user reproduces → `stop` → `check`). |
 | `io_error` "Remote shell command exited with code N" | Device command failed | Relay `errors[0].message` verbatim (keep sdb error codes such as `WGT_CRT_ERR` intact). |
 
 ## 결과 보고 — Envelope는 반드시 사용자에게 보여준다

@@ -3885,6 +3885,19 @@ async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
   });
 }
 
+/**
+ * Warning that install-app and sdb-helper attach when an app fails to launch or
+ * exits right after starting, so the agent offers this skill's startup flow
+ * instead of stopping at the failure. An .rpm platform app is not registered
+ * with app_launcher and has no app id, so app-launch cannot relaunch it.
+ */
+function appStartupLogHint(appId, isRpm = false) {
+  const relaunch = isRpm
+    ? "relaunch it with install-app --run (an .rpm platform app has no app id for app-launch)"
+    : `app-launch ${appId || "<app-id>"}`;
+  return `To find out why the app did not keep running, offer the user a log analysis with the tizen-dlog-analyzer skill: start start-monitoring → ${relaunch} → let the user reproduce → stop → check.`;
+}
+
 module.exports = {
   startDlogAnalyzer,
   stopDlogAnalyzer,
@@ -3912,6 +3925,7 @@ module.exports = {
   clearDeviceLogs,
   collectCrashReports,
   // Pure helpers (unit-tested without a device)
+  appStartupLogHint,
   CRASH_DUMP_DIRS,
   parseCrashDumpDirs,
   buildCrashListScript,
