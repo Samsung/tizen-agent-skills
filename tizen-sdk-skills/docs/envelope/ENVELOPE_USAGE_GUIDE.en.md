@@ -168,6 +168,7 @@ formatDeviceList([{ device_id: 'emulator-26101', device_name: 'Tizen 10.0 Mobile
 | `template_not_found` | TIZEN_SDK_TEMPLATE_E001 | Template not found |
 | `project_creation_failed` | TIZEN_SDK_PROJECT_E001 | Project creation failed |
 | `build_failed` | TIZEN_SDK_BUILD_E001 | Build failed |
+| `gbs_not_found` | TIZEN_SDK_BUILD_E002 | GBS not installed (Platform build) — install it with `suggested_fix.command`, then retry |
 | `emulator_not_found` | TIZEN_SDK_EMULATOR_E001 | Emulator not found |
 | `emulator_already_running` | TIZEN_SDK_EMULATOR_E002 | Emulator already running |
 | `io_error` | TIZEN_SDK_IO_E001 | File I/O error |

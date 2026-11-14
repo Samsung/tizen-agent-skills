@@ -271,6 +271,11 @@ function gbsOutputDirs(projectPath, output) {
 const GBS_ARCHES = ["armv7l", "aarch64", "i586", "x86_64"];
 const DEFAULT_GBS_ARCH = "x86_64";
 
+/** tizen-build-project.sh exits 6 when neither a tizen-cli GBS plugin nor `gbs` is found. */
+const GBS_NOT_FOUND_EXIT = 6;
+const GBS_INSTALL_COMMAND =
+  'echo "deb [trusted=yes] https://download.tizen.org/tools/latest-release/Ubuntu_$(lsb_release -rs)/ /" | sudo tee /etc/apt/sources.list.d/tizen-tools.list && sudo apt-get update && sudo apt-get install gbs';
+
 /**
  * Standalone RPK resource projects are packaged by the legacy `tizen` CLI
  * (`tizen package -t rpk`), not by `tz build`/`tz pack`. Mirrors the marker
@@ -1687,6 +1692,20 @@ async function buildProject(
         .filter(Boolean)
         .join("\n");
       const logPath = saveBuildLog(fullOutput);
+      if (platformProject && error.status === GBS_NOT_FOUND_EXIT) {
+        return formatError(
+          command,
+          "gbs_not_found",
+          formatBuildFailureMessage(
+            "GBS is not installed. Platform projects are built with GBS on a Linux host. " +
+              "Install it (Ubuntu: add the Tizen tools repository, then apt-get install gbs) and re-run the build.",
+            [],
+            logPath,
+          ),
+          GBS_INSTALL_COMMAND,
+          startTime,
+        );
+      }
       const diagnostics = extractBuildDiagnostics(fullOutput);
       return formatError(
         command,

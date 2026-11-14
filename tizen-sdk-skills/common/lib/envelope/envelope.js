@@ -202,6 +202,10 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_BUILD_E001",
     error_category: "build_failed",
   },
+  GBS_NOT_FOUND: {
+    error_code: "TIZEN_SDK_BUILD_E002",
+    error_category: "gbs_not_found",
+  },
 
   // 에뮬레이터 관련
   EMULATOR_NOT_FOUND: {

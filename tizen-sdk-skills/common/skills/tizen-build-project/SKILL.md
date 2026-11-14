@@ -273,6 +273,9 @@ Rules:
 - **Multi-step** (e.g., "빌드해서 설치해줘") → Continue to next step.
 - SDK or `tz` not found → `tizen-sdk-install`
 - DotNET build fails with exit 3 (dotnet not found) → `tizen-dotnet-setup` then retry
+- Platform build fails with `gbs_not_found` (exit 6: no tizen-cli GBS plugin and no `gbs`
+  on PATH) → show the user `suggested_fix.command` (it adds the Tizen tools apt repository
+  and installs `gbs`, so it needs `sudo`); do not retry the build until GBS is installed
 - Platform build fails with exit 4 (DALi without C++17) → add `set(CMAKE_CXX_STANDARD 17)`
   to the project's `CMakeLists.txt`, then retry
 - `--clean` fails with exit 5 (build output could not be fully removed — a file

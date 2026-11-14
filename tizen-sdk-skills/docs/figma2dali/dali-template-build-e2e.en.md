@@ -558,7 +558,7 @@ tizen-cli tizen-sdk screenshot
 |---------|-------|-----|
 | `fatal error: dali/dali.h: No such file or directory` | `BuildRequires` packages not in GBS environment | Verify `pkgconfig(dali2-core)` etc. from `.spec` file are installed |
 | `error: Bad exit status from /var/tmp/rpm-tmp.XXX (%build)` | Compilation error or missing dependencies | Check `details` array in the response. If empty: `cat ~/GBS-ROOT/local/repos/tizen/<arch>/logs/fail/<app-name>-<version>-1/log.txt` |
-| `GBS is not available` | GBS not installed | `sudo apt-get install gbs` or check tizen-cli GBS plugin |
+| `GBS is not available` | GBS not installed (`gbs_not_found`, exit 6) | Add the Tizen tools repository, then `apt-get install gbs` — run `suggested_fix.command`; see [platform-gbs-build.en.md](../platform-gbs-build.en.md#gbs-is-not-available) |
 | `No local package repository for arch x86_64` | GBS local repo has no packages for the target arch | Verify `.gbs.conf` configuration and Tizen platform repository profile |
 
 > Do **not** re-run the same build when it fails. Check the `details` array in the response Envelope first. See [Build Failure Diagnostics](build-failure-diagnostics.en.md) for details.

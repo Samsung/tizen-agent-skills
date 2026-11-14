@@ -378,17 +378,14 @@ RPM 플랫폼 앱은 디바이스에 `su`가 있으면 `sdb shell`을 통해 **`
 
 ### GBS is not available
 
-**원인:** GBS가 설치되어 있지 않음  
-**해결:**
+**원인:** GBS가 설치되어 있지 않음. 스크립트는 6으로 종료하고, envelope은 `gbs_not_found`
+(`TIZEN_SDK_BUILD_E002`)와 함께 설치 명령을 `suggested_fix.command`에 담아 보고합니다.  
+**해결:** Ubuntu 기본 저장소에는 `gbs`가 없으므로 Tizen tools 저장소를 먼저 추가합니다. 저장소에
+서명이 없어서 `[trusted=yes]`가 필요합니다.
 
 ```bash
-sudo apt-get install gbs
-```
-
-또는 tizen-cli GBS 플러그인 설치 확인:
-
-```bash
-tizen-cli plugin list
+echo "deb [trusted=yes] https://download.tizen.org/tools/latest-release/Ubuntu_$(lsb_release -rs)/ /" | sudo tee /etc/apt/sources.list.d/tizen-tools.list
+sudo apt-get update && sudo apt-get install gbs
 ```
 
 ### 'string_view' in namespace 'std' does not name a type
