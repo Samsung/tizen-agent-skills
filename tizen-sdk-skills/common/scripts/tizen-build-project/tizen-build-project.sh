@@ -279,12 +279,9 @@ resolve_gbs() {
     # 3) Neither found — print install guidance
     log_error "GBS is not available. GBS is required to build platform (GBS-buildable) projects."
     echo "" >&2
-    echo "To install GBS:" >&2
-    echo "  Ubuntu/Debian:" >&2
-    echo "    sudo apt-get install gbs" >&2
-    echo "" >&2
-    echo "  Or install via Tizen SDK tools:" >&2
-    echo "    See: https://docs.tizen.org/application/tizen-studio/setup/install-sdk/" >&2
+    echo "To install GBS on Ubuntu (add the Tizen tools repository first):" >&2
+    echo "    echo \"deb [trusted=yes] http://download.tizen.org/tools/latest-release/Ubuntu_\$(lsb_release -rs)/ /\" | sudo tee /etc/apt/sources.list.d/tizen-tools.list" >&2
+    echo "    sudo apt-get update && sudo apt-get install gbs" >&2
     echo "" >&2
     echo "  Or check if a tizen-cli GBS plugin is available:" >&2
     echo "    tizen-cli plugin list" >&2
@@ -380,9 +377,9 @@ build_platform_project() {
     # guaranteed failure several minutes into the GBS run.
     check_dali_cxx_standard "$project_path" || exit 4
 
-    # Resolve GBS executable (3-level fallback)
+    # Resolve GBS executable (3-level fallback); exit 6 tells the runner GBS is missing
     local gbs_cmd
-    gbs_cmd=$(resolve_gbs) || exit 1
+    gbs_cmd=$(resolve_gbs) || exit 6
 
     # GBS requires a git repository
     ensure_git_repo "$project_path"

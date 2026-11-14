@@ -11,6 +11,8 @@
  *     accepted values
  *   - a non-default --arch on a non-Platform project is ignored with a
  *     warning; the x86_64 default (which tizen-cli always passes) is silent
+ *   - a Platform build whose script exits 6 (GBS missing) reports
+ *     gbs_not_found with the install command; exit 1 stays build_failed
  *
  * plugin-cache and the signing preflight are stubbed, so no SDK, GBS or
  * device is touched; the stub script "produces" one package per run.
@@ -36,6 +38,7 @@ process.env.TIZEN_RDS_ENABLED = "0";
 
 const calls = [];
 let outputDir = null;
+let scriptFailure = null;
 const projectPath = require.resolve("../core/project");
 const originalLoad = Module._load;
 Module._load = function mockBuildDeps(request, parent, isMain) {
@@ -45,6 +48,7 @@ Module._load = function mockBuildDeps(request, parent, isMain) {
         resolveScript: () => ({ scriptPath: "/stub/tizen-build-project.sh" }),
         execPluginScript: (_script, winArgs, unixArgs) => {
           calls.push({ winArgs, unixArgs });
+          if (scriptFailure) throw scriptFailure;
           const pkg = path.join(outputDir, `app-${calls.length}.rpm`);
           fs.writeFileSync(pkg, "");
           // File times tick coarser than Date.now() on some filesystems (NTFS
@@ -122,6 +126,33 @@ const archOf = (call) => (/--arch="([^"]*)"/.exec(call.unixArgs) || [])[1];
       );
       check(`--arch ${arch}: script not run`, calls.length, 0);
     }
+
+    // The script exits 6 when GBS is missing; other exits stay build_failed.
+    scriptFailure = Object.assign(new Error("exit 6"), {
+      status: 6,
+      stderr: "[ERROR] GBS is not available.\n",
+    });
+    r = await buildProject(platform, "Debug");
+    let error = (r.errors && r.errors[0]) || {};
+    check(
+      "platform, exit 6: gbs_not_found",
+      error.error_category,
+      "gbs_not_found",
+    );
+    check(
+      "platform, exit 6: suggested fix installs gbs",
+      /apt-get install gbs/.test(error.suggested_fix?.command || ""),
+      true,
+    );
+    scriptFailure.status = 1;
+    r = await buildProject(platform, "Debug");
+    error = (r.errors && r.errors[0]) || {};
+    check(
+      "platform, exit 1: build_failed",
+      error.error_category,
+      "build_failed",
+    );
+    scriptFailure = null;
 
     outputDir = native;
     calls.length = 0;

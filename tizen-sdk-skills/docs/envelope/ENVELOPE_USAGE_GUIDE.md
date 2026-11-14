@@ -225,6 +225,7 @@ console.log(JSON.stringify(
 | `template_not_found` | TIZEN_SDK_TEMPLATE_E001 | 템플릿을 찾을 수 없음 |
 | `project_creation_failed` | TIZEN_SDK_PROJECT_E001 | 프로젝트 생성 실패 |
 | `build_failed` | TIZEN_SDK_BUILD_E001 | 빌드 실패 |
+| `gbs_not_found` | TIZEN_SDK_BUILD_E002 | GBS 미설치 (Platform 빌드) — `suggested_fix.command`로 설치 후 재시도 |
 | `emulator_not_found` | TIZEN_SDK_EMULATOR_E001 | 에뮬레이터를 찾을 수 없음 |
 | `emulator_already_running` | TIZEN_SDK_EMULATOR_E002 | 에뮬레이터가 이미 실행 중 |
 | `io_error` | TIZEN_SDK_IO_E001 | 파일 I/O 에러 |

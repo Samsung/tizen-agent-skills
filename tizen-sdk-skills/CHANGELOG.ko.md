@@ -67,6 +67,12 @@
   `install_required`(`TIZEN_SDK_PRECHECK_E001`)와 함께 `needs_action`으로 보고합니다.
   `errors[]`와 `suggested_fix` 형태는 같고 종료 코드도 그대로 `1`입니다. skill과 agent 문서는
   `needs_action`이면 `suggested_fix.command`를 실행하라고 안내합니다.
+- **GBS가 없을 때 Platform 빌드가 `gbs_not_found`를 보고합니다.** tizen-cli GBS 플러그인도 없고
+  PATH에 `gbs`도 없으면 `tizen-build-project.sh`가 1 대신 6으로 종료하고, 러너는 일반
+  `build_failed` 대신 새 카테고리 `gbs_not_found`(`TIZEN_SDK_BUILD_E002`)를 보고합니다.
+  `suggested_fix.command`는 Tizen tools apt 저장소를 추가하고 `gbs`를 설치하는 명령이라, 설치
+  안내를 저장된 빌드 로그에서만 볼 수 있던 문제가 없어졌습니다. 스크립트의 안내도 Tizen Studio
+  설치 페이지 대신 이 저장소를 알려 줍니다.
 
 ### 수정
 

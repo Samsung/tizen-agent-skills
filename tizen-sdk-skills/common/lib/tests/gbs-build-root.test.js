@@ -272,6 +272,23 @@ try {
       true,
     );
     if (res.status !== 0) console.log(res.stdout, res.stderr);
+
+    // No gbs and no tizen-cli on PATH: exit 6 with the install guidance.
+    fs.rmSync(path.join(bin, "gbs"));
+    const hostHasGbs = ["/usr/bin", "/bin"].some((d) =>
+      ["gbs", "tizen-cli"].some((t) => fs.existsSync(path.join(d, t))),
+    );
+    if (hostHasGbs) {
+      console.log("SKIP gbs-missing check (gbs or tizen-cli installed)");
+    } else {
+      res = runScript();
+      check("no gbs on PATH (exit 6)", res.status, 6);
+      check(
+        "install guidance printed",
+        res.stderr.includes("apt-get install gbs"),
+        true,
+      );
+    }
   }
 } finally {
   fs.rmSync(tmp, { recursive: true, force: true });

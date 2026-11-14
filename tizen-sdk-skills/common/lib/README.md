@@ -242,6 +242,7 @@ console.log(JSON.stringify(response));
 | `template_not_found`       | TIZEN_SDK_TEMPLATE_E001 |
 | `project_creation_failed`  | TIZEN_SDK_PROJECT_E001  |
 | `build_failed`             | TIZEN_SDK_BUILD_E001    |
+| `gbs_not_found`            | TIZEN_SDK_BUILD_E002    |
 | `emulator_not_found`       | TIZEN_SDK_EMULATOR_E001 |
 | `emulator_already_running` | TIZEN_SDK_EMULATOR_E002 |
 | `io_error`                 | TIZEN_SDK_IO_E001       |

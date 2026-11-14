@@ -69,6 +69,12 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   `needs_action` with the new `install_required` category (`TIZEN_SDK_PRECHECK_E001`). The
   `errors[]` and `suggested_fix` shape is unchanged, and the exit code is still `1`. The skill
   and agent docs say to run `suggested_fix.command` on `needs_action`.
+- **A Platform build without GBS reports `gbs_not_found`.** When neither a tizen-cli GBS plugin
+  nor `gbs` is on PATH, `tizen-build-project.sh` now exits 6 instead of 1, and the runner reports
+  the new `gbs_not_found` category (`TIZEN_SDK_BUILD_E002`) instead of a generic `build_failed`.
+  `suggested_fix.command` adds the Tizen tools apt repository and installs `gbs`, so the guidance
+  no longer sits only in the saved build log. The script's guidance now names that repository
+  instead of the Tizen Studio install page.
 
 ### Fixed
 

@@ -110,7 +110,9 @@ Platform projects use **GBS** instead of `tz build`. GBS is resolved via 3-level
 
 1. **tizen-cli GBS plugin** — if a GBS plugin is installed in tizen-cli, it is used
 2. **System-installed `gbs`** — if `gbs` is on PATH, it is used directly
-3. **Neither found** — the error message provides installation guidance
+3. **Neither found** — the script exits 6 and the envelope reports `gbs_not_found`
+   (`TIZEN_SDK_BUILD_E002`) with the install command in `suggested_fix.command`. It needs
+   `sudo`, so show it to the user instead of running it; do not retry the build until GBS is installed.
 
 The build script automatically:
 
