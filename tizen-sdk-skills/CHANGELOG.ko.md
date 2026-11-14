@@ -71,8 +71,10 @@
   PATH에 `gbs`도 없으면 `tizen-build-project.sh`가 1 대신 6으로 종료하고, 러너는 일반
   `build_failed` 대신 새 카테고리 `gbs_not_found`(`TIZEN_SDK_BUILD_E002`)를 보고합니다.
   `suggested_fix.command`는 Tizen tools apt 저장소를 추가하고 `gbs`를 설치하는 명령이라, 설치
-  안내를 저장된 빌드 로그에서만 볼 수 있던 문제가 없어졌습니다. 스크립트의 안내도 Tizen Studio
-  설치 페이지 대신 이 저장소를 알려 줍니다.
+  안내를 저장된 빌드 로그에서만 볼 수 있던 문제가 없어졌습니다. 스크립트의 안내와
+  `docs/platform-gbs-build.md`의 문제 해결 섹션도 Tizen Studio 설치 페이지나 단순한
+  `apt-get install gbs` 대신 이 저장소(HTTPS)를 알려 주며, tizen-cli GBS 플러그인을 확인하라는
+  안내는 뺐습니다.
 
 ### 수정
 

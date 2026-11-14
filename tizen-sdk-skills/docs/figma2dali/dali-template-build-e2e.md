@@ -558,7 +558,7 @@ tizen-cli tizen-sdk screenshot
 |------|------|------|
 | `fatal error: dali/dali.h: No such file or directory` | `BuildRequires` 패키지가 GBS 환경에 없음 | `.spec` 파일의 `pkgconfig(dali2-core)` 등이 설치되어 있는지 확인 |
 | `error: Bad exit status from /var/tmp/rpm-tmp.XXX (%build)` | 컴파일 에러 또는 의존성 누락 | 응답 `details` 배열에서 실제 에러 확인. 비어 있으면 `cat ~/GBS-ROOT/local/repos/tizen/<arch>/logs/fail/<app-name>-<version>-1/log.txt` |
-| `GBS is not available` | GBS 미설치 | `sudo apt-get install gbs` 또는 tizen-cli GBS 플러그인 확인 |
+| `GBS is not available` | GBS 미설치 (`gbs_not_found`, exit 6) | Tizen tools 저장소를 추가한 뒤 `apt-get install gbs` — `suggested_fix.command` 실행. [platform-gbs-build.md](../platform-gbs-build.md#gbs-is-not-available) 참고 |
 | `No local package repository for arch x86_64` | GBS 로컬 저장소에 해당 아키텍처 패키지 없음 | `.gbs.conf` 설정 및 Tizen 플랫폼 저장소 프로파일 점검 |
 
 > 빌드 실패 시 **동일한 빌드를 재실행하지 마세요.** 응답 Envelope의 `details` 배열에서 원인을 먼저 확인하세요. 자세한 내용은 [빌드 실패 진단 정보 개선](build-failure-diagnostics.md)을 참조하세요.

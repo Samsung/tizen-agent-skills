@@ -73,8 +73,10 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   nor `gbs` is on PATH, `tizen-build-project.sh` now exits 6 instead of 1, and the runner reports
   the new `gbs_not_found` category (`TIZEN_SDK_BUILD_E002`) instead of a generic `build_failed`.
   `suggested_fix.command` adds the Tizen tools apt repository and installs `gbs`, so the guidance
-  no longer sits only in the saved build log. The script's guidance now names that repository
-  instead of the Tizen Studio install page.
+  no longer sits only in the saved build log. The script's guidance and the troubleshooting
+  section of `docs/platform-gbs-build.md` now name that repository (over HTTPS) instead of the
+  Tizen Studio install page or a bare `apt-get install gbs`, and no longer suggest checking for a
+  tizen-cli GBS plugin.
 
 ### Fixed
 

@@ -274,7 +274,7 @@ const DEFAULT_GBS_ARCH = "x86_64";
 /** tizen-build-project.sh exits 6 when neither a tizen-cli GBS plugin nor `gbs` is found. */
 const GBS_NOT_FOUND_EXIT = 6;
 const GBS_INSTALL_COMMAND =
-  'echo "deb [trusted=yes] http://download.tizen.org/tools/latest-release/Ubuntu_$(lsb_release -rs)/ /" | sudo tee /etc/apt/sources.list.d/tizen-tools.list && sudo apt-get update && sudo apt-get install gbs';
+  'echo "deb [trusted=yes] https://download.tizen.org/tools/latest-release/Ubuntu_$(lsb_release -rs)/ /" | sudo tee /etc/apt/sources.list.d/tizen-tools.list && sudo apt-get update && sudo apt-get install gbs';
 
 /**
  * Standalone RPK resource projects are packaged by the legacy `tizen` CLI

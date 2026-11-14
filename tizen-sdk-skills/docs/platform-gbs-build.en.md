@@ -387,17 +387,14 @@ If the process is not found after the polling window, the script automatically f
 
 ### GBS is not available
 
-**Cause:** GBS is not installed  
-**Fix:**
+**Cause:** GBS is not installed. The script exits 6 and the envelope reports `gbs_not_found`
+(`TIZEN_SDK_BUILD_E002`) with the install command in `suggested_fix.command`.  
+**Fix:** Ubuntu does not ship `gbs`; add the Tizen tools repository first. The repository is
+unsigned, so the line needs `[trusted=yes]`.
 
 ```bash
-sudo apt-get install gbs
-```
-
-Or check for tizen-cli GBS plugin:
-
-```bash
-tizen-cli plugin list
+echo "deb [trusted=yes] https://download.tizen.org/tools/latest-release/Ubuntu_$(lsb_release -rs)/ /" | sudo tee /etc/apt/sources.list.d/tizen-tools.list
+sudo apt-get update && sudo apt-get install gbs
 ```
 
 ### 'string_view' in namespace 'std' does not name a type
