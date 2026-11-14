@@ -1803,6 +1803,13 @@ async function buildProject(
 }
 
 /**
+ * Templates left out of list-templates. They can still be created by name
+ * (`create-project --template <name>`). The native BasicUI is the plugin's own
+ * template, synced into the SDK by create-project-app.
+ */
+const HIDDEN_TEMPLATES = { native: ["BasicUI"] };
+
+/**
  * Query template list: list available project templates from installed SDK
  *
  * Script output format (section header + indented template names), preceded by
@@ -1866,6 +1873,7 @@ async function listTemplates(
     // Parsing: section headers like "webapp:" + indented lines are template names
     // Also recognizes "tv:" for Samsung TV templates and "platform:" for GBS-buildable sample apps
     const templates = {};
+    const hidden = {};
     let currentSection = null;
     for (const rawLine of output.split("\n")) {
       const line = rawLine.replace(/\r$/, "");
@@ -1879,7 +1887,12 @@ async function listTemplates(
         continue;
       }
       if (currentSection && /^\s+\S/.test(line)) {
-        templates[currentSection].push(line.trim());
+        const name = line.trim();
+        if ((HIDDEN_TEMPLATES[currentSection] || []).includes(name)) {
+          hidden[currentSection] = [...(hidden[currentSection] || []), name];
+        } else {
+          templates[currentSection].push(name);
+        }
       }
     }
 
@@ -1974,6 +1987,11 @@ async function listTemplates(
               sdkPath,
             );
           }
+        }
+        // Only hidden templates were listed: the SDK is fine, the list is not.
+        if (hidden[key]) {
+          hints[key] =
+            `Only ${hidden[key].join(", ")} is installed for ${key}, and it is left out of this list on purpose; create it by name with --template <name>.`;
         }
         const hint =
           hints[key] ||

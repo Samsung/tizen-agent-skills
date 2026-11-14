@@ -82,6 +82,11 @@
   같은 줄이 붙습니다. install-app과 sdb-helper의 skill·agent 문서는 이때 사용자가 묻지 않아도 로그
   분석을 제안하라고 안내하고, README와 quick guide에는 예시 요청과 함께 "앱이 실행되지 않거나 죽을
   때" 항목을 추가했습니다.
+- **`list-templates`가 네이티브 `BasicUI` 템플릿을 더 이상 보여 주지 않습니다.** 러너가
+  `result.templates.native`에서 빼므로 에이전트도 이 템플릿을 제안하지 않습니다. 이름으로는 계속
+  만들 수 있고(`create-project --type native --template BasicUI`), 플러그인은 지금처럼 SDK에
+  sync합니다. native 템플릿이 `BasicUI`뿐이면 `--type native`는 플랫폼 패키지 탓을 하는 대신, 그 템플릿을
+  이름으로 만들라고 알려 주는 `template_not_found`로 실패합니다. create-project skill과 agent 문서에는 목록에 있는 템플릿만 제안하라고 적었습니다.
 
 ### 수정
 

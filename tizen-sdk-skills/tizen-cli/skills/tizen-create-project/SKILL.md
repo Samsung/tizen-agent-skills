@@ -62,6 +62,8 @@ longer than 4 behind a `더 보기…` follow-up question.
 
 1. Tizen SDK installed (`tizen-cli tizen-sdk sdk-install` succeeds).
 2. Discover real template names first: `tizen-cli tizen-sdk list-templates --type <type>`.
+   The native `BasicUI` template is left out of the list on purpose; offer only what the list
+   returns (it can still be created with `--template BasicUI` when the user names it).
 3. For `dotnet` projects, run `tizen-cli tizen-sdk dotnet-setup` first.
 
 **Samsung TV templates come along.** The `list-templates` envelope carries `result.tv`
