@@ -1873,6 +1873,7 @@ async function listTemplates(
     // Parsing: section headers like "webapp:" + indented lines are template names
     // Also recognizes "tv:" for Samsung TV templates and "platform:" for GBS-buildable sample apps
     const templates = {};
+    const hidden = {};
     let currentSection = null;
     for (const rawLine of output.split("\n")) {
       const line = rawLine.replace(/\r$/, "");
@@ -1887,7 +1888,9 @@ async function listTemplates(
       }
       if (currentSection && /^\s+\S/.test(line)) {
         const name = line.trim();
-        if (!(HIDDEN_TEMPLATES[currentSection] || []).includes(name)) {
+        if ((HIDDEN_TEMPLATES[currentSection] || []).includes(name)) {
+          hidden[currentSection] = [...(hidden[currentSection] || []), name];
+        } else {
           templates[currentSection].push(name);
         }
       }
@@ -1984,6 +1987,11 @@ async function listTemplates(
               sdkPath,
             );
           }
+        }
+        // Only hidden templates were listed: the SDK is fine, the list is not.
+        if (hidden[key]) {
+          hints[key] =
+            `Only ${hidden[key].join(", ")} is installed for ${key}, and it is left out of this list on purpose; create it by name with --template <name>.`;
         }
         const hint =
           hints[key] ||

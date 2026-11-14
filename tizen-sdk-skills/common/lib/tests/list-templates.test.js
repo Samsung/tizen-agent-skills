@@ -733,6 +733,28 @@ async function withPluginRoot(lines, code, fn) {
     JSON.stringify(ok.result?.templates),
   );
 
+  // Only the hidden template listed: the failure must say so, not blame the
+  // platform package.
+  const onlyHidden = await withPluginRoot(
+    ["PROFILE=tizen-10.0", "native:", "  BasicUI"],
+    0,
+    () => listTemplates("native", "tizen-sdk list-templates"),
+  );
+  const onlyHiddenMsg = onlyHidden.errors?.[0]?.message || "";
+  check(
+    "--type native with only BasicUI → template_not_found naming the hidden template",
+    onlyHidden.status === "failure" &&
+      onlyHidden.errors?.[0]?.error_category === "template_not_found" &&
+      /Only BasicUI is installed for native/.test(onlyHiddenMsg) &&
+      /--template <name>/.test(onlyHiddenMsg),
+    onlyHiddenMsg,
+  );
+  check(
+    "… and does not blame the platform package",
+    !/platform package/.test(onlyHiddenMsg),
+    onlyHiddenMsg,
+  );
+
   const withProfile = await withPluginRoot(
     [
       "PROFILE=tizen-11.0",
