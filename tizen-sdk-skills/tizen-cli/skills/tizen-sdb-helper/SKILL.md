@@ -223,6 +223,9 @@ Follow it with `tizen-cli tizen-sdk dlog-analyzer --action log-dump` (view/save)
 ## Follow-ups
 
 - Device logs (view / save / clear) and crash analysis → `tizen-cli tizen-sdk dlog-analyzer`
+- A failed `launch` names `tizen-dlog-analyzer` in its error message → offer the log analysis
+  without waiting to be asked: `--action start --subcommand start-monitoring` → `--action app-launch
+  --app-id <id>` → end your turn → `--action stop` → `--action check`
 - Screenshot capture → `tizen-cli tizen-sdk screenshot`
 - Package install → `tizen-cli tizen-sdk install-app` (uninstall is a gated intent of this command)
 - Device discovery → `tizen-cli tizen-sdk device-manager`

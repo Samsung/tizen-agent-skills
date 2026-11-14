@@ -3885,6 +3885,16 @@ async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
   });
 }
 
+/**
+ * Warning that install-app and sdb-helper attach when an app fails to launch or
+ * exits right after starting, so the agent offers this skill's startup flow
+ * instead of stopping at the failure.
+ */
+function appStartupLogHint(appId) {
+  const id = appId || "<app-id>";
+  return `To find out why the app did not keep running, offer the user a log analysis with the tizen-dlog-analyzer skill: start start-monitoring → app-launch ${id} → let the user reproduce → stop → check.`;
+}
+
 module.exports = {
   startDlogAnalyzer,
   stopDlogAnalyzer,
@@ -3912,6 +3922,7 @@ module.exports = {
   clearDeviceLogs,
   collectCrashReports,
   // Pure helpers (unit-tested without a device)
+  appStartupLogHint,
   CRASH_DUMP_DIRS,
   parseCrashDumpDirs,
   buildCrashListScript,

@@ -135,6 +135,10 @@ Installation on a cold emulator can be slow — set the Bash tool timeout to 600
 
 ## Follow-ups
 
+- When the launch failed after `--run` (`app_launched: false`) or the app exited right after start
+  (`app_running: false`), the envelope `warnings` carry a line naming `tizen-dlog-analyzer`.
+  Offer the log analysis in your report without waiting to be asked, then use the startup path
+  below.
 - Log collection and analysis (any executable package) → `tizen-cli tizen-sdk dlog-analyzer`.
   Pick one path (one dlog collector at a time): with the app already running,
   `--action dlog-collect --app-id <result.app_id>` → end your turn, user exercises the app →

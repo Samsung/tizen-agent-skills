@@ -53,6 +53,7 @@ const {
   parseWebAppId,
   parseManifestAppId,
 } = require("./rds");
+const { appStartupLogHint } = require("./dlog-analyzer");
 
 const VALID_PROJECT_TYPES = [
   "native",
@@ -2648,10 +2649,11 @@ async function recordRdsBaseline(projectDir, installedSerial, resolvedPath) {
  * @returns {Promise<object>} Standard JSON Envelope
  */
 async function fullInstallSuccess(command, startTime, ctx, output) {
-  const { projectDir, resolvedPath, resolvedSerial } = ctx;
+  const { projectDir, resolvedPath, resolvedSerial, runAfterInstall } = ctx;
   // Success marker parsing (script must output on success)
   const serialMatch = output.match(/^Device Serial:\s*(.+)$/m);
   const appIdMatch = output.match(/^Found app ID:\s*(.+)$/m);
+  const appId = appIdMatch ? appIdMatch[1].trim() : null;
   const launched = /App launched successfully/i.test(output);
 
   // app_launched only proves launchpad accepted the launch; APP_RUNNING is
@@ -2668,6 +2670,12 @@ async function fullInstallSuccess(command, startTime, ctx, output) {
     warnings.unshift(
       "App launched but exited immediately — check /opt disk space (sdb shell df -h /opt) and crash dumps at /opt/usr/share/crash/dump (cleanup requires 'sdb root on'; see the tizen-sdb-helper skill).",
     );
+  }
+  // An RPK is never launched, so --run on it is not a launch failure.
+  const launchFailed =
+    runAfterInstall && !launched && !/\.rpk$/i.test(resolvedPath);
+  if (appRunning === false || launchFailed) {
+    warnings.push(appStartupLogHint(appId));
   }
 
   // Uses the serial the script actually reported, not the possibly-unresolved
@@ -2687,7 +2695,7 @@ async function fullInstallSuccess(command, startTime, ctx, output) {
     {
       package_path: resolvedPath,
       device_serial: installedSerial,
-      app_id: appIdMatch ? appIdMatch[1].trim() : null,
+      app_id: appId,
       installation_status: "completed",
       app_launched: launched,
       app_running: appRunning,

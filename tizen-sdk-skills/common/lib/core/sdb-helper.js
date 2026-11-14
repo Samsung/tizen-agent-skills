@@ -33,6 +33,7 @@ const {
   resolveSerial,
   describeSerialFailure,
 } = require("./sdb");
+const { appStartupLogHint } = require("./dlog-analyzer");
 
 const execFileAsync = promisify(execFile);
 
@@ -617,11 +618,12 @@ function emulatorPowerNote(action) {
  * @param {string} serial
  * @param {string} request - original request (for extracting paths, ports, etc.)
  * @returns {{command: string, note?: string, fallbacks?: string[],
- *            accept?: (output: string) => boolean}}
+ *            accept?: (output: string) => boolean, failureHint?: string}}
  *   `fallbacks` (screenshot and launch intents) lists alternative sdb commands
  *   the caller tries in order after `command` fails. `accept` (launch intent)
  *   decides from the output whether an attempt succeeded — sdb exits 0 even
- *   when the remote command printed nothing useful.
+ *   when the remote command printed nothing useful. `failureHint` (launch
+ *   intent) is appended to the error message when every attempt fails.
  */
 function buildCommand(intentId, serial, request) {
   const s = serial ? `-s "${serial}"` : "";
@@ -682,6 +684,7 @@ function buildCommand(intentId, serial, request) {
       return {
         command: `${s} shell app_launcher -s "${appId}"`,
         fallbacks: [`${s} shell 0 was_execute "${appId}"`],
+        failureHint: appStartupLogHint(appId),
         accept: (output) =>
           /successfully launched/i.test(output) || tvLaunched.test(output),
       };
@@ -1191,7 +1194,7 @@ function runFallbackIntent(ctx) {
   return formatError(
     command,
     "io_error",
-    `All methods failed. Tried: ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${sdbErrorSuffix(run.lastError)}`,
+    `All methods failed. Tried: ${run.triedCommands.join(" → ")}. Last error: ${run.lastError.message}${sdbErrorSuffix(run.lastError)}${cmdInfo.failureHint ? ` ${cmdInfo.failureHint}` : ""}`,
     null,
     startTime,
   );

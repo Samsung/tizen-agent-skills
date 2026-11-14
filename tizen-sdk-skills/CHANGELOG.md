@@ -77,6 +77,14 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   section of `docs/platform-gbs-build.md` now name that repository (over HTTPS) instead of the
   Tizen Studio install page or a bare `apt-get install gbs`, and no longer suggest checking for a
   tizen-cli GBS plugin.
+- **A failed or short-lived app launch points to `tizen-dlog-analyzer`.** When `install-app --run`
+  cannot launch the app, or the app exits right after starting (`app_running: false`), the
+  envelope `warnings` now carry a line naming `tizen-dlog-analyzer` and its startup flow
+  (`start start-monitoring` → `app-launch <app-id>` → reproduce → `stop` → `check`). A failed
+  `sdb-helper` `launch` adds the same line to its error message. The install-app and sdb-helper
+  skills and agents tell the agent to offer the log analysis unasked in those cases, and the
+  READMEs and quick guides gain a "when an app does not start or crashes" entry with example
+  requests.
 
 ### Fixed
 

@@ -167,6 +167,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 | Symptom | Cause and fix |
 |---------|---------------|
 | Skills are not recognized | Check that you restarted the host and re-run setup (it is idempotent) |
+| The app does not start, closes right away, freezes or crashes | Describe the symptom, for example "The app closes right after it starts — find out why". `tizen-dlog-analyzer` collects the device logs while you reproduce it and reports the cause. After a failed launch the assistant offers this on its own |
 | The assistant's command is denied by a guard, then retried another way | Expected. The PreToolUse guard hook blocks common wrong command forms (such as a hand-typed `sdb`) and has the assistant retry through the right skill runner |
 | `node` not found | Node.js 22+ must be on `PATH`. Ask "check node" (`check-node`) or run `node --version` |
 | No update notice | Open `~/.tizen.agent.update.json`. `failed: false` means the check works: you are up to date, or the same notice was already shown in the last 24 hours (`notifiedAt`). `failed: true` carries an `error` code (recorded since v1.6.1) |
