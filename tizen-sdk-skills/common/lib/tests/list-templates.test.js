@@ -717,16 +717,20 @@ async function withPluginRoot(lines, code, fn) {
   );
 
   const ok = await withPluginRoot(
-    ["webapp:", "  Basic", "  Basic2", "native:", "  BasicUI"],
+    ["webapp:", "  Basic", "  Basic2", "native:", "  BasicUI", "  ServiceApp"],
     0,
     () => listTemplates(undefined, "tizen-sdk list-templates"),
   );
   check(
     "script success → templates grouped by section",
     ok.status === "success" &&
-      JSON.stringify(ok.result?.templates?.webapp) === '["Basic","Basic2"]' &&
-      JSON.stringify(ok.result?.templates?.native) === '["BasicUI"]',
+      JSON.stringify(ok.result?.templates?.webapp) === '["Basic","Basic2"]',
     JSON.stringify(ok).slice(0, 400),
+  );
+  check(
+    "the native BasicUI is hidden from the list",
+    JSON.stringify(ok.result?.templates?.native) === '["ServiceApp"]',
+    JSON.stringify(ok.result?.templates),
   );
 
   const withProfile = await withPluginRoot(

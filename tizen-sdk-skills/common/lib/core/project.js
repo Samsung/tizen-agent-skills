@@ -1803,6 +1803,13 @@ async function buildProject(
 }
 
 /**
+ * Templates left out of list-templates. They can still be created by name
+ * (`create-project --template <name>`). The native BasicUI is the plugin's own
+ * template, synced into the SDK by create-project-app.
+ */
+const HIDDEN_TEMPLATES = { native: ["BasicUI"] };
+
+/**
  * Query template list: list available project templates from installed SDK
  *
  * Script output format (section header + indented template names), preceded by
@@ -1879,7 +1886,10 @@ async function listTemplates(
         continue;
       }
       if (currentSection && /^\s+\S/.test(line)) {
-        templates[currentSection].push(line.trim());
+        const name = line.trim();
+        if (!(HIDDEN_TEMPLATES[currentSection] || []).includes(name)) {
+          templates[currentSection].push(name);
+        }
       }
     }
 

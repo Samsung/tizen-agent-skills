@@ -387,9 +387,11 @@ For a **web app** request ("웹앱 만들어줘", "create a webapp") show `resul
 ("Samsung TV 웹앱 템플릿 (`result.tv.profile`)") so the user can pick either; a TV pick is
 created with `--type tv`. For a **TV** request (`--type tv`) show `result.tv.web` and
 `result.tv.dotnet` as two groups rather than the flat `result.templates.tv`.
+The native `BasicUI` template is left out of `result.templates` on purpose — offer only what
+the envelope lists; create it with `--template BasicUI` only when the user names it.
 
 **⚠️ AskUserQuestion caps options at 4 per question.** When a type has more than 4
-templates (e.g. native: BasicUI, ServiceApp, SharedLibrary, StaticLibrary, gtest),
+templates (e.g. the Samsung TV web templates),
 show the full list as text first, then ask with the 3 most common templates plus a
 final `더 보기…` option that leads to a follow-up question with the remaining ones —
 never pass 5+ options in one question (`InputValidationError: too_big`).

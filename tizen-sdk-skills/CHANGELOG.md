@@ -86,6 +86,10 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
   skills and agents tell the agent to offer the log analysis unasked in those cases, and the
   READMEs and quick guides gain a "when an app does not start or crashes" entry with example
   requests.
+- **`list-templates` no longer lists the native `BasicUI` template.** The runner leaves it out of
+  `result.templates.native`, so agents no longer offer it. It can still be created by name
+  (`create-project --type native --template BasicUI`), and the plugin keeps syncing it into the SDK.
+  The create-project skills and agent say to offer only the listed templates.
 
 ### Fixed
 

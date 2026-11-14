@@ -174,6 +174,10 @@ folders or run `tz` yourself. No `result.tv` → TV SDK not installed → do not
 > Report that envelope — never conclude "no templates" from the cache, and never hand-write
 > a project instead (issue #72).
 
+> **The native `BasicUI` template is not listed.** `list-templates` leaves it out on purpose; offer only
+> what the envelope lists. It can still be created by name (`--template BasicUI`) when the user asks for
+> it explicitly.
+
 **Codex sandbox (guard rule 12).** Run this runner's `list-templates` and `create` **with escalated
 permissions**: the runner syncs the plugin's templates into `<sdk>/platforms/...` and `tz` works
 inside the SDK tree, and Codex's default `workspace-write` sandbox blocks writes outside the
