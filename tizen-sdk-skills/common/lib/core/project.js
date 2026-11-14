@@ -2675,7 +2675,7 @@ async function fullInstallSuccess(command, startTime, ctx, output) {
   const launchFailed =
     runAfterInstall && !launched && !/\.rpk$/i.test(resolvedPath);
   if (appRunning === false || launchFailed) {
-    warnings.push(appStartupLogHint(appId));
+    warnings.push(appStartupLogHint(appId, /\.rpm$/i.test(resolvedPath)));
   }
 
   // Uses the serial the script actually reported, not the possibly-unresolved

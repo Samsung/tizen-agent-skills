@@ -80,7 +80,8 @@ launch` (and `create --launch`) for a `tv-samsung` VM on macOS arm64 takes the e
 - **A failed or short-lived app launch points to `tizen-dlog-analyzer`.** When `install-app --run`
   cannot launch the app, or the app exits right after starting (`app_running: false`), the
   envelope `warnings` now carry a line naming `tizen-dlog-analyzer` and its startup flow
-  (`start start-monitoring` → `app-launch <app-id>` → reproduce → `stop` → `check`). A failed
+  (`start start-monitoring` → `app-launch <app-id>` → reproduce → `stop` → `check`; an `.rpm`,
+  which has no app id, is relaunched with `install-app --run` instead). A failed
   `sdb-helper` `launch` adds the same line to its error message. The install-app and sdb-helper
   skills and agents tell the agent to offer the log analysis unasked in those cases, and the
   READMEs and quick guides gain a "when an app does not start or crashes" entry with example

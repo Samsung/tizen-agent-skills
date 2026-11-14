@@ -10,6 +10,8 @@
  *   - --run and APP_RUNNING=yes, or install only → no hint
  *   - an .rpk is never launched, so --run without a launch line → no hint
  *   - the hint names the app id, or <app-id> when the script did not print one
+ *   - an .rpm platform app has no app id, so its hint relaunches through
+ *     install-app --run instead of app-launch
  *
  * Runs against a stubbed plugin-cache with RDS disabled and an explicit
  * device serial, so no SDK, sdb or device is touched.
@@ -56,8 +58,10 @@ const APP_ID = "org.example.myapp";
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "install-app-log-hint-"));
 const tpk = path.join(dir, "MyApp-1.0.0.tpk");
 const rpk = path.join(dir, "MyRes-1.0.0.rpk");
+const rpm = path.join(dir, "my-platform-app-1.0-1.x86_64.rpm");
 fs.writeFileSync(tpk, "");
 fs.writeFileSync(rpk, "");
+fs.writeFileSync(rpm, "");
 
 const hintOf = (r) =>
   (r.warnings || []).find((w) => w.includes("tizen-dlog-analyzer")) || null;
@@ -105,6 +109,19 @@ const hintOf = (r) =>
     scriptOutput = INSTALLED;
     r = await installApp(rpk, "emulator-26101", true);
     check(".rpk with --run: no hint", hintOf(r), null);
+
+    scriptOutput = `${INSTALLED}OK: App launched successfully (PID: 4242)\nAPP_RUNNING=no\n`;
+    r = await installApp(rpm, "emulator-26101", true);
+    check(".rpm exited: hint present", Boolean(hintOf(r)), true);
+    check(
+      ".rpm exited: relaunch through install-app --run, not app-launch",
+      Boolean(
+        hintOf(r) &&
+        hintOf(r).includes("install-app --run") &&
+        !hintOf(r).includes("app-launch <app-id>"),
+      ),
+      true,
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
