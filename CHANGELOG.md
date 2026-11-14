@@ -12,6 +12,46 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.5.0] — 2026-11-14
+
+Repository-wide release that ships `tizen-sdk-skills` 1.8.0 and `tizen-action-skills` 1.0.0.
+The plugin moved by a minor version, so the release does too.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.7.0 to 1.8.0. Highlights:
+  - Pre-check installer hand-offs (SDK, TV SDK, custom repository, emulator, platform, mobile
+    platform and rootstrap) report `status: "needs_action"` with the new `install_required`
+    category instead of `failure` / `execution_error`. The exit code is still `1`, but a caller
+    that compares the status string with `"failure"` now sees `"needs_action"`.
+  - TV emulators boot on Apple Silicon Macs: the runner starts the platform's emulator-v2 QEMU
+    with VirGL by itself (`launch_method: "emulator-v2"`), asking for consent before it recreates
+    a disk or clears macOS's quarantine, and `tizen-launch-emulator` documents the path.
+  - TV SDK ZIP installs detect the TV version from current bundle names again and keep the
+    execute bit on the TV emulator binaries.
+  - GBS builds find their RPMs under a custom `buildroot` (`TIZEN_BUILD_ROOT` or `.gbs.conf`),
+    and Platform projects with a nested `CMakeLists.txt` (DALi's `build/tizen/`) are detected.
+    A Platform build on a host without GBS reports the new `gbs_not_found` category
+    (`TIZEN_SDK_BUILD_E002`, previously `build_failed`) with the Tizen tools apt repository and
+    `apt-get install gbs` in `suggested_fix.command`.
+  - When `install-app --run` cannot launch the app, or the app exits right after starting, the
+    envelope `warnings` point to `tizen-dlog-analyzer` and its startup flow, a failed
+    `sdb-helper` `launch` does the same, and the agent offers the log analysis unasked.
+  - `list-templates` no longer lists the native `BasicUI` template (`result.templates.native`
+    drops it); it can still be created by name with `--template BasicUI`.
+  - The bash installers that need bash 4 re-run themselves with a bash 4+ on macOS's bash 3.2,
+    or stop with a `brew install bash` hint (issue #127).
+  - `sdb-helper` hands Korean device-list requests and `sdb devices` to
+    `tizen-device-manager`.
+  - `remote-device scan --connected-only` / `--saved-only` probe only the user's sdb-connected
+    or bookmarked devices instead of every address on the local /24 subnet.
+
+  See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
+  assets stamped with the plugin version are therefore `tizen-sdk-v1.8.0.zip`,
+  `tizen-ai-extension-v1.8.0.vsix` and `tizen-sdk-skills-source-v1.8.0.zip`, plus
+  `tizen-action-skills-source-v1.0.0.zip` for the unchanged action plugin.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.8.0.
+
 ## [1.4.0] — 2026-11-03
 
 Repository-wide release that ships `tizen-sdk-skills` 1.7.0 and `tizen-action-skills` 1.0.0.
