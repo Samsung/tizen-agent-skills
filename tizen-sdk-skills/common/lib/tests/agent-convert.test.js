@@ -13,8 +13,10 @@
  *     strings, maps tools, renames maxTurns → max_turns, drops model; body
  *     preserved verbatim
  *   - quoting: a source value that is one quoted scalar is unquoted on parse
- *     and re-escaped per format; look-alikes ('a' or 'b') stay verbatim; a
- *     double-quoted value with a non-JSON escape and a missing/empty
+ *     and re-escaped per format (YAML escapes decoded, a trailing comment
+ *     dropped, control characters / newlines written as escapes, never raw);
+ *     look-alikes ('a' or 'b') stay verbatim; a
+ *     double-quoted value with a non-YAML escape and a missing/empty
  *     name or description are errors for both formats
  *   - CLI entry point: usage error → exit 1
  */
@@ -186,6 +188,61 @@ for (const [label, src, plain, gemRaw, codexLine] of quotedCases) {
   check(
     `  codex: ${label}`,
     toCodexToml(text, "q.md").split("\n")[2],
+    codexLine,
+  );
+}
+
+// YAML-only escapes are decoded; a trailing comment is not part of the value;
+// a decoded newline / control character is written as an escape (Gemini:
+// double-quoted YAML, since a single-quoted scalar cannot hold one).
+const escapeCases = [
+  // [label, source value, plain value, gemini raw, codex description line]
+  [
+    "YAML-only escapes",
+    '"Smile \\U0001F600 \\x41\\_"',
+    "Smile \u{1F600} A\u00a0",
+    "'Smile \u{1F600} A\u00a0'",
+    'description = "Smile \u{1F600} A\u00a0"',
+  ],
+  [
+    "quoted value + comment",
+    "'it''s' # note",
+    "it's",
+    "'it''s'",
+    'description = "it\'s"',
+  ],
+  [
+    "newline",
+    '"line1\\n--- line2"',
+    "line1\n--- line2",
+    '"line1\\n--- line2"',
+    'description = "line1\\n--- line2"',
+  ],
+  [
+    "control characters",
+    '"a\\u0001b\\rc"',
+    "a\u0001b\rc",
+    '"a\\u0001b\\u000Dc"',
+    'description = "a\\u0001b\\u000Dc"',
+  ],
+];
+for (const [label, src, plain, gemRaw, codexLine] of escapeCases) {
+  const text = agent(src);
+  check(
+    `  parse: ${label} → plain value`,
+    get(parseFrontmatter(text).front, "description"),
+    plain,
+  );
+  const g = toGeminiMd(text, "e.md");
+  check(`  gemini: ${label}`, rawValue(g, "description"), gemRaw);
+  check(
+    `  gemini: ${label} round-trips`,
+    get(parseFrontmatter(g).front, "description"),
+    plain,
+  );
+  check(
+    `  codex: ${label}`,
+    toCodexToml(text, "e.md").split("\n")[2],
     codexLine,
   );
 }

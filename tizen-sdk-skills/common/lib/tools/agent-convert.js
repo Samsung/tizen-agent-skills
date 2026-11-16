@@ -34,7 +34,7 @@
  *   default).
  *
  * Frontmatter values: a value written as ONE complete YAML quoted scalar
- * ('…' with '' for a quote, or "…" with JSON-compatible escapes) is unquoted
+ * ('…' with '' for a quote, or "…" with YAML escapes) is unquoted
  * on parse; anything else is taken verbatim. Every output format then escapes
  * the plain value itself, so no writer has to guess whether a value is
  * "already quoted". name and description are required for both formats.
@@ -59,32 +59,64 @@ const GEMINI_TOOL_MAP = {
   WebSearch: "google_web_search",
 };
 
-// A value that is exactly one YAML quoted scalar. `'a' or 'b'` and
-// `"a" or "b"` start and end with a quote but are NOT one scalar, so they
-// fail these patterns and stay verbatim.
-const SINGLE_QUOTED = /^'((?:[^']|'')*)'$/;
-const DOUBLE_QUOTED = /^"(?:[^"\\]|\\.)*"$/;
+// A value that is exactly one YAML quoted scalar, optionally followed by a
+// YAML comment (` # …`). `'a' or 'b'` and `"a" or "b"` start and end with a
+// quote but are NOT one scalar, so they fail these patterns and stay verbatim.
+const SINGLE_QUOTED = /^'((?:[^']|'')*)'(?:\s+#.*)?$/;
+const DOUBLE_QUOTED = /^"((?:[^"\\]|\\.)*)"(?:\s+#.*)?$/;
+
+// YAML 1.2 double-quoted escapes (single character).
+const YAML_ESCAPES = {
+  0: "\0",
+  a: "\x07",
+  b: "\b",
+  t: "\t",
+  "\t": "\t",
+  n: "\n",
+  v: "\v",
+  f: "\f",
+  r: "\r",
+  e: "\x1b",
+  " ": " ",
+  '"': '"',
+  "/": "/",
+  "\\": "\\",
+  N: "\x85",
+  _: "\xa0",
+  L: "\u2028",
+  P: "\u2029",
+};
+const HEX_LEN = { x: 2, u: 4, U: 8 };
 
 /**
  * Unquote one frontmatter value. Single-quoted: `''` → `'`. Double-quoted:
- * JSON escapes (\\ \" \/ \b \f \n \r \t \uXXXX), the subset YAML and JSON
- * share; any other escape (e.g. `"C:\Users"`, where YAML rejects `\U…`) is an
- * error instead of a silent pass-through.
+ * YAML 1.2 escapes (\\ \" \n \t \xXX \uXXXX \UXXXXXXXX …); any other
+ * escape (e.g. `"C:\Tizen"`) is an error instead of a silent pass-through.
  */
 function unquoteValue(key, raw) {
   const s = raw.match(SINGLE_QUOTED);
   if (s) return s[1].replace(/''/g, "'");
-  if (DOUBLE_QUOTED.test(raw)) {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      throw new Error(
-        `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
-          "(use single quotes, or escape the backslash as \\\\)",
-      );
-    }
-  }
-  return raw;
+  const d = raw.match(DOUBLE_QUOTED);
+  if (!d) return raw;
+  const bad = () =>
+    new Error(
+      `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
+        "(use single quotes, or escape the backslash as \\\\)",
+    );
+  return d[1].replace(
+    /\\(?:([xuU])([0-9A-Fa-f]*)|([\s\S]))/g,
+    (_m, h, hex, c) => {
+      if (c !== undefined) {
+        if (!Object.hasOwn(YAML_ESCAPES, c)) throw bad();
+        return YAML_ESCAPES[c];
+      }
+      const n = HEX_LEN[h];
+      if (hex.length < n) throw bad();
+      const cp = parseInt(hex.slice(0, n), 16);
+      if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) throw bad();
+      return String.fromCodePoint(cp) + hex.slice(n);
+    },
+  );
 }
 
 /**
@@ -125,16 +157,30 @@ function parseAgent(text, sourceName) {
   return parsed;
 }
 
-// YAML single-quoted scalar, applied to every plain value. Source values are
-// written unquoted for Claude Code's lenient frontmatter reader, but Gemini CLI
-// parses agent frontmatter as strict YAML, where an inner `": "` (e.g.
-// `"목록": \`x\``) reads as a mapping and the whole agent fails to load. Single
-// quotes need only `'` → `''`; backslashes and double quotes stay literal.
-// Values are single-line (parseFrontmatter splits on newlines).
-const yamlSingle = (s) => `'${String(s).replace(/'/g, "''")}'`;
+// Control characters (C0, DEL, C1) cannot appear raw in a TOML basic string or
+// a YAML scalar; written as \uXXXX they are valid in both formats.
+const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/;
+const doubleQuoted = (s) =>
+  `"${String(s)
+    .replace(/[\\"]/g, "\\$&")
+    .replace(/\n/g, "\\n")
+    .replace(
+      new RegExp(CONTROL_RE.source, "g"),
+      (c) =>
+        `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
+    )}"`;
 
-const tomlBasic = (s) =>
-  `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+// YAML scalar for Gemini. Source values are written unquoted for Claude Code's
+// lenient frontmatter reader, but Gemini CLI parses agent frontmatter as
+// strict YAML, where an inner `": "` (e.g. `"목록": \`x\``) reads as a mapping
+// and the whole agent fails to load. Single quotes need only `'` → `''`, but
+// cannot carry a newline or control character; such a value (only possible
+// from an escaped double-quoted source) is written double-quoted instead.
+const yamlScalar = (s) =>
+  CONTROL_RE.test(s) ? doubleQuoted(s) : `'${String(s).replace(/'/g, "''")}'`;
+
+// TOML basic string: the same double-quoted form is valid TOML.
+const tomlBasic = doubleQuoted;
 
 /** Claude agent .md → Codex agent TOML text. */
 function toCodexToml(text, sourceName) {
@@ -169,7 +215,7 @@ function toGeminiMd(text, sourceName, warn = () => {}) {
     switch (key) {
       case "name":
       case "description":
-        out.push(`${key}: ${yamlSingle(value)}`);
+        out.push(`${key}: ${yamlScalar(value)}`);
         break;
       case "tools": {
         const mapped = [];

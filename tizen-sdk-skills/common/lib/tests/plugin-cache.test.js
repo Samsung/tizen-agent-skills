@@ -310,7 +310,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           stale.push(`${rel} (superseded $(ls …) own-host line)`);
         }
         const lk = l.match(
-          /^\[ -z "\$\{ZSH_VERSION:-\}" \] \|\| unsetopt nomatch; ([A-Z_]+)=; for d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do for f in "\$d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
+          /^_tz_o=; \[ -z "\$\{ZSH_VERSION:-\}" \] \|\| \{ \[\[ ! -o nomatch \]\] \|\| _tz_o=1; unsetopt nomatch; \}; ([A-Z_]+)=; for _tz_d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do for _tz_f in "\$_tz_d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
         );
         if (lk) {
           withLookup++;
@@ -578,6 +578,35 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       `the runner lives under ${P(".claude", X)} on Windows`,
     );
     check("  the generated chain is a fixed point", rw(chainX), chainX);
+
+    // Superseded bash fallback migration.
+    const tailX = "lib/cli/x-cli.js";
+    const cacheX = "plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/x-cli.js";
+    const oldOwn = `CLI=$(ls "$BASE"/${cacheX} 2>/dev/null | sort -V | tail -1) || true`;
+    const oldFb = `[ -n "$CLI" ] || for d in .claude .cline; do CLI=$(ls "$HOME/$d"/${cacheX} 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done`;
+    check(
+      "  own-host + fallback pair → one LOOKUP_LINE",
+      rw(`${oldOwn}\n${oldFb}`),
+      gen.LOOKUP_LINE("CLI", tailX),
+    );
+    check(
+      "  fallback below another line keeps a value set above it",
+      rw(`CLI=\${TIZEN_CLI:-}\n${oldFb}`),
+      `CLI=\${TIZEN_CLI:-}\n${gen.LOOKUP_LINE("CLI", tailX, true)}`,
+    );
+    const staleLookup = gen
+      .LOOKUP_LINE("CLI", tailX)
+      .replace(' "$HOME"/.gemini', "");
+    check(
+      "  stale lookup + fallback → one current LOOKUP_LINE (no duplicate)",
+      rw(`${staleLookup}\n${oldFb}`),
+      gen.LOOKUP_LINE("CLI", tailX),
+    );
+    check(
+      "  guarded lookup is a fixed point",
+      rw(gen.LOOKUP_LINE("CLI", tailX, true)),
+      gen.LOOKUP_LINE("CLI", tailX, true),
+    );
 
     // Test 6: lookup section order — a cmd.exe-first section is re-emitted
     // as shell-pick → run note → Bash → PowerShell → cmd.exe → node step → note, a

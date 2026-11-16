@@ -161,26 +161,43 @@ const BASE_LINE_RE = new RegExp(
 //       - a directory that is not X.Y.Z (digits only) is skipped, like
 //         VERSION_DIR_RE in plugin-cache.js;
 //       - zsh aborts the whole command on a glob with no match (`nomatch`),
-//         so it is switched off there; bash and dash keep the pattern as a
-//         literal word, which `[ -f ]` skips;
-//       - `set -euo pipefail` safe: no pipeline, A/B/C are read only once
+//         so it is switched off for the loop and restored afterwards; bash
+//         and dash keep the pattern as a literal word, which `[ -f ]` skips;
+//       - the line is pasted into the user's own shell too, so its loop
+//         variables are `_tz_`-prefixed and unset at the end: only <VAR> is
+//         left behind;
+//       - `set -euo pipefail` safe: no pipeline, _tz_A/B/C are read only once
 //         <VAR> is set, and the line's status is 0 whether or not it found
 //         a copy.
-const LOOKUP_LINE = (varName, tail) =>
-  `[ -z "\${ZSH_VERSION:-}" ] || unsetopt nomatch; ${varName}=; ` +
-  `for d in "$BASE" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
-  `for f in "$d"/${CACHE_TAIL}/*/${tail}; do [ -f "$f" ] || continue; ` +
-  `v=\${f#"$d"/${CACHE_TAIL}/}; v=\${v%%/*}; ` +
-  `case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; ` +
-  `a=\${v%%.*}; c=\${v##*.}; b=\${v#*.}; b=\${b%.*}; ` +
-  `if [ -z "$${varName}" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; ` +
-  `then ${varName}=$f; A=$a; B=$b; C=$c; fi; done; ` +
-  `[ -z "$${varName}" ] || break; done`;
+//     keep = true wraps the line as `[ -n "${<VAR>:-}" ] || { …; }`, for a
+//     migrated fallback whose <VAR> may already hold a value set above it.
+const LOOKUP_PREFIX =
+  '_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; ';
+const LOOKUP_SUFFIX =
+  '; unset _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o';
+const LOOKUP_LINE = (varName, tail, keep = false) => {
+  const line =
+    `${LOOKUP_PREFIX}${varName}=; ` +
+    `for _tz_d in "$BASE" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
+    `for _tz_f in "$_tz_d"/${CACHE_TAIL}/*/${tail}; do [ -f "$_tz_f" ] || continue; ` +
+    `_tz_v=\${_tz_f#"$_tz_d"/${CACHE_TAIL}/}; _tz_v=\${_tz_v%%/*}; ` +
+    `case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; ` +
+    `_tz_a=\${_tz_v%%.*}; _tz_c=\${_tz_v##*.}; _tz_b=\${_tz_v#*.}; _tz_b=\${_tz_b%.*}; ` +
+    `if [ -z "$${varName}" ] || [ "$_tz_a" -gt "$_tz_A" ] || { [ "$_tz_a" -eq "$_tz_A" ] && { [ "$_tz_b" -gt "$_tz_B" ] || { [ "$_tz_b" -eq "$_tz_B" ] && [ "$_tz_c" -gt "$_tz_C" ]; }; }; }; ` +
+    `then ${varName}=$_tz_f; _tz_A=$_tz_a; _tz_B=$_tz_b; _tz_C=$_tz_c; fi; done; ` +
+    `[ -z "$${varName}" ] || break; done${LOOKUP_SUFFIX}`;
+  return keep ? `[ -n "\${${varName}:-}" ] || { ${line}; }` : line;
+};
 
-// Current lookup line (any host list) — regenerated so a host-list change
-// propagates. group 1 = indent, group 2 = var name, group 3 = tail.
+// A lookup line, current or the previous (unprefixed-variable) form, with or
+// without the keep guard — regenerated so a host-list or form change
+// propagates. group 1 = indent, group 2 = keep guard, group 3 = var name,
+// group 4 = tail.
 const CUR_LOOKUP_RE = new RegExp(
-  `${INDENT}\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| unsetopt nomatch; ([A-Z_]+)=; for d in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do for f in "\\$d"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\2" \\] \\|\\| break; done$`,
+  `${INDENT}(\\[ -n "\\$\\{[A-Z_]+:-\\}" \\] \\|\\| \\{ )?` +
+    `(?:${esc(LOOKUP_PREFIX)}|\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| unsetopt nomatch; )` +
+    `([A-Z_]+)=; for \\w+ in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do ` +
+    `for \\w+ in "\\$\\w+"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\3" \\] \\|\\| break; done.*$`,
   "gm",
 );
 
@@ -653,8 +670,9 @@ function dedupeBaseLines(text) {
 
 // A superseded fallback line (old brace-glob or `for d in …; do X=$(ls …)`
 // form). LOOKUP_LINE already walks every host, so when the line above is the
-// LOOKUP_LINE an own-host line became, the fallback is dropped; on its own it
-// becomes a LOOKUP_LINE itself rather than losing the lookup.
+// LOOKUP_LINE an own-host line became, the fallback is dropped. On its own it
+// becomes a guarded LOOKUP_LINE (keep = true): the old line ran only when
+// <VAR> was still empty, and a value set above it must survive.
 function mergeFallbackLines(text) {
   const lines = text.split("\n");
   const out = [];
@@ -670,9 +688,10 @@ function mergeFallbackLines(text) {
       continue;
     }
     const [, indent, varName, tail] = m;
-    const lookup = LOOKUP_LINE(varName, tail);
     const prev = [...out].reverse().find((l) => l.trim() !== "");
-    if (prev === undefined || prev.trim() !== lookup) out.push(indent + lookup);
+    if (prev === undefined || prev.trim() !== LOOKUP_LINE(varName, tail)) {
+      out.push(indent + LOOKUP_LINE(varName, tail, true));
+    }
   }
   return out.join("\n");
 }
@@ -685,11 +704,14 @@ function rewrite(text, { psBlocks = true } = {}) {
     OWN_HOST_RE,
     (_m, indent, varName, tail) => indent + LOOKUP_LINE(varName, tail),
   );
-  out = mergeFallbackLines(out);
+  // Regenerate existing lookups first, so the fallback merge compares with
+  // the current LOOKUP_LINE and a stale lookup above a fallback is not doubled.
   out = out.replace(
     CUR_LOOKUP_RE,
-    (_m, indent, varName, tail) => indent + LOOKUP_LINE(varName, tail),
+    (_m, indent, keep, varName, tail) =>
+      indent + LOOKUP_LINE(varName, tail, Boolean(keep)),
   );
+  out = mergeFallbackLines(out);
   out = out.replace(BARE_RE, (_m, indent, varName, tail) =>
     [NEW_BASE_LINE, LOOKUP_LINE(varName, tail)]
       .map((l) => indent + l)
