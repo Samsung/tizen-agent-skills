@@ -6,7 +6,7 @@ The extension ships the skill and agent asset tree, so entries below cover both 
 
 ## [1.9.0] — 2026-11-16
 
-No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** converted Gemini agents write `name` / `description` as YAML single-quoted strings so Gemini CLI loads all of them again, the `tizen-device-manager` skill frontmatter is valid YAML again so Cline lists it, and every Bash runner lookup is built from shell builtins so Gemini CLI no longer blocks it as command injection. See the project CHANGELOG for details.
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** converted Gemini agents write `name` / `description` as YAML single-quoted strings so Gemini CLI loads all of them again, the `tizen-device-manager` skill frontmatter is valid YAML again so Cline lists it, and every Bash runner lookup is built from shell builtins so Gemini CLI no longer blocks it as command injection. Note that the Gemini setup script (`gemini/setup`) now installs skills to `~/.agents/skills`, the folder the extension's Codex install uses: removing the extension's Codex install removes the tizen skills Gemini CLI reads there too, so re-run `gemini/setup` afterwards. See the project CHANGELOG for details.
 
 ## [1.8.0] — 2026-11-14
 

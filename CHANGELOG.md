@@ -21,14 +21,15 @@ The plugin moved by a minor version, so the release does too.
 
 - `tizen-sdk-skills` plugin advanced from 1.8.0 to 1.9.0. Highlights:
   - `common/setup/setup-all.sh` (`.ps1`, `.bat`) installs Claude Code, Cline, Codex CLI and
-    Gemini CLI in one run with the same options. A failed host does not stop the others, and
-    the summary names the failed hosts. The README now introduces `setup-all` and `setup.sh`
-    first.
+    Gemini CLI in one run with the same options. A failed host does not stop the others, the
+    summary names the failed hosts, and the exit code is 1 if any failed.
   - The Gemini setup installs skills to `~/.agents/skills`, the folder Codex CLI already uses,
     so Gemini CLI no longer warns `Skill conflict detected` for every skill when both are
     installed. Gemini CLI older than 0.28.0 keeps `~/.gemini/skills`.
   - Gemini CLI loads every converted agent again: `name` and `description` are written as YAML
-    single-quoted strings.
+    single-quoted strings. Agent conversion now stops with an error, naming the file, when
+    `name` or `description` is missing or empty, or is a double-quoted value with an escape
+    YAML rejects (`"C:\Tizen"`).
   - Cline lists the `tizen-device-manager` skill again, and a new test checks that every skill
     and agent frontmatter is strict YAML.
   - Every Bash runner lookup is built from shell builtins, so Gemini CLI no longer blocks it as
