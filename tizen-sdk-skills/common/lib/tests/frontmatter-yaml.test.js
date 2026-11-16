@@ -17,12 +17,20 @@
  *     with ":", and must not start with a YAML indicator character;
  *   - a single-quoted scalar is '…' with every inner quote doubled;
  *   - a double-quoted scalar is "…" with JSON-compatible escapes only;
- *   - block scalars (| > |- >- …) are skipped with their indented body.
+ *   - block scalars (| > |- >- …) are skipped with their indented body in
+ *     skills; an agent is also parsed by agent-convert.js (one line per key,
+ *     no block scalars or nesting), so the Gemini / Codex conversion of every
+ *     shipped agent is known to succeed.
  * Wrap a value that needs ": " in single quotes ('…', ' → '').
  */
 
 const fs = require("fs");
 const path = require("path");
+const {
+  SINGLE_QUOTED,
+  DOUBLE_QUOTED,
+  parseFrontmatter,
+} = require("../tools/agent-convert");
 
 console.log("=== frontmatter-yaml Test ===\n");
 
@@ -38,8 +46,6 @@ function check(name, actual, expected) {
   );
 }
 
-const SINGLE_QUOTED = /^'(?:[^']|'')*'$/;
-const DOUBLE_QUOTED = /^"(?:[^"\\]|\\.)*"$/;
 const BLOCK_SCALAR = /^[|>][+-]?\d*$/;
 // Characters that cannot start a plain scalar (YAML 1.2 c-indicator), plus
 // "- ", "? ", ": " which start a sequence entry / complex key / mapping value.
@@ -61,9 +67,10 @@ function scalarProblem(v) {
     return SINGLE_QUOTED.test(v) ? null : "unbalanced single-quoted value";
   }
   if (v.startsWith('"')) {
-    if (!DOUBLE_QUOTED.test(v)) return "unbalanced double-quoted value";
+    const d = v.match(DOUBLE_QUOTED);
+    if (!d) return "unbalanced double-quoted value";
     try {
-      JSON.parse(v);
+      JSON.parse(d[1]);
       return null;
     } catch {
       return "double-quoted value with an escape outside the JSON subset";
@@ -77,7 +84,14 @@ function scalarProblem(v) {
 }
 
 /** Problems in one file's frontmatter: Array<"line N: reason">. */
-function frontmatterProblems(text) {
+function frontmatterProblems(text, { agent = false } = {}) {
+  if (agent) {
+    try {
+      parseFrontmatter(text);
+    } catch (e) {
+      return [`agent-convert: ${e.message}`];
+    }
+  }
   const m = text.replace(/\r\n/g, "\n").match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
   if (!m) return ["no frontmatter block"];
   const problems = [];
@@ -122,9 +136,17 @@ for (const [label, v, ok] of [
   ["double-quoted JSON escapes", '"say \\"hi\\": now"', true],
   ["double-quoted bad escape", '"C:\\Tizen"', false],
   ["block scalar", ">-", true],
+  ["quoted value + comment", "'ok' # note", true],
 ]) {
   check(`  ${label}`, frontmatterProblems(fm(v)).length === 0, ok);
 }
+check(
+  "  agent: block scalar rejected (agent-convert reads one line per key)",
+  frontmatterProblems("---\nname: x\ndescription: >-\n  long text\n---\n", {
+    agent: true,
+  }).length > 0,
+  true,
+);
 check(
   "  block scalar body is not checked",
   frontmatterProblems("---\ndescription: |\n  a: b\n  c # d\nname: x\n---\n"),
@@ -156,6 +178,7 @@ const bad = [];
 for (const f of files) {
   for (const p of frontmatterProblems(
     fs.readFileSync(path.join(commonDir, f), "utf-8"),
+    { agent: f.startsWith("agents") },
   )) {
     bad.push(`${f.split(path.sep).join("/")} ${p}`);
   }

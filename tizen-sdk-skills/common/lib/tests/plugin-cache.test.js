@@ -310,7 +310,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           stale.push(`${rel} (superseded $(ls …) own-host line)`);
         }
         const lk = l.match(
-          /^_tz_o=; \[ -z "\$\{ZSH_VERSION:-\}" \] \|\| \{ \[\[ ! -o nomatch \]\] \|\| _tz_o=1; unsetopt nomatch; \}; ([A-Z_]+)=; for _tz_d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do for _tz_f in "\$_tz_d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
+          /^_tz_o=; \[ -z "\$\{ZSH_VERSION:-\}" \] \|\| \{ \[\[ ! -o nomatch \]\] \|\| _tz_o=1; unsetopt nomatch; \}; _tz_s=; ([A-Z_]+)=; for _tz_d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do .*?for _tz_f in "\$_tz_d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
         );
         if (lk) {
           withLookup++;

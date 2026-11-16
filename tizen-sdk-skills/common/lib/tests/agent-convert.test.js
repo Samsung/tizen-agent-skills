@@ -13,10 +13,11 @@
  *     strings, maps tools, renames maxTurns → max_turns, drops model; body
  *     preserved verbatim
  *   - quoting: a source value that is one quoted scalar is unquoted on parse
- *     and re-escaped per format (YAML escapes decoded, a trailing comment
+ *     and re-escaped per format (JSON escapes decoded, a trailing comment
  *     dropped, control characters / newlines written as escapes, never raw);
  *     look-alikes ('a' or 'b') stay verbatim; a
- *     double-quoted value with a non-YAML escape and a missing/empty
+ *     name/description with a non-JSON escape (another key keeps its raw
+ *     value) and a missing/empty
  *     name or description are errors for both formats
  *   - CLI entry point: usage error → exit 1
  */
@@ -192,17 +193,24 @@ for (const [label, src, plain, gemRaw, codexLine] of quotedCases) {
   );
 }
 
-// YAML-only escapes are decoded; a trailing comment is not part of the value;
+// JSON escapes are decoded; a trailing comment is not part of the value;
 // a decoded newline / control character is written as an escape (Gemini:
 // double-quoted YAML, since a single-quoted scalar cannot hold one).
 const escapeCases = [
   // [label, source value, plain value, gemini raw, codex description line]
   [
-    "YAML-only escapes",
-    '"Smile \\U0001F600 \\x41\\_"',
-    "Smile \u{1F600} A\u00a0",
-    "'Smile \u{1F600} A\u00a0'",
-    'description = "Smile \u{1F600} A\u00a0"',
+    "JSON surrogate pair",
+    '"Deploy \\ud83d\\ude80"',
+    "Deploy \u{1F680}",
+    "'Deploy \u{1F680}'",
+    'description = "Deploy \u{1F680}"',
+  ],
+  [
+    "plain value + comment",
+    "List VMs # internal note",
+    "List VMs",
+    "'List VMs'",
+    'description = "List VMs"',
   ],
   [
     "quoted value + comment",
@@ -259,6 +267,18 @@ for (const [label, fn] of [
     true,
   );
 }
+
+// A bad escape in a key that is not written out keeps its raw value.
+check(
+  "  bad escape in a dropped key does not stop the conversion",
+  throwsWith(() =>
+    toGeminiMd(
+      '---\nname: x\ndescription: d\nmodel: "C:\\x"\n---\n',
+      "m.md",
+    ),
+  ),
+  null,
+);
 
 // name / description are required for BOTH formats (empty or quoted-empty).
 for (const [label, text] of [

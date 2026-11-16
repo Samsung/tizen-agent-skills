@@ -163,6 +163,8 @@ const BASE_LINE_RE = new RegExp(
 //       - zsh aborts the whole command on a glob with no match (`nomatch`),
 //         so it is switched off for the loop and restored afterwards; bash
 //         and dash keep the pattern as a literal word, which `[ -f ]` skips;
+//       - the host list repeats $BASE's own dot-dir, so a second visit of
+//         $BASE is skipped (_tz_s marks the first one);
 //       - the line is pasted into the user's own shell too, so its loop
 //         variables are `_tz_`-prefixed and unset at the end: only <VAR> is
 //         left behind;
@@ -172,13 +174,14 @@ const BASE_LINE_RE = new RegExp(
 //     keep = true wraps the line as `[ -n "${<VAR>:-}" ] || { …; }`, for a
 //     migrated fallback whose <VAR> may already hold a value set above it.
 const LOOKUP_PREFIX =
-  '_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; ';
+  '_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; _tz_s=; ';
 const LOOKUP_SUFFIX =
-  '; unset _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o';
+  '; unset _tz_s _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o';
 const LOOKUP_LINE = (varName, tail, keep = false) => {
   const line =
     `${LOOKUP_PREFIX}${varName}=; ` +
     `for _tz_d in "$BASE" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
+    `[ "$_tz_d" != "$BASE" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; ` +
     `for _tz_f in "$_tz_d"/${CACHE_TAIL}/*/${tail}; do [ -f "$_tz_f" ] || continue; ` +
     `_tz_v=\${_tz_f#"$_tz_d"/${CACHE_TAIL}/}; _tz_v=\${_tz_v%%/*}; ` +
     `case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; ` +
@@ -189,15 +192,15 @@ const LOOKUP_LINE = (varName, tail, keep = false) => {
   return keep ? `[ -n "\${${varName}:-}" ] || { ${line}; }` : line;
 };
 
-// A lookup line, current or the previous (unprefixed-variable) form, with or
+// A lookup line, current or an earlier form, with or
 // without the keep guard — regenerated so a host-list or form change
 // propagates. group 1 = indent, group 2 = keep guard, group 3 = var name,
 // group 4 = tail.
 const CUR_LOOKUP_RE = new RegExp(
   `${INDENT}(\\[ -n "\\$\\{[A-Z_]+:-\\}" \\] \\|\\| \\{ )?` +
-    `(?:${esc(LOOKUP_PREFIX)}|\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| unsetopt nomatch; )` +
+    `(?:_tz_o=; )?\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| (?:\\{ .*?; )?unsetopt nomatch; (?:\\}; )?(?:_tz_s=; )?` +
     `([A-Z_]+)=; for \\w+ in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do ` +
-    `for \\w+ in "\\$\\w+"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\3" \\] \\|\\| break; done.*$`,
+    `.*?for \\w+ in "\\$\\w+"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\3" \\] \\|\\| break; done.*$`,
   "gm",
 );
 
@@ -207,10 +210,6 @@ const CUR_LOOKUP_RE = new RegExp(
 const LS_TAIL = "2>/dev/null | sort -V | tail -1) || true";
 const OLD_OWN_HOST_LINE = (varName, tail) =>
   `${varName}=$(ls "$BASE"/${CACHE_TAIL}/*/${tail} ${LS_TAIL}`;
-const OLD_FALLBACK_LINE = (varName, tail) =>
-  `[ -n "$${varName}" ] || for d in ${HOST_DOT_DIRS.join(" ")}; do ` +
-  `${varName}=$(ls "$HOME/$d"/${CACHE_TAIL}/*/${tail} ${LS_TAIL}; ` +
-  `[ -z "$${varName}" ] || break; done`;
 
 // Current or previous own-host line (with or without `|| true`).
 //   group 1 = indent, group 2 = var name, group 3 = tail after <VERSION>/
@@ -674,9 +673,9 @@ function dedupeBaseLines(text) {
 // becomes a guarded LOOKUP_LINE (keep = true): the old line ran only when
 // <VAR> was still empty, and a value set above it must survive.
 function mergeFallbackLines(text) {
-  const lines = text.split("\n");
   const out = [];
-  for (const line of lines) {
+  let prev; // last non-blank line written
+  for (const line of text.split("\n")) {
     let m = null;
     for (const re of [OLD_FALLBACK_RE, CUR_FALLBACK_RE]) {
       re.lastIndex = 0;
@@ -685,12 +684,13 @@ function mergeFallbackLines(text) {
     }
     if (!m) {
       out.push(line);
+      if (line.trim()) prev = line.trim();
       continue;
     }
     const [, indent, varName, tail] = m;
-    const prev = [...out].reverse().find((l) => l.trim() !== "");
-    if (prev === undefined || prev.trim() !== LOOKUP_LINE(varName, tail)) {
-      out.push(indent + LOOKUP_LINE(varName, tail, true));
+    if (prev !== LOOKUP_LINE(varName, tail)) {
+      prev = LOOKUP_LINE(varName, tail, true);
+      out.push(indent + prev);
     }
   }
   return out.join("\n");
@@ -852,7 +852,6 @@ function main(argv) {
 module.exports = {
   NEW_BASE_LINE,
   LOOKUP_LINE,
-  OLD_FALLBACK_LINE,
   OLD_OWN_HOST_LINE,
   cmdChainDirs,
   cmdChainArgs,

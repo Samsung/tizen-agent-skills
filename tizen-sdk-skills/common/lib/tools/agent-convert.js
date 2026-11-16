@@ -34,8 +34,9 @@
  *   default).
  *
  * Frontmatter values: a value written as ONE complete YAML quoted scalar
- * ('…' with '' for a quote, or "…" with YAML escapes) is unquoted
- * on parse; anything else is taken verbatim. Every output format then escapes
+ * ('…' with '' for a quote, or "…" with JSON-compatible escapes) is unquoted
+ * on parse; anything else is taken verbatim, minus a trailing ` # …` YAML
+ * comment. Every output format then escapes
  * the plain value itself, so no writer has to guess whether a value is
  * "already quoted". name and description are required for both formats.
  *
@@ -63,60 +64,28 @@ const GEMINI_TOOL_MAP = {
 // YAML comment (` # …`). `'a' or 'b'` and `"a" or "b"` start and end with a
 // quote but are NOT one scalar, so they fail these patterns and stay verbatim.
 const SINGLE_QUOTED = /^'((?:[^']|'')*)'(?:\s+#.*)?$/;
-const DOUBLE_QUOTED = /^"((?:[^"\\]|\\.)*)"(?:\s+#.*)?$/;
-
-// YAML 1.2 double-quoted escapes (single character).
-const YAML_ESCAPES = {
-  0: "\0",
-  a: "\x07",
-  b: "\b",
-  t: "\t",
-  "\t": "\t",
-  n: "\n",
-  v: "\v",
-  f: "\f",
-  r: "\r",
-  e: "\x1b",
-  " ": " ",
-  '"': '"',
-  "/": "/",
-  "\\": "\\",
-  N: "\x85",
-  _: "\xa0",
-  L: "\u2028",
-  P: "\u2029",
-};
-const HEX_LEN = { x: 2, u: 4, U: 8 };
+const DOUBLE_QUOTED = /^("(?:[^"\\]|\\.)*")(?:\s+#.*)?$/;
 
 /**
  * Unquote one frontmatter value. Single-quoted: `''` → `'`. Double-quoted:
- * YAML 1.2 escapes (\\ \" \n \t \xXX \uXXXX \UXXXXXXXX …); any other
- * escape (e.g. `"C:\Tizen"`) is an error instead of a silent pass-through.
+ * JSON escapes (\\ \" \/ \b \f \n \r \t \uXXXX), the subset YAML and JSON
+ * share; any other escape (e.g. `"C:\Users"`, where YAML rejects `\U…`) is an
+ * error instead of a silent pass-through. Plain: a trailing ` # …` is a YAML
+ * comment and is dropped.
  */
 function unquoteValue(key, raw) {
   const s = raw.match(SINGLE_QUOTED);
   if (s) return s[1].replace(/''/g, "'");
   const d = raw.match(DOUBLE_QUOTED);
-  if (!d) return raw;
-  const bad = () =>
-    new Error(
+  if (!d) return raw.replace(/\s+#.*$/, "");
+  try {
+    return JSON.parse(d[1]);
+  } catch {
+    throw new Error(
       `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
         "(use single quotes, or escape the backslash as \\\\)",
     );
-  return d[1].replace(
-    /\\(?:([xuU])([0-9A-Fa-f]*)|([\s\S]))/g,
-    (_m, h, hex, c) => {
-      if (c !== undefined) {
-        if (!Object.hasOwn(YAML_ESCAPES, c)) throw bad();
-        return YAML_ESCAPES[c];
-      }
-      const n = HEX_LEN[h];
-      if (hex.length < n) throw bad();
-      const cp = parseInt(hex.slice(0, n), 16);
-      if (cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) throw bad();
-      return String.fromCodePoint(cp) + hex.slice(n);
-    },
-  );
+  }
 }
 
 /**
@@ -136,7 +105,17 @@ function parseFrontmatter(text) {
     const i = line.indexOf(":");
     if (i === -1) throw new Error(`frontmatter line without ':' — ${line}`);
     const key = line.slice(0, i).trim();
-    front.push([key, unquoteValue(key, line.slice(i + 1).trim())]);
+    const raw = line.slice(i + 1).trim();
+    let value;
+    try {
+      value = unquoteValue(key, raw);
+    } catch (e) {
+      // Only name / description are written out as strings; an unparsable
+      // value of any other key must not stop the whole conversion.
+      if (key === "name" || key === "description") throw e;
+      value = raw;
+    }
+    front.push([key, value]);
   }
   return { front, body: m[2] };
 }
@@ -300,6 +279,8 @@ function main(argv) {
 if (require.main === module) main(process.argv.slice(2));
 
 module.exports = {
+  SINGLE_QUOTED,
+  DOUBLE_QUOTED,
   GEMINI_TOOL_MAP,
   parseFrontmatter,
   toCodexToml,
