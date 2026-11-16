@@ -14,7 +14,6 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HARNESSES=(claude cline codex gemini)
 
 # Checked once here, so a typo is one error instead of four failed runs.
@@ -50,10 +49,8 @@ for harness in "${HARNESSES[@]}"; do
 done
 
 if [[ ${#failed[@]} -gt 0 ]]; then
-  echo "  Fix the errors above, then re-run setup-all or each failed setup:"
-  for harness in "${failed[@]}"; do
-    echo "    bash \"$PLUGIN_DIR/$harness/setup/setup.sh\""
-  done
+  echo "[FAIL] Setup failed for: $(IFS=,; echo "${failed[*]}" | sed 's/,/, /g')"
+  echo "Re-run setup-all, or run each failed host's setup with the same options."
 fi
 
 [[ ${#failed[@]} -eq 0 ]]

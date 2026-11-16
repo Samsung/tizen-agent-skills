@@ -19,8 +19,8 @@ below use those release tags.
 - **`common/setup/setup-all.sh` (`.ps1`, `.bat`) installs every harness in one run.** It
   runs `common/setup/setup.sh` for Claude Code, Cline, Codex CLI and Gemini CLI in turn
   with the same options (`--repo`, `--skip-validation`, `--no-restart`). A failed harness
-  does not stop the others; a summary lists each result and the exit code is 1 if any
-  failed.
+  does not stop the others; a summary lists each result and names the failed harnesses, and
+  the exit code is 1 if any failed.
 
 ### Fixed
 

@@ -4,7 +4,7 @@ English | [한국어](README.ko.md)
 
 A Tizen app development automation skill set for AI coding agents.
 
-Supports **Claude Code**, **Cline**, **Codex CLI** and **VS Code**,
+Supports **Claude Code**, **Cline**, **Codex CLI**, **Gemini CLI** and **VS Code**,
 and ships a standalone **tizen-sdk** CLI that works without an AI host — automates SDK
 installation, project creation, building, device management, app installation, remote
 debugging (GDB / netcoredbg / CDP), certificate management, and Playwright testing.
@@ -27,6 +27,41 @@ New here? Start with the one-page [Quick Guide](quick-guide.md).
 The Tizen SDK itself does **not** need to be pre-installed — the `tizen-sdk-install`
 skill installs it for you.
 
+### Setup scripts
+
+Two scripts in `common/setup/` install the plugin from a local checkout. They work from
+any directory; the examples assume you are in `tizen-sdk-skills/`:
+
+| Script | What it does | Example |
+|---|---|---|
+| `setup-all.sh` / `setup-all.ps1` / `setup-all.bat` | Installs for all four hosts (Claude Code, Cline, Codex CLI, Gemini CLI) in one run. No options needed. | `bash common/setup/setup-all.sh` |
+| `setup.sh` / `setup.ps1` | Installs for one host. `--harness` is required. | `bash common/setup/setup.sh --harness gemini` |
+
+`setup-all` and `common/setup/setup.sh` / `.ps1` both take `--repo <path>`,
+`--skip-validation` and `--no-restart` (`-RepoPath`, `-SkipValidation`, `-NoRestart` in
+PowerShell); the per-host wrappers differ, see below. `--no-restart` only hides the notes printed
+at the end: the scripts never restart a host, so restart each host yourself after
+installing. `setup-all` keeps going when one host fails and ends with a summary that
+names the failed hosts.
+
+The per-host wrappers below (`claude/setup/setup.sh`, `.ps1`, `.bat`, and the same for
+`cline/`, `codex/`, `gemini/`) run the same setup for one host. The bash wrappers take the
+`--repo` spelling; the PowerShell and cmd wrappers take only `-RepoPath`, `-SkipValidation`
+and `-NoRestart` (given `--repo`, they take the word itself as the path and fail).
+
+```bash
+git clone https://github.com/Samsung/tizen-agent-skills.git
+cd tizen-agent-skills/tizen-sdk-skills
+
+# All hosts
+bash common/setup/setup-all.sh                # Windows: common\setup\setup-all.bat
+# One host
+bash common/setup/setup.sh --harness claude   # Windows: <host>\setup\setup.bat, e.g. claude\setup\setup.bat
+```
+
+On Windows the `.bat` files start PowerShell with `-ExecutionPolicy Bypass`. Running a
+`.ps1` directly needs an execution policy that allows local scripts.
+
 ### Claude Code
 
 ```bash
@@ -34,7 +69,7 @@ git clone https://github.com/Samsung/tizen-agent-skills.git
 cd tizen-agent-skills/tizen-sdk-skills
 
 # Windows
-.\claude\setup\setup.ps1
+claude\setup\setup.bat
 # Linux/macOS
 bash claude/setup/setup.sh
 ```
@@ -55,7 +90,7 @@ git clone https://github.com/Samsung/tizen-agent-skills.git
 cd tizen-agent-skills/tizen-sdk-skills
 
 # Windows
-.\cline\setup\setup.ps1
+cline\setup\setup.bat
 # Linux/macOS
 bash cline/setup/setup.sh
 ```
@@ -185,7 +220,7 @@ of another checkout) and re-run the same setup script, then restart the host:
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts,
+bash claude/setup/setup.sh        # Windows: claude\setup\setup.bat (use cline/, codex/, gemini/ for other hosts,
                                   # or common/setup/setup-all.sh for all four)
 ```
 
@@ -263,6 +298,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │   │                       #   hooks.json, tizen-sdk-skills-guard.md (host-neutral rules for AGENTS.md / GEMINI.md)
 │   ├── setup/              #   ONE setup implementation for every harness:
 │   │   ├── setup.sh/.ps1   #     --harness <claude|cline|codex|gemini>
+│   │   ├── setup-all.*     #     all four hosts in one run (.sh / .ps1 / .bat)
 │   │   ├── setup-lib.*     #     mirror copy, compare, version, guard-section helpers
 │   │   └── hosts/          #     <harness>.sh/.ps1 — paths, agent format, hooks/instructions steps
 │   ├── tools/              #   Prebuilt tizen-dlog-analyzer binaries (linux/macos/windows)
