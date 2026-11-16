@@ -13,6 +13,14 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **`common/setup/setup-all.sh`(`.ps1`, `.bat`)로 모든 하네스를 한 번에 설치합니다.**
+  Claude Code, Cline, Codex CLI, Gemini CLI 순서로 `common/setup/setup.sh`를 같은
+  옵션(`--repo`, `--skip-validation`, `--no-restart`)으로 실행합니다. 한 하네스가 실패해도
+  나머지는 계속 진행하고, 끝에 하네스별 결과를 요약하며 하나라도 실패하면 종료 코드 1을
+  반환합니다.
+
 ### 수정
 
 - **Codex와 Gemini 셋업을 둘 다 설치해도 Gemini CLI가 스킬 중복 경고를 내지 않습니다.**
