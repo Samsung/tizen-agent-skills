@@ -16,16 +16,19 @@ set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 HARNESSES=(claude cline codex gemini)
 
-for arg in "$@"; do
-  case "$arg" in
+# Checked once here, so a typo is one error instead of four failed runs.
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  case "${args[i]}" in
+    --repo) i=$((i + 1))
+            [[ -n "${args[i]-}" && -d "${args[i]}" ]] || { echo "Error: --repo needs an existing directory, got: '${args[i]-}'" >&2; exit 1; } ;;
+    --skip-validation|--no-restart) ;;
     -h|--help) sed -n '6,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
-    --harness) echo "Error: setup-all.sh installs every harness; use setup.sh --harness <name> for one." >&2; exit 1 ;;
+    --harness|--harness=*) echo "Error: setup-all.sh installs every harness; use setup.sh --harness <name> for one." >&2; exit 1 ;;
+    *) echo "Error: unknown option: ${args[i]}" >&2; exit 1 ;;
   esac
 done
 
-# Every host gets this checkout's version, so the shared-skills version
-# warning (warn_shared_skills_peer) would only be noise here.
-export TIZEN_SETUP_ALL=1
 failed=()
 for harness in "${HARNESSES[@]}"; do
   bash "$SCRIPT_DIR/setup.sh" --harness "$harness" "$@" || failed+=("$harness")
@@ -40,5 +43,9 @@ for harness in "${HARNESSES[@]}"; do
     echo "  [ OK ] $harness"
   fi
 done
+
+if [[ " ${failed[*]-} " == *" codex "* || " ${failed[*]-} " == *" gemini "* ]]; then
+  echo "  Codex CLI and Gemini CLI share ~/.agents/skills: re-run the failed one's setup so its scripts match the skills there."
+fi
 
 [[ ${#failed[@]} -eq 0 ]]

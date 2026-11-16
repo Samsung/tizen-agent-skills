@@ -107,7 +107,6 @@ host_install_extras() {
       # Unknown version: the old copies may be the only ones this Gemini reads.
       write_status "Could not read the Gemini CLI version - kept ${#legacy_copies[@]} skill folder(s) in $OLD_SKILLS_DIR. With Gemini CLI $GEMINI_MIN_SHARED+ they duplicate $SKILLS_DIR: re-run this setup where 'gemini --version' works, or delete them." "Warning"
     fi
-    warn_shared_skills_peer "Codex CLI" "${CODEX_HOME:-$HOME/.codex}/$CACHE_TAIL" "codex/setup/setup.sh"
   fi
   # Hook adapter + the two guards it dispatches to. The adapter maps Gemini's
   # tool names (run_shell_command / write_file / replace) onto the Bash / Write

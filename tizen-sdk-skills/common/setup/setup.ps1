@@ -80,6 +80,8 @@ if ($argv) {
     exit $LASTEXITCODE
 }
 
+# Lower-case, as setup.sh does, so the host checks compare one spelling.
+$Harness = $Harness.ToLowerInvariant()
 $harnesses = @(Get-ChildItem (Join-Path $PSScriptRoot "hosts") -Filter "*.ps1" -File | ForEach-Object { $_.BaseName })
 if ($Harness -notin $harnesses) {
     Write-Status "-Harness must be one of: $($harnesses -join ', ')" "Error"

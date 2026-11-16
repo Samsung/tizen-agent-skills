@@ -48,15 +48,9 @@ Codex CLI and Gemini CLI share `~/.agents/skills`. Gemini CLI reads both
 therefore writes one copy there; the Gemini setup also removes our skill folders that
 older releases put in `~/.gemini/skills` (other folders there are left alone).
 Gemini CLI reads `~/.agents/skills` from 0.28.0 on; when `gemini --version` reports
-an older release, the Gemini setup keeps installing to `~/.gemini/skills` and says so.
-When the version cannot be read (`gemini` not on PATH, `--version` failing), it installs
-to `~/.agents/skills` but leaves the old `~/.gemini/skills` copies in place and warns.
-
-Because both hosts read the one copy, the setup run last decides which skill version
-both see, while each host still runs the scripts from its own cache. When the other
-host's cache holds a different version, setup prints a warning: re-run the other
-host's setup from the same checkout so the two match. Removal is shared too: see
-below.
+an older release, the Gemini setup keeps installing to `~/.gemini/skills`. When the
+version cannot be read, it installs to `~/.agents/skills` but keeps the old
+`~/.gemini/skills` copies and warns.
 
 The guard scripts themselves (`common/hooks/check-tizen-commands.sh`,
 `check-project-writes.sh`) are identical for every harness. Codex CLI speaks the
@@ -185,11 +179,10 @@ rm -f  ~/.tizen.agent.update.json           # update-check cache, shared by all 
 # hooks entries (PreToolUse / BeforeTool / SessionStart) from settings.json / hooks.json
 ```
 
-Codex CLI and Gemini CLI read the same `~/.agents/skills/tizen-*` folders. When
-removing only one of them, leave those folders in place; delete them once neither
-host is installed. The VS Code extension does the same: while a Gemini setup cache
-(`~/.gemini/plugins/cache/tizen-platform/tizen-sdk-skills`) exists, uninstalling its
-Codex install keeps the shared skills.
+Codex CLI and Gemini CLI read the same `~/.agents/skills/tizen-*` folders, and neither
+setup tracks the other. Do not install Codex both through the VS Code extension and
+with `codex/setup`. If skills go missing or out of date after removing or updating
+one host, re-run that host's setup script: it rewrites its files in place.
 
 ## Adding another harness
 

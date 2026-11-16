@@ -49,9 +49,6 @@ function Get-CodexHooksJson {
 }
 
 function Install-HostExtras {
-    if (Test-GeminiUsesSharedSkills) {
-        Write-SharedSkillsPeerWarning "Gemini CLI" (Join-Path $script:UserHome ".gemini\$script:CacheTail") "gemini\setup\setup.ps1" $pluginVersion
-    }
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-tizen-commands.sh") (Join-Path $script:HooksDir "check-tizen-commands.sh")
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-project-writes.sh") (Join-Path $script:HooksDir "check-project-writes.sh")
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-update.js") (Join-Path $script:HooksDir "check-update.js")

@@ -48,14 +48,8 @@ Codex CLI와 Gemini CLI는 `~/.agents/skills`를 함께 씁니다. Gemini CLI는
 모두 그곳에 한 벌만 설치하고, Gemini 셋업은 이전 릴리스가 `~/.gemini/skills`에 둔 이
 플러그인의 스킬 폴더를 지웁니다(그 밖의 폴더는 건드리지 않습니다).
 Gemini CLI는 0.28.0부터 `~/.agents/skills`를 읽습니다. `gemini --version`이 그보다 이전
-버전이면 Gemini 셋업은 계속 `~/.gemini/skills`에 설치하고 그 사실을 알립니다. 버전을 읽을 수
-없으면(`gemini`가 PATH에 없거나 `--version`이 실패) `~/.agents/skills`에 설치하되, 기존
-`~/.gemini/skills` 사본은 지우지 않고 경고합니다.
-
-두 호스트가 한 벌을 함께 읽으므로, 마지막에 실행한 셋업이 두 호스트가 보는 스킬 버전을
-정합니다. 반면 스크립트는 각 호스트가 자기 캐시에서 실행합니다. 다른 호스트의 캐시 버전이
-다르면 셋업이 경고를 출력하니, 같은 체크아웃에서 다른 호스트의 셋업도 다시 실행해 버전을
-맞추세요. 제거도 공유됩니다. 아래를 참고하세요.
+버전이면 Gemini 셋업은 계속 `~/.gemini/skills`에 설치합니다. 버전을 읽을 수 없으면
+`~/.agents/skills`에 설치하되 기존 `~/.gemini/skills` 사본은 남기고 경고합니다.
 
 가드 스크립트 자체(`common/hooks/check-tizen-commands.sh`, `check-project-writes.sh`)는 모든
 하네스에 동일합니다. Codex CLI는 Claude Code와 같은 PreToolUse JSON을 사용하므로(셸 도구
@@ -176,10 +170,10 @@ rm -f  ~/.tizen.agent.update.json           # 업데이트 확인 캐시(모든 
 # settings.json / hooks.json의 훅 항목(PreToolUse / BeforeTool / SessionStart)을 삭제
 ```
 
-Codex CLI와 Gemini CLI는 같은 `~/.agents/skills/tizen-*` 폴더를 읽습니다. 둘 중 하나만
-제거할 때는 이 폴더를 그대로 두고, 두 호스트가 모두 제거된 뒤에 지우세요. VS Code 확장도
-같게 동작합니다. Gemini 셋업 캐시(`~/.gemini/plugins/cache/tizen-platform/tizen-sdk-skills`)가
-있으면 확장의 Codex 설치를 제거해도 공유 스킬은 남겨 둡니다.
+Codex CLI와 Gemini CLI는 같은 `~/.agents/skills/tizen-*` 폴더를 읽고, 두 셋업은 서로를
+추적하지 않습니다. Codex를 VS Code 확장과 `codex/setup`으로 함께 설치하지 마세요. 한
+호스트를 제거하거나 업데이트한 뒤 스킬이 없어지거나 버전이 맞지 않으면, 해당 호스트의
+셋업 스크립트를 다시 실행하세요. 파일을 제자리에서 다시 씁니다.
 
 ## 하네스 추가하기
 

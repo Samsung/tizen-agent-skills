@@ -89,8 +89,6 @@ function Install-HostExtras {
             # Unknown version: the old copies may be the only ones this Gemini reads.
             Write-Status "Could not read the Gemini CLI version - kept $($legacyCopies.Count) skill folder(s) in $script:OldSkillsDir. With Gemini CLI $script:GeminiMinShared+ they duplicate $script:SkillsDir`: re-run this setup where 'gemini --version' works, or delete them." "Warning"
         }
-        $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $script:UserHome ".codex" }
-        Write-SharedSkillsPeerWarning "Codex CLI" (Join-Path $codexHome $script:CacheTail) "codex\setup\setup.ps1" $pluginVersion
     }
 
     Install-ShellScript $script:AdapterSrc $script:AdapterDst

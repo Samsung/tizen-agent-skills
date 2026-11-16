@@ -197,29 +197,6 @@ sync_personal_skills() { # <source-skills-dir> <dest-skills-dir> <label>
   done
 }
 
-# ~/.agents/skills is shared by Codex CLI and Gemini CLI, so the last setup run
-# decides which SKILL.md version both hosts read, while each host still runs the
-# scripts from its own cache. Warn when the other host's cache is another version.
-# setup-all.sh sets TIZEN_SETUP_ALL=1: it runs the other host's setup itself.
-warn_shared_skills_peer() { # <peer-label> <peer-cache-root> <peer-setup-script>
-  local label="$1" root="$2" script="$3" peer
-  [[ -d "$root" && "${TIZEN_SETUP_ALL:-}" != "1" ]] || return 0
-  peer="$(find "$root" -mindepth 1 -maxdepth 1 -type d -exec basename {} \; |
-    grep -E '^[0-9]+(\.[0-9]+)*$' | sort -V | tail -1 || true)"
-  [[ -n "$peer" && "$peer" != "$PLUGIN_VERSION" ]] || return 0
-  write_status "$SKILLS_DIR is shared with $label, whose plugin cache is v$peer: both hosts now read the v$PLUGIN_VERSION skills. Re-run $script from v$PLUGIN_VERSION so $label's runners match." "Warning"
-}
-
-# True unless one of our skills sits in ~/.gemini/skills, where the Gemini setup
-# installs for Gemini CLI < 0.28.0 instead of the shared ~/.agents/skills.
-gemini_uses_shared_skills() {
-  local skill_dir
-  for skill_dir in "$COMMON_DIR/skills"/*/; do
-    [[ -d "$HOME/.gemini/skills/$(basename "$skill_dir")" ]] && return 1
-  done
-  return 0
-}
-
 validate_personal_skills() { # <source-skills-dir> <dest-skills-dir> <label>
   local src="$1" dest="$2" label="$3" skill_dir skill_name
   for skill_dir in "$src"/*/; do
