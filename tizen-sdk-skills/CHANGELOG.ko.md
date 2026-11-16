@@ -23,6 +23,12 @@
   들어가거나 두 번 감싸지지 않습니다. 따옴표로 시작하고 끝나기만 하는 값(`'list' or 'run'`)은 일반
   텍스트처럼 이스케이프합니다. YAML이 허용하지 않는 이스케이프가 든 큰따옴표 값(`"C:\Tizen"`)과
   비어 있거나 없는 `name` / `description`은 이제 두 형식 모두에서 파일 이름과 함께 오류로 보고합니다.
+- **Cline에 `tizen-device-manager` 스킬이 다시 나타납니다.** 스킬은 모든 호스트에 원본 그대로
+  복사되는데, 이 스킬의 description에도 같은 `": "`가 있어 `SKILL.md` frontmatter가 올바른 YAML이
+  아니었습니다. Cline은 오류 메시지 없이 이 스킬을 빼고 목록에 보여 주지 않았습니다. 이제
+  `skills/tizen-device-manager/SKILL.md`와 `agents/tizen-device-manager.md`의 description을
+  작은따옴표로 감쌌고, 스킬이나 에이전트의 frontmatter가 엄격한 YAML이 아니면 새 테스트
+  (`frontmatter-yaml.test.js`)가 실패합니다.
 
 ## [1.8.0] — 2026-11-14
 

@@ -25,6 +25,12 @@ below use those release tags.
   (`'list' or 'run'`) is escaped like any other text. A double-quoted value with an escape YAML
   rejects (`"C:\Tizen"`) and a missing or empty `name` / `description` are now errors for both
   formats, naming the file.
+- **Cline lists the `tizen-device-manager` skill again.** Skills are copied to every host as
+  written, and the same `": "` in that skill's description made its `SKILL.md` frontmatter
+  invalid YAML. Cline dropped the skill without printing any error. The description in
+  `skills/tizen-device-manager/SKILL.md` and `agents/tizen-device-manager.md` is now
+  single-quoted, and a new test (`frontmatter-yaml.test.js`) fails when any skill or agent
+  frontmatter is not strict YAML.
 
 ## [1.8.0] — 2026-11-14
 
