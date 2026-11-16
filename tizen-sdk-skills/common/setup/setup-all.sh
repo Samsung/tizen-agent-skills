@@ -23,6 +23,9 @@ for arg in "$@"; do
   esac
 done
 
+# Every host gets this checkout's version, so the shared-skills version
+# warning (warn_shared_skills_peer) would only be noise here.
+export TIZEN_SETUP_ALL=1
 failed=()
 for harness in "${HARNESSES[@]}"; do
   bash "$SCRIPT_DIR/setup.sh" --harness "$harness" "$@" || failed+=("$harness")

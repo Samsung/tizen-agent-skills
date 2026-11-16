@@ -169,12 +169,23 @@ function Sync-PersonalSkills {
 # warn_shared_skills_peer in setup-lib.sh.
 function Write-SharedSkillsPeerWarning {
     param([string]$PeerLabel, [string]$PeerCacheRoot, [string]$PeerSetup, [string]$Version)
-    if (-not (Test-Path $PeerCacheRoot)) { return }
+    if (-not (Test-Path $PeerCacheRoot) -or $env:TIZEN_SETUP_ALL -eq "1") { return }
     $peer = Get-ChildItem $PeerCacheRoot -Directory |
-        Sort-Object { try { [version]$_.Name } catch { [version]"0.0" } } |
+        Where-Object { $_.Name -match '^\d+(\.\d+)+$' } |
+        Sort-Object { [version]$_.Name } |
         Select-Object -Last 1
     if (-not $peer -or $peer.Name -eq $Version) { return }
     Write-Status "$script:SkillsDir is shared with $PeerLabel, whose plugin cache is v$($peer.Name): both hosts now read the v$Version skills. Re-run $PeerSetup from v$Version so $PeerLabel's runners match." "Warning"
+}
+
+# True unless one of our skills sits in ~/.gemini/skills - see
+# gemini_uses_shared_skills in setup-lib.sh.
+function Test-GeminiUsesSharedSkills {
+    $legacy = Join-Path $script:UserHome ".gemini\skills"
+    foreach ($skill in Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory) {
+        if (Test-Path (Join-Path $legacy $skill.Name)) { return $false }
+    }
+    return $true
 }
 
 function Test-PersonalSkills {

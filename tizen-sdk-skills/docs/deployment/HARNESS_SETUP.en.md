@@ -49,6 +49,8 @@ therefore writes one copy there; the Gemini setup also removes our skill folders
 older releases put in `~/.gemini/skills` (other folders there are left alone).
 Gemini CLI reads `~/.agents/skills` from 0.28.0 on; when `gemini --version` reports
 an older release, the Gemini setup keeps installing to `~/.gemini/skills` and says so.
+When the version cannot be read (`gemini` not on PATH, `--version` failing), it installs
+to `~/.agents/skills` but leaves the old `~/.gemini/skills` copies in place and warns.
 
 Because both hosts read the one copy, the setup run last decides which skill version
 both see, while each host still runs the scripts from its own cache. When the other

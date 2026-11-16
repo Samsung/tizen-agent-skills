@@ -36,6 +36,7 @@ import {
   codexHooksDir,
   codexHooksJsonPath,
   codexSkillsDir,
+  geminiCacheRoot,
 } from "../install/codexLayout";
 import { mirrorDir } from "../install/fsutil";
 import { guardMarkers } from "../install/guardSection";
@@ -1092,8 +1093,20 @@ test("without a manifest, Codex removal drops only the cache and says why", asyn
   assert.strictEqual(fs.existsSync(codexCacheBase(fx.home, VERSION)), false);
 });
 
-test("Codex removal keeps the shared skills while the Gemini setup uses them", async () => {
-  const fx = makeCodexFixture();
+/** A Gemini setup install: its cache at `version` ships `skills`. */
+function fakeGeminiSetup(
+  home: string,
+  version: string,
+  skills: string[],
+): void {
+  for (const s of skills) {
+    fs.mkdirSync(path.join(geminiCacheRoot(home), version, "skills", s), {
+      recursive: true,
+    });
+  }
+}
+
+async function installCodexWithManifest(fx: Fixture): Promise<string[]> {
   const r = await installCodex(fx.assets, fx.home, VERSION);
   writeManifest(path.join(fx.home, ".codex"), {
     version: VERSION,
@@ -1101,32 +1114,62 @@ test("Codex removal keeps the shared skills while the Gemini setup uses them", a
     skills: r.owned.skills,
     agents: r.owned.agents,
   });
-  fs.mkdirSync(
-    path.join(
-      fx.home,
-      ".gemini",
-      "plugins",
-      "cache",
-      "tizen-platform",
-      "tizen-sdk-skills",
-      VERSION,
-    ),
-    { recursive: true },
-  );
+  return r.owned.agents;
+}
+
+test("Codex removal keeps only the shared skills the Gemini setup ships", async () => {
+  const fx = makeCodexFixture();
+  const agents = await installCodexWithManifest(fx);
+  // The newest Gemini cache decides; an older one listing both is ignored.
+  fakeGeminiSetup(fx.home, "1.0.0", ASSET_SKILLS);
+  fakeGeminiSetup(fx.home, "1.10.0", [ASSET_SKILLS[0]]);
   takeLog();
   await removeCodex(fx.home);
 
   assert.ok(takeLog().some((l) => l.includes("Gemini CLI")));
-  for (const s of ASSET_SKILLS) {
-    assert.ok(fs.existsSync(path.join(codexSkillsDir(fx.home), s)), s);
-  }
-  for (const a of r.owned.agents) {
+  assert.ok(fs.existsSync(path.join(codexSkillsDir(fx.home), ASSET_SKILLS[0])));
+  assert.strictEqual(
+    fs.existsSync(path.join(codexSkillsDir(fx.home), ASSET_SKILLS[1])),
+    false,
+  );
+  for (const a of agents) {
     assert.strictEqual(
       fs.existsSync(path.join(codexAgentsDir(fx.home), a)),
       false,
       a,
     );
   }
+});
+
+test("Codex removal ignores a Gemini setup that installed to ~/.gemini/skills", async () => {
+  const fx = makeCodexFixture();
+  await installCodexWithManifest(fx);
+  fakeGeminiSetup(fx.home, VERSION, ASSET_SKILLS);
+  write(
+    path.join(fx.home, ".gemini", "skills", ASSET_SKILLS[0], "SKILL.md"),
+    "old\n",
+  );
+  await removeCodex(fx.home);
+
+  for (const s of ASSET_SKILLS) {
+    assert.strictEqual(
+      fs.existsSync(path.join(codexSkillsDir(fx.home), s)),
+      false,
+      s,
+    );
+  }
+});
+
+test("a Codex upgrade keeps a dropped skill the Gemini setup still ships", async () => {
+  const fx = makeCodexFixture();
+  await installCodexWithManifest(fx);
+  fakeGeminiSetup(fx.home, VERSION, ASSET_SKILLS);
+  fs.rmSync(path.join(fx.assets, "skills", ASSET_SKILLS[1]), {
+    recursive: true,
+  });
+  await installCodex(fx.assets, fx.home, "10.0.0");
+
+  assert.ok(fs.existsSync(path.join(codexSkillsDir(fx.home), ASSET_SKILLS[1])));
 });
 
 test("a Codex upgrade prunes the skill and agent the new version no longer ships", async () => {

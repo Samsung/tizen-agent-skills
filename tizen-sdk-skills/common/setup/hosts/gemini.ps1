@@ -7,12 +7,19 @@
 # First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
 $script:GeminiMinShared = [version]"0.28.0"
 
-# Installed Gemini CLI version, or $null when gemini is not on PATH.
+# Installed Gemini CLI version, or $null when it cannot be read - see
+# _gemini_cli_version in hosts\gemini.sh.
 function Get-GeminiCliVersion {
     if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { return $null }
-    try { $out = (& gemini --version 2>$null) -join " " } catch { return $null }
-    if ($out -match '(\d+\.\d+\.\d+)') { return [version]$Matches[1] }
-    return $null
+    # setup.ps1 runs with ErrorActionPreference Stop, which turns any stderr line
+    # of a native command into an error in Windows PowerShell 5.1.
+    $ErrorActionPreference = "Continue"
+    try { $lines = @(& gemini --version 2>$null) } catch { return $null }
+    $found = $null
+    foreach ($line in $lines) {
+        if ("$line" -match '^v?(\d+\.\d+\.\d+)') { $found = [version]$Matches[1] }
+    }
+    return $found
 }
 
 function Initialize-HostConfig {
@@ -69,13 +76,18 @@ function Get-GeminiSessionEntries {
 }
 
 function Install-HostExtras {
+    $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
+        ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path $_ })
     if ($script:SkillsDir -eq $script:OldSkillsDir) {
         Write-Status "Gemini CLI $script:GeminiVersion does not read ~/.agents/skills (needs $script:GeminiMinShared+) - skills kept in $script:SkillsDir. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
     } else {
-        # Our skills used to live in ~/.gemini/skills. Remove only the folders named
-        # after our skills; anything else there belongs to the user.
-        foreach ($skill in Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory) {
-            Remove-LegacyPath (Join-Path $script:OldSkillsDir $skill.Name) "Gemini skill copy"
+        if ($script:GeminiVersion) {
+            # Our skills used to live in ~/.gemini/skills. Remove only the folders
+            # named after our skills; anything else there belongs to the user.
+            foreach ($copy in $legacyCopies) { Remove-LegacyPath $copy "Gemini skill copy" }
+        } elseif ($legacyCopies.Count -gt 0) {
+            # Unknown version: the old copies may be the only ones this Gemini reads.
+            Write-Status "Could not read the Gemini CLI version - kept $($legacyCopies.Count) skill folder(s) in $script:OldSkillsDir. With Gemini CLI $script:GeminiMinShared+ they duplicate $script:SkillsDir`: re-run this setup where 'gemini --version' works, or delete them." "Warning"
         }
         $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $script:UserHome ".codex" }
         Write-SharedSkillsPeerWarning "Codex CLI" (Join-Path $codexHome $script:CacheTail) "codex\setup\setup.ps1" $pluginVersion

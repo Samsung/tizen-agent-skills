@@ -57,37 +57,63 @@ export function codexSkillsDir(home: string): string {
   return path.join(home, ".agents", "skills");
 }
 
-/**
- * True when the Gemini CLI setup script (gemini/setup) has installed here. It
- * writes the same skill folders into ~/.agents/skills but keeps no manifest, so
- * its plugin cache is the sign. While it is there, deleting our skill folders
- * would take Gemini's skills away too.
- */
-export function geminiSharesSkills(home: string): boolean {
-  return fs.existsSync(
-    path.join(
-      home,
-      ".gemini",
-      "plugins",
-      "cache",
-      "tizen-platform",
-      PLUGIN_NAME,
-    ),
-  );
-}
-
 export function codexAgentsDir(home: string): string {
   return path.join(codexHome(home), "agents");
 }
 
+function pluginCacheRoot(hostHome: string, pluginName: string): string {
+  return path.join(hostHome, "plugins", "cache", "tizen-platform", pluginName);
+}
+
 function codexCacheRootFor(home: string, pluginName: string): string {
-  return path.join(
-    codexHome(home),
-    "plugins",
-    "cache",
-    "tizen-platform",
-    pluginName,
-  );
+  return pluginCacheRoot(codexHome(home), pluginName);
+}
+
+/** The Gemini CLI setup's plugin cache root — one directory per version. */
+export function geminiCacheRoot(home: string): string {
+  return pluginCacheRoot(path.join(home, ".gemini"), PLUGIN_NAME);
+}
+
+function compareVersions(a: string, b: string): number {
+  const pa = a.split(".").map(Number);
+  const pb = b.split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const d = (pa[i] ?? 0) - (pb[i] ?? 0);
+    if (d !== 0) return d;
+  }
+  return 0;
+}
+
+function subdirs(dir: string): string[] {
+  try {
+    return fs
+      .readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Skill folders the Gemini CLI setup (gemini/setup) reads from ~/.agents/skills,
+ * taken from its newest plugin cache: it keeps no manifest. Empty when it is not
+ * installed, or when it installed to ~/.gemini/skills (Gemini CLI < 0.28.0).
+ * Deleting one of these would take the skill away from Gemini too.
+ */
+export function geminiSharedSkills(home: string): Set<string> {
+  const root = geminiCacheRoot(home);
+  const versions = subdirs(root)
+    .filter((v) => /^\d+(\.\d+)*$/.test(v))
+    .sort(compareVersions);
+  const newest = versions[versions.length - 1];
+  if (!newest) return new Set();
+  const skills = subdirs(path.join(root, newest, "skills"));
+  const legacyDir = path.join(home, ".gemini", "skills");
+  if (skills.some((s) => fs.existsSync(path.join(legacyDir, s)))) {
+    return new Set();
+  }
+  return new Set(skills);
 }
 
 /** The plugin cache root for Codex — one directory per version. */

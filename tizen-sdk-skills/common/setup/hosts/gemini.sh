@@ -23,10 +23,12 @@
 # First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
 GEMINI_MIN_SHARED="0.28.0"
 
-# Installed Gemini CLI version, or empty when gemini is not on PATH.
+# Installed Gemini CLI version, or empty when it cannot be read (not on PATH,
+# --version failing). Only a line that starts with the version counts, so an
+# update notice mentioning other versions is not mistaken for it.
 _gemini_cli_version() {
   command -v gemini >/dev/null 2>&1 || return 0
-  gemini --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
+  gemini --version 2>/dev/null | grep -Eo '^v?[0-9]+\.[0-9]+\.[0-9]+' | tail -1 | sed 's/^v//' || true
 }
 
 _version_ge() { # <a> <b> — true when a >= b
@@ -88,16 +90,23 @@ EOF
 
 
 host_install_extras() {
+  local skill_dir legacy_copies=()
+  for skill_dir in "$COMMON_DIR/skills"/*/; do
+    [[ -d "$OLD_SKILLS_DIR/$(basename "$skill_dir")" ]] && legacy_copies+=("$OLD_SKILLS_DIR/$(basename "$skill_dir")")
+  done
   if [[ "$SKILLS_DIR" == "$OLD_SKILLS_DIR" ]]; then
     write_status "Gemini CLI $GEMINI_VERSION does not read ~/.agents/skills (needs $GEMINI_MIN_SHARED+) - skills kept in $SKILLS_DIR. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
   else
-    # Our skills used to live in ~/.gemini/skills. Remove only the folders named
-    # after our skills; anything else there belongs to the user.
-    local skill_dir
-    for skill_dir in "$COMMON_DIR/skills"/*/; do
-      [[ -d "$skill_dir" ]] || continue
-      remove_legacy_path "$OLD_SKILLS_DIR/$(basename "$skill_dir")" "Gemini skill copy"
-    done
+    if [[ -n "$GEMINI_VERSION" ]]; then
+      # Our skills used to live in ~/.gemini/skills. Remove only the folders
+      # named after our skills; anything else there belongs to the user.
+      for skill_dir in "${legacy_copies[@]+"${legacy_copies[@]}"}"; do
+        remove_legacy_path "$skill_dir" "Gemini skill copy"
+      done
+    elif [[ ${#legacy_copies[@]} -gt 0 ]]; then
+      # Unknown version: the old copies may be the only ones this Gemini reads.
+      write_status "Could not read the Gemini CLI version - kept ${#legacy_copies[@]} skill folder(s) in $OLD_SKILLS_DIR. With Gemini CLI $GEMINI_MIN_SHARED+ they duplicate $SKILLS_DIR: re-run this setup where 'gemini --version' works, or delete them." "Warning"
+    fi
     warn_shared_skills_peer "Codex CLI" "${CODEX_HOME:-$HOME/.codex}/$CACHE_TAIL" "codex/setup/setup.sh"
   fi
   # Hook adapter + the two guards it dispatches to. The adapter maps Gemini's

@@ -8,6 +8,9 @@
 param([string]$RepoPath, [switch]$SkipValidation, [switch]$NoRestart)
 
 $harnesses = @("claude", "cline", "codex", "gemini")
+# Every host gets this checkout's version, so the shared-skills version
+# warning (Write-SharedSkillsPeerWarning) would only be noise here.
+$env:TIZEN_SETUP_ALL = "1"
 $failed = @()
 foreach ($harness in $harnesses) {
     # Each run in its own process: setup.ps1 calls exit, which would end this script.
@@ -19,6 +22,8 @@ foreach ($harness in $harnesses) {
     & $shell @argList
     if ($LASTEXITCODE -ne 0) { $failed += $harness }
 }
+
+Remove-Item Env:TIZEN_SETUP_ALL -ErrorAction SilentlyContinue
 
 Write-Host ""
 Write-Host "=== setup-all summary ===" -ForegroundColor Cyan

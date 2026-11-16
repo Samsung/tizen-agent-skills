@@ -48,7 +48,9 @@ Codex CLI와 Gemini CLI는 `~/.agents/skills`를 함께 씁니다. Gemini CLI는
 모두 그곳에 한 벌만 설치하고, Gemini 셋업은 이전 릴리스가 `~/.gemini/skills`에 둔 이
 플러그인의 스킬 폴더를 지웁니다(그 밖의 폴더는 건드리지 않습니다).
 Gemini CLI는 0.28.0부터 `~/.agents/skills`를 읽습니다. `gemini --version`이 그보다 이전
-버전이면 Gemini 셋업은 계속 `~/.gemini/skills`에 설치하고 그 사실을 알립니다.
+버전이면 Gemini 셋업은 계속 `~/.gemini/skills`에 설치하고 그 사실을 알립니다. 버전을 읽을 수
+없으면(`gemini`가 PATH에 없거나 `--version`이 실패) `~/.agents/skills`에 설치하되, 기존
+`~/.gemini/skills` 사본은 지우지 않고 경고합니다.
 
 두 호스트가 한 벌을 함께 읽으므로, 마지막에 실행한 셋업이 두 호스트가 보는 스킬 버전을
 정합니다. 반면 스크립트는 각 호스트가 자기 캐시에서 실행합니다. 다른 호스트의 캐시 버전이
