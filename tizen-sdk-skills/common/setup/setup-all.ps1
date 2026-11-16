@@ -95,11 +95,8 @@ foreach ($harness in $harnesses) {
     }
 }
 if ($failed.Count -gt 0) {
-    Write-Host "  Fix the errors above, then re-run setup-all or each failed setup:" -ForegroundColor Yellow
-    $pluginDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-    foreach ($harness in $failed) {
-        Write-Host "    & `"$(Join-Path $pluginDir "$harness\setup\setup.ps1")`"" -ForegroundColor Yellow
-    }
+    Write-Host "[FAIL] Setup failed for: $($failed -join ', ')" -ForegroundColor Red
+    Write-Host "Re-run setup-all, or run each failed host's setup with the same options." -ForegroundColor Yellow
     exit 1
 }
 exit 0

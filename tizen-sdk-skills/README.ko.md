@@ -4,7 +4,7 @@
 
 AI 코딩 에이전트를 위한 타이젠 앱 개발 자동화 스킬셋입니다.
 
-**Claude Code**, **Cline**, **Codex CLI**, **VS Code**를 지원하며,
+**Claude Code**, **Cline**, **Codex CLI**, **Gemini CLI**, **VS Code**를 지원하며,
 AI 호스트 없이 쓸 수 있는 독립 실행형 **tizen-sdk** CLI도 함께 제공합니다 — SDK 설치, 프로젝트 생성,
 빌드, 디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서 관리, Playwright 테스트를 자동화합니다.
 
@@ -28,27 +28,36 @@ Tizen SDK 자체는 미리 설치할 필요가 **없습니다** — `tizen-sdk-i
 ### 설치 스크립트
 
 로컬 체크아웃에서 플러그인을 설치하는 스크립트는 `common/setup/`에 두 가지가 있습니다.
-`tizen-sdk-skills/` 폴더에서 실행하세요:
+어느 폴더에서 실행해도 되며, 아래 예시는 `tizen-sdk-skills/` 폴더 기준입니다:
 
 | 스크립트 | 하는 일 | 예 |
 |---|---|---|
 | `setup-all.sh` / `setup-all.ps1` / `setup-all.bat` | 네 호스트(Claude Code, Cline, Codex CLI, Gemini CLI)를 한 번에 설치합니다. 옵션이 필요 없습니다. | `bash common/setup/setup-all.sh` |
 | `setup.sh` / `setup.ps1` | 호스트 하나를 설치합니다. `--harness`가 반드시 필요합니다. | `bash common/setup/setup.sh --harness gemini` |
 
-둘 다 `--repo <path>`, `--skip-validation`, `--no-restart`를 받습니다(PowerShell에서는
-`-RepoPath`, `-SkipValidation`, `-NoRestart`). `setup-all`은 한 호스트가 실패해도 나머지를
-계속 설치하고, 끝에 결과를 요약합니다. 아래의 호스트별 wrapper(`claude/setup/setup.sh` 등)는
-`setup.sh --harness <호스트>`의 바로가기입니다. 설치 후에는 각 호스트를 재시작하세요.
+`setup-all`과 `common/setup/setup.sh` / `.ps1`은 둘 다 `--repo <path>`, `--skip-validation`,
+`--no-restart`를 받습니다(PowerShell에서는 `-RepoPath`, `-SkipValidation`, `-NoRestart`). 호스트별
+wrapper는 다르니 아래를 참고하세요. `--no-restart`는 끝에 출력되는 안내만 숨깁니다.
+스크립트는 호스트를 재시작하지 않으므로, 설치 후 각 호스트를 직접 재시작하세요. `setup-all`은
+한 호스트가 실패해도 나머지를 계속 설치하고, 끝에 실패한 호스트를 알려 주는 요약을 출력합니다.
+
+아래의 호스트별 wrapper(`claude/setup/setup.sh`, `.ps1`, `.bat`, 그리고 `cline/`, `codex/`,
+`gemini/`의 같은 파일)는 호스트 하나에 같은 셋업을 실행합니다. bash wrapper는 `--repo` 방식
+인자를 받고, PowerShell·cmd wrapper는 `-RepoPath`, `-SkipValidation`, `-NoRestart`만 받습니다(`--repo`를
+주면 그 단어 자체를 경로로 받아 실패합니다).
 
 ```bash
 git clone https://github.com/Samsung/tizen-agent-skills.git
 cd tizen-agent-skills/tizen-sdk-skills
 
 # 모든 호스트
-bash common/setup/setup-all.sh                # Windows: .\common\setup\setup-all.ps1
+bash common/setup/setup-all.sh                # Windows: common\setup\setup-all.bat
 # 호스트 하나
-bash common/setup/setup.sh --harness claude   # Windows: .\common\setup\setup.ps1 -Harness claude
+bash common/setup/setup.sh --harness claude   # Windows: <호스트>\setup\setup.bat (예: claude\setup\setup.bat)
 ```
+
+Windows의 `.bat` 파일은 PowerShell을 `-ExecutionPolicy Bypass`로 실행합니다. `.ps1`을 직접
+실행하려면 로컬 스크립트를 허용하는 실행 정책이 필요합니다.
 
 ### Claude Code
 
@@ -57,7 +66,7 @@ git clone https://github.com/Samsung/tizen-agent-skills.git
 cd tizen-agent-skills/tizen-sdk-skills
 
 # Windows
-.\claude\setup\setup.ps1
+claude\setup\setup.bat
 # Linux/macOS
 bash claude/setup/setup.sh
 ```
@@ -78,7 +87,7 @@ git clone https://github.com/Samsung/tizen-agent-skills.git
 cd tizen-agent-skills/tizen-sdk-skills
 
 # Windows
-.\cline\setup\setup.ps1
+cline\setup\setup.bat
 # Linux/macOS
 bash cline/setup/setup.sh
 ```
@@ -200,7 +209,7 @@ Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/,
+bash claude/setup/setup.sh        # Windows: claude\setup\setup.bat (다른 호스트는 cline/, codex/, gemini/,
                                   # 네 개 모두는 common/setup/setup-all.sh)
 ```
 
@@ -274,6 +283,7 @@ tizen-sdk-skills/
 │   │                       #   hooks.json, tizen-sdk-skills-guard.md (AGENTS.md / GEMINI.md용 호스트 중립 규칙)
 │   ├── setup/              #   모든 하네스가 공유하는 단일 setup 구현:
 │   │   ├── setup.sh/.ps1   #     --harness <claude|cline|codex|gemini>
+│   │   ├── setup-all.*     #     네 호스트를 한 번에 (.sh / .ps1 / .bat)
 │   │   ├── setup-lib.*     #     미러 복사, 비교, 버전, 가드 섹션 헬퍼
 │   │   └── hosts/          #     <harness>.sh/.ps1 — 경로, 에이전트 형식, 훅/지침 단계
 │   ├── tools/              #   미리 빌드된 tizen-dlog-analyzer 바이너리 (linux/macos/windows)
