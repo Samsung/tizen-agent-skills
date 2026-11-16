@@ -14,6 +14,14 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Added
+
+- **`common/setup/setup-all.sh` (`.ps1`, `.bat`) installs every harness in one run.** It
+  runs `common/setup/setup.sh` for Claude Code, Cline, Codex CLI and Gemini CLI in turn
+  with the same options (`--repo`, `--skip-validation`, `--no-restart`). A failed harness
+  does not stop the others; a summary lists each result and the exit code is 1 if any
+  failed.
+
 ### Fixed
 
 - **Gemini CLI loads every converted agent again.** Gemini parses agent frontmatter as strict
@@ -51,7 +59,11 @@ below use those release tags.
   The `~/.agents/skills` copy won, so an older Codex install also hid a newer Gemini one.
   `gemini/setup/setup.sh` and `setup.ps1` now install the skills to `~/.agents/skills` too,
   and remove this plugin's skill folders from `~/.gemini/skills`; other folders there are
-  kept.
+  kept. Gemini CLI older than 0.28.0 does not read `~/.agents/skills`, so for those the
+  setup keeps installing to `~/.gemini/skills`; when the version cannot be read, the old
+  copies there are kept. The two hosts now share one copy without tracking each other:
+  HARNESS_SETUP explains the removal steps, and re-running a host's setup restores its
+  skills.
 
 ## [1.8.0] — 2026-11-14
 

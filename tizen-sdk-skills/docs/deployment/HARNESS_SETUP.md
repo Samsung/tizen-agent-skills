@@ -19,6 +19,11 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 | Cline | `bash cline/setup/setup.sh` | `.\cline\setup\setup.ps1` | `…\cline\setup\setup.bat` |
 | Codex CLI | `bash codex/setup/setup.sh` | `.\codex\setup\setup.ps1` | `…\codex\setup\setup.bat` |
 | Gemini CLI | `bash gemini/setup/setup.sh` | `.\gemini\setup\setup.ps1` | `…\gemini\setup\setup.bat` |
+| 네 개 모두 | `bash common/setup/setup-all.sh` | `.\common\setup\setup-all.ps1` | `…\common\setup\setup-all.bat` |
+
+`setup-all`은 네 셋업을 같은 옵션(`--repo`, `--skip-validation`, `--no-restart`)으로 차례로
+실행합니다. 한 하네스가 실패해도 나머지는 계속 진행하고, 끝에 하네스별 결과를 요약하며 하나라도
+실패하면 종료 코드 1을 반환합니다.
 
 선행 조건: PATH에 `node`(CLI 러너가 필요로 하며, setup은 `plugin.json` 읽기와 에이전트
 정의 변환에 사용). Windows에서는 모든 하네스의 훅이 `bash`(Git Bash)로 실행되므로 PATH에
@@ -35,7 +40,7 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 |---|---|---|---|---|
 | Dot-dir | `~/.claude` | `~/.cline` | `~/.codex` (`$CODEX_HOME`) | `~/.gemini` |
 | 캐시 내용 | skills agents scripts lib assets tools docs | scripts lib assets tools docs | skills agents scripts lib assets tools docs | skills agents scripts lib assets tools docs |
-| 스킬 | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (Gemini와 공유) | `~/.agents/skills/<n>/` (Codex와 공유) |
+| 스킬 | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (Gemini와 공유) | `~/.agents/skills/<n>/` (Codex와 공유); Gemini CLI 0.28.0 미만은 `~/.gemini/skills/<n>/` |
 | 에이전트 | `~/.claude/agents/*.md` (원본 그대로) | — (Cline 서브에이전트는 이를 지원하는 빌드에 내장) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (Gemini의 엄격한 YAML 파서에 맞춰 `name`/`description`을 YAML 작은따옴표 문자열로 기록, tools를 Gemini 이름으로 매핑, `maxTurns` → `max_turns`, `model` 제거) |
 | 가드(훅) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + `settings.json` `hooks.PreToolUse` 항목 자동 병합(3개 훅 모두; 파일을 파싱할 수 없을 때만 스니펫 출력) | `Documents/Cline/Hooks/PreToolUse` 어댑터 + 가드 (훅을 지원하는 Cline 빌드; macOS/Linux만) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` 작성(외부 `hooks.json`이 있으면 병합 스니펫 출력) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` 어댑터 + 가드; `settings.json` `hooks.BeforeTool` 항목 자동 병합(파일을 파싱할 수 없을 때만 스니펫 출력) |
 | 업데이트 확인(세션 시작) | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 | `Documents/Cline/Hooks/TaskStart` 어댑터 + `check-update.js` (macOS/Linux만) | 훅 디렉터리의 `check-update.js`; `hooks.json` `SessionStart` 항목 | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 |
@@ -47,6 +52,10 @@ Codex CLI와 Gemini CLI는 `~/.agents/skills`를 함께 씁니다. Gemini CLI는
 "Skill conflict detected" 경고를 내며 `~/.agents/skills` 쪽을 씁니다. 그래서 두 호스트
 모두 그곳에 한 벌만 설치하고, Gemini 셋업은 이전 릴리스가 `~/.gemini/skills`에 둔 이
 플러그인의 스킬 폴더를 지웁니다(그 밖의 폴더는 건드리지 않습니다).
+Gemini CLI는 0.28.0부터 `~/.agents/skills`를 읽습니다. `gemini --version`이 그보다 이전
+버전이면 Gemini 셋업은 계속 `~/.gemini/skills`에 설치합니다. 버전을 읽을 수 없으면(셋업 셸의
+PATH에 `gemini`가 없거나 — 예: 대화형 셸에서만 로드되는 nvm shim — `--version`이 실패)
+`~/.agents/skills`에 설치하되 기존 `~/.gemini/skills` 사본은 남기고 경고합니다.
 
 가드 스크립트 자체(`common/hooks/check-tizen-commands.sh`, `check-project-writes.sh`)는 모든
 하네스에 동일합니다. Codex CLI는 Claude Code와 같은 PreToolUse JSON을 사용하므로(셸 도구
@@ -157,7 +166,8 @@ setup은 멱등합니다: 캐시는 클린 미러, 개인 스킬 폴더는 스�
 
 ```bash
 rm -rf ~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills
-rm -rf <skills-dir>/tizen-*                 # <skills-dir>는 위 표 참조
+rm -rf <skills-dir>/tizen-*                 # 위 표 참조. codex / gemini는 다른 쪽이
+                                            # 아직 설치되어 있으면 건너뜀
 rm -f  <agents-dir>/tizen-*.md <agents-dir>/tizen-*.toml
 rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # claude / codex / gemini
 rm -f  ~/.tizen.agent.update.json           # 업데이트 확인 캐시(모든 호스트 공용)
@@ -165,6 +175,11 @@ rm -f  ~/.tizen.agent.update.json           # 업데이트 확인 캐시(모든 
 # 그 다음 AGENTS.md / GEMINI.md의 tizen-sdk-skills 구획과
 # settings.json / hooks.json의 훅 항목(PreToolUse / BeforeTool / SessionStart)을 삭제
 ```
+
+Codex CLI와 Gemini CLI는 같은 `~/.agents/skills/tizen-*` 폴더를 읽고, 두 셋업은 서로를
+추적하지 않습니다. Codex를 VS Code 확장과 `codex/setup`으로 함께 설치하지 마세요. 한
+호스트를 제거하거나 업데이트한 뒤 스킬이 없어지거나 버전이 맞지 않으면, 해당 호스트의
+셋업 스크립트를 다시 실행하세요. 파일을 제자리에서 다시 씁니다.
 
 ## 하네스 추가하기
 

@@ -175,7 +175,8 @@ Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/)
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/,
+                                  # 네 개 모두는 common/setup/setup-all.sh)
 ```
 
 VS Code 확장은 세션 시작 확인을 설치하지 않으므로 릴리스 Watch로 알림을 받으세요. 업데이트는
@@ -333,7 +334,9 @@ tizen-sdk-skills/
   `node bin/tizen-sdk.js --doctor`)가 SDK 경로, 캐시, 러너 상태를 보고합니다.
 - **제거** — VS Code 확장은 제거 시 자신이 설치한 파일을 모두 정리합니다. 스크립트로 설치한
   경우에는 캐시 루트 `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, `tizen-*`
-  스킬 폴더와 에이전트 파일, 훅/지침 항목을 삭제하면 됩니다. 호스트별 정확한 경로는
+  스킬 폴더와 에이전트 파일, 훅/지침 항목을 삭제하면 됩니다. Codex CLI와 Gemini CLI는
+  `~/.agents/skills/tizen-*`를 함께 쓰므로, 다른 쪽이 아직 설치되어 있으면 이 폴더는
+  남겨 두세요. 호스트별 정확한 경로는
   [HARNESS_SETUP.md](docs/deployment/HARNESS_SETUP.md)의 *Re-running and removing* 절을
   참고하세요.
 

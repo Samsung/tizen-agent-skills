@@ -185,7 +185,8 @@ of another checkout) and re-run the same setup script, then restart the host:
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts)
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts,
+                                  # or common/setup/setup-all.sh for all four)
 ```
 
 The VS Code extension does not install the session-start check; watch the releases
@@ -351,7 +352,9 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
 - **Uninstall** — the VS Code extension removes everything it installed when
   uninstalled. For script installs, delete the cache root
   `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, the `tizen-*` skill
-  folders and agent files, and the hook/instruction entries; the exact paths per host
+  folders and agent files, and the hook/instruction entries. Codex CLI and Gemini CLI
+  share `~/.agents/skills/tizen-*`, so keep those folders while the other host is
+  still installed. The exact paths per host
   are listed under *Re-running and removing* in
   [HARNESS_SETUP.en.md](docs/deployment/HARNESS_SETUP.en.md).
 

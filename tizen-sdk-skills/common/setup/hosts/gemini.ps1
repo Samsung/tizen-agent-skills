@@ -4,13 +4,41 @@
 # hosts\gemini.ps1 - Gemini CLI specifics for common\setup\setup.ps1 (dot-sourced).
 # See hosts\gemini.sh for the surfaces and rationale; keep the two in step.
 
+# First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
+$script:GeminiMinShared = [version]"0.28.0"
+
+# Installed Gemini CLI version, or $null when it cannot be read - see
+# _gemini_cli_version in hosts\gemini.sh.
+function Get-GeminiCliVersion {
+    if (-not (Get-Command gemini -ErrorAction SilentlyContinue)) { return $null }
+    # setup.ps1 runs with ErrorActionPreference Stop, which turns any stderr line
+    # of a native command into an error in Windows PowerShell 5.1.
+    $ErrorActionPreference = "Continue"
+    try { $lines = @($null | & gemini --version 2>$null) } catch { return $null }
+    if ($LASTEXITCODE -ne 0) { return $null }
+    $found = $null
+    foreach ($line in $lines) {
+        if ("$line" -match '^v?(\d+\.\d+\.\d+)(-\S*)?') {
+            $found = [version]$Matches[1]
+            if ($Matches[2] -and $found -eq $script:GeminiMinShared) { $found = $null }
+        }
+    }
+    return $found
+}
+
 function Initialize-HostConfig {
     $script:HostLabel = "Gemini CLI"
     $script:HostHome = Join-Path $script:UserHome ".gemini"
     $script:CacheSubDirs = @("skills", "agents", "scripts", "lib", "assets")
-    # Shared with Codex CLI - see hosts\gemini.sh for why both install here.
-    $script:SkillsDir = Join-Path $script:UserHome ".agents\skills"
     $script:OldSkillsDir = Join-Path $script:HostHome "skills"
+    # Shared with Codex CLI - see hosts\gemini.sh for why both install here,
+    # unless the installed Gemini CLI predates ~/.agents/skills support.
+    $script:GeminiVersion = Get-GeminiCliVersion
+    if ($script:GeminiVersion -and $script:GeminiVersion -lt $script:GeminiMinShared) {
+        $script:SkillsDir = $script:OldSkillsDir
+    } else {
+        $script:SkillsDir = Join-Path $script:UserHome ".agents\skills"
+    }
     $script:AgentsMode = "gemini-md"
     $script:AgentsDir = Join-Path $script:HostHome "agents"
     $script:SettingsFile = Join-Path $script:HostHome "settings.json"
@@ -52,10 +80,25 @@ function Get-GeminiSessionEntries {
 }
 
 function Install-HostExtras {
-    # Our skills used to live in ~/.gemini/skills. Remove only the folders named
-    # after our skills; anything else there belongs to the user.
-    foreach ($skill in Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory) {
-        Remove-LegacyPath (Join-Path $script:OldSkillsDir $skill.Name) "Gemini skill copy"
+    if ($script:SkillsDir -eq $script:OldSkillsDir) {
+        Write-Status "Gemini CLI $script:GeminiVersion does not read ~/.agents/skills (needs $script:GeminiMinShared+) - skills kept in $script:SkillsDir. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
+    } else {
+        # See hosts\gemini.sh: old copies are the folders named after our skills,
+        # unless ~/.gemini/skills is itself a link (then they are the new copies).
+        $legacyCopies = @()
+        $old = Get-Item -LiteralPath $script:OldSkillsDir -Force -ErrorAction SilentlyContinue
+        if ($old -and -not ($old.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
+                ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path -LiteralPath $_ })
+        }
+        if ($script:GeminiVersion) {
+            foreach ($copy in $legacyCopies) { Remove-LegacyPath $copy "Gemini skill copy" }
+        } else {
+            Write-Status "Could not read the Gemini CLI version - installed to $script:SkillsDir, which Gemini CLI reads from $script:GeminiMinShared on. If yours is older, re-run this setup where 'gemini --version' works." "Warning"
+            if ($legacyCopies.Count -gt 0) {
+                Write-Status "Kept $($legacyCopies.Count) skill folder(s) in $script:OldSkillsDir`: with Gemini CLI $script:GeminiMinShared+ they duplicate $script:SkillsDir, so delete them once the version is confirmed." "Warning"
+            }
+        }
     }
 
     Install-ShellScript $script:AdapterSrc $script:AdapterDst
@@ -156,7 +199,7 @@ function Write-HostSummary {
 
 
 function Write-HostNotes {
-    Write-Host " - Restart Gemini CLI; check with /skills list and /agents. Skills are read from ~/.agents/skills (shared with Codex CLI)." -ForegroundColor Yellow
+    Write-Host " - Restart Gemini CLI; check with /skills list and /agents. Skills are read from $script:SkillsDir (~/.agents/skills is shared with Codex CLI)." -ForegroundColor Yellow
     Write-Host " - Hooks run via bash - Git Bash must be on PATH on Windows." -ForegroundColor Yellow
     Write-Host " - Agent 'tools' names were mapped Claude->Gemini by agent-convert.js; if /agents rejects one, report the name." -ForegroundColor Yellow
 }

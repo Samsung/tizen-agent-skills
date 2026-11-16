@@ -13,6 +13,14 @@
 
 ## [Unreleased]
 
+### 추가
+
+- **`common/setup/setup-all.sh`(`.ps1`, `.bat`)로 모든 하네스를 한 번에 설치합니다.**
+  Claude Code, Cline, Codex CLI, Gemini CLI 순서로 `common/setup/setup.sh`를 같은
+  옵션(`--repo`, `--skip-validation`, `--no-restart`)으로 실행합니다. 한 하네스가 실패해도
+  나머지는 계속 진행하고, 끝에 하네스별 결과를 요약하며 하나라도 실패하면 종료 코드 1을
+  반환합니다.
+
 ### 수정
 
 - **Gemini CLI가 변환된 에이전트를 모두 다시 불러옵니다.** Gemini는 에이전트 frontmatter를 엄격한
@@ -47,7 +55,10 @@
   `~/.agents/skills` 쪽이 이기기 때문에, Codex 설치가 더 오래된 버전이면 새 Gemini 설치를
   가리기도 했습니다. 이제 `gemini/setup/setup.sh`와 `setup.ps1`도 스킬을
   `~/.agents/skills`에 설치하고, `~/.gemini/skills`에서 이 플러그인의 스킬 폴더를
-  지웁니다. 그 밖의 폴더는 그대로 둡니다.
+  지웁니다. 그 밖의 폴더는 그대로 둡니다. 0.28.0 이전 Gemini CLI는 `~/.agents/skills`를
+  읽지 않으므로, 이 경우 셋업은 계속 `~/.gemini/skills`에 설치하고, 버전을 읽을 수 없으면 그곳의
+  기존 사본을 남깁니다. 두 호스트는 서로를 추적하지 않고 한 벌을 함께 씁니다. 제거 절차는
+  HARNESS_SETUP에 있으며, 호스트의 셋업을 다시 실행하면 그 스킬이 복구됩니다.
 
 ## [1.8.0] — 2026-11-14
 

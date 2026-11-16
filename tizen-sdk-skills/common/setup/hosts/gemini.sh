@@ -9,6 +9,8 @@
 #            overriding the earlier with a "Skill conflict detected" warning per
 #            skill. Codex reads only ~/.agents/skills, so both hosts install there:
 #            one copy, no conflict, no stale Codex copy shadowing ours.
+#            ~/.agents/skills is read from Gemini CLI 0.28.0 on; an older CLI
+#            keeps getting ~/.gemini/skills.
 #   agents   ~/.gemini/agents/*.md              (YAML name/description/tools/max_turns)
 #   hooks    ~/.gemini/settings.json -> hooks.BeforeTool[...]; stdin carries
 #            tool_name + tool_input, deny = stdout {"decision":"deny","reason":…};
@@ -18,12 +20,45 @@
 # The cache keeps the shared ~/<dot>/plugins/cache/tizen-platform/tizen-sdk-skills/<VER>
 # convention so plugin-cache.js and the SKILL.md snippets find the runners.
 
+# First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
+GEMINI_MIN_SHARED="0.28.0"
+
+# Installed Gemini CLI version, or empty when it cannot be read: not on PATH,
+# --version exiting non-zero, or no version line. Only a line that starts with
+# the version counts, so an update notice mentioning other versions is not
+# mistaken for it. stdin is closed so the CLI cannot wait for a prompt. A
+# pre-release of the first supporting version (0.28.0-nightly...) may predate
+# the feature, so it counts as unknown too.
+_gemini_cli_version() {
+  command -v gemini >/dev/null 2>&1 || return 0
+  local out ver
+  out="$(gemini --version </dev/null 2>/dev/null)" || return 0
+  ver="$(printf '%s\n' "$out" | grep -Eo '^v?[0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*' | tail -1 | sed 's/^v//' || true)"
+  [[ "$ver" == "$GEMINI_MIN_SHARED"-* ]] && return 0
+  printf '%s' "${ver%%-*}"
+}
+
+_version_ge() { # <a> <b> — true when x.y.z a >= b; plain bash, as sort -V is not everywhere
+  local IFS=. i
+  local -a a=($1) b=($2)
+  for i in 0 1 2; do
+    (( ${a[i]:-0} > ${b[i]:-0} )) && return 0
+    (( ${a[i]:-0} < ${b[i]:-0} )) && return 1
+  done
+  return 0
+}
+
 host_configure() {
   HOST_LABEL="Gemini CLI"
   HOST_HOME="$HOME/.gemini"
   CACHE_SUBDIRS=(skills agents scripts lib assets)
-  SKILLS_DIR="$HOME/.agents/skills"
   OLD_SKILLS_DIR="$HOST_HOME/skills"
+  GEMINI_VERSION="$(_gemini_cli_version)"
+  if [[ -n "$GEMINI_VERSION" ]] && ! _version_ge "$GEMINI_VERSION" "$GEMINI_MIN_SHARED"; then
+    SKILLS_DIR="$OLD_SKILLS_DIR"
+  else
+    SKILLS_DIR="$HOME/.agents/skills"
+  fi
   AGENTS_MODE="gemini-md"
   AGENTS_DIR="$HOST_HOME/agents"
   SETTINGS_FILE="$HOST_HOME/settings.json"
@@ -68,13 +103,30 @@ EOF
 
 
 host_install_extras() {
-  # Our skills used to live in ~/.gemini/skills. Remove only the folders named
-  # after our skills; anything else there belongs to the user.
-  local skill_dir
-  for skill_dir in "$COMMON_DIR/skills"/*/; do
-    [[ -d "$skill_dir" ]] || continue
-    remove_legacy_path "$OLD_SKILLS_DIR/$(basename "$skill_dir")" "Gemini skill copy"
-  done
+  if [[ "$SKILLS_DIR" == "$OLD_SKILLS_DIR" ]]; then
+    write_status "Gemini CLI $GEMINI_VERSION does not read ~/.agents/skills (needs $GEMINI_MIN_SHARED+) - skills kept in $SKILLS_DIR. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
+  else
+    # Our skills used to live in ~/.gemini/skills: the folders named after our
+    # skills there. Anything else in that folder belongs to the user. When the
+    # two folders are one (a symlink), those are the copies just installed.
+    local skill_dir legacy_copies=()
+    if [[ ! "$OLD_SKILLS_DIR" -ef "$SKILLS_DIR" ]]; then
+      for skill_dir in "$COMMON_DIR/skills"/*/; do
+        [[ -d "$OLD_SKILLS_DIR/$(basename "$skill_dir")" ]] && legacy_copies+=("$OLD_SKILLS_DIR/$(basename "$skill_dir")")
+      done
+    fi
+    if [[ -n "$GEMINI_VERSION" ]]; then
+      for skill_dir in "${legacy_copies[@]+"${legacy_copies[@]}"}"; do
+        remove_legacy_path "$skill_dir" "Gemini skill copy"
+      done
+    else
+      # Unknown version (not on PATH here, e.g. an nvm shim, or --version failed):
+      # assume a current CLI, but keep the old copies an older one may still need.
+      write_status "Could not read the Gemini CLI version - installed to $SKILLS_DIR, which Gemini CLI reads from $GEMINI_MIN_SHARED on. If yours is older, re-run this setup where 'gemini --version' works." "Warning"
+      [[ ${#legacy_copies[@]} -eq 0 ]] ||
+        write_status "Kept ${#legacy_copies[@]} skill folder(s) in $OLD_SKILLS_DIR: with Gemini CLI $GEMINI_MIN_SHARED+ they duplicate $SKILLS_DIR, so delete them once the version is confirmed." "Warning"
+    fi
+  fi
   # Hook adapter + the two guards it dispatches to. The adapter maps Gemini's
   # tool names (run_shell_command / write_file / replace) onto the Bash / Write
   # payload the shared guards expect and converts their deny JSON to Gemini's.
@@ -162,7 +214,7 @@ host_summary() {
 
 
 host_notes() {
-  echo -e "${YELLOW} - Restart Gemini CLI; check with /skills list and /agents. Skills are read from ~/.agents/skills (shared with Codex CLI).${NC}"
+  echo -e "${YELLOW} - Restart Gemini CLI; check with /skills list and /agents. Skills are read from $SKILLS_DIR (~/.agents/skills is shared with Codex CLI).${NC}"
   echo -e "${YELLOW} - Hooks run via bash — on Windows, Git Bash must be on PATH.${NC}"
   echo -e "${YELLOW} - Agent 'tools' names were mapped Claude->Gemini by agent-convert.js; if /agents rejects one, report the name.${NC}"
 }

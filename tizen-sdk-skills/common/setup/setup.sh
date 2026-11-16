@@ -52,9 +52,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+# Lower-case, so "Gemini" finds hosts/gemini.sh on a case-sensitive filesystem too.
+HARNESS="$(printf '%s' "$HARNESS" | tr '[:upper:]' '[:lower:]')"
 HOST_FILE="$SCRIPT_DIR/hosts/$HARNESS.sh"
-if [[ -z "$HARNESS" || ! -f "$HOST_FILE" ]]; then
-  echo "Error: --harness must be one of: $(ls "$SCRIPT_DIR/hosts" | sed 's/\.sh$//' | tr '\n' ' ')" >&2
+# A plain name only: anything with a path segment would source a file outside hosts/.
+if [[ ! "$HARNESS" =~ ^[a-z]+$ || ! -f "$HOST_FILE" ]]; then
+  echo "Error: --harness must be one of: $(ls "$SCRIPT_DIR/hosts" | sed -n "s/\.sh$//p" | tr "\n" " ")" >&2
   exit 1
 fi
 
