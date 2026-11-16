@@ -27,6 +27,32 @@ New here? Start with the one-page [Quick Guide](quick-guide.md).
 The Tizen SDK itself does **not** need to be pre-installed — the `tizen-sdk-install`
 skill installs it for you.
 
+### Setup scripts
+
+Two scripts in `common/setup/` install the plugin from a local checkout. Run them from
+`tizen-sdk-skills/`:
+
+| Script | What it does | Example |
+|---|---|---|
+| `setup-all.sh` / `setup-all.ps1` / `setup-all.bat` | Installs for all four hosts (Claude Code, Cline, Codex CLI, Gemini CLI) in one run. No options needed. | `bash common/setup/setup-all.sh` |
+| `setup.sh` / `setup.ps1` | Installs for one host. `--harness` is required. | `bash common/setup/setup.sh --harness gemini` |
+
+Both take `--repo <path>`, `--skip-validation` and `--no-restart` (`-RepoPath`,
+`-SkipValidation`, `-NoRestart` in PowerShell). `setup-all` keeps going when one host
+fails and prints a summary at the end. The per-host wrappers below (`claude/setup/setup.sh`
+and so on) are shortcuts for `setup.sh --harness <host>`. Restart each host after
+installing.
+
+```bash
+git clone https://github.com/Samsung/tizen-agent-skills.git
+cd tizen-agent-skills/tizen-sdk-skills
+
+# All hosts
+bash common/setup/setup-all.sh                # Windows: .\common\setup\setup-all.ps1
+# One host
+bash common/setup/setup.sh --harness claude   # Windows: .\common\setup\setup.ps1 -Harness claude
+```
+
 ### Claude Code
 
 ```bash
