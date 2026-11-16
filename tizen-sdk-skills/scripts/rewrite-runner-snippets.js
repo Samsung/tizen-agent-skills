@@ -204,6 +204,22 @@ const CUR_LOOKUP_RE = new RegExp(
   "gm",
 );
 
+// A file that ships next to a runner (e.g. dlog-analyzer's REPORT_TEMPLATE.md):
+// a personal skill copy in any host's skills dir (or ~/.agents) first, then
+// the copy in the same plugin-cache version directory as $CLI. With $CLI
+// empty, the last word is empty and `[ -f ]` skips it.
+const SKILL_FILE_DIRS = [...HOST_DOT_DIRS, ".agents"];
+const SKILL_FILE_LINE = (varName, skill, file) =>
+  `${varName}=; for _tz_t in ` +
+  SKILL_FILE_DIRS.map((d) => `"$HOME"/${d}/skills/${skill}/${file}`).join(" ") +
+  ` "\${CLI:+\${CLI%/lib/cli/*}/skills/${skill}/${file}}"; ` +
+  `do [ -f "$_tz_t" ] || continue; ${varName}=$_tz_t; break; done; unset _tz_t`;
+// group 1 = indent, group 2 = var name, group 3 = skill, group 4 = file.
+const SKILL_FILE_RE = new RegExp(
+  `${INDENT}([A-Z_]+)=; for _?[a-z_]+ in "\\$HOME"/[^/\\s]+/skills/([\\w-]+)/([\\w.-]+) .*; done(?:; unset _tz_t)?$`,
+  "gm",
+);
+
 // Superseded two-line form (own host, then fallback) — still recognised so
 // a stale copy is migrated to LOOKUP_LINE. The `|| true` kept a missing cache
 // from aborting a `set -o pipefail` shell.
@@ -712,6 +728,11 @@ function rewrite(text, { psBlocks = true } = {}) {
       indent + LOOKUP_LINE(varName, tail, Boolean(keep)),
   );
   out = mergeFallbackLines(out);
+  out = out.replace(
+    SKILL_FILE_RE,
+    (_m, indent, varName, skill, file) =>
+      indent + SKILL_FILE_LINE(varName, skill, file),
+  );
   out = out.replace(BARE_RE, (_m, indent, varName, tail) =>
     [NEW_BASE_LINE, LOOKUP_LINE(varName, tail)]
       .map((l) => indent + l)
@@ -852,6 +873,7 @@ function main(argv) {
 module.exports = {
   NEW_BASE_LINE,
   LOOKUP_LINE,
+  SKILL_FILE_LINE,
   OLD_OWN_HOST_LINE,
   cmdChainDirs,
   cmdChainArgs,

@@ -35,8 +35,7 @@
  *
  * Frontmatter values: a value written as ONE complete YAML quoted scalar
  * ('…' with '' for a quote, or "…" with JSON-compatible escapes) is unquoted
- * on parse; anything else is taken verbatim, minus a trailing ` # …` YAML
- * comment. Every output format then escapes
+ * on parse; anything else is taken verbatim. Every output format then escapes
  * the plain value itself, so no writer has to guess whether a value is
  * "already quoted". name and description are required for both formats.
  *
@@ -70,16 +69,25 @@ const DOUBLE_QUOTED = /^("(?:[^"\\]|\\.)*")(?:\s+#.*)?$/;
  * Unquote one frontmatter value. Single-quoted: `''` → `'`. Double-quoted:
  * JSON escapes (\\ \" \/ \b \f \n \r \t \uXXXX), the subset YAML and JSON
  * share; any other escape (e.g. `"C:\Users"`, where YAML rejects `\U…`) is an
- * error instead of a silent pass-through. Plain: a trailing ` # …` is a YAML
- * comment and is dropped.
+ * error instead of a silent pass-through. A raw tab, which YAML allows inside
+ * double quotes, is accepted. Plain: ` #` would start a YAML comment and cut
+ * the value short, so it is an error too (quote the value instead).
  */
 function unquoteValue(key, raw) {
   const s = raw.match(SINGLE_QUOTED);
   if (s) return s[1].replace(/''/g, "'");
   const d = raw.match(DOUBLE_QUOTED);
-  if (!d) return raw.replace(/\s+#.*$/, "");
+  if (!d) {
+    if (/\s#/.test(raw)) {
+      throw new Error(
+        `frontmatter "${key}": plain value contains " #", which YAML reads as ` +
+          `a comment — ${raw} (wrap the value in single quotes)`,
+      );
+    }
+    return raw;
+  }
   try {
-    return JSON.parse(d[1]);
+    return JSON.parse(d[1].replace(/\t/g, "\\t"));
   } catch {
     throw new Error(
       `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
@@ -110,8 +118,8 @@ function parseFrontmatter(text) {
     try {
       value = unquoteValue(key, raw);
     } catch (e) {
-      // Only name / description are written out as strings; an unparsable
-      // value of any other key must not stop the whole conversion.
+      // Only name / description are written out as strings; a value of any
+      // other key that fails here must not stop the whole conversion.
       if (key === "name" || key === "description") throw e;
       value = raw;
     }
@@ -130,7 +138,10 @@ function parseAgent(text, sourceName) {
   } catch (e) {
     throw new Error(`${sourceName}: ${e.message}`, { cause: e });
   }
-  if (!get(parsed.front, "name") || !get(parsed.front, "description")) {
+  if (
+    !get(parsed.front, "name")?.trim() ||
+    !get(parsed.front, "description")?.trim()
+  ) {
     throw new Error(`${sourceName}: name and description are required`);
   }
   return parsed;

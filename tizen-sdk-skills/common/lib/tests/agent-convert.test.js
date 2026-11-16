@@ -206,11 +206,11 @@ const escapeCases = [
     'description = "Deploy \u{1F680}"',
   ],
   [
-    "plain value + comment",
-    "List VMs # internal note",
-    "List VMs",
-    "'List VMs'",
-    'description = "List VMs"',
+    "raw tab in double quotes",
+    '"Build\tapp"',
+    "Build\tapp",
+    '"Build\\u0009app"',
+    'description = "Build\\u0009app"',
   ],
   [
     "quoted value + comment",
@@ -268,6 +268,15 @@ for (const [label, fn] of [
   );
 }
 
+// A plain name / description with " #" (YAML comment) is an error, not cut.
+check(
+  "  plain description with \" #\" rejected",
+  (throwsWith(() => toGeminiMd(agent("see issue #41"), "c.md")) || "").includes(
+    'contains " #"',
+  ),
+  true,
+);
+
 // A bad escape in a key that is not written out keeps its raw value.
 check(
   "  bad escape in a dropped key does not stop the conversion",
@@ -285,6 +294,7 @@ for (const [label, text] of [
   ["missing description", "---\nname: x\n---\n"],
   ["empty description", agent("")],
   ["quoted-empty description", agent("''")],
+  ["blank description", agent("'   '")],
   ["empty name", agent("d", "")],
 ]) {
   for (const [fmt, fn] of [

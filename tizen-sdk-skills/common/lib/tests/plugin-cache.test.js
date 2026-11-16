@@ -309,6 +309,10 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         if (/^[A-Z_]+=\$\(ls "\$BASE"\//.test(l)) {
           stale.push(`${rel} (superseded $(ls …) own-host line)`);
         }
+        const sf = l.match(/^([A-Z_]+)=; for _tz_t in .*\/skills\/([\w-]+)\/([\w.-]+) /);
+        if (sf && l !== gen.SKILL_FILE_LINE(sf[1], sf[2], sf[3])) {
+          stale.push(`${rel} (skill-file line differs from SKILL_FILE_LINE)`);
+        }
         const lk = l.match(
           /^_tz_o=; \[ -z "\$\{ZSH_VERSION:-\}" \] \|\| \{ \[\[ ! -o nomatch \]\] \|\| _tz_o=1; unsetopt nomatch; \}; _tz_s=; ([A-Z_]+)=; for _tz_d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do .*?for _tz_f in "\$_tz_d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
         );
@@ -578,6 +582,17 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       `the runner lives under ${P(".claude", X)} on Windows`,
     );
     check("  the generated chain is a fixed point", rw(chainX), chainX);
+
+    const tplLine = gen.SKILL_FILE_LINE(
+      "TEMPLATE",
+      "tizen-dlog-analyzer",
+      "REPORT_TEMPLATE.md",
+    );
+    check(
+      "  skill-file line missing a host is regenerated",
+      rw(tplLine.replace(/ "\$HOME"\/\.gemini\/\S+/, "")),
+      tplLine,
+    );
 
     // Superseded bash fallback migration.
     const tailX = "lib/cli/x-cli.js";
@@ -951,6 +966,21 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     put("h2 sp", ".codex", "0.1.0");
     fs.mkdirSync(path.join(root, "h3"));
     const script = `set -eu\n${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\nprintf '%s' "$CLI"`;
+    // State the line leaves in the shell it was pasted into: no _tz_*
+    // variable, and (zsh) nomatch exactly as it was before.
+    const leftover = (sh, pre) => {
+      const r = spawnSync(
+        sh,
+        [
+          "-c",
+          `${pre}${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n` +
+            `set | grep '^_tz_' || true; ` +
+            `[ -z "\${ZSH_VERSION:-}" ] || { [[ -o nomatch ]] && echo nomatch=on || echo nomatch=off; }`,
+        ],
+        { encoding: "utf-8", env: { PATH: process.env.PATH, HOME: path.join(root, "h3") } },
+      );
+      return r.status === 0 ? r.stdout.trim() : `exit ${r.status}: ${r.stderr}`;
+    };
     const found = (sh, home, env) => {
       const r = spawnSync(sh, ["-c", script], {
         encoding: "utf-8",
@@ -990,7 +1020,25 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         found(sh, "h3", {}),
         "",
       );
+      check(
+        `  ${sh}: no _tz_* variable left behind`,
+        leftover(sh, "").replace(/nomatch=\w+/, "").trim(),
+        "",
+      );
     }
+    if (shells.includes("zsh")) {
+      check("  zsh: nomatch on stays on", leftover("zsh", ""), "nomatch=on");
+      check(
+        "  zsh: nomatch off stays off",
+        leftover("zsh", "unsetopt nomatch\n"),
+        "nomatch=off",
+      );
+    }
+    check(
+      "  zsh runs the lookup in CI",
+      !process.env.CI || shells.includes("zsh"),
+      true,
+    );
     fs.rmSync(root, { recursive: true, force: true });
   }
 }
