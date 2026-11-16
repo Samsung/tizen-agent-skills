@@ -208,7 +208,8 @@ validate_personal_skills() { # <source-skills-dir> <dest-skills-dir> <label>
 
 # Agent definitions. MODE:
 #   md         copy agents/*.md verbatim           (Claude Code)
-#   gemini-md  rewrite frontmatter for Gemini CLI  (tools names, max_turns)
+#   gemini-md  rewrite frontmatter for Gemini CLI  (name/description YAML
+#              single-quoted, tools names, max_turns)
 #   toml       convert to Codex CLI agent TOML
 #   none       harness has no file-based subagents (Cline)
 sync_agents() { # <mode> <source-agents-dir> <dest-dir>

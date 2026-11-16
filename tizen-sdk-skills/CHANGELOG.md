@@ -14,6 +14,18 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Gemini CLI loads every converted agent again.** Gemini parses agent frontmatter as strict
+  YAML, so a description containing `": "` (for example ``"목록": `list-vm` ``) was read as a
+  mapping and the agent failed to load. `agent-convert.js` now writes `name` and `description`
+  as YAML single-quoted strings. A source value that is one complete quoted scalar is unquoted
+  when read and escaped again for each format, so neither Gemini YAML nor Codex TOML passes
+  source quotes through or wraps them twice; a value that only starts and ends with a quote
+  (`'list' or 'run'`) is escaped like any other text. A double-quoted value with an escape YAML
+  rejects (`"C:\Tizen"`) and a missing or empty `name` / `description` are now errors for both
+  formats, naming the file.
+
 ## [1.8.0] — 2026-11-14
 
 ### Added

@@ -9,8 +9,13 @@
  * in this repo, so the checks are shape-based):
  *   - codex-toml: one .toml per agent; name/description/developer_instructions
  *     present; literal-string fences balanced; body preserved verbatim
- *   - gemini-md: frontmatter keeps name/description, maps tools, renames
- *     maxTurns → max_turns, drops model; body preserved verbatim
+ *   - gemini-md: frontmatter keeps name/description as YAML single-quoted
+ *     strings, maps tools, renames maxTurns → max_turns, drops model; body
+ *     preserved verbatim
+ *   - quoting: a source value that is one quoted scalar is unquoted on parse
+ *     and re-escaped per format; look-alikes ('a' or 'b') stay verbatim; a
+ *     double-quoted value with a non-JSON escape and a missing/empty
+ *     name or description are errors for both formats
  *   - CLI entry point: usage error → exit 1
  */
 
@@ -27,6 +32,8 @@ const {
 } = require("../tools/agent-convert");
 
 console.log("=== agent-convert Test ===\n");
+
+const get = (front, key) => (front.find(([k]) => k === key) || [])[1];
 
 let failures = 0;
 function check(name, actual, expected) {
@@ -83,34 +90,138 @@ check(
   false,
 );
 
+// Raw (still quoted) frontmatter value as written — parseFrontmatter unquotes.
+const rawValue = (text, key) => {
+  const m = text.match(new RegExp(`^${key}: (.*)$`, "m"));
+  return m ? m[1] : null;
+};
+// A YAML single-quoted scalar: '…' with every inner quote doubled.
+const isYamlSingle = (v) => /^'(?:[^']|'')*'$/.test(v || "");
+const agent = (desc, name = "x") =>
+  `---\nname: ${name}\ndescription: ${desc}\n---\n`;
+const throwsWith = (fn) => {
+  try {
+    fn();
+    return null;
+  } catch (e) {
+    return e.message;
+  }
+};
+
 const gem = toGeminiMd(sample, "sample.md", (m) => warnings.push(m));
 const gemFront = parseFrontmatter(gem).front;
+check("  gemini: name single-quoted", rawValue(gem, "name"), "'tizen-sample'");
 check(
-  "  gemini: name kept",
+  "  gemini: name round-trips",
   gemFront.find(([k]) => k === "name")[1],
   "tizen-sample",
 );
 check(
   "  gemini: description single-quoted for strict YAML",
-  gemFront.find(([k]) => k === "description")[1],
+  rawValue(gem, "description"),
   `'Sample agent: does "things" with C:\\paths, 한글 included'`,
 );
-const tricky = toGeminiMd(
-  '---\nname: x\ndescription: LIST ("list", "목록": `list-vm`) — it\'s here\n---\n',
-  "tricky.md",
-);
+const trickyDesc = 'LIST ("list", "목록": `list-vm`) — it\'s here';
+const tricky = toGeminiMd(agent(trickyDesc), "tricky.md");
 check(
   "  gemini: inner '\": ' and apostrophe quoted safely",
-  parseFrontmatter(tricky).front.find(([k]) => k === "description")[1],
+  rawValue(tricky, "description"),
   `'LIST ("list", "목록": \`list-vm\`) — it''s here'`,
 );
 check(
-  "  gemini: already-quoted description passed through",
-  parseFrontmatter(
-    toGeminiMd("---\nname: x\ndescription: 'already: quoted'\n---\n", "q.md"),
-  ).front.find(([k]) => k === "description")[1],
-  "'already: quoted'",
+  "  gemini: tricky description round-trips",
+  get(parseFrontmatter(tricky).front, "description"),
+  trickyDesc,
 );
+
+// Source values that are ONE quoted scalar are unquoted, then re-escaped per
+// format — never passed through, never double-quoted.
+const quotedCases = [
+  // [label, source value, plain value, gemini raw, codex description line]
+  [
+    "single-quoted source",
+    "'already: quoted, it''s'",
+    "already: quoted, it's",
+    "'already: quoted, it''s'",
+    'description = "already: quoted, it\'s"',
+  ],
+  [
+    "double-quoted source",
+    '"say \\"hi\\": C:\\\\x"',
+    'say "hi": C:\\x',
+    `'say "hi": C:\\x'`,
+    'description = "say \\"hi\\": C:\\\\x"',
+  ],
+  // Start and end with a quote but are not ONE scalar → verbatim, then escaped.
+  [
+    "'a' or 'b' (not one scalar)",
+    "'list' or 'run'",
+    "'list' or 'run'",
+    "'''list'' or ''run'''",
+    "description = \"'list' or 'run'\"",
+  ],
+  [
+    '"a" or "b" (not one scalar)',
+    '"list" or "run"',
+    '"list" or "run"',
+    `'"list" or "run"'`,
+    'description = "\\"list\\" or \\"run\\""',
+  ],
+];
+for (const [label, src, plain, gemRaw, codexLine] of quotedCases) {
+  const text = agent(src);
+  check(
+    `  parse: ${label} → plain value`,
+    get(parseFrontmatter(text).front, "description"),
+    plain,
+  );
+  const g = toGeminiMd(text, "q.md");
+  check(`  gemini: ${label}`, rawValue(g, "description"), gemRaw);
+  check(`  gemini: ${label} is one YAML scalar`, isYamlSingle(gemRaw), true);
+  check(
+    `  gemini: ${label} round-trips`,
+    get(parseFrontmatter(g).front, "description"),
+    plain,
+  );
+  check(
+    `  codex: ${label}`,
+    toCodexToml(text, "q.md").split("\n")[2],
+    codexLine,
+  );
+}
+
+// A double-quoted value with an escape YAML rejects is an error, not a pass-through.
+for (const [label, fn] of [
+  ["gemini", () => toGeminiMd(agent('"D:\\Tizen\\x"'), "bad.md")],
+  ["codex", () => toCodexToml(agent('"D:\\Tizen\\x"'), "bad.md")],
+]) {
+  const msg = throwsWith(fn) || "";
+  check(
+    `  ${label}: invalid double-quoted escape rejected, file named`,
+    msg.startsWith("bad.md: ") && msg.includes("unsupported escape"),
+    true,
+  );
+}
+
+// name / description are required for BOTH formats (empty or quoted-empty).
+for (const [label, text] of [
+  ["missing description", "---\nname: x\n---\n"],
+  ["empty description", agent("")],
+  ["quoted-empty description", agent("''")],
+  ["empty name", agent("d", "")],
+]) {
+  for (const [fmt, fn] of [
+    ["gemini", toGeminiMd],
+    ["codex", toCodexToml],
+  ]) {
+    check(
+      `  ${fmt}: ${label} → error`,
+      throwsWith(() => fn(text, "e.md")),
+      "e.md: name and description are required",
+    );
+  }
+}
+
 check(
   "  gemini: tools mapped, unknown dropped",
   gemFront.find(([k]) => k === "tools")[1],
@@ -174,11 +285,18 @@ try {
 
   const badMd = [];
   for (const f of mds) {
-    const { front } = parseFrontmatter(fs.readFileSync(f, "utf-8"));
+    const text = fs.readFileSync(f, "utf-8");
+    const { front } = parseFrontmatter(text);
     const keys = front.map(([k]) => k);
     const tools = front.find(([k]) => k === "tools");
-    const desc = (front.find(([k]) => k === "description") || [])[1] || "";
-    const descQuoted = /^'(?:[^']|'')*'$/.test(desc);
+    const src = parseFrontmatter(
+      fs.readFileSync(path.join(agentsDir, path.basename(f)), "utf-8"),
+    ).front;
+    const descQuoted =
+      isYamlSingle(rawValue(text, "name")) &&
+      isYamlSingle(rawValue(text, "description")) &&
+      get(front, "name") === get(src, "name") &&
+      get(front, "description") === get(src, "description");
     const known = new Set(Object.values(GEMINI_TOOL_MAP));
     const toolsOk =
       !tools ||
@@ -199,7 +317,7 @@ try {
     }
   }
   check(
-    "  gemini: every .md has name/quoted description, no model/maxTurns, only Gemini tool names",
+    "  gemini: every .md has quoted name/description that round-trip, no model/maxTurns, only Gemini tool names",
     badMd,
     [],
   );
