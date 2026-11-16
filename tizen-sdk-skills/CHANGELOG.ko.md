@@ -29,6 +29,17 @@
   `skills/tizen-device-manager/SKILL.md`와 `agents/tizen-device-manager.md`의 description을
   작은따옴표로 감쌌고, 스킬이나 에이전트의 frontmatter가 엄격한 YAML이 아니면 새 테스트
   (`frontmatter-yaml.test.js`)가 실패합니다.
+- **Gemini CLI가 Bash 러너 탐색 블록을 "Command injection detected"로 차단하지 않습니다.**
+  Gemini CLI는 작은따옴표 밖에 `$(…)`, 백틱, `<(…)`가 있는 셸 명령을 거부하는데, 모든 스킬과
+  에이전트의 Bash 블록이 `CLI=$(ls … | sort -V | tail -1)`로 러너를 찾았습니다. 이제 탐색은
+  `scripts/rewrite-runner-snippets.js`가 생성하는 셸 내장 명령(glob `for` 루프, `case`, `[ ]`)
+  한 줄이며, 순서는 그대로입니다: 현재 하네스의 캐시 먼저, 그다음 `~/.claude`, `~/.cline`,
+  `~/.codex`, `~/.gemini`. `X.Y.Z` 캐시 디렉터리를 숫자로 비교해 `1.10.0`이 `1.9.0`보다 앞서고,
+  `X.Y.Z`가 아닌 디렉터리는 건너뛰며, zsh의 `nomatch`를 꺼서 캐시가 없어도 오류가 나지 않고,
+  아무것도 설치되지 않았으면 종료 코드 0으로 `$CLI`를 비워 둡니다. `tizen-dlog-analyzer`의 보고서
+  템플릿 탐색과 Bash 주석 안의 백틱도 같은 방식으로 바꿨습니다. PowerShell과 cmd.exe 블록은
+  바뀌지 않았습니다. `plugin-cache.test.js`는 이제 모든 Bash 탐색 줄을 Gemini 규칙으로 검사하고,
+  생성된 줄을 가짜 캐시에 대해 bash, dash, (설치된 경우) zsh로 실행합니다.
 
 ## [1.8.0] — 2026-11-14
 
