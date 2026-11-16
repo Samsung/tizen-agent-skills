@@ -48,8 +48,7 @@ and refuse to proceed.
 2. You MUST rebuild with Debug — use the build runner (NOT hand-rolled tz):
    ```bash
    BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-   CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-   [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+   [ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
    node "$CLI" build --project "<project-dir>" --build-type Debug
    ```
 3. Reinstall via the install-app runner (NOT `tz install` by hand — `tz install` takes
@@ -57,8 +56,7 @@ and refuse to proceed.
    a project directory):
    ```bash
    BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-   CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-   [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+   [ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
    node "$CLI" install --package "<absolute .tpk path from the build envelope>" --device-serial <serial>
    ```
 4. Retry debugging (re-run the gdb-debug runner)
@@ -83,8 +81,7 @@ command and it works as-is on Windows (Git Bash), macOS, and Linux.
 ```bash
 # Set up remote GDB debugging (gdbserver + port forward + gdb init file):
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/gdb-debug-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/gdb-debug-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/gdb-debug-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" <APP_ID> "<HOST_BINARY>" [attach|launch] ["fn1,fn2"|-] [port]
 #   arg 1 (required) - Tizen package ID
 #   arg 2 (required) - host binary with debug symbols, e.g. <project>/Debug/tpk/bin/<exec>.
@@ -94,7 +91,7 @@ node "$CLI" <APP_ID> "<HOST_BINARY>" [attach|launch] ["fn1,fn2"|-] [port]
 #           or launch (gdbserver launches the binary; needed to break at main)
 #   arg 4 - comma-separated breakpoints ("-" = none; launch mode defaults to main)
 #   arg 5 - debug port (default 5039; "-" keeps the default)
-#   arg 6 - device serial from `sdb devices` (default: the first connected device)
+#   arg 6 - device serial from 'sdb devices' (default: the first connected device)
 ```
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)

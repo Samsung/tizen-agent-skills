@@ -52,8 +52,7 @@ with `command not found`:
 ```bash
 # Setup webapp debug (all options except --app-id are optional):
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" --app-id <APP_ID> [--port 9222] [--serial <serial>] [--timeout 30]
 ```
 
@@ -148,8 +147,7 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
    specified):
    ```bash
    BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-   CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js 2>/dev/null | sort -V | tail -1) || true
-   [ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+   [ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/webapp-debug-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
    node "$CLI" --app-id abcDEF1234.MyWebApp
    ```
 

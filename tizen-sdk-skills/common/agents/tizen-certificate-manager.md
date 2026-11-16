@@ -105,8 +105,7 @@ this is a Bash command and it works as-is on Windows (Git Bash), macOS, and Linu
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/cert-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/cert-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/cert-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 
 # Generate a local Tizen author certificate in an interactive user terminal:
 node "$CLI" generate-author --name "Jane Dev" --prompt-password
@@ -116,7 +115,7 @@ node "$CLI" generate-author --name "Jane Dev" --prompt-password
 # Linux/macOS: chmod 600 <password-file>. The agent receives only the file path.
 node "$CLI" generate-author --name "Jane Dev" --password-file <password-file>
 
-# `tz cert` never overwrites an existing `<file>.p12`; choose a unique --file when needed:
+# 'tz cert' never overwrites an existing '<file>.p12'; choose a unique --file when needed:
 node "$CLI" generate-author --name "Jane Dev" --prompt-password --file jane-dev-20260731
 
 # Optional metadata fields:
