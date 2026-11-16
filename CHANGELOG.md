@@ -12,6 +12,34 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.6.0] — 2026-11-16
+
+Repository-wide release that ships `tizen-sdk-skills` 1.9.0 and `tizen-action-skills` 1.0.0.
+The plugin moved by a minor version, so the release does too.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.8.0 to 1.9.0. Highlights:
+  - `common/setup/setup-all.sh` (`.ps1`, `.bat`) installs Claude Code, Cline, Codex CLI and
+    Gemini CLI in one run with the same options. A failed host does not stop the others, and
+    the summary names the failed hosts. The README now introduces `setup-all` and `setup.sh`
+    first.
+  - The Gemini setup installs skills to `~/.agents/skills`, the folder Codex CLI already uses,
+    so Gemini CLI no longer warns `Skill conflict detected` for every skill when both are
+    installed. Gemini CLI older than 0.28.0 keeps `~/.gemini/skills`.
+  - Gemini CLI loads every converted agent again: `name` and `description` are written as YAML
+    single-quoted strings.
+  - Cline lists the `tizen-device-manager` skill again, and a new test checks that every skill
+    and agent frontmatter is strict YAML.
+  - Every Bash runner lookup is built from shell builtins, so Gemini CLI no longer blocks it as
+    "Command injection detected".
+
+  See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
+  assets stamped with the plugin version are therefore `tizen-sdk-v1.9.0.zip`,
+  `tizen-ai-extension-v1.9.0.vsix` and `tizen-sdk-skills-source-v1.9.0.zip`, plus
+  `tizen-action-skills-source-v1.0.0.zip` for the unchanged action plugin.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.9.0.
+
 ## [1.5.0] — 2026-11-14
 
 Repository-wide release that ships `tizen-sdk-skills` 1.8.0 and `tizen-action-skills` 1.0.0.
