@@ -56,8 +56,8 @@ for ($i = 0; $i -lt $tokens.Count; $i++) {
 }
 
 if ($RepoPath) {
-    if (-not (Test-Path -LiteralPath $RepoPath -PathType Container)) {
-        Write-Host "Error: the repo path needs an existing directory, got: '$RepoPath'" -ForegroundColor Red
+    if (-not (Test-Path -LiteralPath (Join-Path $RepoPath "common\.claude-plugin\plugin.json") -PathType Leaf)) {
+        Write-Host "Error: the repo path must be the tizen-sdk-skills folder (with common\.claude-plugin\plugin.json), got: '$RepoPath'" -ForegroundColor Red
         exit 1
     }
     # Absolute, so the child shells resolve the same directory, and without a
@@ -70,8 +70,11 @@ if ($RepoPath) {
 $harnesses = @("claude", "cline", "codex", "gemini")
 $failed = @()
 # Each run in its own process: setup.ps1 calls exit, which would end this script.
-# Named explicitly: the current host may be an editor such as the ISE.
-$shell = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh" } else { "powershell" }
+# The engine of this session, from $PSHOME: the current host exe may be an
+# editor such as the ISE, and pwsh need not be on PATH.
+$exe = if ($PSVersionTable.PSEdition -eq "Core") { "pwsh" } else { "powershell" }
+if ($env:OS -eq "Windows_NT") { $exe += ".exe" }
+$shell = Join-Path $PSHOME $exe
 $argBase = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", (Join-Path $PSScriptRoot "setup.ps1"))
 if ($RepoPath) { $argBase += @("-RepoPath", $RepoPath) }
 if ($SkipValidation) { $argBase += "-SkipValidation" }
@@ -92,7 +95,11 @@ foreach ($harness in $harnesses) {
     }
 }
 if ($failed.Count -gt 0) {
-    Write-Host "  Fix the error above, then re-run setup-all or the failed harness's own setup (for example .\codex\setup\setup.ps1)." -ForegroundColor Yellow
+    Write-Host "  Fix the errors above, then re-run setup-all or each failed setup:" -ForegroundColor Yellow
+    $pluginDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    foreach ($harness in $failed) {
+        Write-Host "    & `"$(Join-Path $pluginDir "$harness\setup\setup.ps1")`"" -ForegroundColor Yellow
+    }
+    exit 1
 }
-if ($failed.Count -gt 0) { exit 1 }
 exit 0

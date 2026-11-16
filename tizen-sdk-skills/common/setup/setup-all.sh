@@ -14,14 +14,19 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 HARNESSES=(claude cline codex gemini)
 
 # Checked once here, so a typo is one error instead of four failed runs.
 args=("$@")
+repo_given=false
 for ((i = 0; i < ${#args[@]}; i++)); do
   case "${args[i]}" in
     --repo) i=$((i + 1))
-            [[ -n "${args[i]-}" && -d "${args[i]}" ]] || { echo "Error: --repo needs an existing directory, got: '${args[i]-}'" >&2; exit 1; } ;;
+            [[ "$repo_given" == false ]] || { echo "Error: the repo path is given twice" >&2; exit 1; }
+            repo_given=true
+            [[ -n "${args[i]-}" && -f "${args[i]}/common/.claude-plugin/plugin.json" ]] ||
+              { echo "Error: --repo must be the tizen-sdk-skills folder (with common/.claude-plugin/plugin.json), got: '${args[i]-}'" >&2; exit 1; } ;;
     --skip-validation|--no-restart) ;;
     -h|--help) sed -n '6,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     --harness|--harness=*) echo "Error: setup-all.sh installs every harness; use setup.sh --harness <name> for one." >&2; exit 1 ;;
@@ -45,7 +50,10 @@ for harness in "${HARNESSES[@]}"; do
 done
 
 if [[ ${#failed[@]} -gt 0 ]]; then
-  echo "  Fix the error above, then re-run setup-all or the failed harness's own setup (for example bash codex/setup/setup.sh)."
+  echo "  Fix the errors above, then re-run setup-all or each failed setup:"
+  for harness in "${failed[@]}"; do
+    echo "    bash \"$PLUGIN_DIR/$harness/setup/setup.sh\""
+  done
 fi
 
 [[ ${#failed[@]} -eq 0 ]]

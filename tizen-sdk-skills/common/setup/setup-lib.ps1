@@ -22,10 +22,17 @@ $script:MarkerRegex = (@($script:PluginName) + $script:LegacyPluginNames | ForEa
 
 # Remove a directory or file a previous release wrote under a name we no longer
 # use. Namespaced to the plugin, so nothing of the user's lives inside.
+# A link (symlink or junction) is removed itself: Windows PowerShell 5.1's
+# Remove-Item -Recurse would follow it and empty its target.
 function Remove-LegacyPath {
     param([string]$Target, [string]$Label)
-    if (-not (Test-Path $Target)) { return }
-    Remove-Item $Target -Recurse -Force
+    $item = Get-Item -LiteralPath $Target -Force -ErrorAction SilentlyContinue
+    if (-not $item) { return }
+    if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+        $item.Delete()
+    } else {
+        Remove-Item -LiteralPath $Target -Recurse -Force
+    }
     Write-Status "Removed legacy $Label`: $Target" "Success"
 }
 

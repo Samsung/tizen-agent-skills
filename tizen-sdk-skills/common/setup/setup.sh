@@ -52,8 +52,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Lower-case: on a case-insensitive filesystem "Gemini" would find hosts/gemini.sh
-# while the host checks below compare against "gemini".
+# Lower-case, so "Gemini" finds hosts/gemini.sh on a case-sensitive filesystem too.
 HARNESS="$(printf '%s' "$HARNESS" | tr '[:upper:]' '[:lower:]')"
 HOST_FILE="$SCRIPT_DIR/hosts/$HARNESS.sh"
 # A plain name only: anything with a path segment would source a file outside hosts/.

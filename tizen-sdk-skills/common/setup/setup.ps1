@@ -92,9 +92,9 @@ if ($Harness -notin $harnesses) {
 if (-not $RepoPath) { $RepoPath = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent }
 
 try {
-    if (-not (Test-Path $RepoPath)) { throw "Repository path not found: $RepoPath" }
+    if (-not (Test-Path -LiteralPath $RepoPath)) { throw "Repository path not found: $RepoPath" }
     # Absolute path: Compare-Directories and the printed snippets rely on it.
-    $RepoPath = (Resolve-Path $RepoPath).Path
+    $RepoPath = (Resolve-Path -LiteralPath $RepoPath).Path
 
     # Host module - defines Initialize-HostConfig, Install-HostExtras,
     # Test-HostExtras, Write-HostSummary, Write-HostNotes.

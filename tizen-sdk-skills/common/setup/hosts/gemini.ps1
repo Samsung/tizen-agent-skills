@@ -14,10 +14,14 @@ function Get-GeminiCliVersion {
     # setup.ps1 runs with ErrorActionPreference Stop, which turns any stderr line
     # of a native command into an error in Windows PowerShell 5.1.
     $ErrorActionPreference = "Continue"
-    try { $lines = @(& gemini --version 2>$null) } catch { return $null }
+    try { $lines = @($null | & gemini --version 2>$null) } catch { return $null }
+    if ($LASTEXITCODE -ne 0) { return $null }
     $found = $null
     foreach ($line in $lines) {
-        if ("$line" -match '^v?(\d+\.\d+\.\d+)') { $found = [version]$Matches[1] }
+        if ("$line" -match '^v?(\d+\.\d+\.\d+)(-\S*)?') {
+            $found = [version]$Matches[1]
+            if ($Matches[2] -and $found -eq $script:GeminiMinShared) { $found = $null }
+        }
     }
     return $found
 }
@@ -79,9 +83,14 @@ function Install-HostExtras {
     if ($script:SkillsDir -eq $script:OldSkillsDir) {
         Write-Status "Gemini CLI $script:GeminiVersion does not read ~/.agents/skills (needs $script:GeminiMinShared+) - skills kept in $script:SkillsDir. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
     } else {
-        # See hosts\gemini.sh: old copies are the folders named after our skills.
-        $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
-            ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path $_ })
+        # See hosts\gemini.sh: old copies are the folders named after our skills,
+        # unless ~/.gemini/skills is itself a link (then they are the new copies).
+        $legacyCopies = @()
+        $old = Get-Item -LiteralPath $script:OldSkillsDir -Force -ErrorAction SilentlyContinue
+        if ($old -and -not ($old.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+            $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
+                ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path -LiteralPath $_ })
+        }
         if ($script:GeminiVersion) {
             foreach ($copy in $legacyCopies) { Remove-LegacyPath $copy "Gemini skill copy" }
         } else {

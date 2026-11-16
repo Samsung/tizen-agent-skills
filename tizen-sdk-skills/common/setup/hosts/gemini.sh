@@ -23,12 +23,19 @@
 # First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
 GEMINI_MIN_SHARED="0.28.0"
 
-# Installed Gemini CLI version, or empty when it cannot be read (not on PATH,
-# --version failing). Only a line that starts with the version counts, so an
-# update notice mentioning other versions is not mistaken for it.
+# Installed Gemini CLI version, or empty when it cannot be read: not on PATH,
+# --version exiting non-zero, or no version line. Only a line that starts with
+# the version counts, so an update notice mentioning other versions is not
+# mistaken for it. stdin is closed so the CLI cannot wait for a prompt. A
+# pre-release of the first supporting version (0.28.0-nightly...) may predate
+# the feature, so it counts as unknown too.
 _gemini_cli_version() {
   command -v gemini >/dev/null 2>&1 || return 0
-  gemini --version 2>/dev/null | grep -Eo '^v?[0-9]+\.[0-9]+\.[0-9]+' | tail -1 | sed 's/^v//' || true
+  local out ver
+  out="$(gemini --version </dev/null 2>/dev/null)" || return 0
+  ver="$(printf '%s\n' "$out" | grep -Eo '^v?[0-9]+\.[0-9]+\.[0-9]+[^[:space:]]*' | tail -1 | sed 's/^v//' || true)"
+  [[ "$ver" == "$GEMINI_MIN_SHARED"-* ]] && return 0
+  printf '%s' "${ver%%-*}"
 }
 
 _version_ge() { # <a> <b> — true when x.y.z a >= b; plain bash, as sort -V is not everywhere
@@ -100,11 +107,14 @@ host_install_extras() {
     write_status "Gemini CLI $GEMINI_VERSION does not read ~/.agents/skills (needs $GEMINI_MIN_SHARED+) - skills kept in $SKILLS_DIR. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
   else
     # Our skills used to live in ~/.gemini/skills: the folders named after our
-    # skills there. Anything else in that folder belongs to the user.
+    # skills there. Anything else in that folder belongs to the user. When the
+    # two folders are one (a symlink), those are the copies just installed.
     local skill_dir legacy_copies=()
-    for skill_dir in "$COMMON_DIR/skills"/*/; do
-      [[ -d "$OLD_SKILLS_DIR/$(basename "$skill_dir")" ]] && legacy_copies+=("$OLD_SKILLS_DIR/$(basename "$skill_dir")")
-    done
+    if [[ ! "$OLD_SKILLS_DIR" -ef "$SKILLS_DIR" ]]; then
+      for skill_dir in "$COMMON_DIR/skills"/*/; do
+        [[ -d "$OLD_SKILLS_DIR/$(basename "$skill_dir")" ]] && legacy_copies+=("$OLD_SKILLS_DIR/$(basename "$skill_dir")")
+      done
+    fi
     if [[ -n "$GEMINI_VERSION" ]]; then
       for skill_dir in "${legacy_copies[@]+"${legacy_copies[@]}"}"; do
         remove_legacy_path "$skill_dir" "Gemini skill copy"
