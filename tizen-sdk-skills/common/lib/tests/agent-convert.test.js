@@ -284,7 +284,7 @@ for (const [label, fn] of [
 
 // A plain name / description with " #" (YAML comment) is an error, not cut.
 check(
-  "  plain description with \" #\" rejected",
+  '  plain description with " #" rejected',
   (throwsWith(() => toGeminiMd(agent("see issue #41"), "c.md")) || "").includes(
     'contains " #"',
   ),
@@ -311,10 +311,7 @@ check(
 check(
   "  bad escape in a dropped key does not stop the conversion",
   throwsWith(() =>
-    toGeminiMd(
-      '---\nname: x\ndescription: d\nmodel: "C:\\x"\n---\n',
-      "m.md",
-    ),
+    toGeminiMd('---\nname: x\ndescription: d\nmodel: "C:\\x"\n---\n', "m.md"),
   ),
   null,
 );

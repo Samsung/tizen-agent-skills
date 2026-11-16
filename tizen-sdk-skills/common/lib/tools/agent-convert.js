@@ -88,9 +88,14 @@ function unquoteValue(key, raw) {
     }
     return raw;
   }
+  // eslint-disable-next-line no-control-regex -- detecting raw control characters is the point
   const ctl = d[1].match(/[\x00-\x08\x0a-\x1f]/);
   if (ctl) {
-    const code = ctl[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0");
+    const code = ctl[0]
+      .charCodeAt(0)
+      .toString(16)
+      .toUpperCase()
+      .padStart(4, "0");
     throw new Error(
       `frontmatter "${key}": raw control character U+${code} in double-quoted ` +
         `value (write it as an escape, e.g. \\n)`,
@@ -166,6 +171,7 @@ function parseAgent(text, sourceName) {
 
 // Control characters (C0, DEL, C1) cannot appear raw in a TOML basic string or
 // a YAML scalar; written as \uXXXX they are valid in both formats.
+// eslint-disable-next-line no-control-regex -- matches the characters that must be escaped
 const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/;
 const doubleQuoted = (s) =>
   `"${String(s)

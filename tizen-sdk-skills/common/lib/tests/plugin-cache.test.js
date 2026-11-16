@@ -598,7 +598,8 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
 
     // Superseded bash fallback migration.
     const tailX = "lib/cli/x-cli.js";
-    const cacheX = "plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/x-cli.js";
+    const cacheX =
+      "plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/x-cli.js";
     const oldOwn = `CLI=$(ls "$BASE"/${cacheX} 2>/dev/null | sort -V | tail -1) || true`;
     const oldFb = `[ -n "$CLI" ] || for d in .claude .cline; do CLI=$(ls "$HOME/$d"/${cacheX} 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done`;
     check(
@@ -967,7 +968,15 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     put("h2 sp", ".gemini", "1.2.3");
     put("h2 sp", ".codex", "0.1.0");
     fs.mkdirSync(path.join(root, "h3"));
-    const tpl = path.join(root, "h1", ".claude", cacheTail, "1.10.0", "skills", "x");
+    const tpl = path.join(
+      root,
+      "h1",
+      ".claude",
+      cacheTail,
+      "1.10.0",
+      "skills",
+      "x",
+    );
     fs.mkdirSync(tpl, { recursive: true });
     fs.writeFileSync(path.join(tpl, "T.md"), "");
     // Run BASE + lookup (+ skill-file line) in `sh` with HOME=<root>/<home>,
@@ -985,7 +994,9 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
         },
       );
-      return r.error || r.status !== 0 ? `exit ${r.status}: ${r.stderr}` : r.stdout;
+      return r.error || r.status !== 0
+        ? `exit ${r.status}: ${r.stderr}`
+        : r.stdout;
     };
     const rel = (home, p) =>
       p && path.relative(path.join(root, home), p).split(path.sep).join("/");
@@ -1035,21 +1046,30 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         `  ${sh}: skill file from $CLI's version directory`,
         rel(
           "h1",
-          run(sh, "h1", { env: { CLAUDECODE: "1" }, after: `printf '%s' "$TPL"` }),
+          run(sh, "h1", {
+            env: { CLAUDECODE: "1" },
+            after: `printf '%s' "$TPL"`,
+          }),
         ),
         `.claude/${cacheTail}1.10.0/skills/x/T.md`,
       );
       for (const home of ["h1", "h3"]) {
         check(
           `  ${sh}: no _tz_* variable left behind (${home === "h1" ? "found" : "nothing installed"})`,
-          leftover(sh, home).replace(/nomatch=\w+/, "").trim(),
+          leftover(sh, home)
+            .replace(/nomatch=\w+/, "")
+            .trim(),
           "",
         );
       }
     }
     if (shells.includes("zsh")) {
       for (const home of ["h1", "h3"]) {
-        check(`  zsh: nomatch on stays on (${home})`, leftover("zsh", home), "nomatch=on");
+        check(
+          `  zsh: nomatch on stays on (${home})`,
+          leftover("zsh", home),
+          "nomatch=on",
+        );
         check(
           `  zsh: nomatch off stays off (${home})`,
           leftover("zsh", home, "unsetopt nomatch\n"),
