@@ -9,6 +9,8 @@
 #            overriding the earlier with a "Skill conflict detected" warning per
 #            skill. Codex reads only ~/.agents/skills, so both hosts install there:
 #            one copy, no conflict, no stale Codex copy shadowing ours.
+#            ~/.agents/skills is read from Gemini CLI 0.28.0 on; an older CLI
+#            keeps getting ~/.gemini/skills.
 #   agents   ~/.gemini/agents/*.md              (YAML name/description/tools/max_turns)
 #   hooks    ~/.gemini/settings.json -> hooks.BeforeTool[...]; stdin carries
 #            tool_name + tool_input, deny = stdout {"decision":"deny","reason":…};
@@ -18,12 +20,30 @@
 # The cache keeps the shared ~/<dot>/plugins/cache/tizen-platform/tizen-sdk-skills/<VER>
 # convention so plugin-cache.js and the SKILL.md snippets find the runners.
 
+# First Gemini CLI release that reads ~/.agents/skills (google-gemini/gemini-cli#18151).
+GEMINI_MIN_SHARED="0.28.0"
+
+# Installed Gemini CLI version, or empty when gemini is not on PATH.
+_gemini_cli_version() {
+  command -v gemini >/dev/null 2>&1 || return 0
+  gemini --version 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true
+}
+
+_version_ge() { # <a> <b> — true when a >= b
+  [[ "$(printf '%s\n%s\n' "$1" "$2" | sort -V | head -1)" == "$2" ]]
+}
+
 host_configure() {
   HOST_LABEL="Gemini CLI"
   HOST_HOME="$HOME/.gemini"
   CACHE_SUBDIRS=(skills agents scripts lib assets)
-  SKILLS_DIR="$HOME/.agents/skills"
   OLD_SKILLS_DIR="$HOST_HOME/skills"
+  GEMINI_VERSION="$(_gemini_cli_version)"
+  if [[ -n "$GEMINI_VERSION" ]] && ! _version_ge "$GEMINI_VERSION" "$GEMINI_MIN_SHARED"; then
+    SKILLS_DIR="$OLD_SKILLS_DIR"
+  else
+    SKILLS_DIR="$HOME/.agents/skills"
+  fi
   AGENTS_MODE="gemini-md"
   AGENTS_DIR="$HOST_HOME/agents"
   SETTINGS_FILE="$HOST_HOME/settings.json"
@@ -68,13 +88,18 @@ EOF
 
 
 host_install_extras() {
-  # Our skills used to live in ~/.gemini/skills. Remove only the folders named
-  # after our skills; anything else there belongs to the user.
-  local skill_dir
-  for skill_dir in "$COMMON_DIR/skills"/*/; do
-    [[ -d "$skill_dir" ]] || continue
-    remove_legacy_path "$OLD_SKILLS_DIR/$(basename "$skill_dir")" "Gemini skill copy"
-  done
+  if [[ "$SKILLS_DIR" == "$OLD_SKILLS_DIR" ]]; then
+    write_status "Gemini CLI $GEMINI_VERSION does not read ~/.agents/skills (needs $GEMINI_MIN_SHARED+) - skills kept in $SKILLS_DIR. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
+  else
+    # Our skills used to live in ~/.gemini/skills. Remove only the folders named
+    # after our skills; anything else there belongs to the user.
+    local skill_dir
+    for skill_dir in "$COMMON_DIR/skills"/*/; do
+      [[ -d "$skill_dir" ]] || continue
+      remove_legacy_path "$OLD_SKILLS_DIR/$(basename "$skill_dir")" "Gemini skill copy"
+    done
+    warn_shared_skills_peer "Codex CLI" "${CODEX_HOME:-$HOME/.codex}/$CACHE_TAIL" "codex/setup/setup.sh"
+  fi
   # Hook adapter + the two guards it dispatches to. The adapter maps Gemini's
   # tool names (run_shell_command / write_file / replace) onto the Bash / Write
   # payload the shared guards expect and converts their deny JSON to Gemini's.
@@ -162,7 +187,7 @@ host_summary() {
 
 
 host_notes() {
-  echo -e "${YELLOW} - Restart Gemini CLI; check with /skills list and /agents. Skills are read from ~/.agents/skills (shared with Codex CLI).${NC}"
+  echo -e "${YELLOW} - Restart Gemini CLI; check with /skills list and /agents. Skills are read from $SKILLS_DIR (~/.agents/skills is shared with Codex CLI).${NC}"
   echo -e "${YELLOW} - Hooks run via bash — on Windows, Git Bash must be on PATH.${NC}"
   echo -e "${YELLOW} - Agent 'tools' names were mapped Claude->Gemini by agent-convert.js; if /agents rejects one, report the name.${NC}"
 }

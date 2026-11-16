@@ -19,6 +19,7 @@ import {
   codexCacheRoot,
   codexHome,
   codexSkillsDir,
+  geminiSharesSkills,
   legacyCodexCacheRoots,
 } from "./codexLayout";
 import {
@@ -173,7 +174,10 @@ export async function installCodex(
   );
 
   // Step 5: Prune what the previous version shipped and this one does not.
-  const staleSkills = staleEntries(previous?.skills, skillNames);
+  const keepSharedSkills = geminiSharesSkills(home);
+  const staleSkills = keepSharedSkills
+    ? []
+    : staleEntries(previous?.skills, skillNames);
   const staleAgents = staleEntries(previous?.agents, agentNames);
   if (staleSkills.length > 0 || staleAgents.length > 0) {
     writeStatus(
@@ -226,7 +230,16 @@ export async function removeCodex(home: string): Promise<void> {
     return;
   }
 
-  await removeNamedEntries(codexSkillsDir(home), manifest.skills, "skill");
+  if (geminiSharesSkills(home)) {
+    writeStatus(
+      `Gemini CLI (gemini/setup) also reads ${codexSkillsDir(home)} — leaving ` +
+        "the skills there. Remove them with that setup's removal steps once " +
+        "Gemini no longer needs them.",
+      "Warning",
+    );
+  } else {
+    await removeNamedEntries(codexSkillsDir(home), manifest.skills, "skill");
+  }
   await removeNamedEntries(codexAgentsDir(home), manifest.agents, "agent");
 
   removeManifest(hostHome);

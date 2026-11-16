@@ -165,6 +165,18 @@ function Sync-PersonalSkills {
         Copy-FilesRecursive $_.FullName (Join-Path $Destination $_.Name) "$Label`: $($_.Name)" -Clean
     }
 }
+# ~/.agents/skills is shared by Codex CLI and Gemini CLI - see
+# warn_shared_skills_peer in setup-lib.sh.
+function Write-SharedSkillsPeerWarning {
+    param([string]$PeerLabel, [string]$PeerCacheRoot, [string]$PeerSetup, [string]$Version)
+    if (-not (Test-Path $PeerCacheRoot)) { return }
+    $peer = Get-ChildItem $PeerCacheRoot -Directory |
+        Sort-Object { try { [version]$_.Name } catch { [version]"0.0" } } |
+        Select-Object -Last 1
+    if (-not $peer -or $peer.Name -eq $Version) { return }
+    Write-Status "$script:SkillsDir is shared with $PeerLabel, whose plugin cache is v$($peer.Name): both hosts now read the v$Version skills. Re-run $PeerSetup from v$Version so $PeerLabel's runners match." "Warning"
+}
+
 function Test-PersonalSkills {
     param([string]$Source, [string]$Destination, [string]$Label)
     Get-ChildItem -Path $Source -Directory | ForEach-Object {

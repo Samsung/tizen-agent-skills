@@ -30,7 +30,10 @@
   `~/.agents/skills` 쪽이 이기기 때문에, Codex 설치가 더 오래된 버전이면 새 Gemini 설치를
   가리기도 했습니다. 이제 `gemini/setup/setup.sh`와 `setup.ps1`도 스킬을
   `~/.agents/skills`에 설치하고, `~/.gemini/skills`에서 이 플러그인의 스킬 폴더를
-  지웁니다. 그 밖의 폴더는 그대로 둡니다.
+  지웁니다. 그 밖의 폴더는 그대로 둡니다. 0.28.0 이전 Gemini CLI는 `~/.agents/skills`를
+  읽지 않으므로, 이 경우 셋업은 계속 `~/.gemini/skills`에 설치합니다. 두 호스트가 한 벌을
+  함께 쓰게 되었으므로, Codex와 Gemini 셋업은 다른 호스트의 캐시 버전이 다르면 경고하고,
+  VS Code 확장의 Codex 설치를 제거할 때 Gemini 셋업 설치가 있으면 공유 스킬을 남겨 둡니다.
 
 ## [1.8.0] — 2026-11-14
 

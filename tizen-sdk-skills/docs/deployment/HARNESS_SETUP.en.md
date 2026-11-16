@@ -47,6 +47,14 @@ Codex CLI and Gemini CLI share `~/.agents/skills`. Gemini CLI reads both
 "Skill conflict detected" and the `~/.agents/skills` copy wins. Installing both hosts
 therefore writes one copy there; the Gemini setup also removes our skill folders that
 older releases put in `~/.gemini/skills` (other folders there are left alone).
+Gemini CLI reads `~/.agents/skills` from 0.28.0 on; when `gemini --version` reports
+an older release, the Gemini setup keeps installing to `~/.gemini/skills` and says so.
+
+Because both hosts read the one copy, the setup run last decides which skill version
+both see, while each host still runs the scripts from its own cache. When the other
+host's cache holds a different version, setup prints a warning: re-run the other
+host's setup from the same checkout so the two match. Removal is shared too: see
+below.
 
 The guard scripts themselves (`common/hooks/check-tizen-commands.sh`,
 `check-project-writes.sh`) are identical for every harness. Codex CLI speaks the
@@ -165,7 +173,8 @@ To remove a harness install by hand:
 
 ```bash
 rm -rf ~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills
-rm -rf <skills-dir>/tizen-*                 # see the table for <skills-dir>
+rm -rf <skills-dir>/tizen-*                 # see the table; skip for codex / gemini
+                                            # while the other one is still installed
 rm -f  <agents-dir>/tizen-*.md <agents-dir>/tizen-*.toml
 rm -rf ~/<dot-dir>/hooks/tizen-sdk-skills   # claude / codex / gemini
 rm -f  ~/.tizen.agent.update.json           # update-check cache, shared by all hosts
@@ -173,6 +182,12 @@ rm -f  ~/.tizen.agent.update.json           # update-check cache, shared by all 
 # then delete the tizen-sdk-skills section from AGENTS.md / GEMINI.md and the
 # hooks entries (PreToolUse / BeforeTool / SessionStart) from settings.json / hooks.json
 ```
+
+Codex CLI and Gemini CLI read the same `~/.agents/skills/tizen-*` folders. When
+removing only one of them, leave those folders in place; delete them once neither
+host is installed. The VS Code extension does the same: while a Gemini setup cache
+(`~/.gemini/plugins/cache/tizen-platform/tizen-sdk-skills`) exists, uninstalling its
+Codex install keeps the shared skills.
 
 ## Adding another harness
 

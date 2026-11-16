@@ -64,6 +64,7 @@ EOF
 }
 
 host_install_extras() {
+  warn_shared_skills_peer "Gemini CLI" "$HOME/.gemini/$CACHE_TAIL" "gemini/setup/setup.sh"
   install_shell_script "$COMMON_DIR/hooks/check-tizen-commands.sh" "$HOOKS_DIR/check-tizen-commands.sh"
   install_shell_script "$COMMON_DIR/hooks/check-project-writes.sh" "$HOOKS_DIR/check-project-writes.sh"
   install_shell_script "$COMMON_DIR/hooks/check-update.js" "$HOOKS_DIR/check-update.js"

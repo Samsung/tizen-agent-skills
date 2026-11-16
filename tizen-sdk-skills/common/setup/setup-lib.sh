@@ -197,6 +197,17 @@ sync_personal_skills() { # <source-skills-dir> <dest-skills-dir> <label>
   done
 }
 
+# ~/.agents/skills is shared by Codex CLI and Gemini CLI, so the last setup run
+# decides which SKILL.md version both hosts read, while each host still runs the
+# scripts from its own cache. Warn when the other host's cache is another version.
+warn_shared_skills_peer() { # <peer-label> <peer-cache-root> <peer-setup-script>
+  local label="$1" root="$2" script="$3" peer
+  [[ -d "$root" ]] || return 0
+  peer="$(ls -1 "$root" 2>/dev/null | sort -V | tail -1)"
+  [[ -n "$peer" && "$peer" != "$PLUGIN_VERSION" ]] || return 0
+  write_status "$SKILLS_DIR is shared with $label, whose plugin cache is v$peer: both hosts now read the v$PLUGIN_VERSION skills. Re-run $script from v$PLUGIN_VERSION so $label's runners match." "Warning"
+}
+
 validate_personal_skills() { # <source-skills-dir> <dest-skills-dir> <label>
   local src="$1" dest="$2" label="$3" skill_dir skill_name
   for skill_dir in "$src"/*/; do

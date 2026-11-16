@@ -39,6 +39,7 @@ import {
   codexHome,
   codexHooksJsonPath,
   codexSkillsDir,
+  geminiSharesSkills,
   isOurCodexHooksJson,
 } from "./install/codexLayout";
 import { hasGuardSection, stripGuardSection } from "./install/guardSection";
@@ -177,8 +178,14 @@ function removeCodexAll(): void {
         `${codexAgentsDir(home)} untouched (not installed by this extension).`,
     );
   } else {
-    for (const skill of manifest.skills) {
-      removeDir(path.join(codexSkillsDir(home), skill));
+    if (geminiSharesSkills(home)) {
+      log(
+        `Gemini CLI (gemini/setup) also reads ${codexSkillsDir(home)} — skills kept.`,
+      );
+    } else {
+      for (const skill of manifest.skills) {
+        removeDir(path.join(codexSkillsDir(home), skill));
+      }
     }
     for (const agent of manifest.agents) {
       removeFile(path.join(codexAgentsDir(home), agent));

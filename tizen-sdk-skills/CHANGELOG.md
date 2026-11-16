@@ -31,7 +31,11 @@ below use those release tags.
   The `~/.agents/skills` copy won, so an older Codex install also hid a newer Gemini one.
   `gemini/setup/setup.sh` and `setup.ps1` now install the skills to `~/.agents/skills` too,
   and remove this plugin's skill folders from `~/.gemini/skills`; other folders there are
-  kept.
+  kept. Gemini CLI older than 0.28.0 does not read `~/.agents/skills`, so for those the
+  setup keeps installing to `~/.gemini/skills`. Because the two hosts now share one copy,
+  the Codex and Gemini setups warn when the other host's cache is a different version,
+  and uninstalling the VS Code extension's Codex install keeps the shared skills while a
+  Gemini setup install exists.
 
 ## [1.8.0] — 2026-11-14
 

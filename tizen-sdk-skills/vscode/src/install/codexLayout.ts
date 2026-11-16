@@ -15,6 +15,7 @@
 //
 // Deliberately free of any `vscode` import: uninstall.ts and the plain-node
 // tests use this too.
+import * as fs from "fs";
 import * as path from "path";
 import {
   ALL_PLUGIN_NAMES,
@@ -54,6 +55,25 @@ export function codexHome(
  */
 export function codexSkillsDir(home: string): string {
   return path.join(home, ".agents", "skills");
+}
+
+/**
+ * True when the Gemini CLI setup script (gemini/setup) has installed here. It
+ * writes the same skill folders into ~/.agents/skills but keeps no manifest, so
+ * its plugin cache is the sign. While it is there, deleting our skill folders
+ * would take Gemini's skills away too.
+ */
+export function geminiSharesSkills(home: string): boolean {
+  return fs.existsSync(
+    path.join(
+      home,
+      ".gemini",
+      "plugins",
+      "cache",
+      "tizen-platform",
+      PLUGIN_NAME,
+    ),
+  );
 }
 
 export function codexAgentsDir(home: string): string {

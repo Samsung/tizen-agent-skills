@@ -1092,6 +1092,43 @@ test("without a manifest, Codex removal drops only the cache and says why", asyn
   assert.strictEqual(fs.existsSync(codexCacheBase(fx.home, VERSION)), false);
 });
 
+test("Codex removal keeps the shared skills while the Gemini setup uses them", async () => {
+  const fx = makeCodexFixture();
+  const r = await installCodex(fx.assets, fx.home, VERSION);
+  writeManifest(path.join(fx.home, ".codex"), {
+    version: VERSION,
+    installedAt: "x",
+    skills: r.owned.skills,
+    agents: r.owned.agents,
+  });
+  fs.mkdirSync(
+    path.join(
+      fx.home,
+      ".gemini",
+      "plugins",
+      "cache",
+      "tizen-platform",
+      "tizen-sdk-skills",
+      VERSION,
+    ),
+    { recursive: true },
+  );
+  takeLog();
+  await removeCodex(fx.home);
+
+  assert.ok(takeLog().some((l) => l.includes("Gemini CLI")));
+  for (const s of ASSET_SKILLS) {
+    assert.ok(fs.existsSync(path.join(codexSkillsDir(fx.home), s)), s);
+  }
+  for (const a of r.owned.agents) {
+    assert.strictEqual(
+      fs.existsSync(path.join(codexAgentsDir(fx.home), a)),
+      false,
+      a,
+    );
+  }
+});
+
 test("a Codex upgrade prunes the skill and agent the new version no longer ships", async () => {
   const fx = makeCodexFixture();
   const v1 = await installCodex(fx.assets, fx.home, "1.0.0");

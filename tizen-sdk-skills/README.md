@@ -351,7 +351,9 @@ to stderr only. See the [Envelope Library README](common/lib/README.md) and the
 - **Uninstall** — the VS Code extension removes everything it installed when
   uninstalled. For script installs, delete the cache root
   `~/<dot-dir>/plugins/cache/tizen-platform/tizen-sdk-skills`, the `tizen-*` skill
-  folders and agent files, and the hook/instruction entries; the exact paths per host
+  folders and agent files, and the hook/instruction entries. Codex CLI and Gemini CLI
+  share `~/.agents/skills/tizen-*`, so keep those folders while the other host is
+  still installed. The exact paths per host
   are listed under *Re-running and removing* in
   [HARNESS_SETUP.en.md](docs/deployment/HARNESS_SETUP.en.md).
 
