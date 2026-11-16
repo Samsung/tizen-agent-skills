@@ -91,6 +91,27 @@ check(
   "tizen-sample",
 );
 check(
+  "  gemini: description single-quoted for strict YAML",
+  gemFront.find(([k]) => k === "description")[1],
+  `'Sample agent: does "things" with C:\\paths, 한글 included'`,
+);
+const tricky = toGeminiMd(
+  '---\nname: x\ndescription: LIST ("list", "목록": `list-vm`) — it\'s here\n---\n',
+  "tricky.md",
+);
+check(
+  "  gemini: inner '\": ' and apostrophe quoted safely",
+  parseFrontmatter(tricky).front.find(([k]) => k === "description")[1],
+  `'LIST ("list", "목록": \`list-vm\`) — it''s here'`,
+);
+check(
+  "  gemini: already-quoted description passed through",
+  parseFrontmatter(
+    toGeminiMd("---\nname: x\ndescription: 'already: quoted'\n---\n", "q.md"),
+  ).front.find(([k]) => k === "description")[1],
+  "'already: quoted'",
+);
+check(
   "  gemini: tools mapped, unknown dropped",
   gemFront.find(([k]) => k === "tools")[1],
   "[run_shell_command, read_file, glob, search_file_content]",
@@ -156,6 +177,8 @@ try {
     const { front } = parseFrontmatter(fs.readFileSync(f, "utf-8"));
     const keys = front.map(([k]) => k);
     const tools = front.find(([k]) => k === "tools");
+    const desc = (front.find(([k]) => k === "description") || [])[1] || "";
+    const descQuoted = /^'(?:[^']|'')*'$/.test(desc);
     const known = new Set(Object.values(GEMINI_TOOL_MAP));
     const toolsOk =
       !tools ||
@@ -169,13 +192,14 @@ try {
       !keys.includes("description") ||
       keys.includes("model") ||
       keys.includes("maxTurns") ||
-      !toolsOk
+      !toolsOk ||
+      !descQuoted
     ) {
       badMd.push(path.basename(f));
     }
   }
   check(
-    "  gemini: every .md has name/description, no model/maxTurns, only Gemini tool names",
+    "  gemini: every .md has name/quoted description, no model/maxTurns, only Gemini tool names",
     badMd,
     [],
   );

@@ -27,7 +27,8 @@
  *   equivalent and are dropped.
  *
  * gemini-md   → ~/.gemini/agents/<name>.md
- *   Same markdown shape; frontmatter rewritten: tools mapped to Gemini CLI
+ *   Same markdown shape; frontmatter rewritten: description emitted as a YAML
+ *   single-quoted string (Gemini parses strict YAML), tools mapped to Gemini CLI
  *   built-in tool names, maxTurns → max_turns, model dropped (Claude aliases
  *   like "sonnet" are not Gemini models; Gemini falls back to its default).
  *
@@ -73,6 +74,18 @@ function parseFrontmatter(text) {
 
 const get = (front, key) => (front.find(([k]) => k === key) || [])[1];
 
+// YAML single-quoted scalar. Source descriptions are written unquoted for
+// Claude Code's lenient frontmatter reader, but Gemini CLI parses agent
+// frontmatter as strict YAML, where an inner `": "` (e.g. `"목록": \`x\``)
+// reads as a mapping and the whole agent fails to load. Single quotes need
+// only `'` → `''`; backslashes and double quotes stay literal. A value that
+// is already quoted in the source is passed through as-is.
+const yamlSingle = (s) => {
+  const v = String(s);
+  if (/^'.*'$/.test(v) || /^".*"$/.test(v)) return v;
+  return `'${v.replace(/'/g, "''")}'`;
+};
+
 const tomlBasic = (s) =>
   `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
 
@@ -111,8 +124,10 @@ function toGeminiMd(text, sourceName, warn = () => {}) {
   for (const [key, value] of front) {
     switch (key) {
       case "name":
-      case "description":
         out.push(`${key}: ${value}`);
+        break;
+      case "description":
+        out.push(`${key}: ${yamlSingle(value)}`);
         break;
       case "tools": {
         const mapped = [];
