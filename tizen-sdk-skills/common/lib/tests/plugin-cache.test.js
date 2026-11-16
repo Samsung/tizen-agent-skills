@@ -274,6 +274,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     const stale = [];
     const incomplete = [];
     let withBase = 0;
+    let withLookup = 0;
     let withCmd = 0;
     for (const file of mdFiles) {
       const text = fs.readFileSync(file, "utf-8");
@@ -298,11 +299,30 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           withBase++;
           if (l !== gen.NEW_BASE_LINE) stale.push(`${rel} (BASE line)`);
         }
-        // (c) every bash fallback lists every host, in order
+        // (c) every bash lookup is the generated LOOKUP_LINE (own host, then
+        //     every host in order) and the superseded `$(ls … | sort -V)`
+        //     own-host / fallback lines are gone: Gemini CLI blocks any shell
+        //     command with `$(…)` or a backtick outside single quotes
         if (/^\[ -n "\$[A-Z_]+" \] \|\| for d in /.test(l)) {
-          const m = l.match(/for d in ([ .a-z]+); do/);
-          if (!m || m[1] !== HOST_DOT_DIRS.join(" ")) {
-            incomplete.push(`${rel} (fallback host list)`);
+          stale.push(`${rel} (superseded $(ls …) fallback line)`);
+        }
+        if (/^[A-Z_]+=\$\(ls "\$BASE"\//.test(l)) {
+          stale.push(`${rel} (superseded $(ls …) own-host line)`);
+        }
+        const lk = l.match(
+          /^\[ -z "\$\{ZSH_VERSION:-\}" \] \|\| unsetopt nomatch; ([A-Z_]+)=; for d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do for f in "\$d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
+        );
+        if (lk) {
+          withLookup++;
+          const hosts = lk[2]
+            .trim()
+            .split(" ")
+            .map((h) => h.slice(8));
+          if (hosts.join(" ") !== HOST_DOT_DIRS.join(" ")) {
+            incomplete.push(`${rel} (lookup host list)`);
+          }
+          if (l !== gen.LOOKUP_LINE(lk[1], lk[3])) {
+            stale.push(`${rel} (lookup line differs from LOOKUP_LINE)`);
           }
         }
       }
@@ -480,6 +500,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       true,
     );
     check(`  bash host-pick lines found (>= 40)`, withBase >= 40, true);
+    check(`  bash lookup lines found (>= 40)`, withLookup >= 40, true);
     check(`  cmd.exe lookups found (>= 25)`, withCmd >= 25, true);
     check("  no file still carries a stale snippet", stale, []);
     check("  every lookup snippet lists all HOST_DOT_DIRS", incomplete, []);
@@ -584,8 +605,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     const bashFence = [
       "```bash",
       gen.NEW_BASE_LINE,
-      gen.OWN_HOST_LINE("CLI", "lib/cli/x-cli.js"),
-      gen.FALLBACK_LINE("CLI", "lib/cli/x-cli.js"),
+      gen.LOOKUP_LINE("CLI", "lib/cli/x-cli.js"),
       'node "$CLI" run --flag',
       "```",
     ].join("\n");
@@ -847,6 +867,102 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       rwAll(indentedNew),
       indentedNew,
     );
+
+    // Test 7: the bash lookup — Gemini-safe and correct in a real shell.
+    console.log("\nTest 7: bash lookup line (Gemini-safe, numeric version)");
+    // Gemini CLI's detectBashSubstitution: `$(` (also `$((`) or a backtick
+    // outside single quotes, or `<(` / `>(` outside double quotes, blocks the
+    // whole command. Mirrored here so the rule needs no Gemini install.
+    const geminiBlocks = (cmd) => {
+      let sq = false;
+      let dq = false;
+      for (let i = 0; i < cmd.length; i++) {
+        const ch = cmd[i];
+        if (ch === "'" && !dq) sq = !sq;
+        else if (ch === '"' && !sq) dq = !dq;
+        else if (sq) continue;
+        else if (ch === "\\") i++;
+        else if (ch === "$" && cmd[i + 1] === "(") return true;
+        else if (!dq && (ch === "<" || ch === ">") && cmd[i + 1] === "(")
+          return true;
+        else if (ch === "`") return true;
+      }
+      return false;
+    };
+    const tail = "lib/cli/x-cli.js";
+    const block = [
+      gen.NEW_BASE_LINE,
+      gen.LOOKUP_LINE("CLI", tail),
+      'node "$CLI" run',
+    ].join("\n");
+    check(
+      "  BASE + lookup + node block passes Gemini's check",
+      geminiBlocks(block),
+      false,
+    );
+    check(
+      "  the superseded $(ls … | sort -V) line would be blocked",
+      geminiBlocks(gen.OLD_OWN_HOST_LINE("CLI", tail)),
+      true,
+    );
+
+    // Run it: a glob expands in byte order (1.10.0 before 1.9.0), so the
+    // newest copy must come from the numeric comparison, not the glob order.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lookup-line-"));
+    const put = (home, dot, ver) => {
+      const d = path.join(root, home, dot, cacheTail, ver, "lib", "cli");
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, "x-cli.js"), "");
+    };
+    for (const v of ["1.9.0", "1.10.0", "1.8.12", "dev", "2.0"]) {
+      put("h1", ".claude", v);
+    }
+    put("h1", ".cline", "9.9.9");
+    put("h2 sp", ".gemini", "1.2.3");
+    put("h2 sp", ".codex", "0.1.0");
+    fs.mkdirSync(path.join(root, "h3"));
+    const script = `set -eu\n${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\nprintf '%s' "$CLI"`;
+    const found = (sh, home, env) => {
+      const r = spawnSync(sh, ["-c", script], {
+        encoding: "utf-8",
+        env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
+      });
+      if (r.error || r.status !== 0) return `exit ${r.status}: ${r.stderr}`;
+      const rel = path.relative(path.join(root, home), r.stdout);
+      return r.stdout ? rel.split(path.sep).join("/") : "";
+    };
+    const at = (dot, ver) => `${dot}/${cacheTail}${ver}/lib/cli/x-cli.js`;
+    const shells = ["bash", "dash", "zsh"].filter(
+      (s) => spawnSync(s, ["-c", "exit 0"]).status === 0,
+    );
+    check(
+      "  bash is available to run the lookup",
+      shells.includes("bash"),
+      true,
+    );
+    for (const sh of shells) {
+      check(
+        `  ${sh}: own host, numeric max (1.10.0 > 1.9.0), non-X.Y.Z skipped`,
+        found(sh, "h1", { CLAUDECODE: "1" }),
+        at(".claude", "1.10.0"),
+      );
+      check(
+        `  ${sh}: default host (.cline) own copy wins`,
+        found(sh, "h1", {}),
+        at(".cline", "9.9.9"),
+      );
+      check(
+        `  ${sh}: no own copy → HOST_DOT_DIRS order, space in HOME`,
+        found(sh, "h2 sp", {}),
+        at(".codex", "0.1.0"),
+      );
+      check(
+        `  ${sh}: nothing installed → empty, exit 0`,
+        found(sh, "h3", {}),
+        "",
+      );
+    }
+    fs.rmSync(root, { recursive: true, force: true });
   }
 }
 

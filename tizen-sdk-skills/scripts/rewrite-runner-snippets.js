@@ -27,14 +27,20 @@
  *       host first, then one `[ -z "${M1:-}${M2:-}…" ] || BASE=…` clause per
  *       marker host, in REVERSE detection order (bash: last clause wins, so the
  *       highest-precedence host comes last). `[ -z … ] ||` exits 0 under `set -e`.
- *   (b) bash fallback —
+ *   (b) bash lookup → LOOKUP_LINE, one line of shell builtins: own host
+ *       ($BASE) first, then HOST_DOT_DIRS in order; within a host the highest
+ *       X.Y.Z, compared numerically. No `$(…)` / backticks — Gemini CLI blocks
+ *       any command containing them (see LOOKUP_LINE). Migrated from:
+ *         CLI=$(ls "$BASE"/<tail>/*\/lib/cli/X.js 2>/dev/null | sort -V | tail -1) || true
+ *         [ -n "$CLI" ] || for d in .claude …; do CLI=$(ls "$HOME/$d"/… | sort -V | tail -1) || true; …; done
+ *       (the pair becomes one LOOKUP_LINE), and from the older brace-glob
+ *       fallback
  *         [ -n "$CLI" ] || CLI=$(ls "$HOME"/.{claude,cline,…}/<tail>/<VER>/lib/cli/X.js … | sort -V | tail -1)
- *       sorted the WHOLE path, so the alphabetically-last dot-dir (.gemini) won
- *       regardless of version (issue #41). → FALLBACK_LINE: walk HOST_DOT_DIRS
- *       in order and version-sort within each host; first host with a copy wins.
+ *       which sorted the WHOLE path, so the alphabetically-last dot-dir
+ *       (.gemini) won regardless of version (issue #41).
  *   (c) bash bare form (no host pick at all) —
  *         CLI=$(ls "$HOME"/.{…}/<tail>/<VER>/lib/cli/X.js … | sort | tail -1)
- *       → the full three-line block (a)+(line 2)+(b).
+ *       → the two-line block (a)+(b).
  *   (d) cmd.exe lookup:  dir /s /b "%USERPROFILE%\.claude\…\*X.js" "%USERPROFILE%\.cline\…\*X.js" …
  *                        → dir /s /b "…\.claude\…" 2>nul & dir /s /b "…\.cline\…" 2>nul & … & ver >nul
  *       (one dir per host: a single dir with several paths prints nothing
@@ -91,7 +97,7 @@
  * After rewriting, any remaining line that mentions a host cache path but not
  * every host is printed under "UNCLASSIFIED" for manual review.
  *
- * Exports NEW_BASE_LINE / FALLBACK_LINE / PS_HOST_PICK_LINE / PS_GUARD /
+ * Exports NEW_BASE_LINE / LOOKUP_LINE / PS_HOST_PICK_LINE / PS_GUARD /
  * psLookupLine / psNodeLine / rewrite for common/lib/tests/plugin-cache.test.js
  * (drift guard).
  */
@@ -139,14 +145,52 @@ const BASE_LINE_RE = new RegExp(
   "gm",
 );
 
-// (b) bash lines for <VAR> and a path tail under <VERSION>/ (e.g.
-//     lib/cli/x-cli.js or scripts/g/g.ps1). The `|| true` keeps a missing cache
-//     from aborting a `set -o pipefail` shell: `ls` exits 2 when the glob has no
-//     match, and pipefail would make that the status of the whole assignment.
+// (b) bash lookup line for <VAR> and a path tail under <VERSION>/ (e.g.
+//     lib/cli/x-cli.js or scripts/g/g.ps1): own host ($BASE) first, then every
+//     host in HOST_DOT_DIRS order; within a host, the highest X.Y.Z version.
+//
+//     Shell builtins only — no command substitution `$(…)`, backticks,
+//     arithmetic `$((…))` or process substitution. Gemini CLI refuses any
+//     shell command that contains one of those outside single quotes
+//     ("Command injection detected … the command was blocked"), so the old
+//     `$(ls … | sort -V | tail -1)` lines never ran there.
+//       - the version is compared numerically, part by part, with `[ -gt ]`:
+//         a glob expands in byte order, which puts 1.10.0 before 1.9.0, so
+//         "last match wins" would pick the older copy once a two-digit part
+//         ships (several versions sit side by side in a host cache);
+//       - a directory that is not X.Y.Z (digits only) is skipped, like
+//         VERSION_DIR_RE in plugin-cache.js;
+//       - zsh aborts the whole command on a glob with no match (`nomatch`),
+//         so it is switched off there; bash and dash keep the pattern as a
+//         literal word, which `[ -f ]` skips;
+//       - `set -euo pipefail` safe: no pipeline, A/B/C are read only once
+//         <VAR> is set, and the line's status is 0 whether or not it found
+//         a copy.
+const LOOKUP_LINE = (varName, tail) =>
+  `[ -z "\${ZSH_VERSION:-}" ] || unsetopt nomatch; ${varName}=; ` +
+  `for d in "$BASE" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
+  `for f in "$d"/${CACHE_TAIL}/*/${tail}; do [ -f "$f" ] || continue; ` +
+  `v=\${f#"$d"/${CACHE_TAIL}/}; v=\${v%%/*}; ` +
+  `case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; ` +
+  `a=\${v%%.*}; c=\${v##*.}; b=\${v#*.}; b=\${b%.*}; ` +
+  `if [ -z "$${varName}" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; ` +
+  `then ${varName}=$f; A=$a; B=$b; C=$c; fi; done; ` +
+  `[ -z "$${varName}" ] || break; done`;
+
+// Current lookup line (any host list) — regenerated so a host-list change
+// propagates. group 1 = indent, group 2 = var name, group 3 = tail.
+const CUR_LOOKUP_RE = new RegExp(
+  `${INDENT}\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| unsetopt nomatch; ([A-Z_]+)=; for d in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do for f in "\\$d"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\2" \\] \\|\\| break; done$`,
+  "gm",
+);
+
+// Superseded two-line form (own host, then fallback) — still recognised so
+// a stale copy is migrated to LOOKUP_LINE. The `|| true` kept a missing cache
+// from aborting a `set -o pipefail` shell.
 const LS_TAIL = "2>/dev/null | sort -V | tail -1) || true";
-const OWN_HOST_LINE = (varName, tail) =>
+const OLD_OWN_HOST_LINE = (varName, tail) =>
   `${varName}=$(ls "$BASE"/${CACHE_TAIL}/*/${tail} ${LS_TAIL}`;
-const FALLBACK_LINE = (varName, tail) =>
+const OLD_FALLBACK_LINE = (varName, tail) =>
   `[ -n "$${varName}" ] || for d in ${HOST_DOT_DIRS.join(" ")}; do ` +
   `${varName}=$(ls "$HOME/$d"/${CACHE_TAIL}/*/${tail} ${LS_TAIL}; ` +
   `[ -z "$${varName}" ] || break; done`;
@@ -358,8 +402,9 @@ const CMD_HEADING_LEAD = CMD_BLOCK_HEADING.slice(
 const CMD_FENCE_LINE_RE = /^cmd \/c dir \/s \/b /;
 // The runner a lookup fence names: the first `<name>.js` behind a path
 // separator or the cmd.exe `*` glob (`\*x-cli.js`, `\lib\cli\x-cli.js`,
-// `/lib/cli/x-cli.js`), followed by a quote, whitespace or the end of line.
-const RUNNER_JS_RE = /(?<=[\\/*])([\w-]+\.js)(?=["\s]|$)/m;
+// `/lib/cli/x-cli.js`), followed by a quote, whitespace, the `;` that ends the
+// Bash lookup's glob word (`…/x-cli.js; do`) or the end of line.
+const RUNNER_JS_RE = /(?<=[\\/*])([\w-]+\.js)(?=["\s;]|$)/m;
 const fenceRunner = (text) => (text.match(RUNNER_JS_RE) || [])[1] || null;
 
 // Section grammar. A heading belongs to the fence right after it; `pick`,
@@ -606,22 +651,47 @@ function dedupeBaseLines(text) {
   return parts.join("```");
 }
 
+// A superseded fallback line (old brace-glob or `for d in …; do X=$(ls …)`
+// form). LOOKUP_LINE already walks every host, so when the line above is the
+// LOOKUP_LINE an own-host line became, the fallback is dropped; on its own it
+// becomes a LOOKUP_LINE itself rather than losing the lookup.
+function mergeFallbackLines(text) {
+  const lines = text.split("\n");
+  const out = [];
+  for (const line of lines) {
+    let m = null;
+    for (const re of [OLD_FALLBACK_RE, CUR_FALLBACK_RE]) {
+      re.lastIndex = 0;
+      m = re.exec(line);
+      if (m) break;
+    }
+    if (!m) {
+      out.push(line);
+      continue;
+    }
+    const [, indent, varName, tail] = m;
+    const lookup = LOOKUP_LINE(varName, tail);
+    const prev = [...out].reverse().find((l) => l.trim() !== "");
+    if (prev === undefined || prev.trim() !== lookup) out.push(indent + lookup);
+  }
+  return out.join("\n");
+}
+
 function rewrite(text, { psBlocks = true } = {}) {
   let out = text;
   out = out.replace(BASE_LINE_RE, (_m, indent) => indent + NEW_BASE_LINE);
   out = out.split(OLD_BRACE).join(NEW_BRACE);
   out = out.replace(
     OWN_HOST_RE,
-    (_m, indent, varName, tail) => indent + OWN_HOST_LINE(varName, tail),
+    (_m, indent, varName, tail) => indent + LOOKUP_LINE(varName, tail),
   );
-  for (const re of [OLD_FALLBACK_RE, CUR_FALLBACK_RE]) {
-    out = out.replace(
-      re,
-      (_m, indent, varName, tail) => indent + FALLBACK_LINE(varName, tail),
-    );
-  }
+  out = mergeFallbackLines(out);
+  out = out.replace(
+    CUR_LOOKUP_RE,
+    (_m, indent, varName, tail) => indent + LOOKUP_LINE(varName, tail),
+  );
   out = out.replace(BARE_RE, (_m, indent, varName, tail) =>
-    [NEW_BASE_LINE, OWN_HOST_LINE(varName, tail), FALLBACK_LINE(varName, tail)]
+    [NEW_BASE_LINE, LOOKUP_LINE(varName, tail)]
       .map((l) => indent + l)
       .join("\n"),
   );
@@ -759,8 +829,9 @@ function main(argv) {
 
 module.exports = {
   NEW_BASE_LINE,
-  FALLBACK_LINE,
-  OWN_HOST_LINE,
+  LOOKUP_LINE,
+  OLD_FALLBACK_LINE,
+  OLD_OWN_HOST_LINE,
   cmdChainDirs,
   cmdChainArgs,
   PS_HOST_PICK_LINE,
