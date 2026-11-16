@@ -282,7 +282,7 @@ tizen-sdk-skills/
 | **claude/** | Claude Code: 캐시 + `~/.claude/{skills,agents}`; PreToolUse 훅은 `settings.json` 스니펫으로. |
 | **cline/** | Cline: 캐시(lib/scripts/assets) + `~/.cline/skills`; PreToolUse 어댑터는 `Documents/Cline/Hooks`, 상시 규칙은 `Documents/Cline/Rules`. |
 | **codex/** | Codex CLI: `~/.codex` 아래 캐시; 스킬 → `~/.agents/skills`; 에이전트 → `~/.codex/agents/*.toml`; 가드 → `~/.codex/hooks.json`(`/hooks`로 1회 신뢰); 규칙 → `~/.codex/AGENTS.md`. |
-| **gemini/** | Gemini CLI: `~/.gemini` 아래 캐시; 스킬 → `~/.gemini/skills`; 에이전트 → `~/.gemini/agents/*.md`; `BeforeTool` 어댑터 + `settings.json` 스니펫; 규칙 → `~/.gemini/GEMINI.md`. |
+| **gemini/** | Gemini CLI: `~/.gemini` 아래 캐시; 스킬 → `~/.agents/skills`(Codex와 공유); 에이전트 → `~/.gemini/agents/*.md`; `BeforeTool` 어댑터 + `settings.json` 스니펫; 규칙 → `~/.gemini/GEMINI.md`. |
 | **tizen-cli/** | 독립 실행형 `tizen-sdk` CLI — `common/lib` + `common/scripts`를 esbuild로 단일 실행 번들로 제공. |
 | **vscode/** | VS Code 확장 — `common/`을 번들해 에디터에서 `~/.claude` / `~/.cline`에 설치. |
 

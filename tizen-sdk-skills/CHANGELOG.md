@@ -44,6 +44,14 @@ below use those release tags.
   comments were rewritten the same way. The PowerShell and cmd.exe blocks are unchanged.
   `plugin-cache.test.js` now checks every Bash lookup against Gemini's rule and runs the
   generated line in bash, dash and (when installed) zsh against fake caches.
+- **Installing both the Codex and Gemini setups no longer makes Gemini CLI warn about
+  duplicate skills.** Gemini CLI reads skills from `~/.gemini/skills` and `~/.agents/skills`,
+  and the Codex setup installs to `~/.agents/skills`, so every skill was found twice and
+  Gemini printed `Skill conflict detected: … is overriding the same skill from …` for each.
+  The `~/.agents/skills` copy won, so an older Codex install also hid a newer Gemini one.
+  `gemini/setup/setup.sh` and `setup.ps1` now install the skills to `~/.agents/skills` too,
+  and remove this plugin's skill folders from `~/.gemini/skills`; other folders there are
+  kept.
 
 ## [1.8.0] — 2026-11-14
 

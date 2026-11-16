@@ -40,6 +40,14 @@
   템플릿 탐색과 Bash 주석 안의 백틱도 같은 방식으로 바꿨습니다. PowerShell과 cmd.exe 블록은
   바뀌지 않았습니다. `plugin-cache.test.js`는 이제 모든 Bash 탐색 줄을 Gemini 규칙으로 검사하고,
   생성된 줄을 가짜 캐시에 대해 bash, dash, (설치된 경우) zsh로 실행합니다.
+- **Codex와 Gemini 셋업을 둘 다 설치해도 Gemini CLI가 스킬 중복 경고를 내지 않습니다.**
+  Gemini CLI는 `~/.gemini/skills`와 `~/.agents/skills`에서 스킬을 읽고 Codex 셋업은
+  `~/.agents/skills`에 설치하므로, 모든 스킬이 두 번 발견되어 스킬마다
+  `Skill conflict detected: … is overriding the same skill from …` 경고가 나왔습니다.
+  `~/.agents/skills` 쪽이 이기기 때문에, Codex 설치가 더 오래된 버전이면 새 Gemini 설치를
+  가리기도 했습니다. 이제 `gemini/setup/setup.sh`와 `setup.ps1`도 스킬을
+  `~/.agents/skills`에 설치하고, `~/.gemini/skills`에서 이 플러그인의 스킬 폴더를
+  지웁니다. 그 밖의 폴더는 그대로 둡니다.
 
 ## [1.8.0] — 2026-11-14
 

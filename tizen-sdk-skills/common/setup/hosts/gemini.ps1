@@ -8,7 +8,9 @@ function Initialize-HostConfig {
     $script:HostLabel = "Gemini CLI"
     $script:HostHome = Join-Path $script:UserHome ".gemini"
     $script:CacheSubDirs = @("skills", "agents", "scripts", "lib", "assets")
-    $script:SkillsDir = Join-Path $script:HostHome "skills"
+    # Shared with Codex CLI - see hosts\gemini.sh for why both install here.
+    $script:SkillsDir = Join-Path $script:UserHome ".agents\skills"
+    $script:OldSkillsDir = Join-Path $script:HostHome "skills"
     $script:AgentsMode = "gemini-md"
     $script:AgentsDir = Join-Path $script:HostHome "agents"
     $script:SettingsFile = Join-Path $script:HostHome "settings.json"
@@ -50,6 +52,12 @@ function Get-GeminiSessionEntries {
 }
 
 function Install-HostExtras {
+    # Our skills used to live in ~/.gemini/skills. Remove only the folders named
+    # after our skills; anything else there belongs to the user.
+    foreach ($skill in Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory) {
+        Remove-LegacyPath (Join-Path $script:OldSkillsDir $skill.Name) "Gemini skill copy"
+    }
+
     Install-ShellScript $script:AdapterSrc $script:AdapterDst
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-tizen-commands.sh") (Join-Path $script:HooksDir "check-tizen-commands.sh")
     Install-ShellScript (Join-Path $script:CommonDir "hooks\check-project-writes.sh") (Join-Path $script:HooksDir "check-project-writes.sh")
@@ -148,7 +156,7 @@ function Write-HostSummary {
 
 
 function Write-HostNotes {
-    Write-Host " - Restart Gemini CLI; check with /skills list and /agents." -ForegroundColor Yellow
+    Write-Host " - Restart Gemini CLI; check with /skills list and /agents. Skills are read from ~/.agents/skills (shared with Codex CLI)." -ForegroundColor Yellow
     Write-Host " - Hooks run via bash - Git Bash must be on PATH on Windows." -ForegroundColor Yellow
     Write-Host " - Agent 'tools' names were mapped Claude->Gemini by agent-convert.js; if /agents rejects one, report the name." -ForegroundColor Yellow
 }
