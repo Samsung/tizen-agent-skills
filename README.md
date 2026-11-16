@@ -18,13 +18,14 @@ or Korean request.
 
 ## Plugins in this repository
 
-Each top-level directory is one independently versioned plugin with its own README, changelog
-and release tags (`<plugin>-vX.Y.Z`). More plugins for the Tizen platform will be added over time.
+Each top-level directory is one independently versioned plugin with its own README and changelog.
+Releases are tagged for the whole repository (`tizen-agent-skills-vX.Y.Z`). More plugins for the
+Tizen platform will be added over time.
 
 <!-- plugins:start -->
 | Plugin | What it does | Hosts | Version | Install & docs |
 |---|---|---|---|---|
-| [`tizen-sdk-skills/`](tizen-sdk-skills/) | Automates the Tizen SDK end to end: SDK install, project creation, build, emulator and device management, app install, remote debugging (GDB / netcoredbg / CDP), certificates, dlog analysis, Playwright testing. 29 skills, 24 agents, a standalone `tizen-sdk` CLI and the Tizen AI Extension for VS Code. | Claude Code, Cline, Codex CLI, VS Code, standalone CLI | 1.8.0 | [Quick Start](tizen-sdk-skills/README.md#quick-start) · [README](tizen-sdk-skills/README.md) · [한국어](tizen-sdk-skills/README.ko.md) · [Skills reference](tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md) |
+| [`tizen-sdk-skills/`](tizen-sdk-skills/) | Automates the Tizen SDK end to end: SDK install, project creation, build, emulator and device management, app install, remote debugging (GDB / netcoredbg / CDP), certificates, dlog analysis, Playwright testing. 29 skills, 24 agents, a standalone `tizen-sdk` CLI and the Tizen AI Extension for VS Code. | Claude Code, Cline, Codex CLI, Gemini CLI, VS Code, standalone CLI | 1.9.0 | [Quick Start](tizen-sdk-skills/README.md#quick-start) · [README](tizen-sdk-skills/README.md) · [한국어](tizen-sdk-skills/README.ko.md) · [Skills reference](tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md) |
 | [`tizen-action-skills/`](tizen-action-skills/) | Builds Tizen Action Framework providers: picks a default Action category or authors custom `.action`/`.entity` schemas, generates `actionc`/TIDL stubs for C#, C++, JavaScript or Flutter-Tizen/Dart, registers provider metadata and verifies with `action-tool`. 1 skill. | Claude Code | 1.0.0 | [README](tizen-action-skills/README.md) · [한국어](tizen-action-skills/README.ko.md) |
 <!-- plugins:end -->
 

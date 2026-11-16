@@ -4,6 +4,10 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [1.9.0] — 2026-11-16
+
+No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** converted Gemini agents write `name` / `description` as YAML single-quoted strings so Gemini CLI loads all of them again, the `tizen-device-manager` skill frontmatter is valid YAML again so Cline lists it, and every Bash runner lookup is built from shell builtins so Gemini CLI no longer blocks it as command injection. Note that the Gemini setup script (`gemini/setup`) now installs skills to `~/.agents/skills`, the folder the extension's Codex install uses: removing the extension's Codex install removes the tizen skills Gemini CLI reads there too, so re-run `gemini/setup` afterwards. See the project CHANGELOG for details.
+
 ## [1.8.0] — 2026-11-14
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** pre-check installer hand-offs report `status: "needs_action"` (`install_required`) instead of `failure`, the emulator runner boots a TV emulator on Apple Silicon Macs with emulator-v2, TV SDK ZIP installs detect the TV version again and keep the emulator binaries executable, GBS builds find RPMs under a custom `buildroot`, detect a nested `CMakeLists.txt` and report `gbs_not_found` with the install command when GBS is missing, a failed or short-lived app launch points to `tizen-dlog-analyzer`, `list-templates` no longer lists the native `BasicUI` template, the bash installers re-run themselves with a bash 4+ on macOS's bash 3.2, `sdb-helper` hands Korean device-list requests and `sdb devices` to `tizen-device-manager`, and `remote-device scan --connected-only` / `--saved-only` probe only the user's own devices. See the project CHANGELOG for details.
