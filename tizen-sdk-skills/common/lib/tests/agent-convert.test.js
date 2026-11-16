@@ -206,6 +206,20 @@ const escapeCases = [
     'description = "Deploy \u{1F680}"',
   ],
   [
+    "escaped raw tab (backslash + TAB)",
+    '"a\\\tb"',
+    "a\tb",
+    '"a\\u0009b"',
+    'description = "a\\u0009b"',
+  ],
+  [
+    "escaped backslash then raw tab",
+    '"a\\\\\tb"',
+    "a\\\tb",
+    '"a\\\\\\u0009b"',
+    'description = "a\\\\\\u0009b"',
+  ],
+  [
     "raw tab in double quotes",
     '"Build\tapp"',
     "Build\tapp",
@@ -275,6 +289,22 @@ check(
     'contains " #"',
   ),
   true,
+);
+
+check(
+  "  raw control character in double quotes named in the error",
+  (throwsWith(() => toGeminiMd(agent('"a\u0001b"'), "c.md")) || "").includes(
+    "U+0001",
+  ),
+  true,
+);
+check(
+  "  comment dropped from a key that is not name / description",
+  toGeminiMd(
+    "---\nname: x\ndescription: d\ntools: Bash, Read # note\n---\n",
+    "t.md",
+  ).split("\n")[3],
+  "tools: [run_shell_command, read_file]",
 );
 
 // A bad escape in a key that is not written out keeps its raw value.

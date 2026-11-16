@@ -309,7 +309,9 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         if (/^[A-Z_]+=\$\(ls "\$BASE"\//.test(l)) {
           stale.push(`${rel} (superseded $(ls …) own-host line)`);
         }
-        const sf = l.match(/^([A-Z_]+)=; for _tz_t in .*\/skills\/([\w-]+)\/([\w.-]+) /);
+        const sf = l.match(
+          /^([A-Z_]+)=; for _?[a-z_]+ in "\$HOME"\/[^/\s]+\/skills\/([\w-]+)\/([\w.-]+) /,
+        );
         if (sf && l !== gen.SKILL_FILE_LINE(sf[1], sf[2], sf[3])) {
           stale.push(`${rel} (skill-file line differs from SKILL_FILE_LINE)`);
         }
@@ -965,31 +967,40 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     put("h2 sp", ".gemini", "1.2.3");
     put("h2 sp", ".codex", "0.1.0");
     fs.mkdirSync(path.join(root, "h3"));
-    const script = `set -eu\n${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\nprintf '%s' "$CLI"`;
-    // State the line leaves in the shell it was pasted into: no _tz_*
-    // variable, and (zsh) nomatch exactly as it was before.
-    const leftover = (sh, pre) => {
+    const tpl = path.join(root, "h1", ".claude", cacheTail, "1.10.0", "skills", "x");
+    fs.mkdirSync(tpl, { recursive: true });
+    fs.writeFileSync(path.join(tpl, "T.md"), "");
+    // Run BASE + lookup (+ skill-file line) in `sh` with HOME=<root>/<home>,
+    // then `after`; stdout, or the exit status and stderr on failure.
+    const run = (sh, home, { env = {}, pre = "", after }) => {
       const r = spawnSync(
         sh,
         [
           "-c",
-          `${pre}${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n` +
-            `set | grep '^_tz_' || true; ` +
-            `[ -z "\${ZSH_VERSION:-}" ] || { [[ -o nomatch ]] && echo nomatch=on || echo nomatch=off; }`,
+          `set -eu\n${pre}${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n` +
+            `${gen.SKILL_FILE_LINE("TPL", "x", "T.md")}\n${after}`,
         ],
-        { encoding: "utf-8", env: { PATH: process.env.PATH, HOME: path.join(root, "h3") } },
+        {
+          encoding: "utf-8",
+          env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
+        },
       );
-      return r.status === 0 ? r.stdout.trim() : `exit ${r.status}: ${r.stderr}`;
+      return r.error || r.status !== 0 ? `exit ${r.status}: ${r.stderr}` : r.stdout;
     };
-    const found = (sh, home, env) => {
-      const r = spawnSync(sh, ["-c", script], {
-        encoding: "utf-8",
-        env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
-      });
-      if (r.error || r.status !== 0) return `exit ${r.status}: ${r.stderr}`;
-      const rel = path.relative(path.join(root, home), r.stdout);
-      return r.stdout ? rel.split(path.sep).join("/") : "";
-    };
+    const rel = (home, p) =>
+      p && path.relative(path.join(root, home), p).split(path.sep).join("/");
+    const found = (sh, home, env) =>
+      rel(home, run(sh, home, { env, after: `printf '%s' "$CLI"` }));
+    // State left in the shell the lines were pasted into: no _tz_* variable,
+    // and (zsh) nomatch exactly as it was before.
+    const leftover = (sh, home, pre = "") =>
+      run(sh, home, {
+        env: { CLAUDECODE: "1" },
+        pre,
+        after:
+          `set | grep '^_tz_' || true; ` +
+          `[ -z "\${ZSH_VERSION:-}" ] || { [[ -o nomatch ]] && echo nomatch=on || echo nomatch=off; }`,
+      }).trim();
     const at = (dot, ver) => `${dot}/${cacheTail}${ver}/lib/cli/x-cli.js`;
     const shells = ["bash", "dash", "zsh"].filter(
       (s) => spawnSync(s, ["-c", "exit 0"]).status === 0,
@@ -1021,18 +1032,30 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
         "",
       );
       check(
-        `  ${sh}: no _tz_* variable left behind`,
-        leftover(sh, "").replace(/nomatch=\w+/, "").trim(),
-        "",
+        `  ${sh}: skill file from $CLI's version directory`,
+        rel(
+          "h1",
+          run(sh, "h1", { env: { CLAUDECODE: "1" }, after: `printf '%s' "$TPL"` }),
+        ),
+        `.claude/${cacheTail}1.10.0/skills/x/T.md`,
       );
+      for (const home of ["h1", "h3"]) {
+        check(
+          `  ${sh}: no _tz_* variable left behind (${home === "h1" ? "found" : "nothing installed"})`,
+          leftover(sh, home).replace(/nomatch=\w+/, "").trim(),
+          "",
+        );
+      }
     }
     if (shells.includes("zsh")) {
-      check("  zsh: nomatch on stays on", leftover("zsh", ""), "nomatch=on");
-      check(
-        "  zsh: nomatch off stays off",
-        leftover("zsh", "unsetopt nomatch\n"),
-        "nomatch=off",
-      );
+      for (const home of ["h1", "h3"]) {
+        check(`  zsh: nomatch on stays on (${home})`, leftover("zsh", home), "nomatch=on");
+        check(
+          `  zsh: nomatch off stays off (${home})`,
+          leftover("zsh", home, "unsetopt nomatch\n"),
+          "nomatch=off",
+        );
+      }
     }
     check(
       "  zsh runs the lookup in CI",

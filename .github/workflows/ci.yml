@@ -174,7 +174,7 @@ jobs:
       # zsh is the macOS default shell; plugin-cache.test.js runs the Bash
       # runner lookup under bash, dash and zsh.
       - name: Install zsh
-        run: sudo apt-get install -y --no-install-recommends zsh
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh
 
       - name: Run common/lib unit tests
         working-directory: tizen-sdk-skills/common/lib/tests

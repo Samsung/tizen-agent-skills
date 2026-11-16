@@ -70,8 +70,10 @@ const DOUBLE_QUOTED = /^("(?:[^"\\]|\\.)*")(?:\s+#.*)?$/;
  * JSON escapes (\\ \" \/ \b \f \n \r \t \uXXXX), the subset YAML and JSON
  * share; any other escape (e.g. `"C:\Users"`, where YAML rejects `\U…`) is an
  * error instead of a silent pass-through. A raw tab, which YAML allows inside
- * double quotes, is accepted. Plain: ` #` would start a YAML comment and cut
- * the value short, so it is an error too (quote the value instead).
+ * double quotes, is accepted; any other raw control character is an error.
+ * Plain: ` #` starts a YAML comment, which would cut the value short — an
+ * error here; parseFrontmatter drops the comment for keys other than
+ * name / description.
  */
 function unquoteValue(key, raw) {
   const s = raw.match(SINGLE_QUOTED);
@@ -81,13 +83,27 @@ function unquoteValue(key, raw) {
     if (/\s#/.test(raw)) {
       throw new Error(
         `frontmatter "${key}": plain value contains " #", which YAML reads as ` +
-          `a comment — ${raw} (wrap the value in single quotes)`,
+          `a comment — ${raw} (wrap the value in single quotes, writing ' as '')`,
       );
     }
     return raw;
   }
+  const ctl = d[1].match(/[\x00-\x08\x0a-\x1f]/);
+  if (ctl) {
+    const code = ctl[0].charCodeAt(0).toString(16).toUpperCase().padStart(4, "0");
+    throw new Error(
+      `frontmatter "${key}": raw control character U+${code} in double-quoted ` +
+        `value (write it as an escape, e.g. \\n)`,
+    );
+  }
   try {
-    return JSON.parse(d[1].replace(/\t/g, "\\t"));
+    // Escapes are taken as pairs so `\<TAB>` (YAML's escaped tab) and a raw
+    // tab both become `\t`, while `\\` followed by a tab stays two tokens.
+    return JSON.parse(
+      d[1].replace(/\\[\s\S]|\t/g, (m) =>
+        m === "\t" || m === "\\\t" ? "\\t" : m,
+      ),
+    );
   } catch {
     throw new Error(
       `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
@@ -119,9 +135,10 @@ function parseFrontmatter(text) {
       value = unquoteValue(key, raw);
     } catch (e) {
       // Only name / description are written out as strings; a value of any
-      // other key that fails here must not stop the whole conversion.
+      // other key that fails here must not stop the whole conversion. Its
+      // trailing ` # …` is a YAML comment, not part of the value.
       if (key === "name" || key === "description") throw e;
-      value = raw;
+      value = raw.replace(/\s+#.*$/, "");
     }
     front.push([key, value]);
   }
