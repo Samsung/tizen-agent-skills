@@ -44,8 +44,8 @@ for harness in "${HARNESSES[@]}"; do
   fi
 done
 
-if [[ " ${failed[*]-} " == *" codex "* || " ${failed[*]-} " == *" gemini "* ]]; then
-  echo "  Codex CLI and Gemini CLI share ~/.agents/skills: re-run the failed one's setup so its scripts match the skills there."
+if [[ ${#failed[@]} -gt 0 ]]; then
+  echo "  Fix the error above, then re-run setup-all or the failed harness's own setup (for example bash codex/setup/setup.sh)."
 fi
 
 [[ ${#failed[@]} -eq 0 ]]

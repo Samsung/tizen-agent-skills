@@ -19,6 +19,11 @@ Each harness directory ships thin wrappers so the familiar entry points still wo
 | Cline | `bash cline/setup/setup.sh` | `.\cline\setup\setup.ps1` | `…\cline\setup\setup.bat` |
 | Codex CLI | `bash codex/setup/setup.sh` | `.\codex\setup\setup.ps1` | `…\codex\setup\setup.bat` |
 | Gemini CLI | `bash gemini/setup/setup.sh` | `.\gemini\setup\setup.ps1` | `…\gemini\setup\setup.bat` |
+| All four | `bash common/setup/setup-all.sh` | `.\common\setup\setup-all.ps1` | `…\common\setup\setup-all.bat` |
+
+`setup-all` runs the four setups in turn with the same options (`--repo`,
+`--skip-validation`, `--no-restart`). A failed harness does not stop the others; the
+summary lists each result and the exit code is 1 if any failed.
 
 Prerequisites: `node` on PATH (the CLI runners need it; the setup uses it to read
 `plugin.json` and to convert agent definitions). On Windows, `bash` (Git Bash) on
@@ -35,7 +40,7 @@ snippet in every agent/skill search.
 |---|---|---|---|---|
 | Dot-dir | `~/.claude` | `~/.cline` | `~/.codex` (`$CODEX_HOME`) | `~/.gemini` |
 | Cache contents | skills agents scripts lib assets tools docs | scripts lib assets tools docs | skills agents scripts lib assets tools docs | skills agents scripts lib assets tools docs |
-| Skills | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (shared with Gemini) | `~/.agents/skills/<n>/` (shared with Codex) |
+| Skills | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (shared with Gemini) | `~/.agents/skills/<n>/` (shared with Codex); `~/.gemini/skills/<n>/` for Gemini CLI < 0.28.0 |
 | Agents | `~/.claude/agents/*.md` (verbatim) | — (Cline subagents are built in, on builds that support them) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (tools mapped to Gemini names, `maxTurns` → `max_turns`, `model` dropped) |
 | Guards (hooks) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + entries merged into `settings.json` `hooks.PreToolUse` (all 3 hooks; snippet printed only when the file cannot be parsed) | `Documents/Cline/Hooks/PreToolUse` adapter + guards (Cline builds with hooks support; macOS/Linux only) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` written (or a merge snippet if a foreign `hooks.json` exists) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` adapter + guards; `settings.json` `hooks.BeforeTool` entry merged (snippet printed only when the file cannot be parsed) |
 | Update check (session start) | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged | `Documents/Cline/Hooks/TaskStart` adapter + `check-update.js` (macOS/Linux only) | `check-update.js` in the hook dir; `hooks.json` `SessionStart` entry | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged |
@@ -49,8 +54,9 @@ therefore writes one copy there; the Gemini setup also removes our skill folders
 older releases put in `~/.gemini/skills` (other folders there are left alone).
 Gemini CLI reads `~/.agents/skills` from 0.28.0 on; when `gemini --version` reports
 an older release, the Gemini setup keeps installing to `~/.gemini/skills`. When the
-version cannot be read, it installs to `~/.agents/skills` but keeps the old
-`~/.gemini/skills` copies and warns.
+version cannot be read (`gemini` not on the setup shell's PATH, for example an nvm
+shim that only an interactive shell loads, or `--version` failing), it installs to
+`~/.agents/skills`, keeps the old `~/.gemini/skills` copies and warns.
 
 The guard scripts themselves (`common/hooks/check-tizen-commands.sh`,
 `check-project-writes.sh`) are identical for every harness. Codex CLI speaks the

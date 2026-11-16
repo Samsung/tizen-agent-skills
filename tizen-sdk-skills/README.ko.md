@@ -175,7 +175,8 @@ Code VS Code 확장)에는 어시스턴트가 첫 답변에서 알려 주도록 
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/)
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (다른 호스트는 cline/, codex/, gemini/,
+                                  # 네 개 모두는 common/setup/setup-all.sh)
 ```
 
 VS Code 확장은 세션 시작 확인을 설치하지 않으므로 릴리스 Watch로 알림을 받으세요. 업데이트는

@@ -185,7 +185,8 @@ of another checkout) and re-run the same setup script, then restart the host:
 cd tizen-agent-skills
 git pull
 cd tizen-sdk-skills
-bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts)
+bash claude/setup/setup.sh        # Windows: .\claude\setup\setup.ps1 (use cline/, codex/, gemini/ for other hosts,
+                                  # or common/setup/setup-all.sh for all four)
 ```
 
 The VS Code extension does not install the session-start check; watch the releases

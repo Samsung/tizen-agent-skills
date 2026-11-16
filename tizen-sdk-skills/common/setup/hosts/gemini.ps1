@@ -76,18 +76,19 @@ function Get-GeminiSessionEntries {
 }
 
 function Install-HostExtras {
-    $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
-        ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path $_ })
     if ($script:SkillsDir -eq $script:OldSkillsDir) {
         Write-Status "Gemini CLI $script:GeminiVersion does not read ~/.agents/skills (needs $script:GeminiMinShared+) - skills kept in $script:SkillsDir. Upgrade Gemini CLI and re-run this setup to move them." "Warning"
     } else {
+        # See hosts\gemini.sh: old copies are the folders named after our skills.
+        $legacyCopies = @(Get-ChildItem (Join-Path $script:CommonDir "skills") -Directory |
+            ForEach-Object { Join-Path $script:OldSkillsDir $_.Name } | Where-Object { Test-Path $_ })
         if ($script:GeminiVersion) {
-            # Our skills used to live in ~/.gemini/skills. Remove only the folders
-            # named after our skills; anything else there belongs to the user.
             foreach ($copy in $legacyCopies) { Remove-LegacyPath $copy "Gemini skill copy" }
-        } elseif ($legacyCopies.Count -gt 0) {
-            # Unknown version: the old copies may be the only ones this Gemini reads.
-            Write-Status "Could not read the Gemini CLI version - kept $($legacyCopies.Count) skill folder(s) in $script:OldSkillsDir. With Gemini CLI $script:GeminiMinShared+ they duplicate $script:SkillsDir`: re-run this setup where 'gemini --version' works, or delete them." "Warning"
+        } else {
+            Write-Status "Could not read the Gemini CLI version - installed to $script:SkillsDir, which Gemini CLI reads from $script:GeminiMinShared on. If yours is older, re-run this setup where 'gemini --version' works." "Warning"
+            if ($legacyCopies.Count -gt 0) {
+                Write-Status "Kept $($legacyCopies.Count) skill folder(s) in $script:OldSkillsDir`: with Gemini CLI $script:GeminiMinShared+ they duplicate $script:SkillsDir, so delete them once the version is confirmed." "Warning"
+            }
         }
     }
 
