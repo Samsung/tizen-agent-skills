@@ -29,6 +29,7 @@ const path = require("path");
 const {
   SINGLE_QUOTED,
   DOUBLE_QUOTED,
+  unquoteValue,
   parseFrontmatter,
 } = require("../tools/agent-convert");
 
@@ -52,13 +53,13 @@ const BLOCK_SCALAR = /^[|>][+-]?\d*$/;
 const BAD_START = /^(?:[[\]{},&*!|>%@`#]|[-?:](?:\s|$))/;
 
 /** Problem with one scalar value, or null when it is valid strict YAML. */
-function scalarProblem(v) {
+function scalarProblem(v, key = "item") {
   if (v === "" || BLOCK_SCALAR.test(v)) return null;
   // Flow sequence of plain items, e.g. `required_tools: [bash, read]`.
   const flow = v.match(/^\[([^[\]{}]*)\]$/);
   if (flow) {
     for (const item of flow[1].split(",")) {
-      const p = scalarProblem(item.trim());
+      const p = scalarProblem(item.trim(), key);
       if (p) return `flow sequence item: ${p}`;
     }
     return null;
@@ -67,13 +68,12 @@ function scalarProblem(v) {
     return SINGLE_QUOTED.test(v) ? null : "unbalanced single-quoted value";
   }
   if (v.startsWith('"')) {
-    const d = v.match(DOUBLE_QUOTED);
-    if (!d) return "unbalanced double-quoted value";
+    if (!DOUBLE_QUOTED.test(v)) return "unbalanced double-quoted value";
     try {
-      JSON.parse(d[1]);
+      unquoteValue(key, v);
       return null;
-    } catch {
-      return "double-quoted value with an escape outside the JSON subset";
+    } catch (e) {
+      return e.message;
     }
   }
   if (BAD_START.test(v)) return "plain value starts with a YAML indicator";
@@ -113,7 +113,7 @@ function frontmatterProblems(text, { agent = false } = {}) {
     }
     const value = (kv ? kv[3] || "" : item[1]).trim();
     if (BLOCK_SCALAR.test(value)) blockIndent = indent;
-    const p = scalarProblem(value);
+    const p = scalarProblem(value, kv ? kv[2] : "item");
     if (p) problems.push(`line ${i + 2}: ${p}`);
   });
   return problems;
@@ -136,6 +136,8 @@ for (const [label, v, ok] of [
   ["double-quoted JSON escapes", '"say \\"hi\\": now"', true],
   ["double-quoted bad escape", '"C:\\Tizen"', false],
   ["block scalar", ">-", true],
+  ["double-quoted raw tab", '"a\tb"', true],
+  ['"a" or "b" (not one scalar)', '"a" or "b"', false],
   ["quoted value + comment", "'ok' # note", true],
 ]) {
   check(`  ${label}`, frontmatterProblems(fm(v)).length === 0, ok);

@@ -168,7 +168,7 @@ the command returns quickly (a few seconds for em-cli to create the VM). sdb is 
 
 **Codex CLI:** there is no Bash `timeout` parameter and one exec call waits at most 30 s,
 so run `create … --launch --background` (job receipt at once) and poll
-`node "$(dirname "$CLI")/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until
+`node "${CLI%/*}/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until
 `job.state` is `done`; that response is the create envelope. A result that is only the
 `[tizen-emulator] Action: create…` progress line is NOT the outcome (issue #48).
 

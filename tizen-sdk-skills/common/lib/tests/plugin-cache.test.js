@@ -585,15 +585,27 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     );
     check("  the generated chain is a fixed point", rw(chainX), chainX);
 
-    const tplLine = gen.SKILL_FILE_LINE(
+    const tmplLine = gen.SKILL_FILE_LINE(
       "TEMPLATE",
       "tizen-dlog-analyzer",
       "REPORT_TEMPLATE.md",
     );
     check(
       "  skill-file line missing a host is regenerated",
-      rw(tplLine.replace(/ "\$HOME"\/\.gemini\/\S+/, "")),
-      tplLine,
+      rw(tmplLine.replace(/ "\$HOME"\/\.gemini\/\S+/, "")),
+      tmplLine,
+    );
+    check(
+      "  text after a skill-file line is kept",
+      rw(`${tmplLine}; cat "$TEMPLATE"`),
+      `${tmplLine}; cat "$TEMPLATE"`,
+    );
+    check(
+      "  superseded $(ls … | head -1) skill-file line is migrated",
+      rw(
+        'TEMPLATE=$(ls "$HOME"/.{claude,cline}/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/x 2>/dev/null | head -1)',
+      ),
+      tmplLine,
     );
 
     // Superseded bash fallback migration.
@@ -979,21 +991,49 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     );
     fs.mkdirSync(tpl, { recursive: true });
     fs.writeFileSync(path.join(tpl, "T.md"), "");
+    // A newer version holding only the template (no runner): with $CLI set,
+    // the template must still come from $CLI's own version directory.
+    // Another harness's cache with an older template: a Gemini session must
+    // still prefer its own.
+    const tplGem = path.join(
+      root,
+      "h1",
+      ".gemini",
+      cacheTail,
+      "1.2.0",
+      "skills",
+      "x",
+    );
+    fs.mkdirSync(tplGem, { recursive: true });
+    fs.writeFileSync(path.join(tplGem, "T.md"), "");
+    const tplOnly = path.join(
+      root,
+      "h1",
+      ".claude",
+      cacheTail,
+      "1.11.0",
+      "skills",
+      "x",
+    );
+    fs.mkdirSync(tplOnly, { recursive: true });
+    fs.writeFileSync(path.join(tplOnly, "T.md"), "");
     // Run BASE + lookup (+ skill-file line) in `sh` with HOME=<root>/<home>,
     // then `after`; stdout, or the exit status and stderr on failure.
-    const run = (sh, home, { env = {}, pre = "", after }) => {
-      const r = spawnSync(
-        sh,
-        [
-          "-c",
-          `set -eu\n${pre}${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n` +
-            `${gen.SKILL_FILE_LINE("TPL", "x", "T.md")}\n${after}`,
-        ],
-        {
-          encoding: "utf-8",
-          env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
-        },
-      );
+    const tplLine = gen.SKILL_FILE_LINE("TPL", "x", "T.md");
+    const run = (
+      sh,
+      home,
+      {
+        env = {},
+        pre = "",
+        body = `${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n${tplLine}`,
+        after,
+      },
+    ) => {
+      const r = spawnSync(sh, ["-c", `set -eu\n${pre}${body}\n${after}`], {
+        encoding: "utf-8",
+        env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
+      });
       return r.error || r.status !== 0
         ? `exit ${r.status}: ${r.stderr}`
         : r.stdout;
@@ -1052,6 +1092,39 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           }),
         ),
         `.claude/${cacheTail}1.10.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone in a fresh shell finds the newest cache copy`,
+        rel(
+          "h1",
+          run(sh, "h1", {
+            env: { CLAUDECODE: "1" },
+            body: tplLine,
+            after: `printf '%s' "$TPL"`,
+          }),
+        ),
+        `.claude/${cacheTail}1.11.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone prefers this harness's cache (Gemini)`,
+        rel(
+          "h1",
+          run(sh, "h1", {
+            env: { GEMINI_CLI: "1" },
+            body: tplLine,
+            after: `printf '%s' "$TPL"`,
+          }),
+        ),
+        `.gemini/${cacheTail}1.2.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone leaves BASE unset`,
+        run(sh, "h1", {
+          env: { CLAUDECODE: "1" },
+          body: tplLine,
+          after: `printf '%s' "\${BASE-unset}"`,
+        }),
+        "unset",
       );
       for (const home of ["h1", "h3"]) {
         check(

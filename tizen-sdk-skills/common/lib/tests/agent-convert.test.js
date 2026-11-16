@@ -294,7 +294,7 @@ check(
 check(
   "  raw control character in double quotes named in the error",
   (throwsWith(() => toGeminiMd(agent('"a\u0001b"'), "c.md")) || "").includes(
-    "U+0001",
+    "\\u0001",
   ),
   true,
 );
@@ -306,6 +306,43 @@ check(
   ).split("\n")[3],
   "tools: [run_shell_command, read_file]",
 );
+
+check(
+  '  quoted value of another key keeps its inner " #"',
+  get(
+    parseFrontmatter('---\nname: x\ndescription: d\nmodel: "C:\\x #1"\n---\n')
+      .front,
+    "model",
+  ),
+  '"C:\\x #1"',
+);
+
+check(
+  "  comment after a failing quoted value of another key is dropped",
+  get(
+    parseFrontmatter(
+      '---\nname: x\ndescription: d\ntools: "Bash, Read\\q" # note\n---\n',
+    ).front,
+    "tools",
+  ),
+  '"Bash, Read\\q"',
+);
+
+for (const [src, kept] of [
+  ['"a" or "b" # note', '"a" or "b"'],
+  ["'it's' # note", "'it's'"],
+  ['"x\\q" extra # note', '"x\\q" extra'],
+]) {
+  check(
+    `  comment dropped after ${src.split(" #")[0]} (not one quoted scalar)`,
+    get(
+      parseFrontmatter(`---\nname: x\ndescription: d\nmodel: ${src}\n---\n`)
+        .front,
+      "model",
+    ),
+    kept,
+  );
+}
 
 // A bad escape in a key that is not written out keeps its raw value.
 check(

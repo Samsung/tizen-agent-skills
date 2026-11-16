@@ -59,6 +59,10 @@ const GEMINI_TOOL_MAP = {
   WebSearch: "google_web_search",
 };
 
+/** `\uXXXX` for one UTF-16 code unit. */
+const hex4 = (c) =>
+  `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
+
 // A value that is exactly one YAML quoted scalar, optionally followed by a
 // YAML comment (` # …`). `'a' or 'b'` and `"a" or "b"` start and end with a
 // quote but are NOT one scalar, so they fail these patterns and stay verbatim.
@@ -91,13 +95,8 @@ function unquoteValue(key, raw) {
   // eslint-disable-next-line no-control-regex -- detecting raw control characters is the point
   const ctl = d[1].match(/[\x00-\x08\x0a-\x1f]/);
   if (ctl) {
-    const code = ctl[0]
-      .charCodeAt(0)
-      .toString(16)
-      .toUpperCase()
-      .padStart(4, "0");
     throw new Error(
-      `frontmatter "${key}": raw control character U+${code} in double-quoted ` +
+      `frontmatter "${key}": raw control character ${hex4(ctl[0])} in double-quoted ` +
         `value (write it as an escape, e.g. \\n)`,
     );
   }
@@ -141,9 +140,14 @@ function parseFrontmatter(text) {
     } catch (e) {
       // Only name / description are written out as strings; a value of any
       // other key that fails here must not stop the whole conversion. Its
-      // trailing ` # …` is a YAML comment, not part of the value.
+      // trailing ` # …` is a YAML comment, not part of the value; in a
+      // quoted value only a ` #` after the closing quote starts one. Any
+      // other value: a final ` # …` with no quote in it is the comment.
       if (key === "name" || key === "description") throw e;
-      value = raw.replace(/\s+#.*$/, "");
+      const head = raw.match(
+        /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^"'].*?)\s+#.*$/,
+      );
+      value = head ? head[1] : raw.replace(/\s+#[^"']*$/, "");
     }
     front.push([key, value]);
   }
@@ -177,11 +181,7 @@ const doubleQuoted = (s) =>
   `"${String(s)
     .replace(/[\\"]/g, "\\$&")
     .replace(/\n/g, "\\n")
-    .replace(
-      new RegExp(CONTROL_RE.source, "g"),
-      (c) =>
-        `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`,
-    )}"`;
+    .replace(new RegExp(CONTROL_RE.source, "g"), hex4)}"`;
 
 // YAML scalar for Gemini. Source values are written unquoted for Claude Code's
 // lenient frontmatter reader, but Gemini CLI parses agent frontmatter as
@@ -315,6 +315,7 @@ if (require.main === module) main(process.argv.slice(2));
 module.exports = {
   SINGLE_QUOTED,
   DOUBLE_QUOTED,
+  unquoteValue,
   GEMINI_TOOL_MAP,
   parseFrontmatter,
   toCodexToml,

@@ -81,7 +81,7 @@ $JOB = Join-Path (Split-Path $CLI) "job-cli.js"
 node "$JOB" wait --id <job_id>     # blocks ≤ 25 s; repeat while result.state is "running"
 ```
 
-(bash: `JOB="$(dirname "$CLI")/job-cli.js"`.) The finished `wait` response **is** the
+(bash: `JOB="${CLI%/*}/job-cli.js"`.) The finished `wait` response **is** the
 launch envelope (`result.device_serial`, plus a `job` block) — report it exactly as
 below. A tool result that shows only the progress line and no `{ "status": … }` JSON is
 not a result: the runner is still running.

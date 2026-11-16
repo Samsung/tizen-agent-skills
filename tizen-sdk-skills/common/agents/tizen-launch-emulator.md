@@ -61,7 +61,7 @@ never exceeds the cap (the wait tops out at 300s).
 
 **Codex CLI is different — there is no Bash `timeout` parameter and one exec call waits
 at most 30 s.** There, run `node "$CLI" launch --vm-name <name> --background` (it returns
-a job receipt within a second), then run `node "$(dirname "$CLI")/job-cli.js" wait --id
+a job receipt within a second), then run `node "${CLI%/*}/job-cli.js" wait --id
 <job_id>` repeatedly (each call blocks ≤ 25 s) until `job.state` is `done`; that response
 is the launch envelope — return it verbatim. A tool result that is only the
 `[tizen-emulator] Launching VM…` progress line is NOT the outcome: the runner is still

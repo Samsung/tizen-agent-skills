@@ -126,13 +126,15 @@ const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // (a) bash host pick line. Reverse detection order: bash's last matching clause
 //     wins, so the host with the highest precedence must come last.
-const NEW_BASE_LINE = [
-  `BASE="$HOME/${DEFAULT_HOST_DOT_DIR}"`,
-  ...[...HOST_DETECT_ORDER].reverse().map((d) => {
-    const probe = HOST_MARKERS[d].map((v) => `\${${v}:-}`).join("");
-    return `[ -z "${probe}" ] || BASE="$HOME/${d}"`;
-  }),
-].join("; ");
+const hostPickLine = (varName) =>
+  [
+    `${varName}="$HOME/${DEFAULT_HOST_DOT_DIR}"`,
+    ...[...HOST_DETECT_ORDER].reverse().map((d) => {
+      const probe = HOST_MARKERS[d].map((v) => `\${${v}:-}`).join("");
+      return `[ -z "${probe}" ] || ${varName}="$HOME/${d}"`;
+    }),
+  ].join("; ");
+const NEW_BASE_LINE = hostPickLine("BASE");
 
 // Snippets inside list items are indented; every line rule below captures the
 // leading whitespace as group 1 and re-emits it.
@@ -177,11 +179,13 @@ const LOOKUP_PREFIX =
   '_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; _tz_s=; ';
 const LOOKUP_SUFFIX =
   '; unset _tz_s _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o';
-const LOOKUP_LINE = (varName, tail, keep = false) => {
+//     baseVar names the variable holding the own host's dot-dir (BASE in
+//     the runner blocks).
+const LOOKUP_LINE = (varName, tail, keep = false, baseVar = "BASE") => {
   const line =
     `${LOOKUP_PREFIX}${varName}=; ` +
-    `for _tz_d in "$BASE" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
-    `[ "$_tz_d" != "$BASE" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; ` +
+    `for _tz_d in "$${baseVar}" ${HOST_DOT_DIRS.map((d) => `"$HOME"/${d}`).join(" ")}; do ` +
+    `[ "$_tz_d" != "$${baseVar}" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; ` +
     `for _tz_f in "$_tz_d"/${CACHE_TAIL}/*/${tail}; do [ -f "$_tz_f" ] || continue; ` +
     `_tz_v=\${_tz_f#"$_tz_d"/${CACHE_TAIL}/}; _tz_v=\${_tz_v%%/*}; ` +
     `case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; ` +
@@ -192,33 +196,46 @@ const LOOKUP_LINE = (varName, tail, keep = false) => {
   return keep ? `[ -n "\${${varName}:-}" ] || { ${line}; }` : line;
 };
 
-// A lookup line, current or an earlier form, with or
-// without the keep guard — regenerated so a host-list or form change
-// propagates. group 1 = indent, group 2 = keep guard, group 3 = var name,
-// group 4 = tail.
+// A lookup line, with or without the keep guard — regenerated so a host-list
+// change propagates. group 1 = indent, group 2 = keep guard, group 3 = var
+// name, group 4 = tail.
 const CUR_LOOKUP_RE = new RegExp(
-  `${INDENT}(\\[ -n "\\$\\{[A-Z_]+:-\\}" \\] \\|\\| \\{ )?` +
-    `(?:_tz_o=; )?\\[ -z "\\$\\{ZSH_VERSION:-\\}" \\] \\|\\| (?:\\{ .*?; )?unsetopt nomatch; (?:\\}; )?(?:_tz_s=; )?` +
-    `([A-Z_]+)=; for \\w+ in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do ` +
-    `.*?for \\w+ in "\\$\\w+"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\3" \\] \\|\\| break; done.*$`,
+  `${INDENT}(\\[ -n "\\$\\{[A-Z_]+:-\\}" \\] \\|\\| \\{ )?${esc(LOOKUP_PREFIX)}` +
+    `([A-Z_]+)=; for _tz_d in "\\$BASE"(?: "\\$HOME"/\\.[a-z]+)*; do ` +
+    `.*?for _tz_f in "\\$_tz_d"/${esc(CACHE_TAIL)}/\\*/(\\S+); do .*; \\[ -z "\\$\\3" \\] \\|\\| break; done.*$`,
   "gm",
 );
 
-// A file that ships next to a runner (e.g. dlog-analyzer's REPORT_TEMPLATE.md):
-// a personal skill copy in any host's skills dir (or ~/.agents) first, then
-// the copy in the same plugin-cache version directory as $CLI. With $CLI
-// empty, the last word is empty and `[ -f ]` skips it.
+// A file that ships next to a runner (e.g. dlog-analyzer's REPORT_TEMPLATE.md),
+// on one self-contained line: the docs run it on its own, later, often in a
+// fresh shell where $CLI and $BASE are gone. A personal skill copy in any
+// host's skills dir (or ~/.agents) first, then the copy in $CLI's own version
+// directory (same version as the runner; the word is empty when $CLI is);
+// only when both miss, LOOKUP_LINE over the host caches, this harness's own
+// first. The host pick goes into _tz_h (unset afterwards), so the line
+// neither needs nor sets BASE.
 const SKILL_FILE_DIRS = [...HOST_DOT_DIRS, ".agents"];
 const SKILL_FILE_LINE = (varName, skill, file) =>
   `${varName}=; for _tz_t in ` +
   SKILL_FILE_DIRS.map((d) => `"$HOME"/${d}/skills/${skill}/${file}`).join(" ") +
-  ` "\${CLI:+\${CLI%/lib/cli/*}/skills/${skill}/${file}}"; ` +
-  `do [ -f "$_tz_t" ] || continue; ${varName}=$_tz_t; break; done; unset _tz_t`;
-// group 1 = indent, group 2 = var name, group 3 = skill, group 4 = file.
-const SKILL_FILE_RE = new RegExp(
-  `${INDENT}([A-Z_]+)=; for _?[a-z_]+ in "\\$HOME"/[^/\\s]+/skills/([\\w-]+)/([\\w.-]+) .*; done(?:; unset _tz_t)?$`,
-  "gm",
-);
+  ` "\${CLI:+\${CLI%/lib/cli/*}/skills/${skill}/${file}}"` +
+  `; do [ -f "$_tz_t" ] || continue; ${varName}=$_tz_t; break; done; unset _tz_t; ` +
+  `[ -n "$${varName}" ] || { ${hostPickLine("_tz_h")}; ` +
+  `${LOOKUP_LINE(varName, `skills/${skill}/${file}`, false, "_tz_h")}; unset _tz_h; }`;
+// Current form, or the superseded `X=$(ls "$HOME"/.{…}/skills/… | head -1)`
+// one (Gemini CLI blocks `$(…)`). group 1 = indent, group 2 = var name,
+// group 3 = skill, group 4 = file.
+const SKILL_FILE_RES = [
+  new RegExp(
+    `${INDENT}([A-Z_]+)=; for _?[a-z_]+ in "\\$HOME"/[^/\\s]+/skills/([\\w-]+)/([\\w.-]+) .*; done` +
+      `(?:; unset _tz_t(?:; \\[ -n "\\$\\2" \\] \\|\\| \\{ .*; \\})?)?$`,
+    "gm",
+  ),
+  new RegExp(
+    `${INDENT}([A-Z_]+)=\\$\\(ls "\\$HOME"/\\.\\{[a-z,]+\\}/skills/([\\w-]+)/([\\w.-]+) .*\\| head -1\\)$`,
+    "gm",
+  ),
+];
 
 // Superseded two-line form (own host, then fallback) — still recognised so
 // a stale copy is migrated to LOOKUP_LINE. The `|| true` kept a missing cache
@@ -728,11 +745,13 @@ function rewrite(text, { psBlocks = true } = {}) {
       indent + LOOKUP_LINE(varName, tail, Boolean(keep)),
   );
   out = mergeFallbackLines(out);
-  out = out.replace(
-    SKILL_FILE_RE,
-    (_m, indent, varName, skill, file) =>
-      indent + SKILL_FILE_LINE(varName, skill, file),
-  );
+  for (const re of SKILL_FILE_RES) {
+    out = out.replace(
+      re,
+      (_m, indent, varName, skill, file) =>
+        indent + SKILL_FILE_LINE(varName, skill, file),
+    );
+  }
   out = out.replace(BARE_RE, (_m, indent, varName, tail) =>
     [NEW_BASE_LINE, LOOKUP_LINE(varName, tail)]
       .map((l) => indent + l)
