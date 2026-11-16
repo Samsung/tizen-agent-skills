@@ -296,7 +296,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 | **claude/** | Claude Code: cache + `~/.claude/{skills,agents}`; PreToolUse hooks via a `settings.json` snippet. |
 | **cline/** | Cline: cache (lib/scripts/assets) + `~/.cline/skills`; PreToolUse adapter in `Documents/Cline/Hooks`, always-on rule in `Documents/Cline/Rules`. |
 | **codex/** | Codex CLI: cache under `~/.codex`; skills → `~/.agents/skills`; agents → `~/.codex/agents/*.toml`; guards → `~/.codex/hooks.json` (trust once with `/hooks`); rules → `~/.codex/AGENTS.md`. |
-| **gemini/** | Gemini CLI: cache under `~/.gemini`; skills → `~/.gemini/skills`; agents → `~/.gemini/agents/*.md`; `BeforeTool` adapter + `settings.json` snippet; rules → `~/.gemini/GEMINI.md`. |
+| **gemini/** | Gemini CLI: cache under `~/.gemini`; skills → `~/.agents/skills` (shared with Codex); agents → `~/.gemini/agents/*.md`; `BeforeTool` adapter + `settings.json` snippet; rules → `~/.gemini/GEMINI.md`. |
 | **tizen-cli/** | Standalone `tizen-sdk` CLI — bundles `common/lib` + `common/scripts` into a single executable bundle via esbuild. |
 | **vscode/** | VS Code extension — bundles `common/` and installs it into `~/.claude` / `~/.cline` from the editor. |
 
