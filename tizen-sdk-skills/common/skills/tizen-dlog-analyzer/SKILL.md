@@ -60,12 +60,11 @@ All three blocks resolve the **same file**: `<host-dot-dir>` is the harness you 
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dlog-analyzer-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dlog-analyzer-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/dlog-analyzer-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" investigate --symptoms "<the user's words>" <app-id>
 
 # Report template (cat "$TEMPLATE" right before rendering the final report — see Rule 6):
-TEMPLATE=$(ls "$HOME"/.{claude,cline,codex,gemini}/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.agents/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md 2>/dev/null | head -1)
+TEMPLATE=; for t in "$HOME"/.claude/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.cline/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.codex/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.gemini/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$HOME"/.agents/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md; do [ -f "$t" ] || continue; TEMPLATE=$t; break; done
 ```
 
 **PowerShell (Codex CLI on Windows, Cline PowerShell terminal) — prefers this harness's own cache, then the newest version. Run all three lines below, in order, in the SAME PowerShell session: the `node` line needs the `$CLI` the lookup line sets (on its own, `node "$CLI" …` becomes `node <first-arg>` and fails with a misleading `MODULE_NOT_FOUND`), so it carries a guard that stops with a clear message when `$CLI` is empty. Never wrap the lines in `powershell -Command "…"` (PowerShell and Git Bash expand `$h`, `$CLI` and `$env:…` before the inner shell runs, so the lookup arrives empty):**
