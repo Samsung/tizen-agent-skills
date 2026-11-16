@@ -27,9 +27,17 @@
  *   equivalent and are dropped.
  *
  * gemini-md   → ~/.gemini/agents/<name>.md
- *   Same markdown shape; frontmatter rewritten: tools mapped to Gemini CLI
- *   built-in tool names, maxTurns → max_turns, model dropped (Claude aliases
- *   like "sonnet" are not Gemini models; Gemini falls back to its default).
+ *   Same markdown shape; frontmatter rewritten: name and description emitted
+ *   as YAML single-quoted strings (Gemini parses strict YAML), tools mapped to
+ *   Gemini CLI built-in tool names, maxTurns → max_turns, model dropped (Claude
+ *   aliases like "sonnet" are not Gemini models; Gemini falls back to its
+ *   default).
+ *
+ * Frontmatter values: a value written as ONE complete YAML quoted scalar
+ * ('…' with '' for a quote, or "…" with JSON-compatible escapes) is unquoted
+ * on parse; anything else is taken verbatim. Every output format then escapes
+ * the plain value itself, so no writer has to guess whether a value is
+ * "already quoted". name and description are required for both formats.
  *
  * Exit 0 on success, 1 on any failure (message on stderr). Exported for tests.
  */
@@ -51,9 +59,67 @@ const GEMINI_TOOL_MAP = {
   WebSearch: "google_web_search",
 };
 
+/** `\uXXXX` for one UTF-16 code unit. */
+const hex4 = (c) =>
+  `\\u${c.charCodeAt(0).toString(16).toUpperCase().padStart(4, "0")}`;
+
+// A value that is exactly one YAML quoted scalar, optionally followed by a
+// YAML comment (` # …`). `'a' or 'b'` and `"a" or "b"` start and end with a
+// quote but are NOT one scalar, so they fail these patterns and stay verbatim.
+const SINGLE_QUOTED = /^'((?:[^']|'')*)'(?:\s+#.*)?$/;
+const DOUBLE_QUOTED = /^("(?:[^"\\]|\\.)*")(?:\s+#.*)?$/;
+
+/**
+ * Unquote one frontmatter value. Single-quoted: `''` → `'`. Double-quoted:
+ * JSON escapes (\\ \" \/ \b \f \n \r \t \uXXXX), the subset YAML and JSON
+ * share; any other escape (e.g. `"C:\Users"`, where YAML rejects `\U…`) is an
+ * error instead of a silent pass-through. A raw tab, which YAML allows inside
+ * double quotes, is accepted; any other raw control character is an error.
+ * Plain: ` #` starts a YAML comment, which would cut the value short — an
+ * error here; parseFrontmatter drops the comment for keys other than
+ * name / description.
+ */
+function unquoteValue(key, raw) {
+  const s = raw.match(SINGLE_QUOTED);
+  if (s) return s[1].replace(/''/g, "'");
+  const d = raw.match(DOUBLE_QUOTED);
+  if (!d) {
+    if (/\s#/.test(raw)) {
+      throw new Error(
+        `frontmatter "${key}": plain value contains " #", which YAML reads as ` +
+          `a comment — ${raw} (wrap the value in single quotes, writing ' as '')`,
+      );
+    }
+    return raw;
+  }
+  // eslint-disable-next-line no-control-regex -- detecting raw control characters is the point
+  const ctl = d[1].match(/[\x00-\x08\x0a-\x1f]/);
+  if (ctl) {
+    throw new Error(
+      `frontmatter "${key}": raw control character ${hex4(ctl[0])} in double-quoted ` +
+        `value (write it as an escape, e.g. \\n)`,
+    );
+  }
+  try {
+    // Escapes are taken as pairs so `\<TAB>` (YAML's escaped tab) and a raw
+    // tab both become `\t`, while `\\` followed by a tab stays two tokens.
+    return JSON.parse(
+      d[1].replace(/\\[\s\S]|\t/g, (m) =>
+        m === "\t" || m === "\\\t" ? "\\t" : m,
+      ),
+    );
+  } catch {
+    throw new Error(
+      `frontmatter "${key}": unsupported escape in double-quoted value — ${raw} ` +
+        "(use single quotes, or escape the backslash as \\\\)",
+    );
+  }
+}
+
 /**
  * Split a markdown file into frontmatter pairs and body.
- * Values are kept verbatim (no YAML parsing beyond `key: value`).
+ * Only `key: value` lines are understood; a value that is one complete quoted
+ * scalar is unquoted (see unquoteValue), any other value is kept verbatim.
  * @param {string} text
  * @returns {{ front: Array<[string,string]>, body: string }}
  */
@@ -66,24 +132,74 @@ function parseFrontmatter(text) {
     if (!line.trim()) continue;
     const i = line.indexOf(":");
     if (i === -1) throw new Error(`frontmatter line without ':' — ${line}`);
-    front.push([line.slice(0, i).trim(), line.slice(i + 1).trim()]);
+    const key = line.slice(0, i).trim();
+    const raw = line.slice(i + 1).trim();
+    let value;
+    try {
+      value = unquoteValue(key, raw);
+    } catch (e) {
+      // Only name / description are written out as strings; a value of any
+      // other key that fails here must not stop the whole conversion. Its
+      // trailing ` # …` is a YAML comment, not part of the value; in a
+      // quoted value only a ` #` after the closing quote starts one. Any
+      // other value: a final ` # …` with no quote in it is the comment.
+      if (key === "name" || key === "description") throw e;
+      const head = raw.match(
+        /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^"'].*?)\s+#.*$/,
+      );
+      value = head ? head[1] : raw.replace(/\s+#[^"']*$/, "");
+    }
+    front.push([key, value]);
   }
   return { front, body: m[2] };
 }
 
 const get = (front, key) => (front.find(([k]) => k === key) || [])[1];
 
-const tomlBasic = (s) =>
-  `"${String(s).replace(/\\/g, "\\\\").replace(/"/g, '\\"').replace(/\n/g, "\\n")}"`;
+/** Parse an agent file and require name + description, naming the file on error. */
+function parseAgent(text, sourceName) {
+  let parsed;
+  try {
+    parsed = parseFrontmatter(text);
+  } catch (e) {
+    throw new Error(`${sourceName}: ${e.message}`, { cause: e });
+  }
+  if (
+    !get(parsed.front, "name")?.trim() ||
+    !get(parsed.front, "description")?.trim()
+  ) {
+    throw new Error(`${sourceName}: name and description are required`);
+  }
+  return parsed;
+}
+
+// Control characters (C0, DEL, C1) cannot appear raw in a TOML basic string or
+// a YAML scalar; written as \uXXXX they are valid in both formats.
+// eslint-disable-next-line no-control-regex -- matches the characters that must be escaped
+const CONTROL_RE = /[\x00-\x1f\x7f-\x9f]/;
+const doubleQuoted = (s) =>
+  `"${String(s)
+    .replace(/[\\"]/g, "\\$&")
+    .replace(/\n/g, "\\n")
+    .replace(new RegExp(CONTROL_RE.source, "g"), hex4)}"`;
+
+// YAML scalar for Gemini. Source values are written unquoted for Claude Code's
+// lenient frontmatter reader, but Gemini CLI parses agent frontmatter as
+// strict YAML, where an inner `": "` (e.g. `"목록": \`x\``) reads as a mapping
+// and the whole agent fails to load. Single quotes need only `'` → `''`, but
+// cannot carry a newline or control character; such a value (only possible
+// from an escaped double-quoted source) is written double-quoted instead.
+const yamlScalar = (s) =>
+  CONTROL_RE.test(s) ? doubleQuoted(s) : `'${String(s).replace(/'/g, "''")}'`;
+
+// TOML basic string: the same double-quoted form is valid TOML.
+const tomlBasic = doubleQuoted;
 
 /** Claude agent .md → Codex agent TOML text. */
 function toCodexToml(text, sourceName) {
-  const { front, body } = parseFrontmatter(text);
+  const { front, body } = parseAgent(text, sourceName);
   const name = get(front, "name");
   const description = get(front, "description");
-  if (!name || !description) {
-    throw new Error(`${sourceName}: name and description are required`);
-  }
   let instructions = body.replace(/\s+$/, "");
   let block;
   if (!instructions.includes("'''")) {
@@ -106,13 +222,13 @@ function toCodexToml(text, sourceName) {
 
 /** Claude agent .md → Gemini agent .md text. */
 function toGeminiMd(text, sourceName, warn = () => {}) {
-  const { front, body } = parseFrontmatter(text);
+  const { front, body } = parseAgent(text, sourceName);
   const out = [];
   for (const [key, value] of front) {
     switch (key) {
       case "name":
       case "description":
-        out.push(`${key}: ${value}`);
+        out.push(`${key}: ${yamlScalar(value)}`);
         break;
       case "tools": {
         const mapped = [];
@@ -197,6 +313,9 @@ function main(argv) {
 if (require.main === module) main(process.argv.slice(2));
 
 module.exports = {
+  SINGLE_QUOTED,
+  DOUBLE_QUOTED,
+  unquoteValue,
   GEMINI_TOOL_MAP,
   parseFrontmatter,
   toCodexToml,

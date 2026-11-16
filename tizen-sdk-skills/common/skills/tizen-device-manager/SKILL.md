@@ -1,6 +1,6 @@
 ---
 name: tizen-device-manager
-description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill ONLY to find connected Tizen devices via sdb or to stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when the sentence mentions the emulator or device (its runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
+description: 'Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill ONLY to find connected Tizen devices via sdb or to stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when the sentence mentions the emulator or device (its runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.'
 
 
 metadata:
@@ -46,8 +46,7 @@ mentions the emulator but is a **symptom investigation**: route it to `tizen-dlo
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; _tz_s=; CLI=; for _tz_d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do [ "$_tz_d" != "$BASE" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; for _tz_f in "$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js; do [ -f "$_tz_f" ] || continue; _tz_v=${_tz_f#"$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; _tz_v=${_tz_v%%/*}; case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; _tz_a=${_tz_v%%.*}; _tz_c=${_tz_v##*.}; _tz_b=${_tz_v#*.}; _tz_b=${_tz_b%.*}; if [ -z "$CLI" ] || [ "$_tz_a" -gt "$_tz_A" ] || { [ "$_tz_a" -eq "$_tz_A" ] && { [ "$_tz_b" -gt "$_tz_B" ] || { [ "$_tz_b" -eq "$_tz_B" ] && [ "$_tz_c" -gt "$_tz_C" ]; }; }; }; then CLI=$_tz_f; _tz_A=$_tz_a; _tz_B=$_tz_b; _tz_C=$_tz_c; fi; done; [ -z "$CLI" ] || break; done; unset _tz_s _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o
 node "$CLI"
 ```
 

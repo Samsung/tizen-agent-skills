@@ -29,14 +29,13 @@ and it works as-is on Windows (Git Bash), macOS, and Linux.
 > ends up running the OTHER tool's plugin copy; and plain `sort` is lexicographic, so
 > `10.0.0` loses to `2.0.0`. The version below picks this host's root first
 > (`CLAUDECODE` in Claude Code, `GEMINI_CLI` in Gemini CLI, `CODEX_*` in Codex CLI),
-> compares versions with `sort -V`, and only falls back to the other roots — one host
+> compares versions numerically (`1.10.0` above `1.9.0`), and only falls back to the other roots — one host
 > at a time — when this host has no copy installed.
 
 ```bash
 # Create at the size the caller passed you:
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; _tz_s=; CLI=; for _tz_d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do [ "$_tz_d" != "$BASE" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; for _tz_f in "$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js; do [ -f "$_tz_f" ] || continue; _tz_v=${_tz_f#"$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; _tz_v=${_tz_v%%/*}; case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; _tz_a=${_tz_v%%.*}; _tz_c=${_tz_v##*.}; _tz_b=${_tz_v#*.}; _tz_b=${_tz_b%.*}; if [ -z "$CLI" ] || [ "$_tz_a" -gt "$_tz_A" ] || { [ "$_tz_a" -eq "$_tz_A" ] && { [ "$_tz_b" -gt "$_tz_B" ] || { [ "$_tz_b" -eq "$_tz_B" ] && [ "$_tz_c" -gt "$_tz_C" ]; }; }; }; then CLI=$_tz_f; _tz_A=$_tz_a; _tz_B=$_tz_b; _tz_C=$_tz_c; fi; done; [ -z "$CLI" ] || break; done; unset _tz_s _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o
 node "$CLI" create --vm-name my-vm --size 1080
 node "$CLI" create --vm-name my-vm --size 720
 
@@ -169,7 +168,7 @@ the command returns quickly (a few seconds for em-cli to create the VM). sdb is 
 
 **Codex CLI:** there is no Bash `timeout` parameter and one exec call waits at most 30 s,
 so run `create … --launch --background` (job receipt at once) and poll
-`node "$(dirname "$CLI")/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until
+`node "${CLI%/*}/job-cli.js" wait --id <job_id>` (≤ 25 s per call) until
 `job.state` is `done`; that response is the create envelope. A result that is only the
 `[tizen-emulator] Action: create…` progress line is NOT the outcome (issue #48).
 
