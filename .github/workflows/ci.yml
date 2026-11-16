@@ -171,6 +171,11 @@ jobs:
       # Runs every common/lib/tests/*.test.js via the shared runner (same entry
       # point as `npm test` in tizen-cli), so new test files are picked up
       # automatically and CI never drifts from the local test list.
+      # zsh is the macOS default shell; plugin-cache.test.js runs the Bash
+      # runner lookup under bash, dash and zsh.
+      - name: Install zsh
+        run: command -v zsh >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends zsh; }
+
       - name: Run common/lib unit tests
         working-directory: tizen-sdk-skills/common/lib/tests
         run: node run-all.js

@@ -274,6 +274,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     const stale = [];
     const incomplete = [];
     let withBase = 0;
+    let withLookup = 0;
     let withCmd = 0;
     for (const file of mdFiles) {
       const text = fs.readFileSync(file, "utf-8");
@@ -298,11 +299,36 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
           withBase++;
           if (l !== gen.NEW_BASE_LINE) stale.push(`${rel} (BASE line)`);
         }
-        // (c) every bash fallback lists every host, in order
+        // (c) every bash lookup is the generated LOOKUP_LINE (own host, then
+        //     every host in order) and the superseded `$(ls … | sort -V)`
+        //     own-host / fallback lines are gone: Gemini CLI blocks any shell
+        //     command with `$(…)` or a backtick outside single quotes
         if (/^\[ -n "\$[A-Z_]+" \] \|\| for d in /.test(l)) {
-          const m = l.match(/for d in ([ .a-z]+); do/);
-          if (!m || m[1] !== HOST_DOT_DIRS.join(" ")) {
-            incomplete.push(`${rel} (fallback host list)`);
+          stale.push(`${rel} (superseded $(ls …) fallback line)`);
+        }
+        if (/^[A-Z_]+=\$\(ls "\$BASE"\//.test(l)) {
+          stale.push(`${rel} (superseded $(ls …) own-host line)`);
+        }
+        const sf = l.match(
+          /^([A-Z_]+)=; for _?[a-z_]+ in "\$HOME"\/[^/\s]+\/skills\/([\w-]+)\/([\w.-]+) /,
+        );
+        if (sf && l !== gen.SKILL_FILE_LINE(sf[1], sf[2], sf[3])) {
+          stale.push(`${rel} (skill-file line differs from SKILL_FILE_LINE)`);
+        }
+        const lk = l.match(
+          /^_tz_o=; \[ -z "\$\{ZSH_VERSION:-\}" \] \|\| \{ \[\[ ! -o nomatch \]\] \|\| _tz_o=1; unsetopt nomatch; \}; _tz_s=; ([A-Z_]+)=; for _tz_d in "\$BASE"((?: "\$HOME"\/\.[a-z]+)*); do .*?for _tz_f in "\$_tz_d"\/plugins\/cache\/tizen-platform\/tizen-sdk-skills\/\*\/(\S+); do /,
+        );
+        if (lk) {
+          withLookup++;
+          const hosts = lk[2]
+            .trim()
+            .split(" ")
+            .map((h) => h.slice(8));
+          if (hosts.join(" ") !== HOST_DOT_DIRS.join(" ")) {
+            incomplete.push(`${rel} (lookup host list)`);
+          }
+          if (l !== gen.LOOKUP_LINE(lk[1], lk[3])) {
+            stale.push(`${rel} (lookup line differs from LOOKUP_LINE)`);
           }
         }
       }
@@ -480,6 +506,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       true,
     );
     check(`  bash host-pick lines found (>= 40)`, withBase >= 40, true);
+    check(`  bash lookup lines found (>= 40)`, withLookup >= 40, true);
     check(`  cmd.exe lookups found (>= 25)`, withCmd >= 25, true);
     check("  no file still carries a stale snippet", stale, []);
     check("  every lookup snippet lists all HOST_DOT_DIRS", incomplete, []);
@@ -558,6 +585,59 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     );
     check("  the generated chain is a fixed point", rw(chainX), chainX);
 
+    const tmplLine = gen.SKILL_FILE_LINE(
+      "TEMPLATE",
+      "tizen-dlog-analyzer",
+      "REPORT_TEMPLATE.md",
+    );
+    check(
+      "  skill-file line missing a host is regenerated",
+      rw(tmplLine.replace(/ "\$HOME"\/\.gemini\/\S+/, "")),
+      tmplLine,
+    );
+    check(
+      "  text after a skill-file line is kept",
+      rw(`${tmplLine}; cat "$TEMPLATE"`),
+      `${tmplLine}; cat "$TEMPLATE"`,
+    );
+    check(
+      "  superseded $(ls … | head -1) skill-file line is migrated",
+      rw(
+        'TEMPLATE=$(ls "$HOME"/.{claude,cline}/skills/tizen-dlog-analyzer/REPORT_TEMPLATE.md "$BASE"/x 2>/dev/null | head -1)',
+      ),
+      tmplLine,
+    );
+
+    // Superseded bash fallback migration.
+    const tailX = "lib/cli/x-cli.js";
+    const cacheX =
+      "plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/x-cli.js";
+    const oldOwn = `CLI=$(ls "$BASE"/${cacheX} 2>/dev/null | sort -V | tail -1) || true`;
+    const oldFb = `[ -n "$CLI" ] || for d in .claude .cline; do CLI=$(ls "$HOME/$d"/${cacheX} 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done`;
+    check(
+      "  own-host + fallback pair → one LOOKUP_LINE",
+      rw(`${oldOwn}\n${oldFb}`),
+      gen.LOOKUP_LINE("CLI", tailX),
+    );
+    check(
+      "  fallback below another line keeps a value set above it",
+      rw(`CLI=\${TIZEN_CLI:-}\n${oldFb}`),
+      `CLI=\${TIZEN_CLI:-}\n${gen.LOOKUP_LINE("CLI", tailX, true)}`,
+    );
+    const staleLookup = gen
+      .LOOKUP_LINE("CLI", tailX)
+      .replace(' "$HOME"/.gemini', "");
+    check(
+      "  stale lookup + fallback → one current LOOKUP_LINE (no duplicate)",
+      rw(`${staleLookup}\n${oldFb}`),
+      gen.LOOKUP_LINE("CLI", tailX),
+    );
+    check(
+      "  guarded lookup is a fixed point",
+      rw(gen.LOOKUP_LINE("CLI", tailX, true)),
+      gen.LOOKUP_LINE("CLI", tailX, true),
+    );
+
     // Test 6: lookup section order — a cmd.exe-first section is re-emitted
     // as shell-pick → run note → Bash → PowerShell → cmd.exe → node step → note, a
     // hand-written Bash heading is canonicalised, a section without a
@@ -584,8 +664,7 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
     const bashFence = [
       "```bash",
       gen.NEW_BASE_LINE,
-      gen.OWN_HOST_LINE("CLI", "lib/cli/x-cli.js"),
-      gen.FALLBACK_LINE("CLI", "lib/cli/x-cli.js"),
+      gen.LOOKUP_LINE("CLI", "lib/cli/x-cli.js"),
       'node "$CLI" run --flag',
       "```",
     ].join("\n");
@@ -847,6 +926,236 @@ console.log("\nTest 4: agents/ + skills/ snippets match the generated forms");
       rwAll(indentedNew),
       indentedNew,
     );
+
+    // Test 7: the bash lookup — Gemini-safe and correct in a real shell.
+    console.log("\nTest 7: bash lookup line (Gemini-safe, numeric version)");
+    // Gemini CLI's detectBashSubstitution: `$(` (also `$((`) or a backtick
+    // outside single quotes, or `<(` / `>(` outside double quotes, blocks the
+    // whole command. Mirrored here so the rule needs no Gemini install.
+    const geminiBlocks = (cmd) => {
+      let sq = false;
+      let dq = false;
+      for (let i = 0; i < cmd.length; i++) {
+        const ch = cmd[i];
+        if (ch === "'" && !dq) sq = !sq;
+        else if (ch === '"' && !sq) dq = !dq;
+        else if (sq) continue;
+        else if (ch === "\\") i++;
+        else if (ch === "$" && cmd[i + 1] === "(") return true;
+        else if (!dq && (ch === "<" || ch === ">") && cmd[i + 1] === "(")
+          return true;
+        else if (ch === "`") return true;
+      }
+      return false;
+    };
+    const tail = "lib/cli/x-cli.js";
+    const block = [
+      gen.NEW_BASE_LINE,
+      gen.LOOKUP_LINE("CLI", tail),
+      'node "$CLI" run',
+    ].join("\n");
+    check(
+      "  BASE + lookup + node block passes Gemini's check",
+      geminiBlocks(block),
+      false,
+    );
+    check(
+      "  the superseded $(ls … | sort -V) line would be blocked",
+      geminiBlocks(gen.OLD_OWN_HOST_LINE("CLI", tail)),
+      true,
+    );
+
+    // Run it: a glob expands in byte order (1.10.0 before 1.9.0), so the
+    // newest copy must come from the numeric comparison, not the glob order.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "lookup-line-"));
+    const put = (home, dot, ver) => {
+      const d = path.join(root, home, dot, cacheTail, ver, "lib", "cli");
+      fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(d, "x-cli.js"), "");
+    };
+    for (const v of ["1.9.0", "1.10.0", "1.8.12", "dev", "2.0"]) {
+      put("h1", ".claude", v);
+    }
+    put("h1", ".cline", "9.9.9");
+    put("h2 sp", ".gemini", "1.2.3");
+    put("h2 sp", ".codex", "0.1.0");
+    fs.mkdirSync(path.join(root, "h3"));
+    const tpl = path.join(
+      root,
+      "h1",
+      ".claude",
+      cacheTail,
+      "1.10.0",
+      "skills",
+      "x",
+    );
+    fs.mkdirSync(tpl, { recursive: true });
+    fs.writeFileSync(path.join(tpl, "T.md"), "");
+    // A newer version holding only the template (no runner): with $CLI set,
+    // the template must still come from $CLI's own version directory.
+    // Another harness's cache with an older template: a Gemini session must
+    // still prefer its own.
+    const tplGem = path.join(
+      root,
+      "h1",
+      ".gemini",
+      cacheTail,
+      "1.2.0",
+      "skills",
+      "x",
+    );
+    fs.mkdirSync(tplGem, { recursive: true });
+    fs.writeFileSync(path.join(tplGem, "T.md"), "");
+    const tplOnly = path.join(
+      root,
+      "h1",
+      ".claude",
+      cacheTail,
+      "1.11.0",
+      "skills",
+      "x",
+    );
+    fs.mkdirSync(tplOnly, { recursive: true });
+    fs.writeFileSync(path.join(tplOnly, "T.md"), "");
+    // Run BASE + lookup (+ skill-file line) in `sh` with HOME=<root>/<home>,
+    // then `after`; stdout, or the exit status and stderr on failure.
+    const tplLine = gen.SKILL_FILE_LINE("TPL", "x", "T.md");
+    const run = (
+      sh,
+      home,
+      {
+        env = {},
+        pre = "",
+        body = `${gen.NEW_BASE_LINE}\n${gen.LOOKUP_LINE("CLI", tail)}\n${tplLine}`,
+        after,
+      },
+    ) => {
+      const r = spawnSync(sh, ["-c", `set -eu\n${pre}${body}\n${after}`], {
+        encoding: "utf-8",
+        env: { PATH: process.env.PATH, HOME: path.join(root, home), ...env },
+      });
+      return r.error || r.status !== 0
+        ? `exit ${r.status}: ${r.stderr}`
+        : r.stdout;
+    };
+    const rel = (home, p) =>
+      p && path.relative(path.join(root, home), p).split(path.sep).join("/");
+    const found = (sh, home, env) =>
+      rel(home, run(sh, home, { env, after: `printf '%s' "$CLI"` }));
+    // State left in the shell the lines were pasted into: no _tz_* variable,
+    // and (zsh) nomatch exactly as it was before.
+    const leftover = (sh, home, pre = "") =>
+      run(sh, home, {
+        env: { CLAUDECODE: "1" },
+        pre,
+        after:
+          `set | grep '^_tz_' || true; ` +
+          `[ -z "\${ZSH_VERSION:-}" ] || { [[ -o nomatch ]] && echo nomatch=on || echo nomatch=off; }`,
+      }).trim();
+    const at = (dot, ver) => `${dot}/${cacheTail}${ver}/lib/cli/x-cli.js`;
+    const shells = ["bash", "dash", "zsh"].filter(
+      (s) => spawnSync(s, ["-c", "exit 0"]).status === 0,
+    );
+    check(
+      "  bash is available to run the lookup",
+      shells.includes("bash"),
+      true,
+    );
+    for (const sh of shells) {
+      check(
+        `  ${sh}: own host, numeric max (1.10.0 > 1.9.0), non-X.Y.Z skipped`,
+        found(sh, "h1", { CLAUDECODE: "1" }),
+        at(".claude", "1.10.0"),
+      );
+      check(
+        `  ${sh}: default host (.cline) own copy wins`,
+        found(sh, "h1", {}),
+        at(".cline", "9.9.9"),
+      );
+      check(
+        `  ${sh}: no own copy → HOST_DOT_DIRS order, space in HOME`,
+        found(sh, "h2 sp", {}),
+        at(".codex", "0.1.0"),
+      );
+      check(
+        `  ${sh}: nothing installed → empty, exit 0`,
+        found(sh, "h3", {}),
+        "",
+      );
+      check(
+        `  ${sh}: skill file from $CLI's version directory`,
+        rel(
+          "h1",
+          run(sh, "h1", {
+            env: { CLAUDECODE: "1" },
+            after: `printf '%s' "$TPL"`,
+          }),
+        ),
+        `.claude/${cacheTail}1.10.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone in a fresh shell finds the newest cache copy`,
+        rel(
+          "h1",
+          run(sh, "h1", {
+            env: { CLAUDECODE: "1" },
+            body: tplLine,
+            after: `printf '%s' "$TPL"`,
+          }),
+        ),
+        `.claude/${cacheTail}1.11.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone prefers this harness's cache (Gemini)`,
+        rel(
+          "h1",
+          run(sh, "h1", {
+            env: { GEMINI_CLI: "1" },
+            body: tplLine,
+            after: `printf '%s' "$TPL"`,
+          }),
+        ),
+        `.gemini/${cacheTail}1.2.0/skills/x/T.md`,
+      );
+      check(
+        `  ${sh}: skill-file line alone leaves BASE unset`,
+        run(sh, "h1", {
+          env: { CLAUDECODE: "1" },
+          body: tplLine,
+          after: `printf '%s' "\${BASE-unset}"`,
+        }),
+        "unset",
+      );
+      for (const home of ["h1", "h3"]) {
+        check(
+          `  ${sh}: no _tz_* variable left behind (${home === "h1" ? "found" : "nothing installed"})`,
+          leftover(sh, home)
+            .replace(/nomatch=\w+/, "")
+            .trim(),
+          "",
+        );
+      }
+    }
+    if (shells.includes("zsh")) {
+      for (const home of ["h1", "h3"]) {
+        check(
+          `  zsh: nomatch on stays on (${home})`,
+          leftover("zsh", home),
+          "nomatch=on",
+        );
+        check(
+          `  zsh: nomatch off stays off (${home})`,
+          leftover("zsh", home, "unsetopt nomatch\n"),
+          "nomatch=off",
+        );
+      }
+    }
+    check(
+      "  zsh runs the lookup in CI",
+      !process.env.CI || shells.includes("zsh"),
+      true,
+    );
+    fs.rmSync(root, { recursive: true, force: true });
   }
 }
 

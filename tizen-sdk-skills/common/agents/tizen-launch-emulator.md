@@ -26,8 +26,7 @@ and it works as-is on Windows (Git Bash), macOS, and Linux.
 ```bash
 # Launch the newest tizen-profile VM (default: selected by profile and platform version, not list order):
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+_tz_o=; [ -z "${ZSH_VERSION:-}" ] || { [[ ! -o nomatch ]] || _tz_o=1; unsetopt nomatch; }; _tz_s=; CLI=; for _tz_d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do [ "$_tz_d" != "$BASE" ] || [ -z "$_tz_s" ] || continue; _tz_s=1; for _tz_f in "$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/emulator-manager-cli.js; do [ -f "$_tz_f" ] || continue; _tz_v=${_tz_f#"$_tz_d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; _tz_v=${_tz_v%%/*}; case $_tz_v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; _tz_a=${_tz_v%%.*}; _tz_c=${_tz_v##*.}; _tz_b=${_tz_v#*.}; _tz_b=${_tz_b%.*}; if [ -z "$CLI" ] || [ "$_tz_a" -gt "$_tz_A" ] || { [ "$_tz_a" -eq "$_tz_A" ] && { [ "$_tz_b" -gt "$_tz_B" ] || { [ "$_tz_b" -eq "$_tz_B" ] && [ "$_tz_c" -gt "$_tz_C" ]; }; }; }; then CLI=$_tz_f; _tz_A=$_tz_a; _tz_B=$_tz_b; _tz_C=$_tz_c; fi; done; [ -z "$CLI" ] || break; done; unset _tz_s _tz_d _tz_f _tz_v _tz_a _tz_b _tz_c _tz_A _tz_B _tz_C; [ -z "$_tz_o" ] || setopt nomatch; unset _tz_o
 node "$CLI" launch
 
 # Launch a specific VM by name:
@@ -36,7 +35,7 @@ node "$CLI" launch --vm-name my-vm
 # Launch a TV-profile VM (when no name is given):
 node "$CLI" launch --profile tv
 
-# Wait up to 120 s for the VM to appear in `sdb devices` — the runner returns as soon as it
+# Wait up to 120 s for the VM to appear in 'sdb devices' — the runner returns as soon as it
 # connects and does NOT stop the emulator when the time is up (a wait cap, not a run duration):
 node "$CLI" launch --vm-name my-vm --timeout 120
 ```
@@ -62,7 +61,7 @@ never exceeds the cap (the wait tops out at 300s).
 
 **Codex CLI is different — there is no Bash `timeout` parameter and one exec call waits
 at most 30 s.** There, run `node "$CLI" launch --vm-name <name> --background` (it returns
-a job receipt within a second), then run `node "$(dirname "$CLI")/job-cli.js" wait --id
+a job receipt within a second), then run `node "${CLI%/*}/job-cli.js" wait --id
 <job_id>` repeatedly (each call blocks ≤ 25 s) until `job.state` is `done`; that response
 is the launch envelope — return it verbatim. A tool result that is only the
 `[tizen-emulator] Launching VM…` progress line is NOT the outcome: the runner is still

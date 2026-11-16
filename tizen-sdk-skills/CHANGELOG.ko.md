@@ -15,6 +15,31 @@
 
 ### 수정
 
+- **Gemini CLI가 변환된 에이전트를 모두 다시 불러옵니다.** Gemini는 에이전트 frontmatter를 엄격한
+  YAML로 읽기 때문에, description에 `": "`가 들어 있으면(예: ``"목록": `list-vm` ``) 매핑으로
+  해석되어 에이전트를 불러오지 못했습니다. 이제 `agent-convert.js`는 `name`과 `description`을 YAML
+  작은따옴표 문자열로 기록합니다. 원본 값이 하나의 완전한 따옴표 문자열이면 읽을 때 따옴표를 벗기고
+  출력 형식마다 다시 이스케이프하므로, Gemini YAML과 Codex TOML 어느 쪽에도 원본 따옴표가 그대로
+  들어가거나 두 번 감싸지지 않습니다. 따옴표로 시작하고 끝나기만 하는 값(`'list' or 'run'`)은 일반
+  텍스트처럼 이스케이프합니다. YAML이 허용하지 않는 이스케이프가 든 큰따옴표 값(`"C:\Tizen"`)과
+  비어 있거나 없는 `name` / `description`은 이제 두 형식 모두에서 파일 이름과 함께 오류로 보고합니다.
+- **Cline에 `tizen-device-manager` 스킬이 다시 나타납니다.** 스킬은 모든 호스트에 원본 그대로
+  복사되는데, 이 스킬의 description에도 같은 `": "`가 있어 `SKILL.md` frontmatter가 올바른 YAML이
+  아니었습니다. Cline은 오류 메시지 없이 이 스킬을 빼고 목록에 보여 주지 않았습니다. 이제
+  `skills/tizen-device-manager/SKILL.md`와 `agents/tizen-device-manager.md`의 description을
+  작은따옴표로 감쌌고, 스킬이나 에이전트의 frontmatter가 엄격한 YAML이 아니면 새 테스트
+  (`frontmatter-yaml.test.js`)가 실패합니다.
+- **Gemini CLI가 Bash 러너 탐색 블록을 "Command injection detected"로 차단하지 않습니다.**
+  Gemini CLI는 작은따옴표 밖에 `$(…)`, 백틱, `<(…)`가 있는 셸 명령을 거부하는데, 모든 스킬과
+  에이전트의 Bash 블록이 `CLI=$(ls … | sort -V | tail -1)`로 러너를 찾았습니다. 이제 탐색은
+  `scripts/rewrite-runner-snippets.js`가 생성하는 셸 내장 명령(glob `for` 루프, `case`, `[ ]`)
+  한 줄이며, 순서는 그대로입니다: 현재 하네스의 캐시 먼저, 그다음 `~/.claude`, `~/.cline`,
+  `~/.codex`, `~/.gemini`. `X.Y.Z` 캐시 디렉터리를 숫자로 비교해 `1.10.0`이 `1.9.0`보다 앞서고,
+  `X.Y.Z`가 아닌 디렉터리는 건너뛰며, zsh의 `nomatch`를 꺼서 캐시가 없어도 오류가 나지 않고,
+  아무것도 설치되지 않았으면 종료 코드 0으로 `$CLI`를 비워 둡니다. `tizen-dlog-analyzer`의 보고서
+  템플릿 탐색과 Bash 주석 안의 백틱도 같은 방식으로 바꿨습니다. PowerShell과 cmd.exe 블록은
+  바뀌지 않았습니다. `plugin-cache.test.js`는 이제 모든 Bash 탐색 줄을 Gemini 규칙으로 검사하고,
+  생성된 줄을 가짜 캐시에 대해 bash, dash, (설치된 경우) zsh로 실행합니다.
 - **Codex와 Gemini 셋업을 둘 다 설치해도 Gemini CLI가 스킬 중복 경고를 내지 않습니다.**
   Gemini CLI는 `~/.gemini/skills`와 `~/.agents/skills`에서 스킬을 읽고 Codex 셋업은
   `~/.agents/skills`에 설치하므로, 모든 스킬이 두 번 발견되어 스킬마다
