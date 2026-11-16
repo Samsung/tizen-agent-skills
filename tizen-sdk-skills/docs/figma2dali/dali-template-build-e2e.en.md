@@ -101,8 +101,7 @@ Show me platform templates
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" list-templates --type platform
 ```
 
@@ -154,8 +153,7 @@ Create a platform dali_demo template app called MyDaliDemoApp
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" create --type platform --template dali_demo --parent-path /home/user/tizen-apps --name MyDaliDemoApp
 ```
 
@@ -230,8 +228,7 @@ Build the MyDaliDemoApp project
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" build --project "/home/user/tizen-apps/MyDaliDemoApp" --build-type Debug
 ```
 
@@ -333,8 +330,7 @@ Connect a device
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/device-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI"
 ```
 
@@ -385,8 +381,7 @@ Install and run the MyDaliDemoApp RPM on the emulator
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/project-manager-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI" install --package "/home/user/GBS-ROOT/local/repos/tizen/x86_64/RPMS/MyDaliDemoApp-1.0.0-1.x86_64.rpm" --device-serial emulator-26101 --run
 ```
 
@@ -459,8 +454,7 @@ Take a screenshot of the emulator
 
 ```bash
 BASE="$HOME/.cline"; [ -z "${CODEX_THREAD_ID:-}${CODEX_SANDBOX_NETWORK_DISABLED:-}${CODEX_SANDBOX:-}${CODEX_VERSION:-}" ] || BASE="$HOME/.codex"; [ -z "${GEMINI_CLI:-}" ] || BASE="$HOME/.gemini"; [ -z "${CLAUDECODE:-}" ] || BASE="$HOME/.claude"
-CLI=$(ls "$BASE"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/screenshot-cli.js 2>/dev/null | sort -V | tail -1) || true
-[ -n "$CLI" ] || for d in .claude .cline .codex .gemini; do CLI=$(ls "$HOME/$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/screenshot-cli.js 2>/dev/null | sort -V | tail -1) || true; [ -z "$CLI" ] || break; done
+[ -z "${ZSH_VERSION:-}" ] || unsetopt nomatch; CLI=; for d in "$BASE" "$HOME"/.claude "$HOME"/.cline "$HOME"/.codex "$HOME"/.gemini; do for f in "$d"/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/screenshot-cli.js; do [ -f "$f" ] || continue; v=${f#"$d"/plugins/cache/tizen-platform/tizen-sdk-skills/}; v=${v%%/*}; case $v in *[!0-9.]*|.*|*.|*..*|*.*.*.*) continue ;; *.*.*) ;; *) continue ;; esac; a=${v%%.*}; c=${v##*.}; b=${v#*.}; b=${b%.*}; if [ -z "$CLI" ] || [ "$a" -gt "$A" ] || { [ "$a" -eq "$A" ] && { [ "$b" -gt "$B" ] || { [ "$b" -eq "$B" ] && [ "$c" -gt "$C" ]; }; }; }; then CLI=$f; A=$a; B=$b; C=$c; fi; done; [ -z "$CLI" ] || break; done
 node "$CLI"                              # Auto-select device, default output path
 node "$CLI" emulator-26101               # Specify device
 node "$CLI" emulator-26101 ./dali-demo-screenshot.png  # Specify output path
