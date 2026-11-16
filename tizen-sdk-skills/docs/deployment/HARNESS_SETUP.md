@@ -35,12 +35,18 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 |---|---|---|---|---|
 | Dot-dir | `~/.claude` | `~/.cline` | `~/.codex` (`$CODEX_HOME`) | `~/.gemini` |
 | 캐시 내용 | skills agents scripts lib assets tools docs | scripts lib assets tools docs | skills agents scripts lib assets tools docs | skills agents scripts lib assets tools docs |
-| 스킬 | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (Gemini와 공유) | `~/.gemini/skills/<n>/` |
+| 스킬 | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (Gemini와 공유) | `~/.agents/skills/<n>/` (Codex와 공유) |
 | 에이전트 | `~/.claude/agents/*.md` (원본 그대로) | — (Cline 서브에이전트는 이를 지원하는 빌드에 내장) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (tools를 Gemini 이름으로 매핑, `maxTurns` → `max_turns`, `model` 제거) |
 | 가드(훅) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + `settings.json` `hooks.PreToolUse` 항목 자동 병합(3개 훅 모두; 파일을 파싱할 수 없을 때만 스니펫 출력) | `Documents/Cline/Hooks/PreToolUse` 어댑터 + 가드 (훅을 지원하는 Cline 빌드; macOS/Linux만) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` 작성(외부 `hooks.json`이 있으면 병합 스니펫 출력) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` 어댑터 + 가드; `settings.json` `hooks.BeforeTool` 항목 자동 병합(파일을 파싱할 수 없을 때만 스니펫 출력) |
 | 업데이트 확인(세션 시작) | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 | `Documents/Cline/Hooks/TaskStart` 어댑터 + `check-update.js` (macOS/Linux만) | 훅 디렉터리의 `check-update.js`; `hooks.json` `SessionStart` 항목 | 훅 디렉터리의 `check-update.js`; `settings.json` `hooks.SessionStart` 항목 자동 병합 |
 | 상시 규칙 | — | `Documents/Cline/Rules/tizen-sdk-skills-guard.md` (한국어) | `~/.codex/AGENTS.md` — 마커 구획 | `~/.gemini/GEMINI.md` — 마커 구획 |
 | 탐색 스니펫이 쓰는 호스트 마커 | `CLAUDECODE=1` | 없음(기본값) | Codex가 셸에 주입하는 `CODEX_*` 변수 중 하나: `CODEX_THREAD_ID`, `CODEX_SANDBOX_NETWORK_DISABLED`(기본 샌드박스), `CODEX_SANDBOX`(macOS), `CODEX_VERSION` | `GEMINI_CLI=1` |
+
+Codex CLI와 Gemini CLI는 `~/.agents/skills`를 함께 씁니다. Gemini CLI는
+`~/.gemini/skills`와 `~/.agents/skills`를 모두 읽고, 두 곳에 같은 스킬이 있으면
+"Skill conflict detected" 경고를 내며 `~/.agents/skills` 쪽을 씁니다. 그래서 두 호스트
+모두 그곳에 한 벌만 설치하고, Gemini 셋업은 이전 릴리스가 `~/.gemini/skills`에 둔 이
+플러그인의 스킬 폴더를 지웁니다(그 밖의 폴더는 건드리지 않습니다).
 
 가드 스크립트 자체(`common/hooks/check-tizen-commands.sh`, `check-project-writes.sh`)는 모든
 하네스에 동일합니다. Codex CLI는 Claude Code와 같은 PreToolUse JSON을 사용하므로(셸 도구

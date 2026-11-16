@@ -278,7 +278,7 @@ graph TB
         LC["Claude Code<br/>~/.claude/skills · ~/.claude/agents<br/>settings.json hooks 스니펫"]
         LL["Cline<br/>~/.cline/skills<br/>Documents/Cline/Hooks · Rules"]
         LX["Codex CLI<br/>~/.agents/skills · ~/.codex/agents/*.toml<br/>~/.codex/hooks.json · AGENTS.md"]
-        LG["Gemini CLI<br/>~/.gemini/skills · ~/.gemini/agents/*.md<br/>settings.json · GEMINI.md"]
+        LG["Gemini CLI<br/>~/.agents/skills · ~/.gemini/agents/*.md<br/>settings.json · GEMINI.md"]
     end
 
     VSC["VS Code 확장 (Tizen AI Extension)<br/>번들된 common/을 에디터 안에서 설치·동기화<br/>Claude Code hooks를 settings.json에 자동 병합"]

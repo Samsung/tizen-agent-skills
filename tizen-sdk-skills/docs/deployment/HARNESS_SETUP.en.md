@@ -35,12 +35,18 @@ snippet in every agent/skill search.
 |---|---|---|---|---|
 | Dot-dir | `~/.claude` | `~/.cline` | `~/.codex` (`$CODEX_HOME`) | `~/.gemini` |
 | Cache contents | skills agents scripts lib assets tools docs | scripts lib assets tools docs | skills agents scripts lib assets tools docs | skills agents scripts lib assets tools docs |
-| Skills | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (shared with Gemini) | `~/.gemini/skills/<n>/` |
+| Skills | `~/.claude/skills/<n>/` | `~/.cline/skills/<n>/` | `~/.agents/skills/<n>/` (shared with Gemini) | `~/.agents/skills/<n>/` (shared with Codex) |
 | Agents | `~/.claude/agents/*.md` (verbatim) | — (Cline subagents are built in, on builds that support them) | `~/.codex/agents/*.toml` (`name`, `description`, `developer_instructions`) | `~/.gemini/agents/*.md` (tools mapped to Gemini names, `maxTurns` → `max_turns`, `model` dropped) |
 | Guards (hooks) | `~/.claude/hooks/tizen-sdk-skills/*.sh` + entries merged into `settings.json` `hooks.PreToolUse` (all 3 hooks; snippet printed only when the file cannot be parsed) | `Documents/Cline/Hooks/PreToolUse` adapter + guards (Cline builds with hooks support; macOS/Linux only) | `~/.codex/hooks/tizen-sdk-skills/*.sh` + `~/.codex/hooks.json` written (or a merge snippet if a foreign `hooks.json` exists) | `~/.gemini/hooks/tizen-sdk-skills/BeforeTool` adapter + guards; `settings.json` `hooks.BeforeTool` entry merged (snippet printed only when the file cannot be parsed) |
 | Update check (session start) | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged | `Documents/Cline/Hooks/TaskStart` adapter + `check-update.js` (macOS/Linux only) | `check-update.js` in the hook dir; `hooks.json` `SessionStart` entry | `check-update.js` in the hook dir; `settings.json` `hooks.SessionStart` entry merged |
 | Always-on rules | — | `Documents/Cline/Rules/tizen-sdk-skills-guard.md` (Korean) | `~/.codex/AGENTS.md` — marker-delimited section | `~/.gemini/GEMINI.md` — marker-delimited section |
 | Host marker used by lookup snippets | `CLAUDECODE=1` | none (default) | any `CODEX_*` var Codex injects into its shells: `CODEX_THREAD_ID`, `CODEX_SANDBOX_NETWORK_DISABLED` (default sandbox), `CODEX_SANDBOX` (macOS), `CODEX_VERSION` | `GEMINI_CLI=1` |
+
+Codex CLI and Gemini CLI share `~/.agents/skills`. Gemini CLI reads both
+`~/.gemini/skills` and `~/.agents/skills`, and a skill found in both is reported as
+"Skill conflict detected" and the `~/.agents/skills` copy wins. Installing both hosts
+therefore writes one copy there; the Gemini setup also removes our skill folders that
+older releases put in `~/.gemini/skills` (other folders there are left alone).
 
 The guard scripts themselves (`common/hooks/check-tizen-commands.sh`,
 `check-project-writes.sh`) are identical for every harness. Codex CLI speaks the
