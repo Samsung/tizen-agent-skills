@@ -399,7 +399,7 @@ When more than one device or emulator is online and no serial is given, every ac
 
 - **Default is budgeted. Never add `--full` preemptively.** The budget exists so the output fits the context window.
 - **Use it only when required:** the user explicitly asks for the complete, untruncated output ("show everything", "don't truncate it", "전체 로그를 잘림 없이 보여줘"), or a budgeted call reported `... N more omitted` and the user asks what was cut — then re-run the **same command** with `--full` instead of paging with bigger `--max-lines` values.
-- On `search`, `--full` also ignores `--max-matches`: every match is collected and printed.
+- On `search`, `--full` also drops `--max-matches`: every match is collected and printed. The same holds for the other budget flags — the runner omits `--max-lines`/`--max-chars`/`--budget`/`--budget-tokens` from the argv when `--full` is set, so the native call gets only what the flag promises.
 - Per-item rendering limits still apply (sample lines, evidence length) — `--full` removes only the global output budget. JSON output and `--output` files were never truncated, so `--full` matters for stdout text only.
 - Requires the shipped analyzer binary that carries the `--full` flag (TizenDLogAnalyzer PR #226); an older binary answers with a failure envelope.
 
