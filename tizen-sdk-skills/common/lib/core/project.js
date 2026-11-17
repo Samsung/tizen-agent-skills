@@ -2847,6 +2847,4 @@ module.exports = {
   patchRpkManifestResType,
   // Exported for tests — the RDS "is this package the Debug output" gate.
   isRdsTrackedPackage,
-  // Exported for tests — the --platform-version / default-platform hand-off.
-  platformVersionArgs,
 };

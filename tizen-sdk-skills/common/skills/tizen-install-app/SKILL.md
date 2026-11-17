@@ -16,6 +16,10 @@ metadata:
     - install tizen application
 ---
 
+> **Handoff notes:** Claude Code and Codex CLI may share this project. Before you start, run
+> `handoff-cli.js show` (see the `tizen-handoff` skill) to catch up on what the other agent did.
+> This runner records its own result there automatically; nothing to set up.
+
 ### Claude Code (서브에이전트 위임)
 
 > Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
