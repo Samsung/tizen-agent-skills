@@ -25,7 +25,9 @@ below use those release tags.
   `common/lib/core/dlog-analyzer.js` selects the directory from `process.arch`, falling
   back to the other macOS build (Rosetta) when the native one is absent. The flat
   pre-arch-split path (`macos/tizen-dlog-analyzer`) stays as a last candidate, so plugin
-  caches installed by older plugin versions still resolve.
+  caches installed by older plugin versions still resolve. The rebuilt macOS x86_64 bundle
+  is not bit-identical to the previous 0.2.9a0 build, so verify copies of any of the four
+  bundles against the hashes in `NOTICE.md`.
 
 ## [1.9.0] — 2026-11-16
 
