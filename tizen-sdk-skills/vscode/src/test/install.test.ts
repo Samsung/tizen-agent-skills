@@ -37,7 +37,11 @@ import {
   codexHooksJsonPath,
   codexSkillsDir,
 } from "../install/codexLayout";
-import { mirrorDir } from "../install/fsutil";
+import {
+  copyPlatformBinary,
+  getCurrentPlatform,
+  mirrorDir,
+} from "../install/fsutil";
 import { guardMarkers } from "../install/guardSection";
 import { installCodexHooks, removeCodexHooks } from "../install/hooks";
 import { readManifest, writeManifest, manifestPath } from "../install/manifest";
@@ -370,6 +374,184 @@ test("a missing source is a warning, and the destination is left alone", async (
     "a missing source must not wipe the destination",
   );
   assert.ok(takeLog().join("\n").includes("Source not found"));
+});
+
+section("copyPlatformBinary (arch-split macOS layout)");
+
+test("the platform directory is copied recursively, keeping arch subdirectories", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  // macOS nests one bundle per arch (arm64/, x86_64/); create the nested
+  // layout plus the legacy flat binary under every platform directory so the
+  // test does not depend on the host OS.
+  for (const p of ["linux", "macos", "windows"]) {
+    const name =
+      p === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+    for (const arch of ["arm64", "x86_64"]) {
+      write(
+        path.join(fx.assets, "tools", "tizen-dlog-analyzer", p, arch, name),
+        `${p}/${arch}\n`,
+      );
+    }
+    write(
+      path.join(fx.assets, "tools", "tizen-dlog-analyzer", p, name),
+      `${p}/flat\n`,
+    );
+  }
+
+  await copyPlatformBinary(
+    path.join(fx.assets, "tools"),
+    path.join(fx.home, "cache", "tools"),
+    "test",
+  );
+
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  for (const arch of ["arm64", "x86_64"]) {
+    const copied = path.join(
+      fx.home,
+      "cache",
+      "tools",
+      "tizen-dlog-analyzer",
+      platform,
+      arch,
+      binName,
+    );
+    assert.strictEqual(
+      fs.readFileSync(copied, "utf-8"),
+      `${platform}/${arch}\n`,
+      `the nested ${arch} bundle must be copied with its subdirectory`,
+    );
+    if (process.platform !== "win32") {
+      assert.strictEqual(
+        fs.statSync(copied).mode & 0o777,
+        0o700,
+        "the copied binary must be owner-executable only",
+      );
+    }
+  }
+  assert.strictEqual(
+    fs.readFileSync(
+      path.join(
+        fx.home,
+        "cache",
+        "tools",
+        "tizen-dlog-analyzer",
+        platform,
+        binName,
+      ),
+      "utf-8",
+    ),
+    `${platform}/flat\n`,
+    "a flat single-binary platform directory still copies",
+  );
+  // Only the current platform's binary is copied.
+  const other = platform === "macos" ? "linux" : "macos";
+  assert.ok(
+    !fs.existsSync(
+      path.join(fx.home, "cache", "tools", "tizen-dlog-analyzer", other),
+    ),
+    "only the current platform's binary is copied",
+  );
+});
+
+test("re-syncing mirrors the destination and clears stale files from an earlier layout", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  // The asset tree has only the nested arch layout.
+  for (const arch of ["arm64", "x86_64"]) {
+    write(
+      path.join(
+        fx.assets,
+        "tools",
+        "tizen-dlog-analyzer",
+        platform,
+        arch,
+        binName,
+      ),
+      `${arch}\n`,
+    );
+  }
+  // The cache was written by an earlier extension with the flat layout: a
+  // flat binary plus a subdirectory that no longer exists in the assets.
+  const destPlatform = path.join(
+    fx.home,
+    "cache",
+    "tools",
+    "tizen-dlog-analyzer",
+    platform,
+  );
+  write(path.join(destPlatform, binName), "stale flat binary\n");
+  write(path.join(destPlatform, "removed-arch", binName), "stale arch\n");
+
+  await copyPlatformBinary(
+    path.join(fx.assets, "tools"),
+    path.join(fx.home, "cache", "tools"),
+    "test",
+  );
+
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatform, "arm64", binName), "utf-8"),
+    "arm64\n",
+    "the new arch bundles must be copied",
+  );
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatform, "x86_64", binName), "utf-8"),
+    "x86_64\n",
+    "the new arch bundles must be copied",
+  );
+  assert.ok(
+    !fs.existsSync(path.join(destPlatform, binName)),
+    "the stale flat binary must not survive the re-sync",
+  );
+  assert.ok(
+    !fs.existsSync(path.join(destPlatform, "removed-arch")),
+    "a stale subdirectory must not survive the re-sync",
+  );
+});
+
+test("copying stages next to the destination and leaves no staging directory behind", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  write(
+    path.join(fx.assets, "tools", "tizen-dlog-analyzer", platform, binName),
+    "binary\n",
+  );
+  const toolsCache = path.join(fx.home, "cache", "tools");
+  const destPlatformDir = path.join(
+    toolsCache,
+    "tizen-dlog-analyzer",
+    platform,
+  );
+
+  await copyPlatformBinary(path.join(fx.assets, "tools"), toolsCache, "test");
+
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatformDir, binName), "utf-8"),
+    "binary\n",
+    "the binary must land in the final destination",
+  );
+  const leftovers = fs
+    .readdirSync(toolsCache, { withFileTypes: true })
+    .flatMap((e) =>
+      e.name === "tizen-dlog-analyzer"
+        ? fs
+            .readdirSync(path.join(toolsCache, e.name), {
+              withFileTypes: true,
+            })
+            .map((sub) => `${e.name}/${sub.name}`)
+        : [e.name],
+    )
+    .filter((name) => name.includes(".staging-"));
+  assert.deepStrictEqual(
+    leftovers,
+    [],
+    "no staging directory may survive a completed copy",
+  );
 });
 
 test("skill names come from readdir, so they are always single path segments", async () => {

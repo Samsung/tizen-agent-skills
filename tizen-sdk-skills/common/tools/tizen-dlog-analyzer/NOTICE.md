@@ -6,26 +6,30 @@ redistributed here so that the skill works without a Python toolchain on the hos
 
 | File | Platform | Size (bytes) | SHA-256 |
 |---|---|---|---|
-| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,451,720 | `44e7ed1edc0309c156979dc38094d510a59243813d5cfc5d50ba9179690c8bd8` |
-| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 17,776,778 | `fce9adc71010dfba0477f772ea04f053b52887887b445b834d0d0999463bd11e` |
-| `macos/tizen-dlog-analyzer` | macOS x86-64 (Mach-O) | 18,067,808 | `d8c6221834f05e3b30854cf9d2498a55c91d677ed3827d26ede886c6c67e873a` |
+| `linux/tizen-dlog-analyzer` | Linux x86-64 (glibc) | 17,468,232 | `a61e73fcb304f8f1ab1217ecd8111d14adb721ada6f3d4c4c3eb4418b99f9ca1` |
+| `windows/tizen-dlog-analyzer.exe` | Windows x86-64 | 16,964,929 | `e3829dfec7c0f0524629f5614ecc63f9e8deb7d005615d41de92a0ea9f8031f7` |
+| `macos/x86_64/tizen-dlog-analyzer` | macOS Intel (Mach-O x86_64) | 18,060,896 | `85f6c2e191124817db9a7bb4551721f20aac3e75282630296aa26f5a9f3e8ebe` |
+| `macos/arm64/tizen-dlog-analyzer` | macOS Apple Silicon (Mach-O arm64) | 18,227,360 | `a25998c5b300873ae32b31877264b016d4069fe091cedc1a2516abe594278908` |
 
-- **Version:** tizen-dlog-analyzer `0.2.9a0`
+- **Version:** tizen-dlog-analyzer `0.3.0`
 - **Packaging:** [PyInstaller](https://pyinstaller.org/) one-file bundles. The Linux build embeds
   CPython 3.12 and was linked on Ubuntu 18.04 (GCC 7.5); the Windows build embeds CPython 3.13;
-  the macOS build embeds CPython 3.14.
+  the macOS build embeds CPython 3.14 (x86_64) / 3.15 (arm64). macOS ships one bundle per
+  architecture (`x86_64/`, `arm64/`); the runner picks the directory from `process.arch` and
+  falls back to the other macOS build under Rosetta when the native one is absent.
 - **Source:** the analyzer's Python source is maintained in a separate repository.
   <!-- TODO(open-source release): add the public URL of the tizen-dlog-analyzer source repository
        (or the release page these binaries were downloaded from). -->
 - **License of the analyzer itself:** Apache License 2.0, Copyright 2026 Samsung Electronics Co., Ltd.
-  (a copy is included inside the bundle as of `0.2.9a0`; see the project `LICENSE`).
+  (a copy is included inside the bundle as of `0.3.0`; see the project `LICENSE`).
 
 Verify a download with:
 
 ```bash
 sha256sum common/tools/tizen-dlog-analyzer/linux/tizen-dlog-analyzer
 sha256sum common/tools/tizen-dlog-analyzer/windows/tizen-dlog-analyzer.exe
-sha256sum common/tools/tizen-dlog-analyzer/macos/tizen-dlog-analyzer
+sha256sum common/tools/tizen-dlog-analyzer/macos/x86_64/tizen-dlog-analyzer
+sha256sum common/tools/tizen-dlog-analyzer/macos/arm64/tizen-dlog-analyzer
 ```
 
 ## Third-party components embedded in the bundles
@@ -35,7 +39,7 @@ Their license texts are available from the linked upstream projects.
 
 | Component | Version (as bundled) | License |
 |---|---|---|
-| [CPython](https://www.python.org/) runtime and standard library | 3.12 (Linux) / 3.13 (Windows) / 3.14 (macOS) | Python Software Foundation License 2.0 |
+| [CPython](https://www.python.org/) runtime and standard library | 3.12 (Linux) / 3.13 (Windows) / 3.14 (macOS x86_64) / 3.15 (macOS arm64) | Python Software Foundation License 2.0 |
 | [PyInstaller](https://pyinstaller.org/) bootloader | — | GPL-2.0-or-later **with the PyInstaller bootloader exception** (bundled programs are not affected) |
 | [OpenSSL](https://www.openssl.org/) (`libssl`, `libcrypto`) | 3.x | Apache-2.0 |
 | [zlib](https://zlib.net/) | 1.x | zlib |

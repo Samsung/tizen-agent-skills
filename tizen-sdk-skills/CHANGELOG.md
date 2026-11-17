@@ -14,6 +14,24 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Changed
+
+- **Bundled `tizen-dlog-analyzer` binaries updated to 0.3.0 and the macOS binary is now picked
+  per CPU architecture.** All four PyInstaller one-file bundles were rebuilt and
+  `NOTICE.md` refreshed with the new sizes and SHA-256 hashes (Linux verified with
+  `--version`: `Tizen DLog Analyzer v0.3.0`). `common/tools/tizen-dlog-analyzer/macos/`
+  ships one bundle per arch (`x86_64/tizen-dlog-analyzer` for Intel Macs,
+  `arm64/tizen-dlog-analyzer` for Apple Silicon), and `resolveBinary()` in
+  `common/lib/core/dlog-analyzer.js` selects the directory from `process.arch`, falling
+  back to the other macOS build (Rosetta) when the native one is absent. The flat
+  pre-arch-split path (`macos/tizen-dlog-analyzer`) stays as a last candidate, so plugin
+  caches installed by older plugin versions still resolve. The rebuilt macOS x86_64 bundle
+  is not bit-identical to the previous 0.2.9a0 build, so verify copies of any
+  of the four bundles against the hashes in `NOTICE.md`. When the native arch
+  bundle is missing, the other macOS build is picked (Rosetta) and every
+  envelope the binary produces carries a warning naming the fallback so a
+  partial install is visible.
+
 ## [1.9.0] — 2026-11-16
 
 ### Added

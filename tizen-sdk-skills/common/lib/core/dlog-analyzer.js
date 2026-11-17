@@ -761,19 +761,72 @@ function parseErrorCount(output) {
   return 0;
 }
 
-/** <tools dir>/tizen-dlog-analyzer/<os>/<binary> for this platform. */
-const BINARY_SUBPATH = (() => {
-  const platform = process.platform;
-  const binOs =
-    platform === "darwin"
-      ? "macos"
-      : platform === "win32"
-        ? "windows"
-        : "linux";
+/**
+ * <tools dir>/tizen-dlog-analyzer/<os>[/<arch>]/<binary> candidates for the
+ * given platform and arch, most preferred first. macOS ships separate Intel
+ * (x86_64) and Apple Silicon (arm64) one-file bundles, so the arch directory
+ * is picked from `arch`; the other macOS arch's binary, and the flat
+ * pre-arch-split layout (`macos/tizen-dlog-analyzer`, which is all that
+ * plugin caches installed before the split hold), stay as last-resort
+ * candidates so an Apple Silicon Mac without the arm64 build can still run
+ * the Intel one under Rosetta. Linux and Windows ship a single binary per
+ * platform, so they resolve to one candidate. Defaults to the running host.
+ */
+function binarySubpathCandidates(
+  platform = process.platform,
+  arch = process.arch,
+) {
   const binName =
     platform === "win32" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
-  return ["tizen-dlog-analyzer", binOs, binName];
-})();
+  if (platform === "darwin") {
+    const primary = arch === "arm64" ? "arm64" : "x86_64";
+    const fallback = primary === "arm64" ? "x86_64" : "arm64";
+    return [
+      ["tizen-dlog-analyzer", "macos", primary, binName],
+      ["tizen-dlog-analyzer", "macos", fallback, binName],
+      // Layout shipped before the arch split — older plugin caches only
+      // have this flat path.
+      ["tizen-dlog-analyzer", "macos", binName],
+    ];
+  }
+  const binOs = platform === "win32" ? "windows" : "linux";
+  return [["tizen-dlog-analyzer", binOs, binName]];
+}
+
+const BINARY_SUBPATHS = binarySubpathCandidates();
+
+/** The preferred candidate — kept as an export for the tests and callers. */
+const BINARY_SUBPATH = BINARY_SUBPATHS[0];
+
+/**
+ * A macOS install whose cache lacks the native arch bundle silently falls
+ * back to the other arch's build, which then runs under Rosetta. Surfacing
+ * that in the envelope's warnings makes a partial install diagnosable.
+ *
+ * @param {string} binaryPath - the path resolveBinary() picked
+ * @param {string} [platform] - host platform (defaults to the running host)
+ * @param {string} [arch] - host arch (defaults to the running host)
+ * @returns {string|null} warning text, or null for the native build
+ */
+function archFallbackWarning(
+  binaryPath,
+  platform = process.platform,
+  arch = process.arch,
+) {
+  if (typeof binaryPath !== "string" || platform !== "darwin") return null;
+  const native = arch === "arm64" ? "arm64" : "x86_64";
+  const fallback = binarySubpathCandidates(platform, arch).find(
+    (subpath) => subpath.length === 4 && subpath[2] !== native,
+  );
+  if (!fallback || !binaryPath.endsWith(path.join(...fallback))) return null;
+  const chosen =
+    fallback[2] === "x86_64" ? "x86_64 (Intel)" : "arm64 (Apple Silicon)";
+  return (
+    `tizen-dlog-analyzer resolved to the ${chosen} build, not the native ` +
+    `${native} bundle, so it runs under Rosetta. Re-run the plugin setup ` +
+    `(or re-sync the plugin cache) to install the native ${native} binary.`
+  );
+}
 
 /**
  * Where to look for the binary, in order:
@@ -802,8 +855,10 @@ function defaultBinarySearchBases() {
 function resolveBinary(searchBases = defaultBinarySearchBases()) {
   for (const base of searchBases) {
     if (!fs.existsSync(base)) continue;
-    const direct = path.join(base, ...BINARY_SUBPATH);
-    if (fs.existsSync(direct)) return direct;
+    const direct = BINARY_SUBPATHS.map((subpath) =>
+      path.join(base, ...subpath),
+    ).find((candidate) => fs.existsSync(candidate));
+    if (direct) return direct;
     let entries;
     try {
       entries = fs.readdirSync(base);
@@ -815,8 +870,10 @@ function resolveBinary(searchBases = defaultBinarySearchBases()) {
       .filter((name) => VERSION_DIR_RE.test(name))
       .sort((a, b) => compareVersions(b, a));
     for (const version of versions) {
-      const candidate = path.join(base, version, "tools", ...BINARY_SUBPATH);
-      if (fs.existsSync(candidate)) return candidate;
+      const candidate = BINARY_SUBPATHS.map((subpath) =>
+        path.join(base, version, "tools", ...subpath),
+      ).find((candidate) => fs.existsSync(candidate));
+      if (candidate) return candidate;
     }
   }
   return null;
@@ -2725,6 +2782,9 @@ function runBinary(command, binaryPath, args, opts = {}) {
     errorCategory = "binary_exec_failed",
     errorPrefix = "Command failed",
   } = opts;
+  // A macOS cache missing the native arch bundle runs the other arch's build
+  // under Rosetta — carry that hint in every envelope the binary produces.
+  const archWarning = archFallbackWarning(binaryPath);
   try {
     const output = execFileSync(binaryPath, args, {
       encoding: "utf-8",
@@ -2735,6 +2795,7 @@ function runBinary(command, binaryPath, args, opts = {}) {
       command,
       status: "success",
       result: { output: output.trim(), ...extraResult },
+      ...(archWarning ? { warnings: [archWarning] } : {}),
     };
   } catch (error) {
     const recovered = recoverEncodingCrash(error);
@@ -2747,7 +2808,7 @@ function runBinary(command, binaryPath, args, opts = {}) {
           output_truncated: true,
           ...extraResult,
         },
-        warnings: [recovered.warning],
+        warnings: [recovered.warning, ...(archWarning ? [archWarning] : [])],
       };
     }
     const stderr = error.stderr ? error.stderr.toString().trim() : "";
@@ -3954,6 +4015,9 @@ module.exports = {
   runBinary,
   recoverEncodingCrash,
   BINARY_SUBPATH,
+  BINARY_SUBPATHS,
+  binarySubpathCandidates,
+  archFallbackWarning,
   awaitCollectorStartup,
   describeLockHolder,
   lockedCollectorError,

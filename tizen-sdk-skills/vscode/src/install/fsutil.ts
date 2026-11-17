@@ -222,6 +222,26 @@ export async function listFiles(dir: string, ext?: string): Promise<string[]> {
 }
 
 /**
+ * List every regular file under a directory, recursively, as paths relative
+ * to `dir` (sorted). Used where a platform directory nests its binaries in
+ * subdirectories — macOS keeps one tizen-dlog-analyzer bundle per arch in
+ * `arm64/` and `x86_64/`.
+ */
+export async function listFilesRecursive(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  if (!(await pathExists(dir))) return out;
+  const walk = async (d: string, prefix: string): Promise<void> => {
+    for (const entry of await fsp.readdir(d, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(path.join(d, entry.name), rel);
+      else if (entry.isFile()) out.push(rel);
+    }
+  };
+  await walk(dir, "");
+  return out.sort();
+}
+
+/**
  * Mode for the shell scripts we install: owner-only read/write/execute.
  *
  * Every script goes somewhere under the user's own home — ~/.claude/hooks/,
@@ -341,30 +361,63 @@ export async function copyPlatformBinary(
       continue;
     }
 
-    // Create destination directory
-    await fsp.mkdir(destPlatformDir, { recursive: true });
+    // Mirror the platform directory so stale files from an earlier layout
+    // cannot survive a re-sync. A cache written before the macOS arch split
+    // holds a flat macos/tizen-dlog-analyzer; an additive copy would leave it
+    // beside the new arch bundles and the recursive validation would report a
+    // file-count mismatch that no re-sync can clear. The destination lives
+    // entirely under the extension's version cache, so removing it touches
+    // nothing the user owns — the same trust model as mirrorDir().
+    //
+    // Copy into a staging directory next to the destination, then swap it in
+    // with one rename: a failure mid-copy leaves the previous cache intact
+    // instead of a half-written platform directory. Staging under the same
+    // parent keeps the rename on one filesystem.
+    const stagingDir = path.join(
+      path.dirname(destPlatformDir),
+      `${toolName}.${platform}.staging-${process.pid}`,
+    );
+    await fsp.rm(stagingDir, { recursive: true, force: true });
+    await fsp.mkdir(stagingDir, { recursive: true });
 
-    // Copy only files from the platform-specific directory
-    const files = await listFiles(srcPlatformDir);
-    for (const fileName of files) {
-      const srcFile = path.join(srcPlatformDir, fileName);
-      const destFile = path.join(destPlatformDir, fileName);
-      await fsp.copyFile(srcFile, destFile);
+    // Copy the platform directory recursively, preserving the relative
+    // structure: macOS nests its per-architecture bundles in arm64/ and
+    // x86_64/ subdirectories, and a flat single-binary platform (linux,
+    // windows) is the degenerate one-level case of the same walk.
+    const files = await listFilesRecursive(srcPlatformDir);
 
-      // Set executable permission on non-Windows platforms.
-      // Use SCRIPT_MODE (0o700) — owner-only — so group/other never gain
-      // execute access (SONARTS S2612).  This matches normalizeExec().
-      if (process.platform !== "win32") {
-        try {
-          await fsp.chmod(destFile, SCRIPT_MODE);
-        } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : String(e);
-          writeStatus(
-            `Warning: Could not set executable permission on ${destFile}: ${message}`,
-            "Warning",
-          );
+    try {
+      for (const rel of files) {
+        const srcFile = path.join(srcPlatformDir, rel);
+        const stagingFile = path.join(stagingDir, rel);
+        await fsp.mkdir(path.dirname(stagingFile), { recursive: true });
+        await fsp.copyFile(srcFile, stagingFile);
+
+        // Set executable permission on non-Windows platforms.
+        // Use SCRIPT_MODE (0o700) — owner-only — so group/other never gain
+        // execute access (SONARTS S2612).  This matches normalizeExec().
+        if (process.platform !== "win32") {
+          try {
+            await fsp.chmod(stagingFile, SCRIPT_MODE);
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            writeStatus(
+              `Warning: Could not set executable permission on ${stagingFile}: ${message}`,
+              "Warning",
+            );
+          }
         }
       }
+
+      await fsp.rm(destPlatformDir, { recursive: true, force: true });
+      await fsp.rename(stagingDir, destPlatformDir);
+    } catch (e: unknown) {
+      // Never leave the staging directory behind: the next run would fail
+      // validation against it or trip over it on a re-sync.
+      await fsp
+        .rm(stagingDir, { recursive: true, force: true })
+        .catch(() => undefined);
+      throw e;
     }
 
     writeStatus(

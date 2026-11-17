@@ -12,6 +12,7 @@ import {
   pathExists,
   getCurrentPlatform,
   listFiles,
+  listFilesRecursive,
 } from "./fsutil";
 import { writeStatus } from "../log";
 import {
@@ -114,7 +115,10 @@ async function validateTools(
 
     // Check if platform binary exists in cache
     const hasCacheBinary = await pathExists(cachePlatformDir);
-    const srcFiles = await listFiles(srcPlatformDir);
+    // Compare recursively: macOS nests its per-arch bundles in arm64/ and
+    // x86_64/ subdirectories, so immediate files alone would compare two
+    // empty listings and report success for a directory with no binary.
+    const srcFiles = await listFilesRecursive(srcPlatformDir);
 
     if (!hasCacheBinary) {
       results.push(
@@ -127,8 +131,8 @@ async function validateTools(
       continue;
     }
 
-    // Compare file names and sizes between source and cache
-    const cacheFiles = await listFiles(cachePlatformDir);
+    // Compare relative file paths and sizes between source and cache
+    const cacheFiles = await listFilesRecursive(cachePlatformDir);
 
     // Check file count first
     if (srcFiles.length !== cacheFiles.length) {

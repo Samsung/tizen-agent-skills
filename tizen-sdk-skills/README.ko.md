@@ -286,7 +286,7 @@ tizen-sdk-skills/
 │   │   ├── setup-all.*     #     네 호스트를 한 번에 (.sh / .ps1 / .bat)
 │   │   ├── setup-lib.*     #     미러 복사, 비교, 버전, 가드 섹션 헬퍼
 │   │   └── hosts/          #     <harness>.sh/.ps1 — 경로, 에이전트 형식, 훅/지침 단계
-│   ├── tools/              #   미리 빌드된 tizen-dlog-analyzer 바이너리 (linux/macos/windows)
+│   ├── tools/              #   미리 빌드된 tizen-dlog-analyzer 바이너리 (linux/macos x86_64+arm64/windows)
 │   └── assets/             #   공유 에셋
 ├── claude/setup/           # Claude Code — 2줄 wrapper: setup.sh, setup.ps1, setup.bat
 ├── cline/                  # Cline

@@ -301,7 +301,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │   │   ├── setup-all.*     #     all four hosts in one run (.sh / .ps1 / .bat)
 │   │   ├── setup-lib.*     #     mirror copy, compare, version, guard-section helpers
 │   │   └── hosts/          #     <harness>.sh/.ps1 — paths, agent format, hooks/instructions steps
-│   ├── tools/              #   Prebuilt tizen-dlog-analyzer binaries (linux/macos/windows)
+│   ├── tools/              #   Prebuilt tizen-dlog-analyzer binaries (linux/macos x86_64+arm64/windows)
 │   └── assets/             #   Shared assets
 ├── claude/setup/           # Claude Code — 2-line wrappers: setup.sh, setup.ps1, setup.bat
 ├── cline/                  # Cline
