@@ -34,6 +34,7 @@ const {
   decorateSandboxFailure,
 } = require("../core/sandbox");
 const { formatError } = require("../envelope/response-formatter");
+const { applyHandoff } = require("../core/handoff/record");
 
 /**
  * Set by parseArgsOrExit when the caller passed `--background`: the argv to
@@ -356,14 +357,21 @@ function runCli(command, fn, opts = {}) {
   (async () => {
     try {
       const result = decorateSandboxFailure(await fn(), sandbox, USER_COMMAND);
+      const printable = mask ? maskEnvelopeSecrets(result) : result;
+      // Handoff notes: records this call in the Tizen project's notes (kept
+      // outside the project, created on first use), and may add one warning
+      // when another agent worked there last. Never throws, never prints.
+      applyHandoff(printable, {
+        label: command,
+        argv: process.argv.slice(2),
+        script: process.argv[1],
+        userCommand: USER_COMMAND,
+        mask,
+      });
       // Exit only after the write is flushed — on Windows a piped stdout is
       // asynchronous and process.exit() would truncate large envelopes
       process.stdout.write(
-        JSON.stringify(
-          withUserCommand(mask ? maskEnvelopeSecrets(result) : result),
-          null,
-          2,
-        ) + "\n",
+        JSON.stringify(withUserCommand(printable), null, 2) + "\n",
         () => finish(result && result.status === "success" ? 0 : 1),
       );
     } catch (error) {

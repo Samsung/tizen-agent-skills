@@ -21,8 +21,12 @@ metadata:
     - tz build
     - tz build native
     - tz build dotnet
-    - tz build webapp
+        - tz build webapp
 ---
+
+> **Handoff notes:** Claude Code and Codex CLI may share this project. Before you start, run
+> `handoff-cli.js show` (see the `tizen-handoff` skill) to catch up on what the other agent did.
+> This runner records its own result there automatically; nothing to set up.
 
 ### Claude Code (서브에이전트 위임)
 
