@@ -1816,6 +1816,14 @@ function buildErrorAnalyzeFileArgs(appId, nativeFormat, opts) {
   if (opts.withContext) args.push("--with-context");
   if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
   if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.full) args.push("--full");
+  return args;
+}
+
+/** Native `error-analyze` argv for collection mode. */
+function buildErrorAnalyzeArgs(appId, nativeFormat, opts) {
+  const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
+  if (opts.full) args.push("--full");
   return args;
 }
 
@@ -1879,7 +1887,7 @@ function analyzeErrorsInFile(command, appId, nativeFormat, opts) {
 }
 
 /** Collection mode: analyze the logs collected for one app. */
-function analyzeErrorsInCollection(command, appId, nativeFormat) {
+function analyzeErrorsInCollection(command, appId, nativeFormat, opts = {}) {
   const logBase = resolveLogBaseDir();
   if (logBase.error) return logBaseDirError(command, logBase.error);
   const logFile = appLogFile(appId, logBase.baseDir);
@@ -1900,7 +1908,7 @@ function analyzeErrorsInCollection(command, appId, nativeFormat) {
   if (!binaryPath) return binaryNotFoundError(command);
 
   // Build the native binary command (it resolves the log directory itself)
-  const args = ["error-analyze", "--app-id", appId, "--format", nativeFormat];
+  const args = buildErrorAnalyzeArgs(appId, nativeFormat, opts);
   const where = `logs for app "${appId}"`;
   return runErrorAnalyze(
     command,
@@ -1943,7 +1951,7 @@ async function analyzeErrors(appId, format, optsOrLabel, commandLabel) {
   if (opts.file) return analyzeErrorsInFile(command, appId, nativeFormat, opts);
 
   // --- Collection mode (existing behavior) ---
-  return analyzeErrorsInCollection(command, appId, nativeFormat);
+  return analyzeErrorsInCollection(command, appId, nativeFormat, opts);
 }
 
 /**
@@ -2825,10 +2833,51 @@ function runBinary(command, binaryPath, args, opts = {}) {
   }
 }
 
+/** Native `app-log --file` argv for file mode. */
+function buildAppLogFileArgs(opts) {
+  const args = ["app-log", "--file", opts.file];
+  if (opts.pids)
+    toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
+  if (opts.noiseTags)
+    toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
+  if (opts.categories)
+    toArray(opts.categories).forEach((c) => args.push("--category", c));
+  if (opts.since) args.push("--since", opts.since);
+  if (opts.until) args.push("--until", opts.until);
+  if (opts.priority) args.push("--priority", opts.priority);
+  if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+  if (opts.keywords)
+    toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.output) args.push("--output", opts.output);
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.full) args.push("--full");
+  return args;
+}
+
+/** Native `app-log` argv for collection mode. */
+function buildAppLogArgs(appId, opts) {
+  // No --base-dir: the binary reads from the SDK-resolved directory itself
+  const args = ["app-log", "--app-id", appId];
+  if (opts.since) args.push("--since", opts.since);
+  if (opts.until) args.push("--until", opts.until);
+  if (opts.priority) args.push("--priority", opts.priority);
+  if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
+  if (opts.keywords)
+    toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.output) args.push("--output", opts.output);
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.full) args.push("--full");
+  return args;
+}
+
 /**
  * Print the full collected log for one app (all priorities, hot + cold files).
  * @param {string} appId - Tizen app ID
- * @param {object} [opts] - { file, pids, noiseTags, categories, since, until, priority, tags, keywords, format, output, maxLines, maxChars }
+ * @param {object} [opts] - { file, pids, noiseTags, categories, since, until, priority, tags, keywords, format, output, maxLines, maxChars, full }
  * @param {string} [commandLabel]
  */
 async function appLog(appId, opts = {}, commandLabel) {
@@ -2841,23 +2890,7 @@ async function appLog(appId, opts = {}, commandLabel) {
     const binaryPath = resolveBinary();
     if (!binaryPath) return binaryNotFoundError(command);
 
-    const args = ["app-log", "--file", opts.file];
-    if (opts.pids)
-      toArray(opts.pids).forEach((p) => args.push("--pid", String(p)));
-    if (opts.noiseTags)
-      toArray(opts.noiseTags).forEach((t) => args.push("--noise-tag", t));
-    if (opts.categories)
-      toArray(opts.categories).forEach((c) => args.push("--category", c));
-    if (opts.since) args.push("--since", opts.since);
-    if (opts.until) args.push("--until", opts.until);
-    if (opts.priority) args.push("--priority", opts.priority);
-    if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
-    if (opts.keywords)
-      toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
-    if (opts.format) args.push("--format", opts.format);
-    if (opts.output) args.push("--output", opts.output);
-    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+    const args = buildAppLogFileArgs(opts);
 
     return runBinary(command, binaryPath, args, {
       result: {
@@ -2904,17 +2937,7 @@ async function appLog(appId, opts = {}, commandLabel) {
   if (!binaryPath) return binaryNotFoundError(command);
 
   // No --base-dir: the binary reads from the SDK-resolved directory itself
-  const args = ["app-log", "--app-id", appId];
-  if (opts.since) args.push("--since", opts.since);
-  if (opts.until) args.push("--until", opts.until);
-  if (opts.priority) args.push("--priority", opts.priority);
-  if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
-  if (opts.keywords)
-    toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
-  if (opts.format) args.push("--format", opts.format);
-  if (opts.output) args.push("--output", opts.output);
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  const args = buildAppLogArgs(appId, opts);
 
   return runBinary(command, binaryPath, args, {
     result: {
@@ -2989,7 +3012,7 @@ const DLOG_PRIORITIES = ["V", "D", "I", "W", "E", "F"];
  * @param {string[]} patterns - already normalised, at least one
  * @param {object} [opts] - { file, appLabels, pids, noiseTags, categories, regex, caseSensitive, invert, all,
  *   context, afterContext, beforeContext, since, until, priority, tags, count, format, output, maxMatches,
- *   maxLines, maxChars }
+ *   maxLines, maxChars, full }
  */
 function buildSearchArgs(patterns, opts = {}) {
   const args = ["search"];
@@ -3025,6 +3048,7 @@ function buildSearchArgs(patterns, opts = {}) {
     args.push("--max-matches", String(opts.maxMatches));
   if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
   if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.full) args.push("--full");
   return args;
 }
 
@@ -3334,24 +3358,9 @@ async function deviceProfile(serial, opts = {}, commandLabel) {
   });
 }
 
-/**
- * Run a one-shot first-pass investigation and emit a budgeted report.
- * @param {string} [appId] - Optional app ID for app-scoped investigation
- * @param {string} [serial]
- * @param {object} [opts] - { symptoms, profile, format, budget, budgetTokens,
- *   allowNetworkProbe, rulesDir, parallel, maxWorkers, deduplicate,
- *   similarityThreshold, allowHeavy, noNoiseFilter, fuzzySymptoms, symptomMap }
- * @param {string} [commandLabel]
- */
-async function investigate(appId, serial, opts = {}, commandLabel) {
-  const command = commandLabel || "tizen-sdk dlog-analyzer investigate";
-  if (appId && !isValidAppId(appId)) return invalidAppIdError(command, appId);
-  const resolved = resolveBinaryForLogs(command);
-  if (resolved.error) return resolved.error;
-  const { binaryPath } = resolved;
-  const device = resolveDevice(serial);
-  if (device.error) return deviceErrorEnvelope(command, device);
-  const args = ["investigate", "--serial", device.serial];
+/** Native `investigate` argv. */
+function buildInvestigateArgs(appId, serial, opts = {}) {
+  const args = ["investigate", "--serial", serial];
   if (appId) args.push("--app-id", appId);
   if (opts.symptoms) args.push("--symptoms", opts.symptoms);
   if (opts.profile) args.push("--profile", opts.profile);
@@ -3359,6 +3368,7 @@ async function investigate(appId, serial, opts = {}, commandLabel) {
   if (opts.budget != null) args.push("--budget", String(opts.budget));
   if (opts.budgetTokens != null)
     args.push("--budget-tokens", String(opts.budgetTokens));
+  if (opts.full) args.push("--full");
   if (opts.allowNetworkProbe) args.push("--allow-network-probe");
   if (opts.rulesDir) args.push("--rules-dir", opts.rulesDir);
   if (opts.parallel) args.push("--parallel");
@@ -3371,6 +3381,27 @@ async function investigate(appId, serial, opts = {}, commandLabel) {
   if (opts.noNoiseFilter) args.push("--no-noise-filter");
   if (opts.fuzzySymptoms) args.push("--fuzzy-symptoms");
   if (opts.symptomMap) args.push("--symptom-map", opts.symptomMap);
+  return args;
+}
+
+/**
+ * Run a one-shot first-pass investigation and emit a budgeted report.
+ * @param {string} [appId] - Optional app ID for app-scoped investigation
+ * @param {string} [serial]
+ * @param {object} [opts] - { symptoms, profile, format, budget, budgetTokens,
+ *   full, allowNetworkProbe, rulesDir, parallel, maxWorkers, deduplicate,
+ *   similarityThreshold, allowHeavy, noNoiseFilter, fuzzySymptoms, symptomMap }
+ * @param {string} [commandLabel]
+ */
+async function investigate(appId, serial, opts = {}, commandLabel) {
+  const command = commandLabel || "tizen-sdk dlog-analyzer investigate";
+  if (appId && !isValidAppId(appId)) return invalidAppIdError(command, appId);
+  const resolved = resolveBinaryForLogs(command);
+  if (resolved.error) return resolved.error;
+  const { binaryPath } = resolved;
+  const device = resolveDevice(serial);
+  if (device.error) return deviceErrorEnvelope(command, device);
+  const args = buildInvestigateArgs(appId, device.serial, opts);
   return runBinary(command, binaryPath, args, {
     timeout: 60000,
     result: {
@@ -3859,6 +3890,30 @@ async function stopKernelCollect(command) {
   };
 }
 
+/** Native `kernel analyze --file` argv for file mode. */
+function buildKernelAnalyzeFileArgs(opts) {
+  const args = ["kernel", "analyze", "--file", opts.file];
+  if (opts.since) args.push("--since", opts.since);
+  if (opts.level) args.push("--level", opts.level);
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.withDlog) {
+    args.push("--with-dlog");
+    if (opts.appId) args.push("--app-id", opts.appId);
+  }
+  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.full) args.push("--full");
+  return args;
+}
+
+/** Native `kernel analyze` argv for collection mode. */
+function buildKernelAnalyzeArgs(opts) {
+  const args = ["kernel", "analyze"];
+  if (opts.format) args.push("--format", opts.format);
+  if (opts.full) args.push("--full");
+  return args;
+}
+
 /**
  * Kernel log collection and analysis (kmsg/dmesg).
  *
@@ -3869,7 +3924,7 @@ async function stopKernelCollect(command) {
  *
  * @param {string} subcommand - "collect", "stop" or "analyze"
  * @param {string} [serial]
- * @param {object} [opts] - { format, file, since, level, withDlog, appId, maxLines, maxChars }
+ * @param {object} [opts] - { format, file, since, level, withDlog, appId, maxLines, maxChars, full }
  * @param {string} [commandLabel]
  */
 async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
@@ -3909,16 +3964,7 @@ async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
       return fileNotFoundError(command, opts.file, "kernel dmesg/kmsg");
     const binaryPath = resolveBinary();
     if (!binaryPath) return binaryNotFoundError(command);
-    const args = ["kernel", "analyze", "--file", opts.file];
-    if (opts.since) args.push("--since", opts.since);
-    if (opts.level) args.push("--level", opts.level);
-    if (opts.format) args.push("--format", opts.format);
-    if (opts.withDlog) {
-      args.push("--with-dlog");
-      if (opts.appId) args.push("--app-id", opts.appId);
-    }
-    if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-    if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+    const args = buildKernelAnalyzeFileArgs(opts);
     return runBinary(command, binaryPath, args, {
       result: {
         file: opts.file,
@@ -3934,8 +3980,7 @@ async function manageKernel(subcommand, serial, opts = {}, commandLabel) {
   const resolved = resolveBinaryForLogs(command);
   if (resolved.error) return resolved.error;
   const { binaryPath } = resolved;
-  const args = ["kernel", "analyze"];
-  if (opts.format) args.push("--format", opts.format);
+  const args = buildKernelAnalyzeArgs(opts);
   return runBinary(command, binaryPath, args, {
     result: {
       message: "Kernel log analysis.",
@@ -3972,7 +4017,15 @@ module.exports = {
   // New v0.1.3 commands
   appLog,
   searchLogs,
+  // Native argv builders — pure, unit-tested without a device or a binary
+  buildErrorAnalyzeArgs,
+  buildErrorAnalyzeFileArgs,
+  buildAppLogArgs,
+  buildAppLogFileArgs,
   buildSearchArgs,
+  buildInvestigateArgs,
+  buildKernelAnalyzeArgs,
+  buildKernelAnalyzeFileArgs,
   summarizeSearchOutput,
   deviceProfile,
   investigate,
