@@ -222,6 +222,26 @@ export async function listFiles(dir: string, ext?: string): Promise<string[]> {
 }
 
 /**
+ * List every regular file under a directory, recursively, as paths relative
+ * to `dir` (sorted). Used where a platform directory nests its binaries in
+ * subdirectories — macOS keeps one tizen-dlog-analyzer bundle per arch in
+ * `arm64/` and `x86_64/`.
+ */
+export async function listFilesRecursive(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  if (!(await pathExists(dir))) return out;
+  const walk = async (d: string, prefix: string): Promise<void> => {
+    for (const entry of await fsp.readdir(d, { withFileTypes: true })) {
+      const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
+      if (entry.isDirectory()) await walk(path.join(d, entry.name), rel);
+      else if (entry.isFile()) out.push(rel);
+    }
+  };
+  await walk(dir, "");
+  return out.sort();
+}
+
+/**
  * Mode for the shell scripts we install: owner-only read/write/execute.
  *
  * Every script goes somewhere under the user's own home — ~/.claude/hooks/,
@@ -344,11 +364,15 @@ export async function copyPlatformBinary(
     // Create destination directory
     await fsp.mkdir(destPlatformDir, { recursive: true });
 
-    // Copy only files from the platform-specific directory
-    const files = await listFiles(srcPlatformDir);
-    for (const fileName of files) {
-      const srcFile = path.join(srcPlatformDir, fileName);
-      const destFile = path.join(destPlatformDir, fileName);
+    // Copy the platform directory recursively, preserving the relative
+    // structure: macOS nests its per-architecture bundles in arm64/ and
+    // x86_64/ subdirectories, and a flat single-binary platform (linux,
+    // windows) is the degenerate one-level case of the same walk.
+    const files = await listFilesRecursive(srcPlatformDir);
+    for (const rel of files) {
+      const srcFile = path.join(srcPlatformDir, rel);
+      const destFile = path.join(destPlatformDir, rel);
+      await fsp.mkdir(path.dirname(destFile), { recursive: true });
       await fsp.copyFile(srcFile, destFile);
 
       // Set executable permission on non-Windows platforms.

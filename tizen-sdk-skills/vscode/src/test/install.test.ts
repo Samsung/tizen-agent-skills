@@ -37,7 +37,11 @@ import {
   codexHooksJsonPath,
   codexSkillsDir,
 } from "../install/codexLayout";
-import { mirrorDir } from "../install/fsutil";
+import {
+  copyPlatformBinary,
+  getCurrentPlatform,
+  mirrorDir,
+} from "../install/fsutil";
 import { guardMarkers } from "../install/guardSection";
 import { installCodexHooks, removeCodexHooks } from "../install/hooks";
 import { readManifest, writeManifest, manifestPath } from "../install/manifest";
@@ -370,6 +374,85 @@ test("a missing source is a warning, and the destination is left alone", async (
     "a missing source must not wipe the destination",
   );
   assert.ok(takeLog().join("\n").includes("Source not found"));
+});
+
+section("copyPlatformBinary (arch-split macOS layout)");
+
+test("the platform directory is copied recursively, keeping arch subdirectories", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  // macOS nests one bundle per arch (arm64/, x86_64/); create the nested
+  // layout plus the legacy flat binary under every platform directory so the
+  // test does not depend on the host OS.
+  for (const p of ["linux", "macos", "windows"]) {
+    const name =
+      p === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+    for (const arch of ["arm64", "x86_64"]) {
+      write(
+        path.join(fx.assets, "tools", "tizen-dlog-analyzer", p, arch, name),
+        `${p}/${arch}\n`,
+      );
+    }
+    write(
+      path.join(fx.assets, "tools", "tizen-dlog-analyzer", p, name),
+      `${p}/flat\n`,
+    );
+  }
+
+  await copyPlatformBinary(
+    path.join(fx.assets, "tools"),
+    path.join(fx.home, "cache", "tools"),
+    "test",
+  );
+
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  for (const arch of ["arm64", "x86_64"]) {
+    const copied = path.join(
+      fx.home,
+      "cache",
+      "tools",
+      "tizen-dlog-analyzer",
+      platform,
+      arch,
+      binName,
+    );
+    assert.strictEqual(
+      fs.readFileSync(copied, "utf-8"),
+      `${platform}/${arch}\n`,
+      `the nested ${arch} bundle must be copied with its subdirectory`,
+    );
+    if (process.platform !== "win32") {
+      assert.strictEqual(
+        fs.statSync(copied).mode & 0o777,
+        0o700,
+        "the copied binary must be owner-executable only",
+      );
+    }
+  }
+  assert.strictEqual(
+    fs.readFileSync(
+      path.join(
+        fx.home,
+        "cache",
+        "tools",
+        "tizen-dlog-analyzer",
+        platform,
+        binName,
+      ),
+      "utf-8",
+    ),
+    `${platform}/flat\n`,
+    "a flat single-binary platform directory still copies",
+  );
+  // Only the current platform's binary is copied.
+  const other = platform === "macos" ? "linux" : "macos";
+  assert.ok(
+    !fs.existsSync(
+      path.join(fx.home, "cache", "tools", "tizen-dlog-analyzer", other),
+    ),
+    "only the current platform's binary is copied",
+  );
 });
 
 test("skill names come from readdir, so they are always single path segments", async () => {

@@ -23,7 +23,9 @@ below use those release tags.
   ships one bundle per arch (`x86_64/tizen-dlog-analyzer` for Intel Macs,
   `arm64/tizen-dlog-analyzer` for Apple Silicon), and `resolveBinary()` in
   `common/lib/core/dlog-analyzer.js` selects the directory from `process.arch`, falling
-  back to the other macOS build (Rosetta) when the native one is absent.
+  back to the other macOS build (Rosetta) when the native one is absent. The flat
+  pre-arch-split path (`macos/tizen-dlog-analyzer`) stays as a last candidate, so plugin
+  caches installed by older plugin versions still resolve.
 
 ## [1.9.0] — 2026-11-16
 

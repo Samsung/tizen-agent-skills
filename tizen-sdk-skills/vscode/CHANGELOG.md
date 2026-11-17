@@ -4,6 +4,17 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
+## [Unreleased]
+
+### Fixed
+
+- The extension's installers (Claude Code, Cline, Codex CLI) ship the macOS
+  `tizen-dlog-analyzer` bundles again: `copyPlatformBinary` now copies the platform
+  `tools/` directory recursively, so the per-architecture `arm64/` / `x86_64/`
+  subdirectories reach the cache instead of an empty `macos/` directory. The install
+  validation compares the platform directory recursively too — comparing only immediate
+  files reported success for an empty directory.
+
 ## [1.9.0] — 2026-11-16
 
 No extension-side change — the extension version is bumped to track the updated skill and agent asset tree. The **(skills)** converted Gemini agents write `name` / `description` as YAML single-quoted strings so Gemini CLI loads all of them again, the `tizen-device-manager` skill frontmatter is valid YAML again so Cline lists it, and every Bash runner lookup is built from shell builtins so Gemini CLI no longer blocks it as command injection. Note that the Gemini setup script (`gemini/setup`) now installs skills to `~/.agents/skills`, the folder the extension's Codex install uses: removing the extension's Codex install removes the tizen skills Gemini CLI reads there too, so re-run `gemini/setup` afterwards. See the project CHANGELOG for details.
@@ -204,7 +215,7 @@ Fixes for the Codex CLI host. No extension code changed — the release ships th
 
 ### Changed
 
-- **(skills)** `--background` now works on *every* runner, not just the eight that parsed options through `parseArgsOrExit`. The flag is removed from `process.argv` at require time in `lib/cli/cli-runner.js` — every runner requires `cli-runner` before reading argv — so option-style, positional and hand-rolled parsers accept it with no per-runner wiring. Previously the positional parsers mis-read it as data (device-manager as a timeout, file-transfer as a device serial, dotnet-setup as a workload version). Only a `--background` before a bare `--` counts, so `job-cli.js run … -- <installer args>` is left alone. This brings app builds, app install, .NET setup, GDB/DotNET/WebApp debug setup, Playwright and file transfer under a host's short tool-call window; `tz build` + `tz pack` runs for minutes and used to return only the `[tizen-build] Building …` header while the build kept going.
+- **(skills)** `--background` now works on _every_ runner, not just the eight that parsed options through `parseArgsOrExit`. The flag is removed from `process.argv` at require time in `lib/cli/cli-runner.js` — every runner requires `cli-runner` before reading argv — so option-style, positional and hand-rolled parsers accept it with no per-runner wiring. Previously the positional parsers mis-read it as data (device-manager as a timeout, file-transfer as a device serial, dotnet-setup as a workload version). Only a `--background` before a bare `--` counts, so `job-cli.js run … -- <installer args>` is left alone. This brings app builds, app install, .NET setup, GDB/DotNET/WebApp debug setup, Playwright and file transfer under a host's short tool-call window; `tz build` + `tz pack` runs for minutes and used to return only the `[tizen-build] Building …` header while the build kept going.
 - **(skills)** Backgrounded runners now report live progress. Inside a job, `execPluginScript` writes each call's output to `<id>.script-<n>.log` and keeps it, and `jobStatus`/`wait` return `progress_tail` and `log_file` from the newest script log. Pipe mode redirects stdout only and leaves stderr on the pipe, so return values and `error.stdout` / `error.stderr` stay byte-identical to a foreground run.
 - **(skills)** `job-cli.js` refuses `--background` (it is the poller/launcher — nesting a receipt inside a receipt), and `cert-manager-cli.js` refuses `--prompt-*` together with `--background`, since a detached child has no terminal to prompt on.
 
@@ -218,7 +229,7 @@ Fixes for the Codex CLI host. No extension code changed — the release ships th
 ### Added
 
 - Activity Bar sidebar tree view and an extension icon, so Install / Re-sync, Show Install Status, Remove Installed Files and Show Log are reachable without the Command Palette. The view refreshes after each command.
-- `tools/` directory support in the build and installation pipeline, for skills that ship a helper binary. Only the binaries matching the current platform are copied, unsupported platforms raise an error instead of installing a broken tree, and installed binaries are set owner-only executable. Install validation compares file name *and* size, not just presence.
+- `tools/` directory support in the build and installation pipeline, for skills that ship a helper binary. Only the binaries matching the current platform are copied, unsupported platforms raise an error instead of installing a broken tree, and installed binaries are set owner-only executable. Install validation compares file name _and_ size, not just presence.
 - **(skills)** `tizen-tv-sdk-install-from-zip` — offline TV SDK installation from a local ZIP file, for machines without access to the Samsung package repository. Brings the shipped skill set to 29.
 - **(skills)** Codex CLI support. The runner detects a Codex CLI host and prefers its own runner cache, and the long installers (10 min+) run as detached jobs via `job-cli.js run --script` with `suggested_fix.background_command`, so they survive Codex CLI's 30 s exec window. The emulator flow drops the slow `em-cli` probe and resolves the platform directly for the same reason.
 - **(skills)** `tizen-dlog-analyzer` gained a structured analysis report template with a bilingual (Korean/English) rendering and a confirm-gated fix workflow — the report is rendered only once analysis is fully done, and no fix is applied without explicit confirmation. The bundled analyzer executable was updated to v0.1.0.dev0 and now ships its LICENSE.
@@ -228,7 +239,7 @@ Fixes for the Codex CLI host. No extension code changed — the release ships th
 - **Renamed `tizen-sdk-agents` to `tizen-sdk-skills`** and flattened the repository layout. Installs made by an earlier version under the old name are recognised and replaced on update rather than left behind as a duplicate tree.
 - Adopted Apache-2.0 across the repository, and added `GOVERNANCE`, `CONTRIBUTING` and per-module `CODEOWNERS`.
 - `tizenAiExtension.targets` default reverted from `both` back to `auto` — `both` installed into a host the user had not set up.
-- The install manifest is written *before* hooks, and a hook failure is no longer fatal. A host whose `settings.json` cannot be merged still gets its skills, and the manifest still records what was written so removal stays exact.
+- The install manifest is written _before_ hooks, and a hook failure is no longer fatal. A host whose `settings.json` cannot be merged still gets its skills, and the manifest still records what was written so removal stays exact.
 - The pnpm lockfile and workspace config are excluded from the VSIX.
 - Replaced the remaining explicit `any` types in the extension with typed settings models, and applied Prettier + `eslint --fix` across the repository.
 - **(skills)** Every skill and agent is required to surface the JSON envelope in its final message, so the result is visible to the user rather than only to the model.
@@ -251,7 +262,7 @@ Fixes for the Codex CLI host. No extension code changed — the release ships th
 - Automatic `settings.json` merge for Claude Code hooks (all 3 hooks, including `check-skill-routing.sh` which was missing from the shell scripts). Our entries are identified by their hook-directory path, so a re-install replaces them without touching hooks you added yourself, and no non-schema marker keys are written into `settings.json`.
 - One-time `settings.json.tizen-backup` of the pristine file, and atomic (temp + rename) writes so an interrupted merge cannot truncate it.
 - The merge reuses your file's own indentation (2-space, 4-space or tabs) instead of reflowing it to a fixed width. Inline arrays are still expanded — that is inherent to re-serialising JSON.
-- A `hooks` section of the wrong *type* (e.g. `"PreToolUse": {}`) parses fine but cannot be merged into. Rather than coercing it and silently discarding what you wrote, the merge is skipped, the reason is logged, and the file is left byte-for-byte untouched — the same handling as a syntax error.
+- A `hooks` section of the wrong _type_ (e.g. `"PreToolUse": {}`) parses fine but cannot be merged into. Rather than coercing it and silently discarding what you wrote, the merge is skipped, the reason is logged, and the file is left byte-for-byte untouched — the same handling as a syntax error.
 - Version-independent hook script path (`~/.claude/hooks/tizen-sdk-agents/`) so hooks survive extension updates. Paths are emitted with forward slashes for `bash`.
 - Cline hook installation with non-clobber check for existing `PreToolUse`.
 - Cline guard rule (`tizen-sdk-agents-guard.md`) as a Windows fallback.
@@ -259,14 +270,14 @@ Fixes for the Codex CLI host. No extension code changed — the release ships th
 - Install manifest (`.tizen-sdk-agents-manifest.json`) recording what was written into the shared `skills/` and `agents/` directories, so removal deletes exactly those and never a skill you wrote yourself.
 - Upgrades prune what the previous version installed and the new one no longer ships. A dropped or renamed skill/agent would otherwise linger forever — the skill mirror is per-name and the agent copy only overwrites — and the new manifest would no longer claim it, so even uninstall would leave it behind while the host kept loading the stale definition.
 - Only the current version's plugin cache is kept. Each version holds a full copy of the asset tree, so without this every update left several more MB behind for good.
-- Validation of the hook install itself — hook scripts on disk *and* registered in `settings.json` — reported by **Show Install Status**.
+- Validation of the hook install itself — hook scripts on disk _and_ registered in `settings.json` — reported by **Show Install Status**.
 - Four commands: Install / Re-sync, Show Install Status, Remove Installed Files, Show Log.
 - Three configuration settings: `targets`, `installHooks`, `autoSyncOnUpdate`.
 - Clean uninstall via `vscode:uninstall`.
 - bash dependency warning on Windows.
 - Unit tests (`npm test`) for the host-detection, settings-merge and manifest logic; `npm run typecheck` gates packaging.
 
-- The on-startup sync is gated on the on-disk install manifest, not only on the version kept in `globalState`. VS Code persists `globalState` in the shared `state.vscdb` and does **not** clear it on uninstall — it only removes the extension's `globalStorage/<id>/` directory. So uninstalling (which deletes every installed file) and re-installing the *same* version would otherwise leave the recorded version matching while nothing was on disk, and the sync would be skipped silently, leaving the user with no skills and no notification. **Show Install Status** now reports the `globalState` version and each host's manifest version separately, so a disagreement is visible.
+- The on-startup sync is gated on the on-disk install manifest, not only on the version kept in `globalState`. VS Code persists `globalState` in the shared `state.vscdb` and does **not** clear it on uninstall — it only removes the extension's `globalStorage/<id>/` directory. So uninstalling (which deletes every installed file) and re-installing the _same_ version would otherwise leave the recorded version matching while nothing was on disk, and the sync would be skipped silently, leaving the user with no skills and no notification. **Show Install Status** now reports the `globalState` version and each host's manifest version separately, so a disagreement is visible.
 
 ### Notes
 

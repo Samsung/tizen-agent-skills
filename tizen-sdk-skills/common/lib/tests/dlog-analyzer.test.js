@@ -79,6 +79,7 @@ const {
   runBinary,
   recoverEncodingCrash,
   BINARY_SUBPATH,
+  binarySubpathCandidates,
   awaitCollectorStartup,
   describeLockHolder,
   lockedCollectorError,
@@ -2042,6 +2043,35 @@ console.log("\nTest 20: binary resolution order");
       domainSource,
     ),
     true,
+  );
+}
+
+// The macOS arch split keeps the flat pre-split layout as a last-resort
+// candidate, so caches installed by older plugin versions stay usable and an
+// Apple Silicon Mac without the arm64 build can still run the Intel binary.
+console.log("\nTest 20b: binary subpath candidates (arch split + legacy)");
+{
+  check(
+    "darwin arm64 → native arch, other arch, then the flat legacy path",
+    binarySubpathCandidates("darwin", "arm64"),
+    [
+      ["tizen-dlog-analyzer", "macos", "arm64", "tizen-dlog-analyzer"],
+      ["tizen-dlog-analyzer", "macos", "x86_64", "tizen-dlog-analyzer"],
+      ["tizen-dlog-analyzer", "macos", "tizen-dlog-analyzer"],
+    ],
+  );
+  check(
+    "darwin x64 → x86_64 first",
+    binarySubpathCandidates("darwin", "x64")[0],
+    ["tizen-dlog-analyzer", "macos", "x86_64", "tizen-dlog-analyzer"],
+  );
+  check("linux → one candidate", binarySubpathCandidates("linux", "x64"), [
+    ["tizen-dlog-analyzer", "linux", "tizen-dlog-analyzer"],
+  ]);
+  check(
+    "win32 → one candidate with the .exe name",
+    binarySubpathCandidates("win32", "x64"),
+    [["tizen-dlog-analyzer", "windows", "tizen-dlog-analyzer.exe"]],
   );
 }
 

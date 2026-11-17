@@ -762,29 +762,38 @@ function parseErrorCount(output) {
 }
 
 /**
- * <tools dir>/tizen-dlog-analyzer/<os>[/<arch>]/<binary> candidates for this
- * platform, most preferred first. macOS ships separate Intel (x86_64) and
- * Apple Silicon (arm64) one-file bundles, so the arch directory is picked from
- * process.arch; the other macOS arch's binary stays as a last-resort candidate
- * so an Apple Silicon Mac whose cache predates the arm64 build can still run
+ * <tools dir>/tizen-dlog-analyzer/<os>[/<arch>]/<binary> candidates for the
+ * given platform and arch, most preferred first. macOS ships separate Intel
+ * (x86_64) and Apple Silicon (arm64) one-file bundles, so the arch directory
+ * is picked from `arch`; the other macOS arch's binary, and the flat
+ * pre-arch-split layout (`macos/tizen-dlog-analyzer`, which is all that
+ * plugin caches installed before the split hold), stay as last-resort
+ * candidates so an Apple Silicon Mac without the arm64 build can still run
  * the Intel one under Rosetta. Linux and Windows ship a single binary per
- * platform, so they resolve to one candidate.
+ * platform, so they resolve to one candidate. Defaults to the running host.
  */
-const BINARY_SUBPATHS = (() => {
-  const platform = process.platform;
+function binarySubpathCandidates(
+  platform = process.platform,
+  arch = process.arch,
+) {
   const binName =
     platform === "win32" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
   if (platform === "darwin") {
-    const primary = process.arch === "arm64" ? "arm64" : "x86_64";
+    const primary = arch === "arm64" ? "arm64" : "x86_64";
     const fallback = primary === "arm64" ? "x86_64" : "arm64";
     return [
       ["tizen-dlog-analyzer", "macos", primary, binName],
       ["tizen-dlog-analyzer", "macos", fallback, binName],
+      // Layout shipped before the arch split — older plugin caches only
+      // have this flat path.
+      ["tizen-dlog-analyzer", "macos", binName],
     ];
   }
   const binOs = platform === "win32" ? "windows" : "linux";
   return [["tizen-dlog-analyzer", binOs, binName]];
-})();
+}
+
+const BINARY_SUBPATHS = binarySubpathCandidates();
 
 /** The preferred candidate — kept as an export for the tests and callers. */
 const BINARY_SUBPATH = BINARY_SUBPATHS[0];
@@ -3973,6 +3982,7 @@ module.exports = {
   recoverEncodingCrash,
   BINARY_SUBPATH,
   BINARY_SUBPATHS,
+  binarySubpathCandidates,
   awaitCollectorStartup,
   describeLockHolder,
   lockedCollectorError,

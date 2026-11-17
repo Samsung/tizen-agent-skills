@@ -22,7 +22,8 @@
   번들이 들어 있습니다(Intel Mac용 `x86_64/tizen-dlog-analyzer`, Apple Silicon용
   `arm64/tizen-dlog-analyzer`). `common/lib/core/dlog-analyzer.js`의 `resolveBinary()`가
   `process.arch`로 디렉터리를 고르고, 네이티브 빌드가 없으면 다른 macOS 빌드(Rosetta)로
-  대체합니다.
+  대체합니다. 아치 분리 이전의 평면 경로(`macos/tizen-dlog-analyzer`)는 마지막 후보로 남아
+  이전 플러그인 버전이 설치한 캐시도 계속 쓰입니다.
 
 ## [1.9.0] — 2026-11-16
 
