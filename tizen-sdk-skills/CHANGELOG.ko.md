@@ -13,6 +13,17 @@
 
 ## [Unreleased]
 
+### 변경
+
+- **번들 `tizen-dlog-analyzer` 바이너리를 0.3.0으로 업데이트하고 macOS 바이너리를 CPU
+  아키텍처별로 고릅니다.** PyInstaller 단일 파일 번들 네 개를 모두 리빌드했고 `NOTICE.md`에
+  새 크기와 SHA-256 해시를 갱신했습니다(Linux는 `--version`으로 확인:
+  `Tizen DLog Analyzer v0.3.0`). `common/tools/tizen-dlog-analyzer/macos/`에는 아키텍처별
+  번들이 들어 있습니다(Intel Mac용 `x86_64/tizen-dlog-analyzer`, Apple Silicon용
+  `arm64/tizen-dlog-analyzer`). `common/lib/core/dlog-analyzer.js`의 `resolveBinary()`가
+  `process.arch`로 디렉터리를 고르고, 네이티브 빌드가 없으면 다른 macOS 빌드(Rosetta)로
+  대체합니다.
+
 ## [1.9.0] — 2026-11-16
 
 ### 추가

@@ -761,19 +761,33 @@ function parseErrorCount(output) {
   return 0;
 }
 
-/** <tools dir>/tizen-dlog-analyzer/<os>/<binary> for this platform. */
-const BINARY_SUBPATH = (() => {
+/**
+ * <tools dir>/tizen-dlog-analyzer/<os>[/<arch>]/<binary> candidates for this
+ * platform, most preferred first. macOS ships separate Intel (x86_64) and
+ * Apple Silicon (arm64) one-file bundles, so the arch directory is picked from
+ * process.arch; the other macOS arch's binary stays as a last-resort candidate
+ * so an Apple Silicon Mac whose cache predates the arm64 build can still run
+ * the Intel one under Rosetta. Linux and Windows ship a single binary per
+ * platform, so they resolve to one candidate.
+ */
+const BINARY_SUBPATHS = (() => {
   const platform = process.platform;
-  const binOs =
-    platform === "darwin"
-      ? "macos"
-      : platform === "win32"
-        ? "windows"
-        : "linux";
   const binName =
     platform === "win32" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
-  return ["tizen-dlog-analyzer", binOs, binName];
+  if (platform === "darwin") {
+    const primary = process.arch === "arm64" ? "arm64" : "x86_64";
+    const fallback = primary === "arm64" ? "x86_64" : "arm64";
+    return [
+      ["tizen-dlog-analyzer", "macos", primary, binName],
+      ["tizen-dlog-analyzer", "macos", fallback, binName],
+    ];
+  }
+  const binOs = platform === "win32" ? "windows" : "linux";
+  return [["tizen-dlog-analyzer", binOs, binName]];
 })();
+
+/** The preferred candidate — kept as an export for the tests and callers. */
+const BINARY_SUBPATH = BINARY_SUBPATHS[0];
 
 /**
  * Where to look for the binary, in order:
@@ -802,8 +816,10 @@ function defaultBinarySearchBases() {
 function resolveBinary(searchBases = defaultBinarySearchBases()) {
   for (const base of searchBases) {
     if (!fs.existsSync(base)) continue;
-    const direct = path.join(base, ...BINARY_SUBPATH);
-    if (fs.existsSync(direct)) return direct;
+    const direct = BINARY_SUBPATHS.map((subpath) =>
+      path.join(base, ...subpath),
+    ).find((candidate) => fs.existsSync(candidate));
+    if (direct) return direct;
     let entries;
     try {
       entries = fs.readdirSync(base);
@@ -815,8 +831,10 @@ function resolveBinary(searchBases = defaultBinarySearchBases()) {
       .filter((name) => VERSION_DIR_RE.test(name))
       .sort((a, b) => compareVersions(b, a));
     for (const version of versions) {
-      const candidate = path.join(base, version, "tools", ...BINARY_SUBPATH);
-      if (fs.existsSync(candidate)) return candidate;
+      const candidate = BINARY_SUBPATHS.map((subpath) =>
+        path.join(base, version, "tools", ...subpath),
+      ).find((candidate) => fs.existsSync(candidate));
+      if (candidate) return candidate;
     }
   }
   return null;
@@ -3954,6 +3972,7 @@ module.exports = {
   runBinary,
   recoverEncodingCrash,
   BINARY_SUBPATH,
+  BINARY_SUBPATHS,
   awaitCollectorStartup,
   describeLockHolder,
   lockedCollectorError,
