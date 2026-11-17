@@ -78,6 +78,7 @@ const {
   resolveBinary,
   runBinary,
   recoverEncodingCrash,
+  archFallbackWarning,
   BINARY_SUBPATH,
   binarySubpathCandidates,
   awaitCollectorStartup,
@@ -2072,6 +2073,89 @@ console.log("\nTest 20b: binary subpath candidates (arch split + legacy)");
     "win32 → one candidate with the .exe name",
     binarySubpathCandidates("win32", "x64"),
     [["tizen-dlog-analyzer", "windows", "tizen-dlog-analyzer.exe"]],
+  );
+}
+
+// An Apple Silicon (or Intel) Mac whose cache misses the native arch bundle
+// runs the other arch's build under Rosetta; runBinary() carries a hint in
+// the envelope's warnings so the partial install is diagnosable.
+console.log("\nTest 20c: archFallbackWarning (Rosetta fallback hint)");
+{
+  check(
+    "darwin arm64 host, native arm64 path → no warning",
+    archFallbackWarning(
+      "/base/tizen-dlog-analyzer/macos/arm64/tizen-dlog-analyzer",
+      "darwin",
+      "arm64",
+    ),
+    null,
+  );
+  check(
+    "darwin x64 host, native x86_64 path → no warning",
+    archFallbackWarning(
+      "/base/tizen-dlog-analyzer/macos/x86_64/tizen-dlog-analyzer",
+      "darwin",
+      "x64",
+    ),
+    null,
+  );
+  const intelOnSilicon = archFallbackWarning(
+    "/base/tizen-dlog-analyzer/macos/x86_64/tizen-dlog-analyzer",
+    "darwin",
+    "arm64",
+  );
+  check(
+    "darwin arm64 host, x86_64 binary → warning naming the Rosetta run",
+    intelOnSilicon !== null && intelOnSilicon.includes("Rosetta"),
+    true,
+  );
+  check(
+    "… and names the missing native bundle",
+    intelOnSilicon !== null && intelOnSilicon.includes("native arm64 bundle"),
+    true,
+  );
+  const siliconOnIntel = archFallbackWarning(
+    "/base/tizen-dlog-analyzer/macos/arm64/tizen-dlog-analyzer",
+    "darwin",
+    "x64",
+  );
+  check(
+    "darwin x64 host, arm64 binary → warning naming the Rosetta run",
+    siliconOnIntel !== null && siliconOnIntel.includes("Rosetta"),
+    true,
+  );
+  check(
+    "… and names the missing native bundle",
+    siliconOnIntel !== null && siliconOnIntel.includes("native x86_64 bundle"),
+    true,
+  );
+  check(
+    "legacy flat path → no warning (arch split out of scope)",
+    archFallbackWarning(
+      "/base/tizen-dlog-analyzer/macos/tizen-dlog-analyzer",
+      "darwin",
+      "arm64",
+    ),
+    null,
+  );
+  check(
+    "linux path → no warning",
+    archFallbackWarning(
+      "/base/tizen-dlog-analyzer/linux/tizen-dlog-analyzer",
+      "linux",
+      "x64",
+    ),
+    null,
+  );
+  check(
+    "non-string path → no warning",
+    archFallbackWarning(undefined, "darwin", "arm64"),
+    null,
+  );
+  check(
+    "runBinary through the module: a non-string binary never warns",
+    archFallbackWarning(null),
+    null,
   );
 }
 

@@ -799,6 +799,36 @@ const BINARY_SUBPATHS = binarySubpathCandidates();
 const BINARY_SUBPATH = BINARY_SUBPATHS[0];
 
 /**
+ * A macOS install whose cache lacks the native arch bundle silently falls
+ * back to the other arch's build, which then runs under Rosetta. Surfacing
+ * that in the envelope's warnings makes a partial install diagnosable.
+ *
+ * @param {string} binaryPath - the path resolveBinary() picked
+ * @param {string} [platform] - host platform (defaults to the running host)
+ * @param {string} [arch] - host arch (defaults to the running host)
+ * @returns {string|null} warning text, or null for the native build
+ */
+function archFallbackWarning(
+  binaryPath,
+  platform = process.platform,
+  arch = process.arch,
+) {
+  if (typeof binaryPath !== "string" || platform !== "darwin") return null;
+  const native = arch === "arm64" ? "arm64" : "x86_64";
+  const fallback = binarySubpathCandidates(platform, arch).find(
+    (subpath) => subpath.length === 4 && subpath[2] !== native,
+  );
+  if (!fallback || !binaryPath.endsWith(path.join(...fallback))) return null;
+  const chosen =
+    fallback[2] === "x86_64" ? "x86_64 (Intel)" : "arm64 (Apple Silicon)";
+  return (
+    `tizen-dlog-analyzer resolved to the ${chosen} build, not the native ` +
+    `${native} bundle, so it runs under Rosetta. Re-run the plugin setup ` +
+    `(or re-sync the plugin cache) to install the native ${native} binary.`
+  );
+}
+
+/**
  * Where to look for the binary, in order:
  *   1. tools/ shipped with this very runner — next to this module (the
  *      tizen-cli bundle: esbuild copies common/tools to dist/tools/) and
@@ -2752,6 +2782,9 @@ function runBinary(command, binaryPath, args, opts = {}) {
     errorCategory = "binary_exec_failed",
     errorPrefix = "Command failed",
   } = opts;
+  // A macOS cache missing the native arch bundle runs the other arch's build
+  // under Rosetta — carry that hint in every envelope the binary produces.
+  const archWarning = archFallbackWarning(binaryPath);
   try {
     const output = execFileSync(binaryPath, args, {
       encoding: "utf-8",
@@ -2762,6 +2795,7 @@ function runBinary(command, binaryPath, args, opts = {}) {
       command,
       status: "success",
       result: { output: output.trim(), ...extraResult },
+      ...(archWarning ? { warnings: [archWarning] } : {}),
     };
   } catch (error) {
     const recovered = recoverEncodingCrash(error);
@@ -2774,7 +2808,7 @@ function runBinary(command, binaryPath, args, opts = {}) {
           output_truncated: true,
           ...extraResult,
         },
-        warnings: [recovered.warning],
+        warnings: [recovered.warning, ...(archWarning ? [archWarning] : [])],
       };
     }
     const stderr = error.stderr ? error.stderr.toString().trim() : "";
@@ -3983,6 +4017,7 @@ module.exports = {
   BINARY_SUBPATH,
   BINARY_SUBPATHS,
   binarySubpathCandidates,
+  archFallbackWarning,
   awaitCollectorStartup,
   describeLockHolder,
   lockedCollectorError,

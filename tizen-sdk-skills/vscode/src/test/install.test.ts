@@ -512,6 +512,48 @@ test("re-syncing mirrors the destination and clears stale files from an earlier 
   );
 });
 
+test("copying stages next to the destination and leaves no staging directory behind", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  write(
+    path.join(fx.assets, "tools", "tizen-dlog-analyzer", platform, binName),
+    "binary\n",
+  );
+  const toolsCache = path.join(fx.home, "cache", "tools");
+  const destPlatformDir = path.join(
+    toolsCache,
+    "tizen-dlog-analyzer",
+    platform,
+  );
+
+  await copyPlatformBinary(path.join(fx.assets, "tools"), toolsCache, "test");
+
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatformDir, binName), "utf-8"),
+    "binary\n",
+    "the binary must land in the final destination",
+  );
+  const leftovers = fs
+    .readdirSync(toolsCache, { withFileTypes: true })
+    .flatMap((e) =>
+      e.name === "tizen-dlog-analyzer"
+        ? fs
+            .readdirSync(path.join(toolsCache, e.name), {
+              withFileTypes: true,
+            })
+            .map((sub) => `${e.name}/${sub.name}`)
+        : [e.name],
+    )
+    .filter((name) => name.includes(".staging-"));
+  assert.deepStrictEqual(
+    leftovers,
+    [],
+    "no staging directory may survive a completed copy",
+  );
+});
+
 test("skill names come from readdir, so they are always single path segments", async () => {
   const fx = makeFixture();
   // readdir never yields "." or ".." — assert that so the invariant mirrorDir's

@@ -26,8 +26,11 @@ below use those release tags.
   back to the other macOS build (Rosetta) when the native one is absent. The flat
   pre-arch-split path (`macos/tizen-dlog-analyzer`) stays as a last candidate, so plugin
   caches installed by older plugin versions still resolve. The rebuilt macOS x86_64 bundle
-  is not bit-identical to the previous 0.2.9a0 build, so verify copies of any of the four
-  bundles against the hashes in `NOTICE.md`.
+  is not bit-identical to the previous 0.2.9a0 build, so verify copies of any
+  of the four bundles against the hashes in `NOTICE.md`. When the native arch
+  bundle is missing, the other macOS build is picked (Rosetta) and every
+  envelope the binary produces carries a warning naming the fallback so a
+  partial install is visible.
 
 ## [1.9.0] — 2026-11-16
 

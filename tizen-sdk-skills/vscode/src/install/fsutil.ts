@@ -361,42 +361,63 @@ export async function copyPlatformBinary(
       continue;
     }
 
-    // Mirror the platform directory: remove the destination first so stale
-    // files from an earlier layout cannot survive a re-sync. A cache written
-    // before the macOS arch split holds a flat macos/tizen-dlog-analyzer; an
-    // additive copy would leave it beside the new arch bundles and the
-    // recursive validation would report a file-count mismatch that no
-    // re-sync can clear. The destination lives entirely under the
-    // extension's version cache, so removing it touches nothing the user
-    // owns — the same trust model as mirrorDir().
-    await fsp.rm(destPlatformDir, { recursive: true, force: true });
-    await fsp.mkdir(destPlatformDir, { recursive: true });
+    // Mirror the platform directory so stale files from an earlier layout
+    // cannot survive a re-sync. A cache written before the macOS arch split
+    // holds a flat macos/tizen-dlog-analyzer; an additive copy would leave it
+    // beside the new arch bundles and the recursive validation would report a
+    // file-count mismatch that no re-sync can clear. The destination lives
+    // entirely under the extension's version cache, so removing it touches
+    // nothing the user owns — the same trust model as mirrorDir().
+    //
+    // Copy into a staging directory next to the destination, then swap it in
+    // with one rename: a failure mid-copy leaves the previous cache intact
+    // instead of a half-written platform directory. Staging under the same
+    // parent keeps the rename on one filesystem.
+    const stagingDir = path.join(
+      path.dirname(destPlatformDir),
+      `${toolName}.${platform}.staging-${process.pid}`,
+    );
+    await fsp.rm(stagingDir, { recursive: true, force: true });
+    await fsp.mkdir(stagingDir, { recursive: true });
 
     // Copy the platform directory recursively, preserving the relative
     // structure: macOS nests its per-architecture bundles in arm64/ and
     // x86_64/ subdirectories, and a flat single-binary platform (linux,
     // windows) is the degenerate one-level case of the same walk.
     const files = await listFilesRecursive(srcPlatformDir);
-    for (const rel of files) {
-      const srcFile = path.join(srcPlatformDir, rel);
-      const destFile = path.join(destPlatformDir, rel);
-      await fsp.mkdir(path.dirname(destFile), { recursive: true });
-      await fsp.copyFile(srcFile, destFile);
 
-      // Set executable permission on non-Windows platforms.
-      // Use SCRIPT_MODE (0o700) — owner-only — so group/other never gain
-      // execute access (SONARTS S2612).  This matches normalizeExec().
-      if (process.platform !== "win32") {
-        try {
-          await fsp.chmod(destFile, SCRIPT_MODE);
-        } catch (e: unknown) {
-          const message = e instanceof Error ? e.message : String(e);
-          writeStatus(
-            `Warning: Could not set executable permission on ${destFile}: ${message}`,
-            "Warning",
-          );
+    try {
+      for (const rel of files) {
+        const srcFile = path.join(srcPlatformDir, rel);
+        const stagingFile = path.join(stagingDir, rel);
+        await fsp.mkdir(path.dirname(stagingFile), { recursive: true });
+        await fsp.copyFile(srcFile, stagingFile);
+
+        // Set executable permission on non-Windows platforms.
+        // Use SCRIPT_MODE (0o700) — owner-only — so group/other never gain
+        // execute access (SONARTS S2612).  This matches normalizeExec().
+        if (process.platform !== "win32") {
+          try {
+            await fsp.chmod(stagingFile, SCRIPT_MODE);
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : String(e);
+            writeStatus(
+              `Warning: Could not set executable permission on ${stagingFile}: ${message}`,
+              "Warning",
+            );
+          }
         }
       }
+
+      await fsp.rm(destPlatformDir, { recursive: true, force: true });
+      await fsp.rename(stagingDir, destPlatformDir);
+    } catch (e: unknown) {
+      // Never leave the staging directory behind: the next run would fail
+      // validation against it or trip over it on a re-sync.
+      await fsp
+        .rm(stagingDir, { recursive: true, force: true })
+        .catch(() => undefined);
+      throw e;
     }
 
     writeStatus(

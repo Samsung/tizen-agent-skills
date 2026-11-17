@@ -23,7 +23,9 @@
   `arm64/tizen-dlog-analyzer`). `common/lib/core/dlog-analyzer.js`의 `resolveBinary()`가
   `process.arch`로 디렉터리를 고르고, 네이티브 빌드가 없으면 다른 macOS 빌드(Rosetta)로
   대체합니다. 아치 분리 이전의 평면 경로(`macos/tizen-dlog-analyzer`)는 마지막 후보로 남아
-  이전 플러그인 버전이 설치한 캐시도 계속 쓰입니다. 리빌드된 macOS x86_64 번들은 이전 0.2.9a0
+  이전 플러그인 버전이 설치한 캐시도 계속 쓰입니다. 네이티브 아치 번들이 없으면
+  다른 macOS 빌드(Rosetta)를 고르며, 바이너리가 만드는 모든 envelope에 폴백을
+  알리는 경고가 붙어 부분 설치를 알 수 있습니다. 리빌드된 macOS x86_64 번들은 이전 0.2.9a0
   빌드와 비트 단위로 같지 않으므로, 네 번들 중 하나라도 받거나 미러링한 사본은 `NOTICE.md`의
   해시로 검증하세요.
 
