@@ -361,7 +361,15 @@ export async function copyPlatformBinary(
       continue;
     }
 
-    // Create destination directory
+    // Mirror the platform directory: remove the destination first so stale
+    // files from an earlier layout cannot survive a re-sync. A cache written
+    // before the macOS arch split holds a flat macos/tizen-dlog-analyzer; an
+    // additive copy would leave it beside the new arch bundles and the
+    // recursive validation would report a file-count mismatch that no
+    // re-sync can clear. The destination lives entirely under the
+    // extension's version cache, so removing it touches nothing the user
+    // owns — the same trust model as mirrorDir().
+    await fsp.rm(destPlatformDir, { recursive: true, force: true });
     await fsp.mkdir(destPlatformDir, { recursive: true });
 
     // Copy the platform directory recursively, preserving the relative

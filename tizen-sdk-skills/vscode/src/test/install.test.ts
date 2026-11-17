@@ -455,6 +455,63 @@ test("the platform directory is copied recursively, keeping arch subdirectories"
   );
 });
 
+test("re-syncing mirrors the destination and clears stale files from an earlier layout", async () => {
+  const fx = makeFixture();
+  const platform = getCurrentPlatform();
+  const binName =
+    platform === "windows" ? "tizen-dlog-analyzer.exe" : "tizen-dlog-analyzer";
+  // The asset tree has only the nested arch layout.
+  for (const arch of ["arm64", "x86_64"]) {
+    write(
+      path.join(
+        fx.assets,
+        "tools",
+        "tizen-dlog-analyzer",
+        platform,
+        arch,
+        binName,
+      ),
+      `${arch}\n`,
+    );
+  }
+  // The cache was written by an earlier extension with the flat layout: a
+  // flat binary plus a subdirectory that no longer exists in the assets.
+  const destPlatform = path.join(
+    fx.home,
+    "cache",
+    "tools",
+    "tizen-dlog-analyzer",
+    platform,
+  );
+  write(path.join(destPlatform, binName), "stale flat binary\n");
+  write(path.join(destPlatform, "removed-arch", binName), "stale arch\n");
+
+  await copyPlatformBinary(
+    path.join(fx.assets, "tools"),
+    path.join(fx.home, "cache", "tools"),
+    "test",
+  );
+
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatform, "arm64", binName), "utf-8"),
+    "arm64\n",
+    "the new arch bundles must be copied",
+  );
+  assert.strictEqual(
+    fs.readFileSync(path.join(destPlatform, "x86_64", binName), "utf-8"),
+    "x86_64\n",
+    "the new arch bundles must be copied",
+  );
+  assert.ok(
+    !fs.existsSync(path.join(destPlatform, binName)),
+    "the stale flat binary must not survive the re-sync",
+  );
+  assert.ok(
+    !fs.existsSync(path.join(destPlatform, "removed-arch")),
+    "a stale subdirectory must not survive the re-sync",
+  );
+});
+
 test("skill names come from readdir, so they are always single path segments", async () => {
   const fx = makeFixture();
   // readdir never yields "." or ".." — assert that so the invariant mirrorDir's

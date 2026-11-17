@@ -9,11 +9,13 @@ The extension ships the skill and agent asset tree, so entries below cover both 
 ### Fixed
 
 - The extension's installers (Claude Code, Cline, Codex CLI) ship the macOS
-  `tizen-dlog-analyzer` bundles again: `copyPlatformBinary` now copies the platform
-  `tools/` directory recursively, so the per-architecture `arm64/` / `x86_64/`
-  subdirectories reach the cache instead of an empty `macos/` directory. The install
-  validation compares the platform directory recursively too — comparing only immediate
-  files reported success for an empty directory.
+  `tizen-dlog-analyzer` bundles again: `copyPlatformBinary` now mirrors the platform
+  `tools/` directory — it removes the destination's stale entries first, then copies
+  recursively — so the per-architecture `arm64/` / `x86_64/` subdirectories reach the
+  cache instead of an empty `macos/` directory, and a flat binary left by an earlier
+  layout cannot survive a re-sync and fail validation forever. The install validation
+  compares the platform directory recursively too — comparing only immediate files
+  reported success for an empty directory.
 
 ## [1.9.0] — 2026-11-16
 
