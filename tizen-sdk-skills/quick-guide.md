@@ -101,6 +101,7 @@ flowchart LR
    - OS: Windows, Linux or macOS. The emulator also works under WSL.
    - pnpm, only if you build the tizen-sdk CLI yourself
 2. Clone the repository — or skip the clone with the download-and-install script (below).
+2. Clone the repository — or skip the clone with the download-and-install script (below).
 3. Run the setup script for your host.
 4. Restart the host and start with **"Install the Tizen SDK"**.
 
@@ -143,17 +144,17 @@ Add `-Harness claude` for a single host; `--ref`/`-Ref` picks a branch or a rele
 instead of `main`. See
 [README.md](README.md#setup-without-cloning-download-and-install) for all options.
 
-**Standalone `tizen-sdk` CLI without a build?** `setup-tizen-cli` installs it from the
+**Standalone `tizen-sdk` CLI without a build?** `setup-tizen-sdk` installs it from the
 release zip — no clone, no pnpm:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.sh)
 ```
 
 ```bat
 :: Windows (cmd or PowerShell)
-curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
-powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+curl -fsSL -o setup-tizen-sdk.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-sdk.ps1
 ```
 
 It installs into `~/.tizen-sdk-cli`, creates a `tizen-sdk` shim, verifies with

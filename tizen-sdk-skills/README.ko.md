@@ -173,18 +173,18 @@ tizen-sdk --doctor
 - 빌드 전에는 런처가 빌드 명령이 담긴 `PLUGIN_NOT_BUILT` 엔벨로프를 출력합니다.
 - 소스, 매니페스트, 호스트 연동 관련 상세 내용은 `tizen-cli/` 폴더에 있습니다.
 
-**빌드 없이 설치** `common/setup/setup-tizen-cli.sh` / `.ps1`은 릴리스 zip에서
+**빌드 없이 설치** `common/setup/setup-tizen-sdk.sh` / `.ps1`은 릴리스 zip에서
 바로 설치합니다 — 클론도, pnpm 빌드도 필요 없습니다:
 
 ```bash
 # macOS/Linux
-bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.sh)
 ```
 
 ```bat
 :: Windows (cmd 또는 PowerShell)
-curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
-powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+curl -fsSL -o setup-tizen-sdk.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-sdk.ps1
 ```
 
 스크립트는 최신 릴리스의 `tizen-sdk-v<version>.zip` 에셋을 찾아(`-Release <tag>`/

@@ -16,7 +16,7 @@ below use those release tags.
 
 ### Added
 
-- **`tizen-sdk` CLI install from a release zip (`common/setup/setup-tizen-cli.sh`
+- **`tizen-sdk` CLI install from a release zip (`common/setup/setup-tizen-sdk.sh`
   / `.ps1` / `.bat`)**. Installs the built tizen-cli plugin without cloning or
   building: it resolves the `tizen-sdk-v<version>.zip` asset of a
   tizen-agent-skills release (latest by default, `--release <tag>` to pin one;
