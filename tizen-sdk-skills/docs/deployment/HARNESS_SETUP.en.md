@@ -29,6 +29,28 @@ Prerequisites: `node` on PATH (the CLI runners need it; the setup uses it to rea
 `plugin.json` and to convert agent definitions). On Windows, `bash` (Git Bash) on
 PATH is required for the hooks of every harness.
 
+## Setup without cloning
+
+`setup-remote` installs with no local checkout: it downloads the tizen-agent-skills
+source zip from GitHub, runs the setup above from the extracted copy, and deletes the
+download when the setup succeeds (a failed setup or `-Keep`/`--keep` retains it).
+
+```bash
+# Linux / macOS — run straight from the download
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+```
+
+```bat
+:: Windows (cmd or PowerShell; curl.exe ships with Windows 10+)
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+Options: `-Harness <name>` / `--harness <name>` installs one host instead of all four,
+`-Ref <branch|tag>` / `--ref` picks the source (`main` by default), `-Keep` / `--keep`
+retains the download, and `-SkipValidation` / `-NoRestart` (`--skip-validation`,
+`--no-restart` in bash) forward to the setup.
+
 ## What gets installed where
 
 All harnesses share the cache convention

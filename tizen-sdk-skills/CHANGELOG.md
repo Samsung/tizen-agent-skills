@@ -16,6 +16,17 @@ below use those release tags.
 
 ### Added
 
+- **No-clone setup (`common/setup/setup-remote.sh` / `.ps1` / `.bat`)**. Installs
+  the plugin without cloning the repository: it downloads the
+  tizen-agent-skills source zip from GitHub (`--ref` picks a branch or a
+  release tag, default `main`), runs the regular setup scripts from the
+  extracted copy, and deletes the download (zip and extracted tree) when the
+  setup succeeds — a failed setup or `--keep` retains it for debugging.
+  `--harness <name>` installs one host instead of all four;
+  `--skip-validation` and `--no-restart` are forwarded. Self-contained, so it
+  can run straight from the download
+  (`bash <(curl -fsSL <raw-url>)`); on Windows use the `.bat`/`.ps1` twin.
+
 - **`--full` flag on the dlog-analyzer runner** (`dlog-analyzer-cli.js` and the
   `tizen-cli` command spec). The analyzer's token budget caps text output to
   protect an agent's context window; `--full` is the explicit opt-out when a

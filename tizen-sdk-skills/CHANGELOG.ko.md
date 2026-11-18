@@ -15,6 +15,16 @@
 
 ### 추가
 
+- **클론 없이 설치 (`common/setup/setup-remote.sh` / `.ps1` / `.bat`)**. 저장소를
+  클론하지 않고 플러그인을 설치합니다. GitHub에서 tizen-agent-skills 소스 zip을
+  내려받고(`--ref`로 브랜치나 릴리스 태그 지정, 기본값 `main`), 압축을 푼 복사본에서
+  기존 설치 스크립트를 실행한 뒤, 설치가 성공하면 내려받은 소스(zip과 압축 푼
+  디렉터리)를 삭제합니다. 설치가 실패하거나 `--keep`을 주면 디버깅을 위해 남겨
+  둡니다. `--harness <name>`으로 네 호스트 대신 하나만 설치할 수 있고,
+  `--skip-validation`과 `--no-restart`는 그대로 전달됩니다. 자기 완결적이라
+  다운로드한 스크립트를 바로 실행할 수 있고(`bash <(curl -fsSL <raw-url>)`),
+  Windows에서는 `.bat`/`.ps1` 버전을 씁니다.
+
 - **dlog-analyzer 러너에 `--full` 플래그** (`dlog-analyzer-cli.js`와
   `tizen-cli` 명령 사양). 분석기의 토큰 예산은 에이전트의 컨텍스트 창을 보호하려고
   텍스트 출력을 잘라냅니다. `--full`은 완전한 로그나 보고서를 받아야 하는 클라이언트를

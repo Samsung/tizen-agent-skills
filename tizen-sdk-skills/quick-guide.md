@@ -100,7 +100,7 @@ flowchart LR
    - Node.js 22+ (on `PATH`) and Git
    - OS: Windows, Linux or macOS. The emulator also works under WSL.
    - pnpm, only if you build the tizen-sdk CLI yourself
-2. Clone the repository.
+2. Clone the repository — or skip the clone with the download-and-install script (below).
 3. Run the setup script for your host.
 4. Restart the host and start with **"Install the Tizen SDK"**.
 
@@ -122,6 +122,27 @@ cd tizen-agent-skills/tizen-sdk-skills
 >
 > **Note**: If the SDK is somewhere other than the default path (`~/tizen-sdk`), register it with "Set the Tizen SDK path to …" (`sdk-init`).
 
+**No clone?** `setup-remote` downloads the source zip from GitHub, installs from it and
+deletes the download when done — nothing to clone:
+
+```bash
+# All hosts (macOS/Linux) — run straight from the download
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+# One host
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh) --harness claude
+```
+
+On Windows (cmd or PowerShell), download and run:
+
+```bat
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+Add `-Harness claude` for a single host; `--ref`/`-Ref` picks a branch or a release tag
+instead of `main`. See
+[README.md](README.md#setup-without-cloning-download-and-install) for all options.
+
 ### 3.1 Checking results
 
 **Natural-language request examples**
@@ -141,7 +162,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 **New version notices**
 
 - The hook installed by setup checks GitHub for a new release when a session starts (at most once a day) and shows a one-line notice.
-- To update: run `git pull` in the clone you installed from, re-run the same setup script and restart the host.
+- To update: run `git pull` in the clone you installed from, re-run the same setup script and restart the host. If you installed with setup-remote (no clone), re-run it with the new `--ref` tag instead of `git pull`.
 - The VS Code extension has no session-start check, so watch the repository's Releases and install the new `.vsix` over the existing one.
 
 > See CHANGELOG.md for the changes in each release.
