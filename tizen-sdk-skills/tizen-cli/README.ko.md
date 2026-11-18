@@ -9,7 +9,7 @@
 tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js)
 ```
 
-## 명령어 (flat, 35개)
+## 명령어 (flat, 36개)
 
 | 명령어 | 용도 |
 |---|---|
@@ -23,6 +23,7 @@ tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js
 | `sdk-repo-info` | Tizen SDK 패키지 저장소 정보 조회 (CDN 미러, 내부 미러, 현재 저장소 URL) |
 | `download-emulator-package` | 패키지 저장소에서 Tizen 에뮬레이터 패키지 다운로드 및 설치 |
 | `platform-install` | Tizen 플랫폼 패키지(TIZEN-{version}) 다운로드 및 설치 |
+| `platform-list` | 설치된 SDK의 Tizen 플랫폼 버전 목록 (installed · incomplete · not_installed, 프로필과 에뮬레이터 이미지 포함) |
 | `download-mobile-platform` | Tizen 모바일 플랫폼 패키지(MOBILE-{version}) 다운로드 및 설치, IOT-Headed 옵션 |
 | `install-rootstrap` | ZIP 파일의 커스텀 루트스트랩을 Tizen SDK에 설치 |
 | `dotnet-setup` | .NET SDK 확인 + Tizen .NET workload 설치 |
@@ -69,6 +70,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `sdk-repo-info` | — | — |
 | `download-emulator-package` | — | `--platform-version`, `--force` |
 | `platform-install` | `--platform-version` | `--force` |
+| `platform-list` | — | — |
 | `download-mobile-platform` | — | `--platform-version`, `--include-iot-headed`, `--iot-headed-version`, `--force` |
 | `install-rootstrap` | `--zip-path` | `--force` |
 | `dotnet-setup` | — | `--force`, `--workload-version` |

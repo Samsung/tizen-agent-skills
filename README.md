@@ -63,7 +63,7 @@ To hear about new versions, choose **Watch → Custom → Releases** on this rep
 | Install, debug & test (6) | `tizen-install-app`, `tizen-gdb-debug` (Native), `tizen-dotnet-debug` (.NET / netcoredbg), `tizen-webapp-debug` (Web / RWI / CDP), `tizen-playwright-test`, `tizen-dlog-analyzer` |
 | Certificates (1) | `tizen-certificate-manager` (local and Samsung online-CA profiles) |
 
-Details, trigger phrases and the 35 `tizen-sdk` CLI commands are in the plugin's
+Details, trigger phrases and the 36 `tizen-sdk` CLI commands are in the plugin's
 [README](tizen-sdk-skills/README.md) and [Skills Reference](tizen-sdk-skills/docs/SKILLS_REFERENCE.en.md).
 
 ## Featured plugin: tizen-action-skills

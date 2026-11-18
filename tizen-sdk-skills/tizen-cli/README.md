@@ -9,7 +9,7 @@ exposing the shared workflows as standard CLI commands.
 tizen-sdk <command> [--options...]             # standalone launcher (bin/tizen-sdk.js)
 ```
 
-## Commands (flat, 35)
+## Commands (flat, 36)
 
 | Command            | Purpose                                                                        |
 | ------------------ | ------------------------------------------------------------------------------ |
@@ -23,6 +23,7 @@ tizen-sdk <command> [--options...]             # standalone launcher (bin/tizen-
 | `sdk-repo-info`    | Show Tizen SDK package repository information (CDN mirrors, internal mirrors, current URL) |
 | `download-emulator-package` | Download and install the Tizen emulator package from the package repository |
 | `platform-install` | Download and install the Tizen platform package (TIZEN-{version})             |
+| `platform-list`    | List the Tizen platform versions in the installed SDK: installed, incomplete or not_installed, with profiles and emulator images |
 | `download-mobile-platform` | Download and install the Tizen Mobile platform package (MOBILE-{version}), optionally with IOT-Headed |
 | `install-rootstrap` | Install a custom rootstrap ZIP into the Tizen SDK                              |
 | `dotnet-setup`     | Verify .NET SDK + install the Tizen .NET workload                              |
@@ -69,6 +70,7 @@ the Commander program at build time (`--schema`). Below is the full reference.
 | `sdk-repo-info`    | —                                                                                | —                                                                                                                                                                                  |
 | `download-emulator-package` | —                                                                        | `--platform-version`, `--force`                                                                                                                                                    |
 | `platform-install` | `--platform-version`                                                             | `--force`                                                                                                                                                                          |
+| `platform-list`    | —                                                                                | —                                                                                                                                                                                  |
 | `download-mobile-platform` | —                                                                        | `--platform-version`, `--include-iot-headed`, `--iot-headed-version`, `--force`                                                                                                    |
 | `install-rootstrap` | `--zip-path`                                                                   | `--force`                                                                                     |
 | `dotnet-setup`     | —                                                                                | `--force`, `--workload-version`                                                                                                                                                    |

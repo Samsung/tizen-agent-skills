@@ -19,7 +19,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | [rds/RDS_FAST_DEPLOY_PLAN.md](rds/RDS_FAST_DEPLOY_PLAN.md) | **RDS / Fast Deploy 통합 계획** — `install-app`이 변경 파일만 push하는 delta 배포의 설계, 상태 파일 형식, vendoring 결정, `deploy_type`/`TIZEN_RDS_ENABLED`/`--reset-rds`, Tizen 11 에뮬레이터 실기기 검증 결과 |
 | [envelope/](envelope/) | **Standard JSON Envelope** — 응답 표준화 계층: [사용 가이드](envelope/ENVELOPE_USAGE_GUIDE.md), [호출 흐름](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit 해설](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [구현 요약](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK 설치 흐름** — [전체 흐름](sdk-install/INSTALLATION_FLOW.md), [에이전트-installSdk 통합](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [설치 검증](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [사용자 지정 저장소 설치](sdk-install/CUSTOM_REPOSITORY_INSTALL.md), [.NET 개발 환경 설정 E2E](sdk-install/DOTNET_SETUP_E2E.md) |
-| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 30개 스킬이 34개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
+| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 30개 스킬이 36개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
 
 구현 코드는 [common/lib/](../common/lib/README.md)에 있습니다.
 
@@ -776,7 +776,7 @@ tizen-sdk-skills/
 │   └── assets/
 │       └── samsung-tv-ca/              # Samsung TV CA 인증서
 │
-├── tizen-cli/                          # tizen-cli 패키지 (34개 커맨드; CLI/MCP 진입점)
+├── tizen-cli/                          # tizen-cli 패키지 (36개 커맨드; CLI/MCP 진입점)
 │   ├── src/
 │   │   ├── index.ts / commands.ts / doctor.ts / envelope-adapter.ts
 │   │   ├── command-specs/              # 커맨드 스펙 (sdk, check, project, device, debug, test, certificate)

@@ -19,7 +19,7 @@ This document (README) is the **overall overview and user manual** for the plugi
 | [rds/RDS_FAST_DEPLOY_PLAN.en.md](rds/RDS_FAST_DEPLOY_PLAN.en.md) | **RDS / Fast Deploy integration plan** — design of the delta deploy behind `install-app` (only changed files are pushed), state file formats, vendoring decisions, `deploy_type` / `TIZEN_RDS_ENABLED` / `--reset-rds`, real-device verification on a Tizen 11 emulator |
 | [envelope/](envelope/) | **Standard JSON Envelope** — response standardization layer: [Usage Guide](envelope/ENVELOPE_USAGE_GUIDE.md), [Call Flow](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit Explained](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [Implementation Summary](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK Installation Flow** — [Full Flow](sdk-install/INSTALLATION_FLOW.md), [Agent-installSdk Integration](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [Installation Verification](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [Custom Repository Install](sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md), [.NET Environment Setup E2E](sdk-install/DOTNET_SETUP_E2E.en.md) |
-| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 30 skills map onto the 34 tizen-cli commands, and why the counts differ |
+| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 30 skills map onto the 36 tizen-cli commands, and why the counts differ |
 
 Implementation code is in [common/lib/](../common/lib/README.md).
 
@@ -786,7 +786,7 @@ tizen-sdk-skills/
 │   └── assets/
 │       └── samsung-tv-ca/              # Samsung TV CA certificates
 │
-├── tizen-cli/                          # tizen-cli package (34 commands; CLI/MCP entry point)
+├── tizen-cli/                          # tizen-cli package (36 commands; CLI/MCP entry point)
 │   ├── src/
 │   │   ├── index.ts / commands.ts / doctor.ts / envelope-adapter.ts
 │   │   ├── command-specs/              # Command specs (sdk, check, project, device, debug, test, certificate)
