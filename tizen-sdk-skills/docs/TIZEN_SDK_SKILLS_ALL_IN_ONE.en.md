@@ -2,7 +2,7 @@
 
 English | [한국어](TIZEN_SDK_SKILLS_ALL_IN_ONE.md)
 
-> This document merges the three documents below into a single file. (Generated: 2026-09-10)
+> This document merges the three documents below into a single file. (Generated: 2026-11-18)
 >
 > 1. `docs/SKILLS_REFERENCE.en.md` — Skills Reference
 > 2. `docs/SDK_COMMANDS_ARCHITECTURE.en.md` — Command Layer Architecture
@@ -32,7 +32,7 @@ English | [한국어](TIZEN_SDK_SKILLS_ALL_IN_ONE.md)
 
 ## Overview
 
-`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **29 automation skills** that can be triggered via natural language.
+`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **30 automation skills** that can be triggered via natural language.
 
 All skills return responses in **Standard JSON Envelope** format, ensuring consistent error handling and machine-readable output.
 
@@ -508,7 +508,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 
 ### 9. tizen-device-manager
 
-**Description:** Find connected Tizen devices via SDB (`start`) or shut down all running emulator VMs (`stop`, via em-cli kill). **This skill does not create or launch emulators** — creation is handled by `tizen-create-emulator` and booting by `tizen-launch-emulator`.
+**Description:** Find connected Tizen devices via SDB (`start`) or shut down all running emulator VMs (`stop`, via em-cli kill). **This skill does not create or launch emulators** — creation is handled by `tizen-create-emulator` and booting by `tizen-launch-emulator`. **It is not a diagnostic skill either:** a problem report (crash, error, freeze, high CPU, video not playing, "investigate") belongs to `tizen-dlog-analyzer` even when it mentions the emulator — the routing hook redirects such prompts.
 
 **Use Case:** Check connected devices/emulators, or shut down running emulators.
 
@@ -859,6 +859,49 @@ node <plugin>/lib/cli/tv-sdk-install-cli.js [--force]
 - URL: `https://download.tizen.org/sdk/extensions/tv_extensions/`
 - Target package: `TV-SAMSUNG-Public`
 - Install location: existing Tizen SDK path (same `~/tizen-sdk` folder)
+
+**Dependencies:** `tizen-sdk-install` (Tizen SDK must be installed first)
+
+---
+
+### 18a. tizen-tv-sdk-install-from-zip
+
+**Description:** Install the Tizen TV SDK extension (TV-SAMSUNG-Public) offline from a local ZIP file. All packages are already bundled in the ZIP — no download required. Requires the Tizen SDK to be installed first.
+
+**Use Case:** Install the TV SDK extension in offline environments or from an internal mirror.
+
+**Parameters:**
+
+| Parameter | Type    | Default | Description                                    |
+| --------- | ------- | ------- | --------------------------------------------- |
+| `zipPath` | string  | (required) | Path to the ZIP file containing TV SDK packages |
+| `tvVersion` | string | from the ZIP | TV platform version the ZIP is for (`--tv-version X.Y`); required when the inner ZIP names carry none |
+| `force`   | boolean | `false` | Force reinstall of that TV version even if already installed |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--tv-version <X.Y>] [--force]
+```
+
+**Pre-check Flow:**
+
+```
+1. Check whether the Tizen SDK is installed (sdk.info)
+   ├─ Installed → proceed with TV SDK install
+   └─ Not installed → interactive prompt: "The Tizen SDK must be installed first. Install it now?"
+       ├─ Approved → run the tizen-sdk-install skill → retry TV SDK install after completion
+       └─ Declined → abort
+2. This ZIP's TV version already installed? (`.platform-installed` records this ZIP, or `--tv-version`) → return success if so; other TV versions install side by side
+3. Return TV SDK installer command (suggested_fix) — run in Phase 2 (background)
+```
+
+**Installation Method:**
+
+- Extract packages from the ZIP file (no download required, offline install)
+- Unzip inner ZIP files into the SDK tools directory
+- Read the TV version from the inner ZIP names (or `--tv-version`); stop before extracting when the two disagree or neither gives one
+- Record the TV version in `.platform-installed` (`Profile: tv-samsung`, `Source: <zip>`) and write the `.tv-sdk-installed` marker
 
 **Dependencies:** `tizen-sdk-install` (Tizen SDK must be installed first)
 
@@ -1318,17 +1361,22 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 ### 28. tizen-dlog-analyzer
 
-**Description:** Continuously collect and analyze Tizen device dlog to automatically detect crashes/exceptions. AI-powered root cause analysis and solution suggestions.
+**Description:** Continuously collect and analyze Tizen device dlog to automatically detect crashes/exceptions. AI-powered root cause analysis and solution suggestions. Also supports app-specific log collection and runtime error (E/F priority) analysis.
 
-**Use Case:** Monitor a running app for crashes/exceptions, analyze dlog for root cause detection. Requires a running emulator or connected device.
+**Use Case:** Monitor a running app for crashes/exceptions, analyze dlog for root cause detection, collect app-specific logs filtered by PID, or perform runtime error analysis. Requires a running emulator or connected device.
 
 **Parameters:**
 
 | Parameter    | Type   | Default      | Description                                                              |
 | ------------ | ------ | ------------ | ------------------------------------------------------------------------ |
-| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze` |
-| `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended) |
-| `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze |
+| `action`     | string | _(required)_ | One of `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear`, `crash-report` |
+| `subcommand` | string | _(start only)_ | One of `dlog-collect`, `exception-detect`, `start-monitoring` (recommended). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect` (background) / `stop` / `analyze`. timeline: `show`/`report`/`analyze`/`export` |
+| `app-id`     | string | _(app actions)_ | Tizen app ID (e.g., org.example.myapp). Required for app-launch, app-terminate, dlog-collect, error-analyze, app-log; optional for investigate (app-scoped) |
+| `symptoms`   | string | `null`       | For investigate: the user's own symptom words (e.g. "300% cpu, video not playing") — selects the probe bundles |
+| `pattern`    | string | _(search)_   | For search (required there): text to look for (several allowed, any one matches; `--regex` for a Python regular expression). Narrow / shape with `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json` |
+| `process`    | string | `null`       | For crash-report: only dumps of this app id or process name (e.g. `deviced` — a system daemon needs no app id); `app-id` is an alias. Default: every process |
+| `dump-dir`   | string | `null`       | For crash-report: one more device directory to search besides `/opt/usr/share/crash/dump` and `/run/crash/dump` (repeatable) |
+| `limit`      | number | `3`          | For crash-report: how many of the newest matching dumps to open (`0` = all) |
 | `format`     | string | `null`       | For error-analyze only: `summary` (summary lines only), `details` (detail entries only), or omit for both |
 | `serial`     | string | `null`       | Optional sdb device serial (auto-select if omitted)                      |
 
@@ -1344,9 +1392,15 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js app-terminate <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js dlog-collect <app-id>
 node <plugin>/lib/cli/dlog-analyzer-cli.js stop-collect
 node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
+node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id] --symptoms "<the user's words>"
+node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
+node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
+node <plugin>/lib/cli/dlog-analyzer-cli.js app-log <app-id> [--since <s>] [--priority <p>] [--max-lines <n>]   # escalation only
+node <plugin>/lib/cli/dlog-analyzer-cli.js search <pattern> [--regex] [--category <app-id>] [--context <n>] [--priority <p>] [--since <s>] [--count] [--format json]   # find a string across every collected log
+node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --app-id <id>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]   # crash-worker dumps, system daemons included
 ```
 
-**Workflow:**
+**Workflow (background monitoring):**
 
 1. **Start monitoring** (`start start-monitoring`) — launch background dlog collection/analysis before launching the app
 2. **Launch the app** — with monitoring running, launch the app to capture startup logs
@@ -1355,6 +1409,29 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 5. **Apply fix** → **rebuild** → **reinstall/relaunch** → **re-check** (`check`) — repeat until resolved
 6. **Stop monitoring** (`stop`) — clean up the background process
 
+**Workflow (app-specific log analysis — when user provides an app ID):**
+
+1. **Launch the app** (`app-launch <app-id>`) — launch a specific app and get its PID (short delay expected)
+2. **Start background collection** (`dlog-collect <app-id>`) — start background log collection filtered by app PID, saved to `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the SDK data path comes from `~/.tizen.sdk.path.config` → `TIZEN_SDK_DATA_PATH` in `sdk.info`, or the `<sdk>-data` sibling)
+3. **Ask user to browse — and end the turn** — tell the user to browse the app and reproduce the issue; give two options: "done — error/crash occurred" or "nothing happened". No `sleep`, no polling, no `stop-collect` in the same turn (the guard hook denies timer waits around the runner).
+4. **Stop collection and analyze, errors first** — when user reports back: `stop-collect` to stop, then `error-analyze <app-id> summary` to analyze E/F priority entries (deduplicated by tag+message with occurrence count). Widen only if the symptom is still unexplained: `error-analyze <app-id> details` → filtered `app-log <app-id> --priority W --since 10m --max-lines 300`. Always use the analyzers — do not read the log file directly, and never open with `app-log`.
+5. **Terminate the app** (`app-terminate <app-id>`) — clean up
+
+**Workflow (symptom investigation — crash, freeze, high CPU, memory, video not playing):**
+
+A problem report belongs here even when it mentions the emulator or device (`tizen-device-manager` only lists devices / stops emulators — the routing hook redirects such prompts).
+
+1. **Preliminary pass** (`investigate --symptoms "<the user's words>" [app-id]`) — symptom-matched probes and existing logs suggest hypotheses. Even `confidence: confirmed` does not bypass collection, launch or user reproduction.
+2. **Start fresh collection, then launch** — `start start-monitoring`, `kernel collect` (CPU / freeze / memory / graphics / driver symptoms), then `app-launch <app-id>`; verify success on the same serial. Preserve running state only at the user's request. One dlog collector at a time: `dlog-collect <app-id>` is an alternative app-only session, without the system monitor.
+3. **Ask the user to reproduce — end the turn and wait** — "(1) done, it occurred / (2) nothing happened"; ask which action failed and roughly when. Do not stop, analyze or run more probes before their reply.
+4. **After the reply, stop and analyze** — `stop` (system monitor) or `stop-collect` (app-only), plus `kernel stop` if started; use `error-analyze <app-id> summary` for app-only capture, `check` for the monitor, `kernel analyze` for kernel capture. Correlate with this reproduction window, then re-run `investigate` or targeted probes as needed. If the symptom did not occur, report **not reproduced**. Escalate only if unexplained: targeted `search` → probes; for an app-only capture also `error-analyze … details` and filtered `app-log` (they return `no_logs` after a monitor-only capture).
+5. **Report** (template, in the user's language) → next-step prompt → `stop` when done
+
+Only an explicit saved-log-only request or declined live reproduction permits
+analysis without this cycle; state the limitation and keep causal claims provisional.
+
+Kernel logs always go through `kernel collect` → `kernel stop` → `kernel analyze` (never `sdb shell dmesg`); probes through `investigate` / `probe run` (never a hand-typed `sdb shell top / ps / free`).
+
 **Action descriptions:**
 
 | Action          | Description                                                        |
@@ -1362,18 +1439,51 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 | `start`         | Launch the binary in background, capture output to a temp file     |
 | `stop`          | Kill the running background process                                |
 | `check`         | Read the temp file and return the latest analyzed output           |
-| `status`        | Check if the background process is still running                   |
-| `app-launch`    | Launch a Tizen app on the device via `sdb shell app_launcher -s`   |
-| `app-terminate` | Terminate a running Tizen app via `sdb shell app_launcher -k`      |
+| `status`        | Check if the background process is still running                  |
+| `app-launch`    | Launch a Tizen app on the device via `sdb shell app_launcher -s` |
+| `app-terminate` | Terminate a running Tizen app via `sdb shell app_launcher -k`    |
 | `dlog-collect`  | Start background dlog collection filtered by app PID (app must be running) |
-| `stop-collect`  | Stop the background app dlog collection process                    |
-| `error-analyze` | Analyze collected app logs for E/F priority errors with deduplication |
+| `stop-collect`  | Stop the background app dlog collection process                   |
+| `error-analyze` | Analyze collected app logs for E/F priority errors with deduplication — the first analysis call |
+| `app-log`       | Full collected log of one app (all priorities, hot + cold) — escalation only, after `error-analyze`, filtered |
+| `search`        | Text / regex search across every collected dlog category (each app, `_general`, `_unparsed`; kernel excluded) — finds a string without knowing which app wrote it and returns whole entries, stack traces intact (binary v0.2.6+; never `grep` the `.hot.log` files) |
+| `investigate`   | One-shot first pass: symptom words → probe bundles → correlated report (the first call of a symptom investigation) |
+| `probe`         | `list` the evidence-probe catalog / `run <probe-id>` one probe (replaces hand-typed `sdb shell top/ps/free`) |
+| `kernel`        | `collect` the kernel log in the background / `stop` it / `analyze` it (replaces `sdb shell dmesg`) |
+| `device-profile` / `snapshot` / `timeline` | Device profile; system snapshots (create/list/compare/delete); probe history across snapshots |
 
-**Notes:** Only one instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` (and `stop-collect`) when done. When the analysis is complete, the report is always rendered in both languages (English first, then Korean).
+**Notes:** Only one background instance at a time. If already running, `start` returns an `already_running` error. The background process survives even if the agent session ends — always `stop` when done. App-specific logs are stored in `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log` (the native binary has no `--base-dir` option; an unconfigured SDK path returns `sdk_path_not_set`). `dlog-collect` requires the app to be running (uses `pgrep` to find PID). `error-analyze` requires `dlog-collect` → `stop-collect` to have been run first. Always use `error-analyze` to analyze logs — do not read the log file directly. When the analysis is complete, the report is rendered once in the user's language (Korean if the user wrote in Korean, English otherwise) following `REPORT_TEMPLATE.md`.
+
 
 **Dependencies:** `tizen-launch-emulator` or `tizen-device-manager` (a running device/emulator is required)
 
 **Details:** [debug/scenario-dlog-analyzer-walkthrough.en.md](debug/scenario-dlog-analyzer-walkthrough.en.md)
+
+---
+
+### 29. tizen-handoff
+
+**Description:** Catch up on a Tizen project's handoff notes before working on it, and hand it over when you stop — so Claude Code, Codex CLI and other agents can continue each other's work.
+
+**Use Case:** The user switches agents ("continue where Codex left off", "pick up where Claude left off"), or Tizen work starts in a project another agent may have touched. Every other skill's runner records its own result into the notes automatically; this skill reads them, and is where an agent writes its own intent (`STATE.md`, `DECISIONS.md`).
+
+**Parameters:**
+
+| Parameter | Type   | Default                                                   | Description                                        |
+| --------- | ------ | --------------------------------------------------------- | -------------------------------------------------- |
+| `action`  | string | _(required)_                                                | `show` (catch up) or `init` (create the folder by hand) |
+| `project` | string | current directory's project (`show`); _(required for `init`)_ | Project root, or any folder inside it              |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/handoff-cli.js show [--project "<project-dir>"]
+node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
+```
+
+**Notes:** The notes live **outside** the project, in `~/.tizen-sdk-skills/handoff/<project>-<id>/`, so they are never packaged into an app or committed to git; the folder is created the first time a runner records something, so there is no setup step. `STATE.md` and `DECISIONS.md` are written by agents; `LOG.md`, `BUILDS.md`, `DEVICES.md`, `DEBUG.md` and `ENVIRONMENT.md` are appended by the runners and must not be edited. Read-only runner calls (list, check, status) are not recorded, and certificate commands record the action and status only, never result data. `TIZEN_HANDOFF=0` turns recording off, `TIZEN_HANDOFF=existing` records only where the folder already exists, and `TIZEN_HANDOFF_HOME` moves the parent folder. Append-only files over 128 KB are rotated into `archive/`.
+
+**Dependencies:** None (no SDK or device required)
 
 ---
 
@@ -1473,6 +1583,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js error-analyze <app-id> [format]
 | 26  | `tizen-download-mobile-platform` | `downloadMobilePlatform()` | `download-mobile-platform-cli.js` | Install Tizen Mobile platform (`MOBILE-{version}`) + IOT-Headed |
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | Install custom rootstrap ZIP package (with security validation) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` etc. | `dlog-analyzer-cli.js` | Continuous dlog crash/exception collection & analysis (background) |
+| 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
 
 ---
 
@@ -1582,7 +1693,7 @@ The file itself is now a **domain-module re-export aggregator**. Business logic 
 | `core/preflight.js` | Node.js / disk space pre-flight checks |
 | `core/screenshot.js`, `core/file-transfer.js`, `core/sdb-helper.js`, `core/remote-device.js` | Screenshot, sdb push/pull, sdb intent matching, remote devices |
 | `core/certificate.js`, `core/samsung-cert.js` | Local certificates/signing profiles, Samsung online-CA certificates |
-| `core/dlog-analyzer.js` | Background dlog monitoring (detached process spawn / PID & output-file management) |
+| `core/dlog-analyzer.js` | Background dlog monitoring (detached process spawn / PID & output-file management), app-specific log collection and error analysis |
 
 ---
 
@@ -1832,8 +1943,9 @@ module.exports = {
   parseDuidList, importDuidsFromFile,
   acquireDuidFromDevice, acquireDuidsFromAllDevices,
 
-  // dlog analyzer (core/dlog-analyzer.js — background dlog monitoring)
+  // dlog analyzer (core/dlog-analyzer.js — background dlog monitoring, app-specific log collection/error analysis)
   startDlogAnalyzer, stopDlogAnalyzer, checkDlogAnalyzer, statusDlogAnalyzer,
+  launchApp, terminateApp, collectAppLogs, analyzeErrors,
 };
 ```
 
@@ -1887,6 +1999,7 @@ Functions that invoke scripts leaving (or potentially leaving) background proces
 ## Related Documents
 
 - [Intermediate Layer Introductions](SDK_LAYERS_OVERVIEW.en.md) — Why each layer is needed and why .ps1 is not called directly
+- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 30 skills map onto the 36 commands (and why the counts differ)
 
 ---
 
@@ -1963,7 +2076,6 @@ Tizen SDK Skills
 │   ├── Platform package install ──── tizen-platform-install
 │   ├── Mobile platform download ──── tizen-download-mobile-platform
 │   ├── TV SDK extension install ──── tizen-tv-sdk-install           ← [4]
-│   ├── TV SDK extension install (ZIP) ──── tizen-tv-sdk-install-from-zip
 │   └── Package update ─────────────── tizen-update-package
 │
 ├── Environment Setup
@@ -2440,7 +2552,7 @@ A **real development conversation record** from SDK installation to WebApp Tetri
 ## 📌 Related Documents
 
 - [Agent Overview (README)](README.en.md)
-- [Skills Reference](#tizen-sdk-skills--skills-reference)
+- [Skills Reference](SKILLS_REFERENCE.en.md)
 
 ---
 

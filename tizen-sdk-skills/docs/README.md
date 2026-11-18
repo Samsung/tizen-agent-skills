@@ -19,7 +19,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | [rds/RDS_FAST_DEPLOY_PLAN.md](rds/RDS_FAST_DEPLOY_PLAN.md) | **RDS / Fast Deploy 통합 계획** — `install-app`이 변경 파일만 push하는 delta 배포의 설계, 상태 파일 형식, vendoring 결정, `deploy_type`/`TIZEN_RDS_ENABLED`/`--reset-rds`, Tizen 11 에뮬레이터 실기기 검증 결과 |
 | [envelope/](envelope/) | **Standard JSON Envelope** — 응답 표준화 계층: [사용 가이드](envelope/ENVELOPE_USAGE_GUIDE.md), [호출 흐름](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit 해설](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [구현 요약](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK 설치 흐름** — [전체 흐름](sdk-install/INSTALLATION_FLOW.md), [에이전트-installSdk 통합](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [설치 검증](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [사용자 지정 저장소 설치](sdk-install/CUSTOM_REPOSITORY_INSTALL.md), [.NET 개발 환경 설정 E2E](sdk-install/DOTNET_SETUP_E2E.md) |
-| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 30개 스킬이 34개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
+| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 30개 스킬이 36개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
 
 구현 코드는 [common/lib/](../common/lib/README.md)에 있습니다.
 
@@ -28,9 +28,9 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 ## 개요
 
 
-`tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 29가지 자동화 스킬을 제공합니다.
+`tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 30가지 자동화 스킬을 제공합니다.
 
-### 29가지 핵심 스킬
+### 30가지 핵심 스킬
 
 | 스킬 | 설명 | 용도 |
 |------|------|------|
@@ -63,6 +63,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-tv-sdk-install** | TV SDK 확장 설치 (TV-SAMSUNG-Public) | TV 앱 개발 |
 | **tizen-tv-sdk-install-from-zip** | TV SDK 확장 설치 (로컬 ZIP, 오프라인) | 오프라인 TV 앱 개발 |
 | **tizen-update-package** | Tizen SDK 패키지 업데이트 | 설치된 패키지의 새 버전 확인 및 업데이트 |
+| **tizen-handoff** | 프로젝트 핸드오프 노트 확인·시작 | 다른 에이전트(Claude Code, Codex CLI, Cline)가 하던 작업 이어받기 |
 
 ---
 
@@ -161,6 +162,7 @@ Cline에서는 자연어로 요청하면 스킬이 자동으로 로드됩니다.
 | "TV SDK 설치해줘" | `tizen-tv-sdk-install` |
 | "TV SDK ZIP으로 설치해줘" | `tizen-tv-sdk-install-from-zip` |
 | "패키지 업데이트해줘" | `tizen-update-package` |
+| "Codex가 하던 작업 이어서 해줘" / "이어서 작업해줘" | `tizen-handoff` |
 
 ---
 
@@ -701,7 +703,8 @@ tizen-sdk-skills/
 │   │   ├── tizen-playwright-test/
 │   │   ├── tizen-tv-sdk-install/
 │   │   ├── tizen-tv-sdk-install-from-zip/
-│   │   └── tizen-update-package/
+│   │   ├── tizen-update-package/
+│   │   └── tizen-handoff/
 │   │
 │   ├── lib/                            # CLI 러너 및 공유 라이브러리
 │   │   ├── README.md                   # lib 구조 설명
@@ -730,7 +733,8 @@ tizen-sdk-skills/
 │   │   │   ├── playwright-test-cli.js
 │   │   │   ├── tv-sdk-install-cli.js
 │   │   │   ├── tv-sdk-install-from-zip-cli.js
-│   │   │   └── update-package-cli.js
+│   │   │   ├── update-package-cli.js
+│   │   │   └── handoff-cli.js
 │   │   ├── core/                       # 공용 코어 (sdk-commands.js, sdb.js, emulator.js, project.js 등)
 │   │   ├── envelope/                   # Standard JSON Envelope
 │   │   │   ├── envelope.js
@@ -772,7 +776,7 @@ tizen-sdk-skills/
 │   └── assets/
 │       └── samsung-tv-ca/              # Samsung TV CA 인증서
 │
-├── tizen-cli/                          # tizen-cli 패키지 (34개 커맨드; CLI/MCP 진입점)
+├── tizen-cli/                          # tizen-cli 패키지 (36개 커맨드; CLI/MCP 진입점)
 │   ├── src/
 │   │   ├── index.ts / commands.ts / doctor.ts / envelope-adapter.ts
 │   │   ├── command-specs/              # 커맨드 스펙 (sdk, check, project, device, debug, test, certificate)

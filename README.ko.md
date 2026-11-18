@@ -61,7 +61,7 @@
 | 설치·디버깅·테스트 (6) | `tizen-install-app`, `tizen-gdb-debug` (네이티브), `tizen-dotnet-debug` (.NET / netcoredbg), `tizen-webapp-debug` (웹 / RWI / CDP), `tizen-playwright-test`, `tizen-dlog-analyzer` |
 | 인증서 (1) | `tizen-certificate-manager` (로컬 및 삼성 온라인 CA 프로파일) |
 
-상세 설명, 트리거 문구, `tizen-sdk` CLI 명령 35개는 플러그인의
+상세 설명, 트리거 문구, `tizen-sdk` CLI 명령 36개는 플러그인의
 [README](tizen-sdk-skills/README.ko.md)와 [스킬 레퍼런스](tizen-sdk-skills/docs/SKILLS_REFERENCE.md)에
 있습니다.
 

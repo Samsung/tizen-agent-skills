@@ -11,7 +11,7 @@
 
 ## 개요
 
-`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **29개 자동화 스킬**을 제공합니다.
+`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **30개 자동화 스킬**을 제공합니다.
 
 모든 스킬은 **Standard JSON Envelope** 형식으로 응답하여 일관된 에러 처리와 기계 판독 가능한 출력을 보장합니다.
 
