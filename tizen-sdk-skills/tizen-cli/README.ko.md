@@ -65,7 +65,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `sdk-install-custom-repo` | `--repo-url` | `--platform-version`, `--force`, `--download-jobs` (1–8) |
 | `validate-repo-url` | `--repo-url` | — |
 | `tv-sdk-install` | — | `--force`, `--download-jobs` (1–8) |
-| `tv-sdk-install-from-zip` | `--zip-path` | `--force` |
+| `tv-sdk-install-from-zip` | `--zip-path` | `--tv-version` (`X.Y`), `--force` |
 | `update-package` | — | `--force`, `--dry-run`, `--download-jobs` (1–8) |
 | `sdk-repo-info` | — | — |
 | `download-emulator-package` | — | `--platform-version`, `--force`, `--download-jobs` (1–8) |
@@ -73,27 +73,27 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `platform-list` | — | — |
 | `download-mobile-platform` | — | `--platform-version`, `--include-iot-headed`, `--iot-headed-version`, `--force`, `--download-jobs` (1–8) |
 | `install-rootstrap` | `--zip-path` | `--force` |
-| `dotnet-setup` | — | `--force`, `--workload-version` |
+| `dotnet-setup` | — | `--force`, `--workload-version`, `--no-install-sdk`, `--sdk-channel`, `--dotnet-root`, `--persist-env` |
 | `check-node` | — | — |
 | `check-disk-space` | — | `--path`, `--required-gb` (기본: `15`) |
-| `create-project` | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`), `--template`, `--parent-path`, `--name` | `--force` (기존 대상 폴더 대체) |
-| `project-delete` | `--project` | — (서버 측 삭제; Tizen 프로젝트가 아닌 경로는 거부) |
-| `list-templates` | — | `--type` (`native`\|`dotnet`\|`webapp`\|`tv`\|`platform`) |
+| `create-project` | `--type` (`native`\|`dotnet`\|`webapp`\|`rpk`\|`tv`\|`platform`), `--template`, `--parent-path`, `--name` | `--force` (기존 대상 폴더 대체), `--open`, `--platform-version` |
+| `project-delete` | `--project` | `--expect-name` (폴더 이름이 다르면 삭제 거부), `--dry-run` (삭제 없이 대상만 보고) — 서버 측 삭제; Tizen 프로젝트가 아닌 경로는 거부 |
+| `list-templates` | — | `--type` (`native`\|`dotnet`\|`webapp`\|`rpk`\|`tv`\|`platform`), `--platform-version` |
 | `import-wgt` | `--wgt-path` (파일명은 `[A-Za-z0-9]`만), `--profile` (`tizen`\|`tv-samsung`), `--platform-version` (`X.Y`, 설치된 프로필), `--working-dir` | — |
 | `build-project` | `--project` | `--build-type` (기본: `Debug`, enum: `Debug`\|`Release`\|`Test`), `--sign-profile`, `--arch` (기본: `x86_64`, enum: `armv7l`\|`aarch64`\|`i586`\|`x86_64`), `--clean` (전체 재빌드) |
 | `create-emulator` | — | `--action` (기본: `create`, enum: `create`\|`list-platform`\|`list-template`\|`list-vm`\|`delete`), `--vm-name`, `--platform`, `--size`, `--assume-defaults`, `--template`, `--profile` (기본: `tizen`), `--launch`, `--timeout`, `--raw-image-path` |
 | `launch-emulator` | — | `--vm-name` (기본: 첫 번째 VM), `--timeout` (기본: `300`) |
 | `emulator-manager` | — | `--action` (기본: `create`, enum: `create`\|`delete`\|`launch`\|`list-vm`\|`list-platform`\|`list-template`\|`detail`\|`modify`\|`reset`\|`create-image`), `--vm-name`, `--size`, `--assume-defaults`, `--template`, `--platform`, `--profile` (기본: `tizen`), `--launch`, `--skin`, `--ram-size`, `--file-sharing-path`, `--hw-virtualization`, `--hw-gl-acceleration`, `--custom-path`, `--raw-image-path`, `--output-dir`, `--compress`, `--confirm`, `--detail`, `--count`, `--timeout` (기본: `300`), `--emulator-path` |
 | `device-manager` | — | `--action` (기본: `start`, enum: `start`\|`stop`), `--timeout` (기본: `300`), `--vm-name` (기본: `tizen-vm-default`), `--profile` (기본: `tizen`, enum: `tizen`\|`tv`) |
-| `install-app` | `--package` | `--serial`, `--run` |
+| `install-app` | `--package` | `--serial`, `--run`, `--reset-rds` |
 | `sdb-helper` | `--request` | `--serial` |
 | `screenshot` | — | `--serial`, `--output` (기본: `./emulator_screenshot.png`) |
 | `file-transfer` | `--direction` (`push`\|`pull`), `--remote` | `--local` (push 시 필수, pull 시 기본 `.`), `--serial`, `--with-utf8` |
 | `remote-device` | — | `--action` (기본: `scan`, enum: `scan`\|`connect`\|`disconnect`\|`list`\|`add`\|`remove`\|`edit`\|`list-saved`), `--ip`, `--subnet`, `--port` (기본: `26101`), `--timeout` (기본: `3000`), `--connected-only`, `--saved-only`, `--name`, `--new-ip`, `--new-port` |
-| `gdb-debug` | `--app-id`, `--binary` | `--mode` (기본: `attach`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `5039`), `--timeout` (기본: `30`) |
+| `gdb-debug` | `--app-id`, `--binary` | `--mode` (기본: `attach`, enum: `attach`\|`launch`), `--breakpoints`, `--serial`, `--port` (기본: `5039`), `--timeout` (기본: `30`) |
 | `dotnet-debug` | `--app-id` | `--mode` (기본: `launch`, enum: `attach`\|`launch`), `--breakpoints`, `--port` (기본: `4711`), `--serial`, `--force-install`, `--timeout` (기본: `30`), `--project <dir>` (launch 모드: `<dir>/.vscode/launch.json` 자동 생성) |
 | `webapp-debug` | `--app-id` | `--port` (기본: `9222`), `--serial`, `--timeout` (기본: `30`) |
-| `dlog-analyzer` | `--action` | `--subcommand` (기본: `start-monitoring`), `--app-id`, `--format`, `--output-dir`, `--filter` / `--lines` / `--output` (log-dump), `--confirm` (log-clear), `--process` / `--dump-dir` / `--limit` / `--lines` / `--output` (crash-report) |
+| `dlog-analyzer` | `--action` | `--subcommand` (기본: `start-monitoring`), `--app-id`, `--serial`, `--format`, `--output-dir`, `--filter` / `--lines` / `--output` (log-dump), `--confirm` (log-clear), `--process` / `--dump-dir` / `--limit` / `--lines` / `--output` (crash-report); 검색·분석: `--pattern`, `--category`, `--regex`, `--case-sensitive`, `--invert`, `--all`, `--context`, `--after-context`, `--before-context`, `--count`, `--max-matches`, `--since`, `--until`, `--priority`, `--tag`, `--keyword`, `--max-lines`, `--max-chars`, `--full`, `--refresh`, `--max-age`, `--symptoms`, `--budget`, `--budget-tokens`, `--allow-network-probe`, `--rules-dir`, `--parallel`, `--max-workers`, `--deduplicate`, `--similarity-threshold`, `--allow-heavy`, `--no-noise-filter`, `--fuzzy-symptoms`, `--symptom-map`, `--probe-id`, `--family`, `--expect`, `--file`, `--pid`, `--noise-tag`, `--level`, `--with-dlog`, `--with-context` |
 | `playwright-test` | — | `--app-id`, `--test-file`, `--project-dir`, `--port` (기본: `9222`), `--serial`, `--setup-timeout` (기본: `30`), `--timeout` (기본: `120`), `--no-setup`, `--scaffold`, `--force` |
 | `certificate-manager` | — | `--action` (기본: `generate-author`, 21개 선택지), `--name`, `--password`, `--prompt-password`, `--password-file`, `--file`, `--email`, `--department`, `--organization`, `--city`, `--state`, `--country`, `--identity`, `--type`, `--version`, `--profile-name`, `--author-cert`, `--author-password`, `--prompt-author-password`, `--author-password-file`, `--distributor-type`, `--distributor-version`, `--distributor-password`, `--prompt-distributor-password`, `--distributor-password-file`, `--distributor2-cert`, `--distributor2-password`, `--prompt-distributor2-password`, `--distributor2-password-file`, `--distributor2-ca`, `--distributor2-type`, `--distributor2-version`, `--profiles-xml`, `--active`, `--source`, `--certificate-type`, `--target-file`, `--overwrite`, `--certificate`, `--duid-list`, `--duid-file`, `--privilege`, `--serial` |
 
