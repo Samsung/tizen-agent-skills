@@ -35,14 +35,14 @@ For a normal install from the automatically-selected CDN mirror, use `tizen-sdk-
 instead. Everything else (paths, env setup, `sdk.info`, auto `sdk-init`) is identical —
 only the package source changes.
 
-### Claude Code (서브에이전트 위임)
+### Claude Code (subagent delegation)
 
-> Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
+> If the Agent tool is not available (e.g., Cline), go to the "CLI Runner" section below.
 
-1. Agent tool로 `tizen-sdk-install-custom-repo` 에이전트 호출
-2. 수집된 입력(repository URL, platform version, force)을 프롬프트로 전달
-3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
-   (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
+1. Call the `tizen-sdk-install-custom-repo` agent with the Agent tool
+2. Pass the collected inputs (repository URL, platform version, force) in the prompt
+3. Pass the subagent's JSON Envelope to the user as-is — follow the "Result reporting" rules below
+   (include the original text in a fenced `json` block, with only a 1–2 line summary beneath it)
 
 ## The repository URL rule (this is what makes a URL valid)
 
@@ -193,7 +193,7 @@ already-installed check and hands back the installer command again. If that re-r
 offer `suggested_fix.command` (`platform-install`), and do not re-run with `--force` (a full reinstall).
 
 Run `errors[0].suggested_fix.command` verbatim. It takes 10–15 minutes (~121 packages).
-**실행 방법은 하네스에 따라 다릅니다:**
+**How to run it depends on the harness:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)
 
@@ -219,84 +219,85 @@ which forwards the same `--repo-url`/`-RepoUrl` and platform flags) **with escal
 - Poll/sleep while waiting
 - Delegate to a subagent (notification only reaches main context)
 
-### Cline — 분리 실행 + 번호를 붙인 `sleep 25 && --status` 폴링, 한 턴 최대 4회 (30초 타임아웃 · 동일 호출 5회 가드)
+### Cline — detached execution + numbered `sleep 25 && --status` polling, up to 4 polls per turn (30-second timeout · 5-identical-calls guard)
 
-Cline은 background 작업이 끝나도 에이전트를 다시 깨우지 않으며 (`<task-notification>` 없음),
-백그라운드 프로세스는 **10분 후 강제 종료**됩니다. SDK 설치는 10–15분이 소요됩니다.
+Cline does not wake the agent again when a background task finishes (no
+`<task-notification>`), and background processes are **forcibly terminated after 10 minutes**.
+An SDK installation takes 10–15 minutes.
 
-Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 간주해 중단**시키는 가드도 있습니다
-(`Detected 5 consecutive identical calls`; 오류가 6번 연속되면 태스크가 멈춥니다). 설치 한 번에
-25초 폴링이 25–35번 필요하므로 폴링 명령을 그대로 반복하면 5번째에서 반드시 걸립니다. 따라서
-**폴링 명령마다 시도 번호를 넣어** 호출이 서로 달라지게 하고 (`poll #1`, `poll #2`, …), **한 턴에
-최대 4번**만 폴링한 뒤 여전히 `STATUS=running`이면 설치가 백그라운드에서 계속 진행 중임과 상태 확인
-명령을 사용자에게 알리고 **턴을 종료**합니다. 사용자가 돌아오면 (예: "계속", "끝났어?") 아래
-Recovery의 `--status` / `-Status`를 한 번 실행해 이어갑니다. 분리된 설치 프로세스는 Cline이
-멈추거나 턴이 끝나도 계속 진행됩니다.
+Cline also has a guard that **treats 5 consecutive repetitions of the same tool call as an infinite loop and aborts**
+(`Detected 5 consecutive identical calls`; if errors repeat 6 times in a row, the task stalls). A single install
+needs 25–35 polls at 25 seconds each, so repeating the polling command verbatim will trip the guard on the 5th call.
+Therefore, **put an attempt number in each polling command** so the calls differ (`poll #1`, `poll #2`, …), and poll **at most
+4 times per turn**; if `STATUS=running` persists, tell the user that the installation is still running in the background and
+how to check the status, then **end the turn**. When the user returns (e.g., "계속", "끝났어?") run the
+Recovery `--status` / `-Status` once to resume. The detached install process keeps running even if Cline
+stalls or the turn ends.
 
-**⚠️ 절대 `run_in_background: true`를 사용하지 마세요.** 10분 타임아웃으로 설치가 강제 중단됩니다.
-**⚠️ 포그라운드로 실행하지 마세요.** 121개 패키지 로그가 컨텍스트 윈도우를 소모합니다.
-**⚠️ `--wait`를 사용하지 마세요.** 60초 sleep이 Cline의 30초 타임아웃에 걸립니다.
-**⚠️ 같은 폴링 명령을 그대로 다시 실행하지 마세요.** 시도 번호 없이 반복하면 5번째 호출에서 Cline이 중단됩니다.
+**⚠️ NEVER use `run_in_background: true`.** The 10-minute timeout forcibly aborts the installation.
+**⚠️ Do not run it in the foreground.** The logs of 121 packages consume the context window.
+**⚠️ Do not use `--wait`.** The 60-second sleep hits Cline's 30-second timeout.
+**⚠️ Do not re-run the same polling command verbatim.** Repeating it without an attempt number makes Cline abort on the 5th call.
 
 #### Linux / macOS (Bash)
 
-1. `nohup` 으로 Phase 1 envelope의 `suggested_fix.command`
-   (`bash "<tizen-sdk-install-custom-repo.sh path>" --repo-url=… --path … [--force] …`)를 **인자까지 그대로**
-   분리 실행. 인자를 빼면 `--repo-url`(기본 CDN으로 설치됨)·`--force`·`--path` 요청이 적용되지 않습니다:
+1. Detach and run the Phase 1 envelope's `suggested_fix.command`
+   (`bash "<tizen-sdk-install-custom-repo.sh path>" --repo-url=… --path … [--force] …`) with `nohup`, **keeping the arguments intact**.
+   Dropping the arguments means the `--repo-url` (installs from the default CDN), `--force` and `--path` requests are not applied:
 
    ```bash
    nohup <suggested_fix.command> > /tmp/tizen-sdk-install.log 2>&1 & \
    jobs -p
    ```
 
-2. 시도 번호를 붙여 `sleep 25 && --status` 로 폴링 (`#N`은 호출마다 1씩 증가):
+2. Poll with `sleep 25 && --status`, adding an attempt number (`#N` increments by 1 on each call):
 
    ```bash
    sleep 25 && echo "poll #1" && bash "<tizen-sdk-install-custom-repo.sh path>" --status
    ```
 
-   - `STATUS=running` → 진행 중. 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
-     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
-     설치는 백그라운드에서 계속 진행 중입니다(10–15분 소요). **설치 완료의 자동 알림은 제공되지
-     않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
-     이어갑니다. (직접 확인: `bash "<tizen-sdk-install-custom-repo.sh path>" --status`)
-   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 +
-     `tail -20 /tmp/tizen-sdk-install.log` 원인 요지 1줄
+   - `STATUS=running` → in progress. Re-run with the attempt number incremented (`poll #2`, `#3`, `#4`).
+     **If it is still `running` after the 4th poll**, stop polling, tell the user the following, and **end the turn**:
+     the installation is still running in the background (takes 10–15 minutes). **No automatic notification of
+     installation completion is provided**, so if you need to confirm completion, ask the user to say
+     "설치 진행 상태를 알려줘" and then check the status and resume. (Check directly: `bash "<tizen-sdk-install-custom-repo.sh path>" --status`)
+   - `STATUS=done EXIT=0` → done. Re-run the Phase 1 pre-check, then report the envelope
+   - `STATUS=done EXIT=1` → failed. Re-run the Phase 1 pre-check, then report the envelope +
+     one line on the gist of the cause from `tail -20 /tmp/tizen-sdk-install.log`
 
 #### Windows (PowerShell)
 
-1. Phase 1 envelope의 `suggested_fix.command`
-   (`powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -RepoUrl "…" -Path … [-Force] …`)를
-   **인자까지 그대로** 쓰고 끝에 `-Detach`만 붙여 분리 실행. 인자를 빼면 `-RepoUrl`(기본 CDN으로
-   설치됨)·`-Force`·`-Path` 요청이 적용되지 않습니다:
+1. Take the Phase 1 envelope's `suggested_fix.command`
+   (`powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -RepoUrl "…" -Path … [-Force] …`)
+   **with the arguments intact**, append `-Detach` at the end, and run it detached. Dropping the arguments means the `-RepoUrl` (installs from the
+   default CDN), `-Force` and `-Path` requests are not applied:
 
    ```powershell
    <suggested_fix.command> -Detach
    ```
 
-2. 시도 번호를 붙여 `Start-Sleep 25; -Status` 로 폴링 (`#N`은 호출마다 1씩 증가):
+2. Poll with `Start-Sleep 25; -Status`, adding an attempt number (`#N` increments by 1 on each call):
 
    ```powershell
    powershell -ExecutionPolicy Bypass -Command "Start-Sleep 25; Write-Host 'poll #1'; powershell -ExecutionPolicy Bypass -File '<tizen-sdk-install-custom-repo.ps1 path>' -Status"
    ```
 
-   - `STATUS=running` → 진행 중. 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
-     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
-     설치는 백그라운드에서 계속 진행 중입니다(10–15분 소요). **설치 완료의 자동 알림은 제공되지
-     않으므로**, 설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해
-     이어갑니다. (직접 확인: `powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -Status`)
-   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 + 로그 파일 원인 요지 1줄
+   - `STATUS=running` → in progress. Re-run with the attempt number incremented (`poll #2`, `#3`, `#4`).
+     **If it is still `running` after the 4th poll**, stop polling, tell the user the following, and **end the turn**:
+     the installation is still running in the background (takes 10–15 minutes). **No automatic notification of
+     installation completion is provided**, so if you need to confirm completion, ask the user to say
+     "설치 진행 상태를 알려줘" and then check the status and resume. (Check directly: `powershell -ExecutionPolicy Bypass -File "<tizen-sdk-install-custom-repo.ps1 path>" -Status`)
+   - `STATUS=done EXIT=0` → done. Re-run the Phase 1 pre-check, then report the envelope
+   - `STATUS=done EXIT=1` → failed. Re-run the Phase 1 pre-check, then report the envelope + one line on the gist of the cause from the log file
 
-### Recovery — 진행 상태를 모를 때 (any harness)
+### Recovery — when the run state is unknown (any harness)
 
 The run state is durable on disk, so a lost completion signal is always recoverable:
 
 - Windows: `powershell -ExecutionPolicy Bypass -File "<...custom-repo.ps1>" -Status`
 - Linux/macOS: `bash "<...custom-repo.sh>" --status`
 
-Output: `STATUS=running` / `STATUS=done EXIT=<code>` (Phase 1 pre-check 재실행 후 envelope 보고) / `STATUS=none`.
+Output: `STATUS=running` / `STATUS=done EXIT=<code>` (re-run the Phase 1 pre-check, then report the envelope) / `STATUS=none`.
 
 **Do NOT (any harness):**
 
@@ -325,39 +326,38 @@ custom-repository install, **updates and emulator packages also come from that c
 repository** — no extra configuration needed. Query it any time with the repository info
 CLI (`sdk-repo-info-cli.js`, see `tizen-sdk-install`).
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope must always be shown to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope is **inside the tool result, so the user cannot see it**
+(the Claude Code UI folds Bash/Agent results away as "Ran 1 shell command"). Only the final
+answer text is visible to the user, so the final answer must follow the format below on
+**any execution path (subagent delegation / direct CLI Runner execution)**:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the envelope JSON **as-is, unmodified and unabridged**, in a fenced `json` block (first item).
+2. Beneath it, add a result summary of **1–2 lines only** (the key value of `result` or the gist of `errors[0].message`).
+3. If helpful, add a one-line suggestion of next steps.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
-- `result.packages`에는 사용자가 설치한 플랫폼 버전마다 `Tizen SDK X.Y` 항목이 하나씩 있다.
-  `.platform-installed`에 기록된 버전(sdk-install, platform-install, 두 TV 설치기가 설치할
-  때마다 블록을 하나씩 덧붙인다)과, `platform-install`이 아직 끝나지 않은 버전이다. 항목마다
-  `status`(`installed`; 그 설치가 끝나지 않았으면 `incomplete`; 기록된 폴더가 지워졌으면
-  `not_installed` — `platform-install --list`와 같다)와 `profiles`(디스크에 있는 기록된 프로필:
-  `tizen`, 그 버전에 TV 확장을 설치했으면 `tv-samsung`)를 갖는다. TV 확장이 예전 버전용으로 함께
-  깔아 두는 폴더(예: 2.4 … 9.0의 `tv` / `tv-samsung`)는 항목이 아니므로 언급하지 않는다. 1~2줄
-  요약 안에서 항목은 **한 줄로**, 버전마다 프로필을 붙여 **하나씩 모두** 적는다 (예:
-  `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`). `incomplete` /
-  `not_installed` 항목이 있으면 그 뒤에 덧붙인다. 가장 높은 버전 하나를 SDK 전체의 버전처럼
-  요약하지 않는다.
-- "설치된 SDK/플랫폼 버전이 뭐야?" 같은 **후속 질문**에는 이 Envelope를 다시 해석하거나
-  디렉터리 목록·크기를 재지 말고, `tizen-platform-install` 스킬을 로드해 그 스킬의
-  `--list` 단계(러너 경로 찾기 포함)를 실행하고 그 Envelope로 답한다.
+- Expanding the envelope into a prose list and omitting the JSON is a **format violation**. This rule
+  takes precedence over the harness's general writing rules ("don't put code in prose", etc.) — the envelope
+  is not code; it is this skill's **result contract**.
+- If the runner was executed multiple times, include the envelope from the **last run**, and mention
+  earlier failures only in a single line in the summary.
+- Include a failure envelope's original text the same way. Do not retype `errors[0].message`/`details`;
+  show what is in the JSON as-is.
+- Show a `user_input_required` envelope as-is, then ask the user the question.
+- `result.packages` has one `Tizen SDK X.Y` entry per platform version the user installed:
+  the versions recorded in `.platform-installed` (sdk-install, platform-install, and the two TV installers
+  each append a block whenever they install) plus versions whose `platform-install` has not finished yet. Each entry
+  has `status` (`installed`; `incomplete` if that installation has not finished; `not_installed` if the
+  recorded folder was deleted — same as `platform-install --list`) and `profiles` (the profiles recorded on disk:
+  `tizen`, and `tv-samsung` if the TV extension was installed for that version). The folders the TV extension
+  also lays down for older versions (e.g., `tv` / `tv-samsung` of 2.4 … 9.0) are not entries, so do not mention them. In the 1–2 line
+  summary, list the entries **on one line**, **each and every one** with its version's profiles (e.g.,
+  `installed: 9.0 (tv-samsung), 10.0 (tizen, tv-samsung), 11.0 (tizen)`). Append any `incomplete` /
+  `not_installed` entries after that. Do not summarize just the highest version as the version of the whole SDK.
+- For **follow-up questions** like "설치된 SDK/플랫폼 버전이 뭐야?", do not re-interpret this envelope or
+  re-measure directory listings/sizes; load the `tizen-platform-install` skill, run that skill's
+  `--list` step (including finding the runner path), and answer with that envelope.
 
 ## Handoff
 

@@ -291,12 +291,12 @@ When the Bash tool is used on Windows, it runs through Git Bash/MSYS2. This caus
 fails with `InputValidationError: too_big`. Never put all six types in one
 question. Select the type in TWO steps instead:
 
-- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `기타 (rpk · tv · platform)…`
+- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `Other (rpk · tv · platform)…`
   — list all six type names in the question TEXT so nothing is hidden. For a generic
   "타이젠 앱 만들어줘" run `list-templates` (no `--type`) FIRST and, when the envelope has
   `result.tv`, say in the question text that the TV SDK is installed and list the TV
   templates (`result.tv.web` / `result.tv.dotnet`) together with the per-type lists.
-- **Q2 (only if 기타 was chosen, 3 options):** `rpk` / `tv` / `platform`
+- **Q2 (only if Other was chosen, 3 options):** `rpk` / `tv` / `platform`
 
 ### 1. Check if a folder is open in VS Code
 
@@ -366,7 +366,7 @@ so the caller can offer the TV *web* templates next to the plain webapp ones. Ru
 - Invoked for a web-app or generic template listing? Run `list-templates --type webapp` /
   `list-templates` (no type) — ONE call; the TV information rides along in the same envelope.
 - The untyped list also carries `result.templates.platform` — the plugin's GBS-buildable
-  samples (e.g. `dali-demo`). Show it as its own "Platform 앱" group, never folded into
+  samples (e.g. `dali-demo`). Show it as its own "Platform apps" group, never folded into
   `native`; a pick there is created with `--type platform`.
 
 Templates come from the **installed SDK** (`tz list templates` under the highest installed
@@ -381,7 +381,7 @@ Never auto-default or skip template selection. The user MUST explicitly select o
 
 For a **web app** request ("웹앱 만들어줘", "create a webapp") show `result.templates.webapp`
 **and**, when `result.tv` exists, `result.tv.web` under a separate heading
-("Samsung TV 웹앱 템플릿 (`result.tv.profile`)") so the user can pick either; a TV pick is
+("Samsung TV web-app templates (`result.tv.profile`)") so the user can pick either; a TV pick is
 created with `--type tv`. For a **TV** request (`--type tv`) show `result.tv.web` and
 `result.tv.dotnet` as two groups rather than the flat `result.templates.tv`.
 The native `BasicUI` template is left out of `result.templates` on purpose — offer only what
@@ -390,7 +390,7 @@ the envelope lists; create it with `--template BasicUI` only when the user names
 **⚠️ AskUserQuestion caps options at 4 per question.** When a type has more than 4
 templates (e.g. the Samsung TV web templates),
 show the full list as text first, then ask with the 3 most common templates plus a
-final `더 보기…` option that leads to a follow-up question with the remaining ones —
+final `More…` option that leads to a follow-up question with the remaining ones —
 never pass 5+ options in one question (`InputValidationError: too_big`).
 
 **⚠️ AskUserQuestion JSON safety:** paths inside question/option text must use
@@ -409,10 +409,10 @@ would fail at install time with `Load archive info fail` / `Operation not allowe
 
 When you ask for the app name:
 
-- **State the rule in the question text**: "영문/숫자 10자 이상 (예: MyTizenWebApp)".
+- **State the rule in the question text**: "At least 10 alphanumeric characters (e.g., MyTizenWebApp)".
 - **Every option or example you offer MUST already satisfy it** — never suggest
   a name that will be rejected and force a second round. Count only `A-Za-z0-9`:
-  `-`, `_`, spaces and non-ASCII characters (한글 included) do not count.
+  `-`, `_`, spaces and non-ASCII characters (Korean characters included) do not count.
   - ✅ `MyTizenWebApp` (13), `MyTizenNativeApp` (16), `MyTizenDotnetApp` (16),
     `MyTizenApp01` (12), `MyDaliDemoApp` (13)
   - ❌ `MyApp` (5), `HelloApp` (8), `TestApp` (7), `Sample01` (8), `dali-demo` (8)

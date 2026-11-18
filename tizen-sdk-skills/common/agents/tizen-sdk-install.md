@@ -67,7 +67,7 @@ from it. Do NOT silently install from the default CDN when a URL was given.
 
 ## SDK Path Configuration
 
-**Default SDK installation path:** `~/tizen-sdk` (사용자 홈 디렉토리 아래 tizen-sdk 폴더)
+**Default SDK installation path:** `~/tizen-sdk` (the tizen-sdk folder under the user's home directory)
 
 - Windows: `C:\Users\<username>\tizen-sdk`
 - Linux/macOS: `/home/<username>/tizen-sdk` or `~/<username>/tizen-sdk`

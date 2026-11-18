@@ -189,28 +189,39 @@ for (const file of skillDocs) {
       text.includes("Write-Host 'poll #1'"),
       "PowerShell poll carries an attempt number",
     );
-    assert.ok(text.includes("최대 4번"), "caps polling at 4 per turn");
     assert.ok(
-      text.includes("4번째 폴링 후에도"),
+      text.includes("at most 4 times per turn"),
+      "caps polling at 4 per turn",
+    );
+    assert.ok(
+      text.includes("after the 4th poll"),
       "says what to do after the 4th poll",
     );
-    assert.ok(text.includes("턴을 종료"), "ends the turn instead of looping");
-    assert.ok(text.includes("연속 5번"), "explains the 5-identical-call guard");
     assert.ok(
-      text.includes("계속 진행됩니다"),
+      text.includes("end the turn"),
+      "ends the turn instead of looping",
+    );
+    assert.ok(
+      text.includes("5 consecutive"),
+      "explains the 5-identical-call guard",
+    );
+    assert.ok(
+      text.includes("keeps running"),
       "says the detached install keeps running",
     );
     assert.ok(
-      text.includes("같은 폴링 명령을 그대로 다시 실행하지 마세요"),
+      text.includes("Do not re-run the same polling command verbatim"),
       "warns against repeating the poll verbatim",
     );
     assert.ok(
-      text.includes("설치 완료의 자동 알림은 제공되지 않으므로"),
+      text.includes(
+        "No automatic notification of installation completion is provided",
+      ),
       "turn-ending message says no automatic completion notice comes",
     );
     assert.ok(
       text.includes(
-        '설치 완료 확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다',
+        'ask the user to say "설치 진행 상태를 알려줘" and then check the status and resume',
       ),
       "turn-ending message tells the user how to ask for the progress",
     );
