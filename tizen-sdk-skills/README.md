@@ -62,6 +62,42 @@ bash common/setup/setup.sh --harness claude   # Windows: <host>\setup\setup.bat,
 On Windows the `.bat` files start PowerShell with `-ExecutionPolicy Bypass`. Running a
 `.ps1` directly needs an execution policy that allows local scripts.
 
+### Setup without cloning (download-and-install)
+
+`common/setup/setup-remote.sh` / `setup-remote.ps1` install the plugin without a local
+checkout. They download the tizen-agent-skills source zip from GitHub, run the regular
+setup scripts from the extracted copy, and delete the download when the setup succeeds
+(a failed setup keeps it for debugging, as does `--keep`).
+
+```bash
+# All hosts (macOS/Linux) — straight from the download, no clone needed
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+# One host
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh) --harness claude
+```
+
+On Windows (cmd or PowerShell — `curl.exe` ships with Windows 10+), download the
+self-contained `.ps1` and run it with an execution-policy bypass:
+
+```bat
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+That installs all four hosts; add `-Harness claude` (or `cline`, `codex`, `gemini`) for a
+single host, and `-Ref tizen-agent-skills-v1.6.0` to pin a release instead of `main`. The
+downloaded `setup-remote.ps1` is self-contained — the repo's `setup-remote.bat` is only a
+wrapper that needs the `.ps1` beside it. Options:
+
+| Option | Meaning |
+|---|---|
+| `--harness <name>` | Install for one host (`claude`, `cline`, `codex`, `gemini`); omitted installs all four |
+| `--ref <branch\|tag>` | Source to download — a branch (`main`, the default) or a release tag (`tizen-agent-skills-v1.6.0`) |
+| `--keep` | Keep the downloaded source after a successful setup |
+| `--skip-validation`, `--no-restart` | Forwarded to the setup script |
+
+(PowerShell uses `-Harness`, `-Ref`, `-Keep`, `-SkipValidation`, `-NoRestart`.)
+
 ### Claude Code
 
 ```bash
@@ -141,6 +177,26 @@ tizen-sdk --doctor
 - `--help` lists every command; `<command> --help` shows its options.
 - Without a build the launcher prints a `PLUGIN_NOT_BUILT` envelope with the build command.
 - The source, plugin manifest and host-integration details live under `tizen-cli/`.
+
+**No build?** `common/setup/setup-tizen-cli.sh` / `.ps1` installs the CLI straight from a
+release zip — no clone, no pnpm build:
+
+```bash
+# All platforms (macOS/Linux)
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd or PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+The script resolves the `tizen-sdk-v<version>.zip` asset of the latest release
+(`--release <tag>` / `-Release <tag>` to pin one), installs the bundle into `~/.tizen-sdk-cli`,
+creates a `tizen-sdk` shim, verifies with `--capabilities`, and deletes the download when
+done. `--tizen-cli` / `-TizenCli` also registers the plugin with a `tizen-cli` host.
+Only Node.js 22+ is required.
 
 See [tizen-cli/README.md](tizen-cli/README.md#standalone-use-without-the-tizen-cli-host) and
 [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).

@@ -100,7 +100,7 @@ flowchart LR
    - Node.js 22+ (`PATH`에 있어야 함), Git
    - OS: Windows, Linux, macOS. 에뮬레이터는 WSL에서도 동작합니다.
    - tizen-sdk CLI를 직접 빌드할 때만 pnpm
-2. 저장소를 클론합니다.
+2. 저장소를 클론합니다. — 또는 클론 없이 다운로드 설치 스크립트(아래)를 사용합니다.
 3. 사용하는 호스트의 setup 스크립트를 실행합니다.
 4. 호스트를 재시작하고 **"타이젠 SDK 설치해줘"**부터 요청합니다.
 
@@ -122,6 +122,43 @@ cd tizen-agent-skills/tizen-sdk-skills
 >
 > **주의**: SDK가 기본 경로(`~/tizen-sdk`)가 아닌 곳에 있으면 "타이젠 SDK 경로를 …로 설정해줘"(`sdk-init`)로 경로를 등록합니다.
 
+**클론 없이 설치** `setup-remote`은 GitHub에서 소스 zip을 내려받아 설치하고, 설치가
+끝나면 내려받은 소스를 삭제합니다. 클론이 필요 없습니다:
+
+```bash
+# 모든 호스트 (macOS/Linux) — 다운로드한 스크립트를 바로 실행
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+# 호스트 하나
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh) --harness claude
+```
+
+Windows(cmd 또는 PowerShell)에서는 내려받아 실행합니다:
+
+```bat
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+호스트 하나만 설치하려면 `-Harness claude`를 추가하고, `--ref`/`-Ref`로 `main` 대신
+브랜치나 릴리스 태그를 지정할 수 있습니다. 전체 옵션은
+[README.ko.md](README.ko.md#클론-없이-설치-다운로드-후-설치)를 참고하세요.
+
+**빌드 없이 독립 실행형 `tizen-sdk` CLI?** `setup-tizen-cli`은 릴리스 zip에서
+설치합니다 — 클론도 pnpm도 필요 없습니다:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd 또는 PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+`~/.tizen-sdk-cli`에 설치하고 `tizen-sdk` 셈을 만들고, `--capabilities`로 검증한 뒤
+내려받은 zip을 삭제합니다. Node.js 22+만 있으면 됩니다.
+
 ### 3.1 결과 확인
 
 **자연어 요청 예시**
@@ -141,7 +178,7 @@ cd tizen-agent-skills/tizen-sdk-skills
 **새 버전 알림**
 
 - setup이 설치한 훅이 새 세션 시작 시 GitHub에서 새 릴리스를 확인(하루 최대 1회)하고 한 줄로 알립니다.
-- 업데이트: 설치에 사용한 클론에서 `git pull` 후 같은 setup 스크립트를 다시 실행하고 호스트를 재시작합니다.
+- 업데이트: 설치에 사용한 클론에서 `git pull` 후 같은 setup 스크립트를 다시 실행하고 호스트를 재시작합니다. setup-remote(클론 없이 설치)로 설치했다면 `git pull` 대신 새 `--ref` 태그로 스크립트를 다시 실행합니다.
 - VS Code 확장은 세션 시작 확인이 없으므로 저장소 Releases를 Watch하고, 새 `.vsix`를 기존 설치 위에 설치합니다.
 
 > 릴리스별 변경 사항은 CHANGELOG.ko.md를 참고하세요.

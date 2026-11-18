@@ -59,6 +59,42 @@ bash common/setup/setup.sh --harness claude   # Windows: <호스트>\setup\setup
 Windows의 `.bat` 파일은 PowerShell을 `-ExecutionPolicy Bypass`로 실행합니다. `.ps1`을 직접
 실행하려면 로컬 스크립트를 허용하는 실행 정책이 필요합니다.
 
+### 클론 없이 설치 (다운로드 후 설치)
+
+`common/setup/setup-remote.sh` / `setup-remote.ps1`은 로컬 체크아웃 없이 플러그인을
+설치합니다. GitHub에서 tizen-agent-skills 소스 zip을 내려받아 압축을 푼 복사본에서 기존
+설치 스크립트를 실행하고, 설치가 성공하면 내려받은 소스를 삭제합니다. 설치가 실패하거나
+`--keep`을 주면 디버깅을 위해 소스를 남겨 둡니다.
+
+```bash
+# 모든 호스트 (macOS/Linux) — 다운로드한 스크립트를 바로 실행, 클론 불필요
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+# 호스트 하나
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh) --harness claude
+```
+
+Windows(cmd 또는 PowerShell — Windows 10+에는 `curl.exe`가 포함되어 있음)에서는
+자기 완결적인 `.ps1`을 내려받아 실행 정책 우회와 함께 실행합니다:
+
+```bat
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+이 명령은 네 호스트를 모두 설치합니다. 호스트 하나만 설치하려면 `-Harness claude`(`cline`,
+`codex`, `gemini`)를, `main` 대신 릴리스를 고정하려면 `-Ref tizen-agent-skills-v1.6.0`을
+추가합니다. 내려받은 `setup-remote.ps1`은 자기 완결적입니다. 저장소의 `setup-remote.bat`은
+`.ps1`을 옆에 두고 실행하는 wrapper일 뿐입니다. 옵션:
+
+| 옵션 | 의미 |
+|---|---|
+| `--harness <name>` | 호스트 하나에만 설치(`claude`, `cline`, `codex`, `gemini`); 생략하면 네 호스트 모두 |
+| `--ref <branch\|tag>` | 내려받을 소스 — 브랜치(`main`, 기본값) 또는 릴리스 태그(`tizen-agent-skills-v1.6.0`) |
+| `--keep` | 설치가 성공한 뒤에도 내려받은 소스를 유지 |
+| `--skip-validation`, `--no-restart` | 설치 스크립트에 그대로 전달 |
+
+(PowerShell은 `-Harness`, `-Ref`, `-Keep`, `-SkipValidation`, `-NoRestart`를 사용합니다.)
+
 ### Claude Code
 
 ```bash
@@ -136,6 +172,26 @@ tizen-sdk --doctor
 - `--help`는 전체 명령 목록을, `<명령> --help`는 해당 명령의 옵션을 보여줍니다.
 - 빌드 전에는 런처가 빌드 명령이 담긴 `PLUGIN_NOT_BUILT` 엔벨로프를 출력합니다.
 - 소스, 매니페스트, 호스트 연동 관련 상세 내용은 `tizen-cli/` 폴더에 있습니다.
+
+**빌드 없이 설치** `common/setup/setup-tizen-cli.sh` / `.ps1`은 릴리스 zip에서
+바로 설치합니다 — 클론도, pnpm 빌드도 필요 없습니다:
+
+```bash
+# macOS/Linux
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd 또는 PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+스크립트는 최신 릴리스의 `tizen-sdk-v<version>.zip` 에셋을 찾아(`-Release <tag>`/
+`--release <tag>`로 고정) 번들을 `~/.tizen-sdk-cli`에 설치하고, `tizen-sdk` 셈을
+만들고, `--capabilities`로 검증한 뒤 내려받은 zip을 삭제합니다. `-TizenCli`/
+`--tizen-cli`를 주면 `tizen-cli` 호스트에도 플러그인을 등록합니다. Node.js 22+만
+있으면 됩니다.
 
 [tizen-cli/README.ko.md](tizen-cli/README.ko.md#독립-실행-tizen-cli-호스트-없이),
 [docs/tizen-cli/build-and-install.md](docs/tizen-cli/build-and-install.md)를 참고하세요.

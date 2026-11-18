@@ -29,6 +29,28 @@ common/setup/setup.ps1  -Harness  <claude|cline|codex|gemini> [-RepoPath <path>]
 정의 변환에 사용). Windows에서는 모든 하네스의 훅이 `bash`(Git Bash)로 실행되므로 PATH에
 있어야 합니다.
 
+## 클론 없이 설치
+
+`setup-remote`은 로컬 체크아웃 없이 설치합니다. GitHub에서 tizen-agent-skills 소스 zip을
+내려받아 압축을 푼 복사본에서 위의 setup을 실행하고, 설치가 성공하면 내려받은 소스를
+삭제합니다(설치가 실패하거나 `-Keep`/`--keep`을 주면 남겨 둡니다).
+
+```bash
+# Linux / macOS — 다운로드한 스크립트를 바로 실행
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.sh)
+```
+
+```bat
+:: Windows (cmd 또는 PowerShell; Windows 10+에는 curl.exe가 포함되어 있음)
+curl -fsSL -o setup-remote.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-remote.ps1
+powershell -ExecutionPolicy Bypass -File setup-remote.ps1
+```
+
+옵션: `-Harness <name>` / `--harness <name>`은 네 호스트 대신 하나만 설치, `-Ref
+<branch|tag>` / `--ref`는 소스 지정(기본값 `main`), `-Keep` / `--keep`은 내려받은 소스
+유지입니다. `--skip-validation`과 `--no-restart`(PowerShell은 `-SkipValidation`,
+`-NoRestart`)는 setup에 그대로 전달됩니다.
+
 ## 무엇이 어디에 설치되나
 
 모든 하네스는 캐시 규약
