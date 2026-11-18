@@ -2,7 +2,7 @@
 
 [English](TIZEN_SDK_SKILLS_ALL_IN_ONE.en.md) | 한국어
 
-> 이 문서는 아래 3개 문서를 하나로 병합한 통합본입니다. (생성일: 2026-09-10)
+> 이 문서는 아래 3개 문서를 하나로 병합한 통합본입니다. (생성일: 2026-11-18)
 >
 > 1. `docs/SKILLS_REFERENCE.md` — 스킬 레퍼런스
 > 2. `docs/SDK_COMMANDS_ARCHITECTURE.md` — 커맨드 계층 아키텍처
@@ -31,7 +31,7 @@
 
 ## 개요
 
-`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **29개 자동화 스킬**을 제공합니다.
+`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **30개 자동화 스킬**을 제공합니다.
 
 모든 스킬은 **Standard JSON Envelope** 형식으로 응답하여 일관된 에러 처리와 기계 판독 가능한 출력을 보장합니다.
 
@@ -487,7 +487,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 
 ### 9. tizen-device-manager
 
-**설명:** SDB로 연결된 Tizen 디바이스 탐지(`start`) 또는 실행 중인 에뮬레이터 VM 전체 종료(`stop`, em-cli kill 사용). **에뮬레이터를 직접 생성/부팅하지 않습니다** — 생성은 `tizen-create-emulator`, 부팅은 `tizen-launch-emulator`가 담당합니다.
+**설명:** SDB로 연결된 Tizen 디바이스 탐지(`start`) 또는 실행 중인 에뮬레이터 VM 전체 종료(`stop`, em-cli kill 사용). **에뮬레이터를 직접 생성/부팅하지 않습니다** — 생성은 `tizen-create-emulator`, 부팅은 `tizen-launch-emulator`가 담당합니다. **진단 스킬도 아닙니다:** 문제 보고(크래시, 에러, 멈춤, CPU 급증, 동영상 재생 안 됨, "조사해줘")는 에뮬레이터가 언급되어도 `tizen-dlog-analyzer`의 일이며, 라우팅 훅이 그런 프롬프트를 되돌려 보냅니다.
 
 **사용 시점:** 연결된 디바이스/에뮬레이터 확인, 실행 중인 에뮬레이터 종료.
 
@@ -838,6 +838,49 @@ node <plugin>/lib/cli/tv-sdk-install-cli.js [--force]
 - URL: `https://download.tizen.org/sdk/extensions/tv_extensions/`
 - 타겟 패키지: `TV-SAMSUNG-Public`
 - 설치 위치: 기존 Tizen SDK 경로 (동일한 `~/tizen-sdk` 폴더)
+
+**의존성:** `tizen-sdk-install` (Tizen SDK가 먼저 설치되어야 함)
+
+---
+
+### 18a. tizen-tv-sdk-install-from-zip
+
+**설명:** 로컬 ZIP 파일에서 Tizen TV SDK 확장(TV-SAMSUNG-Public) 오프라인 설치. 모든 패키지가 ZIP에 포함되어 있어 다운로드 불필요. Tizen SDK가 먼저 설치되어 있어야 함.
+
+**사용 시점:** 오프라인 환경이나 내부 미러에서 TV SDK 확장 설치.
+
+**파라미터:**
+
+| 파라미터   | 타입    | 기본값  | 설명                                    |
+| ---------- | ------- | ------- | --------------------------------------- |
+| `zipPath`  | string  | (필수)  | TV SDK 패키지가 포함된 ZIP 파일 경로    |
+| `tvVersion` | string | ZIP에서 읽음 | ZIP이 담은 TV 플랫폼 버전(`--tv-version X.Y`). 내부 ZIP 이름에 버전이 없으면 필수 |
+| `force`    | boolean | `false` | 그 TV 버전이 이미 설치되어 있어도 강제 재설치 |
+
+**CLI 러너:**
+
+```
+node <plugin>/lib/cli/tv-sdk-install-from-zip-cli.js --zip-path <path> [--tv-version <X.Y>] [--force]
+```
+
+**설치 조건 흐름:**
+
+```
+1. Tizen SDK 설치 여부 확인 (sdk.info)
+   ├─ 설치됨 → TV SDK 설치 진행
+   └─ 미설치 → 대화형 메시지: "Tizen SDK가 먼저 설치되어야 합니다. 설치하시겠습니까?"
+       ├─ 승인 → tizen-sdk-install 스킬 호출 → 완료 후 TV SDK 설치 재시도
+       └─ 거부 → 중단 종료
+2. 이 ZIP의 TV 버전이 이미 설치? (`.platform-installed`에 이 ZIP 또는 `--tv-version`이 기록됨) → 설치 시 success 반환. 다른 TV 버전은 나란히 설치된다
+3. TV SDK 설치 스크립트 명령 반환 (suggested_fix) — Phase 2 background 실행
+```
+
+**설치 방식:**
+
+- ZIP 파일에서 패키지 추출 (다운로드 불필요, 오프라인 설치)
+- 내부 ZIP 파일들을 SDK tools 경로에 압축 해제
+- 내부 ZIP 이름(또는 `--tv-version`)에서 TV 버전을 정한다. 둘이 다르거나 둘 다 없으면 압축을 풀기 전에 멈춘다
+- TV 버전을 `.platform-installed`에 기록(`Profile: tv-samsung`, `Source: <zip>`)하고 `.tv-sdk-installed` 마커를 쓴다
 
 **의존성:** `tizen-sdk-install` (Tizen SDK가 먼저 설치되어야 함)
 
@@ -1294,17 +1337,22 @@ node <plugin>/lib/cli/install-rootstrap-cli.js --zip-path <zipPath> [--force]
 
 ### 28. tizen-dlog-analyzer
 
-**설명:** Tizen 디바이스의 dlog를 지속적으로 수집·분석하여 크래시/예외를 자동 감지. AI 기반 루트 코즈 분석 및 해결책 제안.
+**설명:** Tizen 디바이스의 dlog를 지속적으로 수집·분석하여 크래시/예외를 자동 감지. AI 기반 루트 코즈 분석 및 해결책 제안. 앱별 로그 수집 및 런타임 에러(E/F 우선순위) 분석도 지원.
 
-**사용 시점:** 실행 중인 앱의 크래시/예외 모니터링, dlog 기반 근본 원인 분석. 에뮬레이터 또는 디바이스가 필요.
+**사용 시점:** 실행 중인 앱의 크래시/예외 모니터링, dlog 기반 근본 원인 분석, 앱 PID로 필터링된 로그 수집, 런타임 에러 분석. 에뮬레이터 또는 디바이스가 필요.
 
 **파라미터:**
 
 | 파라미터      | 타입   | 기본값   | 설명                                                                     |
 | ------------- | ------ | -------- | ------------------------------------------------------------------------ |
-| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze` 중 하나 |
-| `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장)     |
-| `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze에 필수 |
+| `action`      | string | _(필수)_ | `start`, `stop`, `check`, `status`, `app-launch`, `app-terminate`, `dlog-collect`, `stop-collect`, `error-analyze`, `app-log`, `search`, `device-profile`, `investigate`, `probe`, `snapshot`, `timeline`, `kernel`, `log-dump`, `log-clear`, `crash-report` 중 하나 |
+| `subcommand`  | string | _(start 전용)_ | `dlog-collect`, `exception-detect`, `start-monitoring` (권장). probe: `list`/`run`. snapshot: `create`/`list`/`compare`/`delete`. kernel: `collect`(백그라운드)/`stop`/`analyze`. timeline: `show`/`report`/`analyze`/`export`     |
+| `app-id`      | string | _(앱 액션)_ | Tizen 앱 ID (예: org.example.myapp). app-launch, app-terminate, dlog-collect, error-analyze, app-log에 필수; investigate는 선택(앱 범위 조사) |
+| `symptoms`    | string | `null`   | investigate 전용: 사용자의 증상 표현 그대로 (예: "300% cpu, video not playing") — 실행할 프로브 번들을 선택 |
+| `pattern`     | string | _(search 필수)_ | search 전용: 찾을 텍스트(여러 개 가능, 기본은 하나라도 일치; `--regex`면 Python 정규식). `--category`, `--priority`, `--since`, `--context <n>`, `--count`, `--format json`으로 범위·출력 조정 |
+| `process`     | string | `null`   | crash-report 전용: 이 앱 ID 또는 프로세스 이름의 덤프만 (예: `deviced` — 시스템 데몬은 앱 ID가 필요 없음). `app-id`는 별칭. 기본값: 모든 프로세스 |
+| `dump-dir`    | string | `null`   | crash-report 전용: `/opt/usr/share/crash/dump`, `/run/crash/dump` 외에 추가로 검색할 디바이스 디렉터리 (반복 가능) |
+| `limit`       | number | `3`      | crash-report 전용: 열어 볼 최신 덤프 개수 (`0` = 전부) |
 | `format`      | string | `null`   | error-analyze 전용: `summary` (요약 라인만), `details` (상세 항목만), 생략 시 둘 다  |
 | `serial`      | string | `null`   | sdb 디바이스 시리얼 (생략 시 자동 선택)                                  |
 
@@ -1327,10 +1375,11 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js investigate [app-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js probe list|run [probe-id]
 node <plugin>/lib/cli/dlog-analyzer-cli.js snapshot create|list|compare|delete [id1] [id2]
 node <plugin>/lib/cli/dlog-analyzer-cli.js timeline show|report|analyze|export
-node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
+node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|stop|analyze
+node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --app-id <id>] [--dump-dir <dir>]... [--limit <n>] [--lines <n>] [--output <dir>]
 ```
 
-**워크플로우:**
+**워크플로우 (백그라운드 모니터링):**
 
 1. **모니터링 시작** (`start start-monitoring`) — 앱 실행 전에 백그라운드에서 dlog 수집/분석 시작
 2. **앱 실행** — 모니터링이 켜진 상태에서 앱을 실행하여 시작 로그부터 캡처
@@ -1338,6 +1387,29 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 4. **분석 결과 확인** (`check`) — 크래시/예외 분석 결과를 읽고 해결책 제안
 5. **수정 적용** → **재빌드** → **재설치/재실행** → **재확인** (`check`) — 문제 해결까지 반복
 6. **모니터링 종료** (`stop`) — 백그라운드 프로세스 정리
+
+**워크플로우 (앱별 로그 분석 — 사용자가 앱 ID를 지정한 경우):**
+
+1. **앱 실행** (`app-launch <app-id>`) — 특정 앱을 실행하고 PID 획득 (약간의 지연 있음)
+2. **백그라운드 수집 시작** (`dlog-collect <app-id>`) — 앱 PID로 필터링된 로그를 백그라운드로 수집 시작, `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장 (SDK 데이터 경로는 `~/.tizen.sdk.path.config` → `sdk.info`의 `TIZEN_SDK_DATA_PATH` 또는 `<sdk>-data`에서 결정)
+3. **사용자에게 앱 사용 요청 — 그리고 턴 종료** — 앱을 사용하며 이슈를 재현하도록 안내하고 "재현 완료 — 에러/크래시 발생" 또는 "아무 일 없음" 두 가지 선택지 제시. `sleep`·폴링·같은 턴의 `stop-collect` 금지 (가드 훅이 러너 주변의 타이머 대기를 차단)
+4. **수집 중지 및 분석 — 에러부터** — 사용자가 보고하면 `stop-collect`로 수집을 중지한 뒤 `error-analyze <app-id> summary`로 E/F 우선순위 항목 분석 (tag+message 기준 중복 제거 및 발생 횟수 계산). 증상이 설명되지 않을 때만 확대: `error-analyze <app-id> details` → 필터를 건 `app-log <app-id> --priority W --since 10m --max-lines 300`. 항상 분석 명령을 사용하고 로그 파일을 직접 읽지 않으며, `app-log`로 시작하지 않음.
+5. **앱 종료** (`app-terminate <app-id>`) — 정리
+
+**워크플로우 (증상 조사 — 크래시, 멈춤, CPU 급증, 메모리, 동영상 재생 안 됨):**
+
+문제 보고는 에뮬레이터·디바이스가 언급되어도 이 스킬의 일입니다 (`tizen-device-manager`는 디바이스 목록·에뮬레이터 종료 전용 — 라우팅 훅이 그런 프롬프트를 되돌려 보냄).
+
+1. **예비 조사** (`investigate --symptoms "<사용자 표현>" [app-id]`) — 증상에 맞는 프로브와 기존 로그로 가설을 세웁니다. `confidence: confirmed`여도 수집·앱 실행·사용자 재현을 생략하지 않습니다.
+2. **새 로그 수집 후 앱 실행** — `start start-monitoring`, `kernel collect`(CPU / 멈춤 / 메모리 / 그래픽 / 드라이버 증상), 이어서 `app-launch <app-id>`; 같은 시리얼에서 성공 여부를 확인합니다. 실행 상태 유지는 사용자가 요청한 경우에만 허용합니다. dlog 수집기는 한 번에 하나만 실행: `dlog-collect <app-id>`는 시스템 모니터 없는 앱 전용 세션의 대안입니다.
+3. **재현 요청 — 턴 종료 후 응답 대기** — "(1) 재현 완료, 발생했어요 / (2) 아무 일 없었어요"; 실패한 동작과 대략적인 시각도 요청합니다. 응답 전에는 중지·분석·추가 프로브를 실행하지 않습니다.
+4. **응답 후 중지 및 분석** — 시스템 모니터는 `stop`, 앱 전용은 `stop-collect`, 커널 수집 시 `kernel stop`; 앱 전용 로그는 `error-analyze <app-id> summary`, 모니터는 `check`, 커널은 `kernel analyze`로 분석합니다. 이번 재현 시간대와 상관 분석 후 필요하면 `investigate`나 프로브를 다시 실행합니다. 증상이 없었다면 **재현되지 않음**으로 보고합니다. 설명되지 않을 때만 확대합니다: 특정 문자열 `search` → 프로브; 앱 전용 수집이면 `error-analyze … details`와 필터를 건 `app-log`도 사용합니다 (모니터만 켠 경우 `no_logs`).
+5. **보고서**(사용자 언어 템플릿) → 다음 단계 안내 → 완료 시 `stop`
+
+사용자가 저장 로그만 분석하도록 명시하거나 실시간 재현을 거절한 경우에만
+이 과정을 생략할 수 있습니다. 그 한계를 밝히고 원인 판단은 잠정적으로 유지합니다.
+
+커널 로그는 항상 `kernel collect` → `kernel stop` → `kernel analyze` (`sdb shell dmesg` 금지); 프로브는 `investigate` / `probe run` (`sdb shell top / ps / free` 직접 입력 금지).
 
 **액션 설명:**
 
@@ -1351,21 +1423,48 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 | `app-terminate` | `sdb shell app_launcher -k`로 실행 중인 Tizen 앱 종료        |
 | `dlog-collect`  | 앱 PID로 필터링된 dlog를 백그라운드로 수집 시작 (앱이 실행 중이어야 함) |
 | `stop-collect`  | 백그라운드 앱 dlog 수집 프로세스 종료                         |
-| `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함)   |
-| `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일)  |
-| `search`        | 수집된 모든 dlog 카테고리(각 앱, `_general`, `_unparsed`; 커널 제외)에서 텍스트/정규식 검색 — 엔트리 전체 반환 (바이너리 v0.2.6+) |
+| `error-analyze` | 수집된 앱 로그에서 E/F 우선순위 에러 분석 (중복 제거 포함) — 첫 번째 분석 호출 |
+| `app-log`       | 한 앱의 전체 수집 로그 출력 (모든 우선순위, hot + cold 파일) — `error-analyze` 이후 확대용, 필터 필수 |
+| `search`        | 수집된 모든 dlog 카테고리(각 앱, `_general`, `_unparsed`; 커널 제외)에서 텍스트/정규식 검색 — 어느 앱이 남겼는지 몰라도 찾고, 스택 트레이스를 포함한 엔트리 전체를 반환 (바이너리 v0.2.6+; `.hot.log`를 `grep`하지 않음) |
 | `device-profile`| 연결된 디바이스의 프로필 감지 및 출력 (타입, 버전, 아키텍처, 루트, 도구) |
-| `investigate`   | 일회성 1차 조사 실행 및 예산화된 보고서 출력 (general/app)   |
-| `probe`         | 데이터 기반 카탈로그에서 증거 프로브 목록 조회 및 실행        |
+| `investigate`   | 일회성 1차 조사: 증상 표현 → 프로브 번들 → 상관 분석 보고서 (증상 조사의 첫 호출) |
+| `probe`         | 증거 프로브 카탈로그 `list` / `run <probe-id>` 한 개 실행 (`sdb shell top/ps/free` 직접 입력 대체) |
 | `snapshot`      | 시스템 스냅샷 생성, 목록 조회, 비교                          |
 | `timeline`      | 스냅샷 간 프로브 히스토리 분석 및 시각화                    |
-| `kernel`        | 커널 로그 수집 및 분석 (kmsg/dmesg)                          |
+| `kernel`        | 커널 로그 `collect`(백그라운드) / `stop` / `analyze` (kmsg/dmesg — `sdb shell dmesg` 대체) |
 
-**참고:** 한 번에 하나의 인스턴스만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`(및 `stop-collect`)으로 종료해야 함. 분석 완료 시 보고서는 영문 → 한글 순서로 항상 두 언어로 렌더링됨.
+**참고:** 백그라운드 인스턴스는 한 번에 하나만 실행 가능. 이미 실행 중이면 `start`는 `already_running` 에러 반환. 백그라운드 프로세스는 세션이 종료되어도 유지되므로 반드시 `stop`으로 종료해야 함. 앱별 로그는 `<sdk-data>/dloganalyzer/app/<app-id>/<app-id>.hot.log`에 저장됨 (네이티브 바이너리에 `--base-dir` 옵션 없음; SDK 경로 미설정 시 `sdk_path_not_set` 반환). `dlog-collect`는 앱이 실행 중이어야 함 (`pgrep`으로 PID 조회). `error-analyze`는 `dlog-collect` → `stop-collect` 이후 실행해야 함. 로그 분석은 항상 `error-analyze`로 — 로그 파일을 직접 읽지 않음. 분석 완료 시 보고서는 사용자가 작성한 언어로 한 번만 렌더링됨 (한국어로 작성 시 한국어, 그 외에는 영어) — `REPORT_TEMPLATE.md` 구조를 따름.
+
 
 **의존성:** `tizen-launch-emulator` 또는 `tizen-device-manager` (실행 중인 디바이스/에뮬레이터 필요)
 
 **상세 문서:** [debug/scenario-dlog-analyzer-walkthrough.md](debug/scenario-dlog-analyzer-walkthrough.md)
+
+---
+
+### 29. tizen-handoff
+
+**설명:** 작업을 시작하기 전에 Tizen 프로젝트의 핸드오프 노트를 확인하고, 작업을 멈출 때 인계합니다 — Claude Code·Codex CLI 등 서로 다른 에이전트가 상대의 작업을 이어받을 수 있습니다.
+
+**사용 시점:** 사용자가 에이전트를 바꿀 때("Codex가 하던 작업 이어서", "이어서 작업해줘"), 또는 다른 에이전트가 건드렸을 수 있는 프로젝트에서 Tizen 작업을 시작할 때. 다른 모든 스킬의 러너가 자신의 결과를 노트에 자동 기록하며, 이 스킬은 그 노트를 읽고 에이전트가 자신의 의도(`STATE.md`, `DECISIONS.md`)를 적는 곳입니다.
+
+**파라미터:**
+
+| 파라미터  | 타입   | 기본값                                            | 설명                                      |
+| --------- | ------ | ------------------------------------------------- | ----------------------------------------- |
+| `action`  | string | _(필수)_                                          | `show`(확인) 또는 `init`(노트 폴더 수동 생성) |
+| `project` | string | 현재 디렉터리의 프로젝트(`show`); _(`init`은 필수)_ | 프로젝트 루트 또는 그 하위 폴더           |
+
+**CLI 러너:**
+
+```
+node <plugin>/lib/cli/handoff-cli.js show [--project "<project-dir>"]
+node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
+```
+
+**참고:** 노트는 프로젝트 **밖**인 `~/.tizen-sdk-skills/handoff/<project>-<id>/`에 저장되므로 앱에 패키징되거나 git에 커밋되지 않습니다. 러너가 처음 무언가를 기록할 때 폴더가 자동 생성되므로 별도 설정 단계가 없습니다. `STATE.md`와 `DECISIONS.md`는 에이전트가 작성하고, `LOG.md`·`BUILDS.md`·`DEVICES.md`·`DEBUG.md`·`ENVIRONMENT.md`는 러너가 추가하므로 편집하지 않습니다. 읽기 전용 호출(list, check, status)은 기록하지 않으며, 인증서 명령은 액션과 상태만 기록하고 결과 데이터는 절대 기록하지 않습니다. `TIZEN_HANDOFF=0`은 기록을 끄고, `TIZEN_HANDOFF=existing`은 폴더가 이미 있는 경우에만 기록하며, `TIZEN_HANDOFF_HOME`은 상위 폴더를 옮깁니다. 128 KB를 넘는 추가 전용 파일은 `archive/`로 이동합니다.
+
+**의존성:** 없음 (SDK·디바이스 불필요)
 
 ---
 
@@ -1466,6 +1565,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 | 26  | `tizen-download-mobile-platform` | `downloadMobilePlatform()` | `download-mobile-platform-cli.js` | Tizen 모바일 플랫폼 패키지(`MOBILE-{version}`) + IOT-Headed 설치 |
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | 커스텀 루트스트랩 ZIP 패키지 설치 (보안 검증 포함) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` 외 | `dlog-analyzer-cli.js`  | dlog 크래시/예외 지속 수집·분석 (백그라운드)       |
+| 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | 프로젝트의 에이전트 간 핸드오프 노트 확인·생성 |
 
 ---
 
@@ -1575,7 +1675,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js kernel collect|analyze
 | `core/preflight.js` | Node.js / 디스크 공간 사전 확인 |
 | `core/screenshot.js`, `core/file-transfer.js`, `core/sdb-helper.js`, `core/remote-device.js` | 스크린샷, sdb push/pull, sdb intent 매칭, 원격 디바이스 |
 | `core/certificate.js`, `core/samsung-cert.js` | 로컬 인증서/서명 프로파일, Samsung 온라인 CA 인증서 |
-| `core/dlog-analyzer.js` | 백그라운드 dlog 모니터링 (분리 프로세스 spawn / PID·출력 파일 관리) |
+| `core/dlog-analyzer.js` | 백그라운드 dlog 모니터링 (분리 프로세스 spawn / PID·출력 파일 관리), 앱별 로그 수집 및 에러 분석 |
 
 ---
 
@@ -1825,8 +1925,9 @@ module.exports = {
   parseDuidList, importDuidsFromFile,
   acquireDuidFromDevice, acquireDuidsFromAllDevices,
 
-  // dlog 분석기 (core/dlog-analyzer.js — 백그라운드 dlog 모니터링)
+  // dlog 분석기 (core/dlog-analyzer.js — 백그라운드 dlog 모니터링, 앱별 로그 수집/에러 분석)
   startDlogAnalyzer, stopDlogAnalyzer, checkDlogAnalyzer, statusDlogAnalyzer,
+  launchApp, terminateApp, collectAppLogs, analyzeErrors,
 };
 ```
 
@@ -1880,6 +1981,7 @@ module.exports = {
 ## 관련 문서
 
 - [중간 계층 소개](SDK_LAYERS_OVERVIEW.md) — 각 계층이 왜 필요한지, 왜 .ps1을 직접 호출하지 않는지 설명
+- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 30개 스킬이 36개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)
 
 ---
 
@@ -1956,7 +2058,6 @@ Tizen SDK Skills
 │   ├── 플랫폼 패키지 설치 ─────── tizen-platform-install
 │   ├── 모바일 플랫폼 다운로드 ─── tizen-download-mobile-platform
 │   ├── TV SDK 확장 설치 ───────── tizen-tv-sdk-install           ← [4]
-│   ├── TV SDK 확장 설치 (ZIP) ─── tizen-tv-sdk-install-from-zip
 │   └── 패키지 업데이트 ────────── tizen-update-package
 │
 ├── 환경 구성
@@ -2433,7 +2534,7 @@ SDK 설치부터 WebApp 테트리스 게임 구현, 빌드, 에뮬레이터 설�
 ## 📌 관련 문서
 
 - [전체 에이전트 개요 (README)](README.md)
-- [스킬 레퍼런스](#tizen-sdk-skills--스킬-레퍼런스)
+- [스킬 레퍼런스](SKILLS_REFERENCE.md)
 
 ---
 

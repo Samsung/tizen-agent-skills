@@ -28,9 +28,9 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 ## 개요
 
 
-`tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 29가지 자동화 스킬을 제공합니다.
+`tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 30가지 자동화 스킬을 제공합니다.
 
-### 29가지 핵심 스킬
+### 30가지 핵심 스킬
 
 | 스킬 | 설명 | 용도 |
 |------|------|------|
@@ -63,6 +63,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-tv-sdk-install** | TV SDK 확장 설치 (TV-SAMSUNG-Public) | TV 앱 개발 |
 | **tizen-tv-sdk-install-from-zip** | TV SDK 확장 설치 (로컬 ZIP, 오프라인) | 오프라인 TV 앱 개발 |
 | **tizen-update-package** | Tizen SDK 패키지 업데이트 | 설치된 패키지의 새 버전 확인 및 업데이트 |
+| **tizen-handoff** | 프로젝트 핸드오프 노트 확인·시작 | 다른 에이전트(Claude Code, Codex CLI, Cline)가 하던 작업 이어받기 |
 
 ---
 
@@ -161,6 +162,7 @@ Cline에서는 자연어로 요청하면 스킬이 자동으로 로드됩니다.
 | "TV SDK 설치해줘" | `tizen-tv-sdk-install` |
 | "TV SDK ZIP으로 설치해줘" | `tizen-tv-sdk-install-from-zip` |
 | "패키지 업데이트해줘" | `tizen-update-package` |
+| "Codex가 하던 작업 이어서 해줘" / "이어서 작업해줘" | `tizen-handoff` |
 
 ---
 
@@ -701,7 +703,8 @@ tizen-sdk-skills/
 │   │   ├── tizen-playwright-test/
 │   │   ├── tizen-tv-sdk-install/
 │   │   ├── tizen-tv-sdk-install-from-zip/
-│   │   └── tizen-update-package/
+│   │   ├── tizen-update-package/
+│   │   └── tizen-handoff/
 │   │
 │   ├── lib/                            # CLI 러너 및 공유 라이브러리
 │   │   ├── README.md                   # lib 구조 설명
@@ -730,7 +733,8 @@ tizen-sdk-skills/
 │   │   │   ├── playwright-test-cli.js
 │   │   │   ├── tv-sdk-install-cli.js
 │   │   │   ├── tv-sdk-install-from-zip-cli.js
-│   │   │   └── update-package-cli.js
+│   │   │   ├── update-package-cli.js
+│   │   │   └── handoff-cli.js
 │   │   ├── core/                       # 공용 코어 (sdk-commands.js, sdb.js, emulator.js, project.js 등)
 │   │   ├── envelope/                   # Standard JSON Envelope
 │   │   │   ├── envelope.js
