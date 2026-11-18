@@ -466,23 +466,23 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-10-26 against v1.6.1. Every row can be re-measured with the
+Measured on 2026-11-18 against v1.9.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
 | Area | Count | How to re-measure |
 |------|-------|-------------------|
 | Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
-| Skills (`common/skills/`) | 29 (+2 CLI-only → 31 in `tizen-cli/skills/`) | `ls -d common/skills/*/ \| wc -l` |
+| Skills (`common/skills/`) | 30 (`tizen-cli/skills/` has 31: 29 of these — all but `tizen-handoff` — plus 2 CLI-only) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI commands | 36 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
-| Error codes | 61 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
-| Hooks | 3 PreToolUse guard scripts with 13 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 90 files | `node common/lib/tests/run-all.js` |
-| VS Code extension tests | 119 cases in 3 files | `cd vscode && npm test` |
+| Error codes | 64 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
+| Hooks | 3 PreToolUse guard scripts with 14 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
+| Unit tests (`common/lib/tests/`) | 100 files | `node common/lib/tests/run-all.js` |
+| VS Code extension tests | 122 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 254 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 213 Markdown files (`docs/` 93 in en/ko pairs), 60 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Documentation | 216 Markdown files (`docs/` 93 in en/ko pairs), 61 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
