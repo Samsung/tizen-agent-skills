@@ -22,7 +22,6 @@ flowchart LR
         direction TB
         Dev["Developer<br/>① Natural-language request<br/>② Run tizen-sdk CLI directly"]
         Host["AI host<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
-        Skill["30 skills · 24 agents<br/>request → skill routing"]
         Skill["29 skills · 24 agents<br/>request → skill routing"]
         Runner["CLI runner (common/lib/cli)<br/>36 commands"]
         Tools["Tizen SDK tools<br/>tz · sdb · em-cli<br/>gbs (Platform builds only)"]
@@ -180,7 +179,6 @@ It installs into `~/.tizen-sdk-cli`, creates a `tizen-sdk` shim, verifies with
 
 - The hook installed by setup checks GitHub for a new release when a session starts (at most once a day) and shows a one-line notice.
 - To update: run `git pull` in the clone you installed from, re-run the same setup script and restart the host. If you installed with setup-remote (no clone), re-run it with the new `--ref` tag instead of `git pull`.
-- To update: run `git pull` in the clone you installed from, re-run the same setup script and restart the host.
 - The VS Code extension has no session-start check, so watch the repository's Releases and install the new `.vsix` over the existing one.
 
 > See CHANGELOG.md for the changes in each release.
