@@ -39,7 +39,7 @@ function resolveProject(projectPath, command, startTime) {
   try {
     isDir = fs.statSync(start).isDirectory();
   } catch (_e) {
-    isDir = false;
+    /* missing or unreadable: isDir stays false, handled below */
   }
   if (!isDir) {
     return {
