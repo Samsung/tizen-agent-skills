@@ -287,7 +287,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 ├── common/                 # Shared by all harnesses (single source of truth)
 │   ├── .claude-plugin/     #   Claude Code plugin metadata (plugin.json)
 │   ├── agents/             #   24 agent .md files (runner lookup covers .claude/.cline/.codex/.gemini)
-│   ├── skills/             #   29 SKILL.md directories (runner lookup covers .claude/.cline/.codex/.gemini)
+│   ├── skills/             #   30 SKILL.md directories (runner lookup covers .claude/.cline/.codex/.gemini)
 │   ├── lib/                #   CommonJS domain logic — CLI runners, core, envelope, tests
 │   │   ├── cli/            #     CLI entry points (one per command, run via `node <file>`)
 │   │   ├── core/           #     sdk-commands.js, plugin-cache.js, certificate, device, emulator, debug, ...

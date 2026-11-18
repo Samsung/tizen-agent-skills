@@ -21,7 +21,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **29 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **30 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -1441,6 +1441,32 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 
 ---
 
+### 29. tizen-handoff
+
+**Description:** Catch up on a Tizen project's handoff notes before working on it, and hand it over when you stop — so Claude Code, Codex CLI and other agents can continue each other's work.
+
+**Use Case:** The user switches agents ("continue where Codex left off", "pick up where Claude left off"), or Tizen work starts in a project another agent may have touched. Every other skill's runner records its own result into the notes automatically; this skill reads them, and is where an agent writes its own intent (`STATE.md`, `DECISIONS.md`).
+
+**Parameters:**
+
+| Parameter | Type   | Default                                                   | Description                                        |
+| --------- | ------ | --------------------------------------------------------- | -------------------------------------------------- |
+| `action`  | string | _(required)_                                                | `show` (catch up) or `init` (create the folder by hand) |
+| `project` | string | current directory's project (`show`); _(required for `init`)_ | Project root, or any folder inside it              |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/handoff-cli.js show [--project "<project-dir>"]
+node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
+```
+
+**Notes:** The notes live **outside** the project, in `~/.tizen-sdk-skills/handoff/<project>-<id>/`, so they are never packaged into an app or committed to git; the folder is created the first time a runner records something, so there is no setup step. `STATE.md` and `DECISIONS.md` are written by agents; `LOG.md`, `BUILDS.md`, `DEVICES.md`, `DEBUG.md` and `ENVIRONMENT.md` are appended by the runners and must not be edited. Read-only runner calls (list, check, status) are not recorded, and certificate commands record the action and status only, never result data. `TIZEN_HANDOFF=0` turns recording off, `TIZEN_HANDOFF=existing` records only where the folder already exists, and `TIZEN_HANDOFF_HOME` moves the parent folder. Append-only files over 128 KB are rotated into `archive/`.
+
+**Dependencies:** None (no SDK or device required)
+
+---
+
 ## Skill Dependency Flow
 
 ```
@@ -1537,6 +1563,7 @@ Kernel logs always go through `kernel collect` → `kernel stop` → `kernel ana
 | 26  | `tizen-download-mobile-platform` | `downloadMobilePlatform()` | `download-mobile-platform-cli.js` | Install Tizen Mobile platform (`MOBILE-{version}`) + IOT-Headed |
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | Install custom rootstrap ZIP package (with security validation) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` etc. | `dlog-analyzer-cli.js` | Continuous dlog crash/exception collection & analysis (background) |
+| 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
 
 ---
 

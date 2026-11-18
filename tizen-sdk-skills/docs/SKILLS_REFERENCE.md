@@ -20,7 +20,7 @@
 ## 주요 기능
 
 - ✅ **원커맨드 SDK 설정** — Node.js 체크 → 디스크 공간 체크 → SDK 설치, 완전 자동화
-- ✅ **29개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
+- ✅ **30개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
 
 - ✅ **크로스 플랫폼** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **멀티 하네스 지원** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (하나의 `common/`을 공유, 하네스별 setup은 `common/setup/setup.{sh,ps1} --harness <이름>`)
@@ -1422,6 +1422,32 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --ap
 
 ---
 
+### 29. tizen-handoff
+
+**설명:** 작업을 시작하기 전에 Tizen 프로젝트의 핸드오프 노트를 확인하고, 작업을 멈출 때 인계합니다 — Claude Code·Codex CLI 등 서로 다른 에이전트가 상대의 작업을 이어받을 수 있습니다.
+
+**사용 시점:** 사용자가 에이전트를 바꿀 때("Codex가 하던 작업 이어서", "이어서 작업해줘"), 또는 다른 에이전트가 건드렸을 수 있는 프로젝트에서 Tizen 작업을 시작할 때. 다른 모든 스킬의 러너가 자신의 결과를 노트에 자동 기록하며, 이 스킬은 그 노트를 읽고 에이전트가 자신의 의도(`STATE.md`, `DECISIONS.md`)를 적는 곳입니다.
+
+**파라미터:**
+
+| 파라미터  | 타입   | 기본값                                            | 설명                                      |
+| --------- | ------ | ------------------------------------------------- | ----------------------------------------- |
+| `action`  | string | _(필수)_                                          | `show`(확인) 또는 `init`(노트 폴더 수동 생성) |
+| `project` | string | 현재 디렉터리의 프로젝트(`show`); _(`init`은 필수)_ | 프로젝트 루트 또는 그 하위 폴더           |
+
+**CLI 러너:**
+
+```
+node <plugin>/lib/cli/handoff-cli.js show [--project "<project-dir>"]
+node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
+```
+
+**참고:** 노트는 프로젝트 **밖**인 `~/.tizen-sdk-skills/handoff/<project>-<id>/`에 저장되므로 앱에 패키징되거나 git에 커밋되지 않습니다. 러너가 처음 무언가를 기록할 때 폴더가 자동 생성되므로 별도 설정 단계가 없습니다. `STATE.md`와 `DECISIONS.md`는 에이전트가 작성하고, `LOG.md`·`BUILDS.md`·`DEVICES.md`·`DEBUG.md`·`ENVIRONMENT.md`는 러너가 추가하므로 편집하지 않습니다. 읽기 전용 호출(list, check, status)은 기록하지 않으며, 인증서 명령은 액션과 상태만 기록하고 결과 데이터는 절대 기록하지 않습니다. `TIZEN_HANDOFF=0`은 기록을 끄고, `TIZEN_HANDOFF=existing`은 폴더가 이미 있는 경우에만 기록하며, `TIZEN_HANDOFF_HOME`은 상위 폴더를 옮깁니다. 128 KB를 넘는 추가 전용 파일은 `archive/`로 이동합니다.
+
+**의존성:** 없음 (SDK·디바이스 불필요)
+
+---
+
 ## 스킬 의존성 흐름
 
 
@@ -1519,6 +1545,7 @@ node <plugin>/lib/cli/dlog-analyzer-cli.js crash-report [--process <name> | --ap
 | 26  | `tizen-download-mobile-platform` | `downloadMobilePlatform()` | `download-mobile-platform-cli.js` | Tizen 모바일 플랫폼 패키지(`MOBILE-{version}`) + IOT-Headed 설치 |
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | 커스텀 루트스트랩 ZIP 패키지 설치 (보안 검증 포함) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` 외 | `dlog-analyzer-cli.js`  | dlog 크래시/예외 지속 수집·분석 (백그라운드)       |
+| 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | 프로젝트의 에이전트 간 핸드오프 노트 확인·생성 |
 
 ---
 

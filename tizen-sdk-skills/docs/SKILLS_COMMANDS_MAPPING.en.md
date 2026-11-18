@@ -1,4 +1,4 @@
-# Skill ↔ Command Mapping — Why 29 Skills but 36 Commands
+# Skill ↔ Command Mapping — Why 30 Skills but 36 Commands
 
 English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 
@@ -10,7 +10,7 @@ English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 
 | Unit | Count | Source of truth |
 |---|---|---|
-| **Skills** (natural-language trigger unit for Cline/Claude Code) | **29** | `common/skills/*/SKILL.md` |
+| **Skills** (natural-language trigger unit for Cline/Claude Code) | **30** | `common/skills/*/SKILL.md` |
 | **Commands** (`tizen-cli tizen-sdk <command>`) | **36** | `tizen-cli/src/command-specs/*.ts` |
 | SKILL.md files for tizen-cli (for reference) | 31 | `tizen-cli/skills/*/SKILL.md` — see [Why there are two skill sets](#why-there-are-two-skill-sets) |
 
@@ -36,7 +36,7 @@ The remaining 29 commands map 1:1 to skills.
 
 ---
 
-## Full mapping table (36 commands → 29 skills)
+## Full mapping table (36 commands → 30 skills)
 
 Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cli/skills/tizen-sdk/SKILL.md).
 
@@ -118,7 +118,7 @@ Skill directories exist per harness, with different counts:
 
 | Location | SKILL.md count | Purpose | Contents |
 |---|---|---|---|
-| `common/skills/` | **29** | Cline/Claude Code — the agent runs `node <cli-runner>` directly | The 29 skills in the table above |
+| `common/skills/` | **30** | Cline/Claude Code — the agent runs `node <cli-runner>` directly | The 30 skills in the table above |
 | `tizen-cli/skills/` | **31** | Agents driving tizen-cli — call `tizen-cli tizen-sdk <command>` | The same 29 + 2 extras (below) |
 
 The 2 extras that exist only in `tizen-cli/skills/`:
@@ -126,7 +126,7 @@ The 2 extras that exist only in `tizen-cli/skills/`:
 1. **`tizen-sdk`** (umbrella router) — the entry-point skill containing the routing table for all 36 commands. It has no counterpart in common (Cline/Claude Code route via each skill's own description).
 2. **`tizen-list-templates`** — in tizen-cli, `list-templates` is a standalone command and therefore gets a dedicated skill. In common it is handled as the list-templates action of the `tizen-create-project` skill.
 
-In other words, "29 skills" in the docs is counted against **common/skills**, while "36 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
+In other words, "30 skills" in the docs is counted against **common/skills**, while "36 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
 
 ---
 
@@ -134,5 +134,5 @@ In other words, "29 skills" in the docs is counted against **common/skills**, wh
 
 - [SDK_COMMANDS_ARCHITECTURE.en.md](SDK_COMMANDS_ARCHITECTURE.en.md) — call flow: CLI runners → sdk-commands.js → domain modules
 - [COMMAND_MAPPING.md](COMMAND_MAPPING.md) — command-spec ↔ envelope `command` field string mapping
-- [SKILLS_REFERENCE.en.md](SKILLS_REFERENCE.en.md) — detailed reference for all 29 skills (parameters, CLI runners, response formats)
+- [SKILLS_REFERENCE.en.md](SKILLS_REFERENCE.en.md) — detailed reference for all 30 skills (parameters, CLI runners, response formats)
 - [tizen-cli umbrella skill routing table](../tizen-cli/skills/tizen-sdk/SKILL.md)
