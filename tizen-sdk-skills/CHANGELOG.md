@@ -37,6 +37,31 @@ below use those release tags.
   `--max-matches` on `search`), `--budget`/`--budget-tokens` on `investigate` —
   from the argv rather than relying on the binary to ignore them.
 
+- **Handoff notes — Claude Code, Codex CLI and Cline can continue each other's Tizen work.**
+  A new `tizen-handoff` skill and `common/lib/cli/handoff-cli.js` runner (`show`, `init`) read
+  and create a per-project folder of plain markdown notes. There is nothing to set up: every
+  runner call that matters — project create / import / delete and builds, installs, emulator
+  and device actions, file transfer, screenshots, remote devices, log collection and
+  debugging, SDK / platform / package installs and certificate changes — is appended
+  automatically by `applyHandoff()` in `common/lib/cli/cli-runner.js`, which every skill's
+  runner already passes through. Read-only calls (list, check, status) are skipped so the
+  entries that matter stay visible. The notes live **outside** the project, in
+  `~/.tizen-sdk-skills/handoff/<project>-<id>/` keyed by the project's real path, so a Tizen
+  web project never packages them into its `.wgt`, git never sees them, and two agents that
+  spell the path differently still land on one folder. `STATE.md` and `DECISIONS.md` are
+  written by agents (intent); `LOG.md`, `BUILDS.md`, `DEVICES.md`, `DEBUG.md` and
+  `ENVIRONMENT.md` are runner-written and append-only. When the previous entry for a project
+  came from a different agent, the envelope carries one extra warning starting
+  "Handoff notes:" naming the folder to read first. Certificate commands record the action and
+  status only — never result data — and a runner whose output is not masked is never recorded,
+  so no secret reaches the notes. Recording can never break a runner: every write is wrapped
+  and a failure to write is swallowed, leaving the envelope and exit code untouched.
+  `TIZEN_HANDOFF=0` turns recording off, `TIZEN_HANDOFF=existing` records only where the
+  folder already exists, `TIZEN_HANDOFF_HOME` moves the parent folder, and append-only files
+  over 128 KB rotate into `archive/`. The guard hooks gain a matching rule
+  (`common/hooks/`, `cline/hooks/`) telling agents to catch up before they act and hand over
+  when they stop.
+
 ### Changed
 
 - **Bundled `tizen-dlog-analyzer` binaries updated to 0.3.0 and the macOS binary is now picked

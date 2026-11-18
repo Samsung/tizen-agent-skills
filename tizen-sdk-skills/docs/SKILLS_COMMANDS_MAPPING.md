@@ -1,4 +1,4 @@
-# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 29개인데 커맨드는 36개인가
+# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 30개인데 커맨드는 36개인가
 
 [English](SKILLS_COMMANDS_MAPPING.en.md) | 한국어
 
@@ -10,7 +10,7 @@
 
 | 단위 | 개수 | 기준 위치 |
 |---|---|---|
-| **스킬** (Cline/Claude Code 자연어 트리거 단위) | **29** | `common/skills/*/SKILL.md` |
+| **스킬** (Cline/Claude Code 자연어 트리거 단위) | **30** | `common/skills/*/SKILL.md` |
 | **커맨드** (`tizen-cli tizen-sdk <command>`) | **36** | `tizen-cli/src/command-specs/*.ts` |
 | tizen-cli용 SKILL.md (참고) | 31 | `tizen-cli/skills/*/SKILL.md` — 아래 [스킬 집합이 두 개인 이유](#스킬-집합이-두-개인-이유) 참조 |
 
@@ -36,7 +36,7 @@
 
 ---
 
-## 전체 맵핑 표 (36개 커맨드 → 29개 스킬)
+## 전체 맵핑 표 (36개 커맨드 → 30개 스킬)
 
 그룹 구분은 [tizen-cli 우산 스킬의 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)과 동일합니다.
 
@@ -118,7 +118,7 @@
 
 | 위치 | SKILL.md 수 | 용도 | 구성 |
 |---|---|---|---|
-| `common/skills/` | **29** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 29개 스킬 |
+| `common/skills/` | **30** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 30개 스킬 |
 | `tizen-cli/skills/` | **31** | tizen-cli 구동 에이전트 — `tizen-cli tizen-sdk <command>` 호출 | 위 29개 + 2개 추가 (아래) |
 
 `tizen-cli/skills/`에만 있는 2개:
@@ -126,7 +126,7 @@
 1. **`tizen-sdk`** (우산 라우터) — 36개 커맨드 전체의 라우팅 테이블을 담은 진입점 스킬. common 쪽에는 대응물이 없습니다 (Cline/Claude Code는 스킬 설명 자체로 라우팅).
 2. **`tizen-list-templates`** — tizen-cli에서는 `list-templates`가 독립 커맨드이므로 전용 스킬로 분리. common 쪽에서는 `tizen-create-project` 스킬의 list-templates 액션으로 처리됩니다.
 
-즉 문서에서 "29개 스킬"은 **common/skills 기준**, "36개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
+즉 문서에서 "30개 스킬"은 **common/skills 기준**, "36개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
 
 ---
 
@@ -134,5 +134,5 @@
 
 - [SDK_COMMANDS_ARCHITECTURE.md](SDK_COMMANDS_ARCHITECTURE.md) — CLI 러너 → sdk-commands.js → 도메인 모듈 호출 흐름
 - [COMMAND_MAPPING.md](COMMAND_MAPPING.md) — 커맨드 스펙 ↔ envelope `command` 필드 문자열 매핑
-- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 29개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
+- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 30개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
 - [tizen-cli 우산 스킬 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)

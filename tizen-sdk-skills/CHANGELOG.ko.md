@@ -34,6 +34,27 @@
   `--max-matches`, `investigate`의 `--budget`/`--budget-tokens`)를 바이너리가
   무시하리라 기대하지 않고 argv에서 생략합니다.
 
+- **핸드오프 노트 — Claude Code·Codex CLI·Cline이 서로의 Tizen 작업을 이어받습니다.**
+  새 `tizen-handoff` 스킬과 `common/lib/cli/handoff-cli.js` 러너(`show`, `init`)가 프로젝트별
+  마크다운 노트 폴더를 읽고 생성합니다. 설정할 것은 없습니다: 의미 있는 러너 호출 —
+  프로젝트 생성 / 임포트 / 삭제와 빌드, 설치, 에뮬레이터·디바이스 작업, 파일 전송,
+  스크린샷, 원격 디바이스, 로그 수집과 디버깅, SDK / 플랫폼 / 패키지 설치와 인증서 변경 —
+  은 모든 스킬의 러너가 거쳐 가는 `common/lib/cli/cli-runner.js`의 `applyHandoff()`가 자동으로
+  기록합니다. 읽기 전용 호출(list, check, status)은 건너뛰어 중요한 항목이 묻히지 않습니다.
+  노트는 프로젝트 **밖**인 `~/.tizen-sdk-skills/handoff/<project>-<id>/`에 실제 경로를 키로
+  저장되므로, Tizen 웹 프로젝트가 `.wgt`에 노트를 패키징하는 일이 없고 git에도 보이지 않으며,
+  두 에이전트가 경로를 다르게 적어도 같은 폴더를 씁니다. `STATE.md`와 `DECISIONS.md`는
+  에이전트가(의도), `LOG.md`·`BUILDS.md`·`DEVICES.md`·`DEBUG.md`·`ENVIRONMENT.md`는 러너가
+  추가 전용으로 기록합니다. 해당 프로젝트의 직전 항목이 다른 에이전트의 것이면 envelope에
+  "Handoff notes:"로 시작하는 경고가 하나 붙어 먼저 읽을 폴더를 알려 줍니다. 인증서 명령은
+  액션과 상태만 기록하고 결과 데이터는 절대 기록하지 않으며, 출력이 마스킹되지 않는 러너는
+  아예 기록하지 않으므로 비밀 값이 노트에 들어가지 않습니다. 기록이 러너를 깨뜨리는 일은
+  없습니다: 모든 쓰기를 감싸고 실패는 삼키므로 envelope과 종료 코드는 그대로입니다.
+  `TIZEN_HANDOFF=0`은 기록을 끄고, `TIZEN_HANDOFF=existing`은 폴더가 이미 있는 경우에만
+  기록하며, `TIZEN_HANDOFF_HOME`은 상위 폴더를 옮기고, 128 KB를 넘는 추가 전용 파일은
+  `archive/`로 이동합니다. 가드 훅(`common/hooks/`, `cline/hooks/`)에도 작업 전에 확인하고
+  멈출 때 인계하라는 규칙이 추가되었습니다.
+
 ### 변경
 
 - **번들 `tizen-dlog-analyzer` 바이너리를 0.3.0으로 업데이트하고 macOS 바이너리를 CPU

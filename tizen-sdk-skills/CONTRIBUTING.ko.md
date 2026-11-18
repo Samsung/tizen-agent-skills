@@ -118,7 +118,7 @@ TC 추가: [tests/README.md → Adding a New TC](tests/README.md#adding-a-new-tc
 - 쌍을 이루는 모든 파일은 H1 바로 아래에 상대 문서로 가는 언어 전환 줄을 둡니다 —
   영문 파일은 `English | [한국어](X.ko.md)`, 한국어 파일은
   `[English](X.en.md) | 한국어`.
-- 명령·스킬 개수("34 commands", "29 skills")를 `README*.md`,
+- 명령·스킬 개수("34 commands", "30 skills")를 `README*.md`,
   `docs/SKILLS_REFERENCE*.md`, `tests/README.md`, 그리고 `README*.md`의
   "프로젝트 현황" 표 전체에서 일치시킵니다.
 - 새 Markdown은 저장소 Prettier 설정(80열, LF 줄바꿈. `.gitattributes`가

@@ -9,7 +9,7 @@ Installing this extension produces **exactly the same on-disk layout** as runnin
 | Target | Path | Semantics |
 |---|---|---|
 | Claude cache | `~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/<version>/{skills,agents,scripts,lib,assets,docs}` | clean mirror |
-| Claude personal skills | `~/.claude/skills/<skill-name>/` | mirror per skill folder (29 skills) |
+| Claude personal skills | `~/.claude/skills/<skill-name>/` | mirror per skill folder (30 skills) |
 | Claude personal agents | `~/.claude/agents/*.md` | per-file copy (24 agents) |
 | Claude hooks | `~/.claude/settings.json` → 3 entries under `hooks.PreToolUse` | JSON merge |
 | Cline cache | `~/.cline/plugins/cache/tizen-platform/tizen-sdk-skills/<version>/{scripts,lib,assets,docs}` | clean mirror (no skills/agents) |
