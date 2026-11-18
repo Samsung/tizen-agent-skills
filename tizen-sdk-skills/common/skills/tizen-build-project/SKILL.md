@@ -21,7 +21,7 @@ metadata:
     - tz build
     - tz build native
     - tz build dotnet
-        - tz build webapp
+    - tz build webapp
 ---
 
 > **Handoff notes:** Claude Code and Codex CLI may share this project. Before you start, run
