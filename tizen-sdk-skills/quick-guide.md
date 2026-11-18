@@ -101,6 +101,7 @@ flowchart LR
    - OS: Windows, Linux or macOS. The emulator also works under WSL.
    - pnpm, only if you build the tizen-sdk CLI yourself
 2. Clone the repository — or skip the clone with the download-and-install script (below).
+2. Clone the repository — or skip the clone with the download-and-install script (below).
 3. Run the setup script for your host.
 4. Restart the host and start with **"Install the Tizen SDK"**.
 
