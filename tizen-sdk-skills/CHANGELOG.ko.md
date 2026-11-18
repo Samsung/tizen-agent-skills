@@ -15,7 +15,7 @@
 
 ### 추가
 
-- **릴리스 zip에서 tizen-sdk CLI 설치 (`common/setup/setup-tizen-cli.sh` /
+- **릴리스 zip에서 tizen-sdk CLI 설치 (`common/setup/setup-tizen-sdk.sh` /
   `.ps1` / `.bat`)**. 클론이나 빌드 없이 빌드된 tizen-cli 플러그인을 설치합니다.
   tizen-agent-skills 릴리스의 `tizen-sdk-v<version>.zip` 에셋을 찾아(기본값은
   최신 릴리스, `--release <tag>`로 고정. 에셋 버전은 플러그인 자체 버전이라

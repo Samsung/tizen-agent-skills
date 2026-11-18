@@ -178,18 +178,18 @@ tizen-sdk --doctor
 - Without a build the launcher prints a `PLUGIN_NOT_BUILT` envelope with the build command.
 - The source, plugin manifest and host-integration details live under `tizen-cli/`.
 
-**No build?** `common/setup/setup-tizen-cli.sh` / `.ps1` installs the CLI straight from a
+**No build?** `common/setup/setup-tizen-sdk.sh` / `.ps1` installs the CLI straight from a
 release zip — no clone, no pnpm build:
 
 ```bash
 # All platforms (macOS/Linux)
-bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.sh)
 ```
 
 ```bat
 :: Windows (cmd or PowerShell)
-curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
-powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+curl -fsSL -o setup-tizen-sdk.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-sdk.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-sdk.ps1
 ```
 
 The script resolves the `tizen-sdk-v<version>.zip` asset of the latest release
