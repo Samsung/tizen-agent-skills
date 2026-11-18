@@ -61,17 +61,17 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | 명령어 | 필수 옵션 | 선택 옵션 |
 |---|---|---|
 | `sdk-init` | — | `--sdk-path` (기본: `~/tizen-sdk`) |
-| `sdk-install` | — | `--tizen-version` (`X.Y`; 기본: 최신 버전), `--label` (기본: `tizen`), `--force`, `--repo-url` |
-| `sdk-install-custom-repo` | `--repo-url` | `--platform-version`, `--force` |
+| `sdk-install` | — | `--tizen-version` (`X.Y`; 기본: 최신 버전), `--label` (기본: `tizen`), `--force`, `--repo-url`, `--download-jobs` (1–8) |
+| `sdk-install-custom-repo` | `--repo-url` | `--platform-version`, `--force`, `--download-jobs` (1–8) |
 | `validate-repo-url` | `--repo-url` | — |
-| `tv-sdk-install` | — | `--force` |
+| `tv-sdk-install` | — | `--force`, `--download-jobs` (1–8) |
 | `tv-sdk-install-from-zip` | `--zip-path` | `--force` |
-| `update-package` | — | `--force`, `--dry-run` |
+| `update-package` | — | `--force`, `--dry-run`, `--download-jobs` (1–8) |
 | `sdk-repo-info` | — | — |
-| `download-emulator-package` | — | `--platform-version`, `--force` |
-| `platform-install` | `--platform-version` | `--force` |
+| `download-emulator-package` | — | `--platform-version`, `--force`, `--download-jobs` (1–8) |
+| `platform-install` | `--platform-version` | `--force`, `--download-jobs` (1–8) |
 | `platform-list` | — | — |
-| `download-mobile-platform` | — | `--platform-version`, `--include-iot-headed`, `--iot-headed-version`, `--force` |
+| `download-mobile-platform` | — | `--platform-version`, `--include-iot-headed`, `--iot-headed-version`, `--force`, `--download-jobs` (1–8) |
 | `install-rootstrap` | `--zip-path` | `--force` |
 | `dotnet-setup` | — | `--force`, `--workload-version` |
 | `check-node` | — | — |
