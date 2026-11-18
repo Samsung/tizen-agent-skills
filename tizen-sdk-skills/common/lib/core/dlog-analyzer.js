@@ -1814,8 +1814,10 @@ function buildErrorAnalyzeFileArgs(appId, nativeFormat, opts) {
     toArray(opts.categories).forEach((c) => args.push("--category", c));
   if (opts.tags) toArray(opts.tags).forEach((t) => args.push("--tag", t));
   if (opts.withContext) args.push("--with-context");
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.maxLines != null && !opts.full)
+    args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null && !opts.full)
+    args.push("--max-chars", String(opts.maxChars));
   if (opts.full) args.push("--full");
   return args;
 }
@@ -2850,8 +2852,10 @@ function buildAppLogFileArgs(opts) {
     toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
   if (opts.format) args.push("--format", opts.format);
   if (opts.output) args.push("--output", opts.output);
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.maxLines != null && !opts.full)
+    args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null && !opts.full)
+    args.push("--max-chars", String(opts.maxChars));
   if (opts.full) args.push("--full");
   return args;
 }
@@ -2868,8 +2872,10 @@ function buildAppLogArgs(appId, opts) {
     toArray(opts.keywords).forEach((k) => args.push("--keyword", k));
   if (opts.format) args.push("--format", opts.format);
   if (opts.output) args.push("--output", opts.output);
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.maxLines != null && !opts.full)
+    args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null && !opts.full)
+    args.push("--max-chars", String(opts.maxChars));
   if (opts.full) args.push("--full");
   return args;
 }
@@ -3044,10 +3050,12 @@ function buildSearchArgs(patterns, opts = {}) {
   if (opts.count) args.push("--count");
   if (opts.format) args.push("--format", opts.format);
   if (opts.output) args.push("--output", opts.output);
-  if (opts.maxMatches != null)
+  if (opts.maxMatches != null && !opts.full)
     args.push("--max-matches", String(opts.maxMatches));
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.maxLines != null && !opts.full)
+    args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null && !opts.full)
+    args.push("--max-chars", String(opts.maxChars));
   if (opts.full) args.push("--full");
   return args;
 }
@@ -3365,8 +3373,9 @@ function buildInvestigateArgs(appId, serial, opts = {}) {
   if (opts.symptoms) args.push("--symptoms", opts.symptoms);
   if (opts.profile) args.push("--profile", opts.profile);
   if (opts.format) args.push("--format", opts.format);
-  if (opts.budget != null) args.push("--budget", String(opts.budget));
-  if (opts.budgetTokens != null)
+  if (opts.budget != null && !opts.full)
+    args.push("--budget", String(opts.budget));
+  if (opts.budgetTokens != null && !opts.full)
     args.push("--budget-tokens", String(opts.budgetTokens));
   if (opts.full) args.push("--full");
   if (opts.allowNetworkProbe) args.push("--allow-network-probe");
@@ -3900,8 +3909,10 @@ function buildKernelAnalyzeFileArgs(opts) {
     args.push("--with-dlog");
     if (opts.appId) args.push("--app-id", opts.appId);
   }
-  if (opts.maxLines != null) args.push("--max-lines", String(opts.maxLines));
-  if (opts.maxChars != null) args.push("--max-chars", String(opts.maxChars));
+  if (opts.maxLines != null && !opts.full)
+    args.push("--max-lines", String(opts.maxLines));
+  if (opts.maxChars != null && !opts.full)
+    args.push("--max-chars", String(opts.maxChars));
   if (opts.full) args.push("--full");
   return args;
 }

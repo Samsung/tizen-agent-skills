@@ -698,7 +698,6 @@ check(
     maxMatches: 20,
     maxLines: 0,
     maxChars: 16000,
-    full: true,
   }),
   [
     "search",
@@ -735,7 +734,6 @@ check(
     "0",
     "--max-chars",
     "16000",
-    "--full",
   ],
 );
 check(
@@ -813,6 +811,65 @@ check(
     base,
     base,
   ]),
+);
+
+// --full overrides the budget flags, so the builders must not forward them
+// together: the argv the runner sends must match the documented behaviour.
+check(
+  "--full omits the budget flags it overrides from every builder's argv",
+  [
+    buildErrorAnalyzeFileArgs("org.a", "details", {
+      file: "/tmp/app.dlog",
+      maxLines: 5,
+      maxChars: 100,
+      full: true,
+    }),
+    buildAppLogArgs("org.a", {
+      maxLines: 5,
+      maxChars: 100,
+      full: true,
+    }),
+    buildAppLogFileArgs({
+      file: "/tmp/app.dlog",
+      maxLines: 5,
+      maxChars: 100,
+      full: true,
+    }),
+    buildSearchArgs(["x"], {
+      maxMatches: 5,
+      maxLines: 5,
+      maxChars: 100,
+      full: true,
+    }),
+    buildInvestigateArgs(null, "emulator-26101", {
+      budget: 1000,
+      budgetTokens: 2000,
+      full: true,
+    }),
+    buildKernelAnalyzeFileArgs({
+      file: "/tmp/kernel.log",
+      maxLines: 5,
+      maxChars: 100,
+      full: true,
+    }),
+  ],
+  [
+    [
+      "error-analyze",
+      "--file",
+      "/tmp/app.dlog",
+      "--format",
+      "details",
+      "--app-id",
+      "org.a",
+      "--full",
+    ],
+    ["app-log", "--app-id", "org.a", "--full"],
+    ["app-log", "--file", "/tmp/app.dlog", "--full"],
+    ["search", "--pattern", "x", "--full"],
+    ["investigate", "--serial", "emulator-26101", "--full"],
+    ["kernel", "analyze", "--file", "/tmp/kernel.log", "--full"],
+  ],
 );
 
 // summarizeSearchOutput — the envelope tells the agent whether to narrow down
