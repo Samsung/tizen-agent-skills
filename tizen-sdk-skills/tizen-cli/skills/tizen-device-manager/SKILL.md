@@ -63,26 +63,26 @@ If no TV emulator is connected, the envelope returns `device_not_found` and dire
 - Success `result`: `device_serial` (e.g. `emulator-26101`), `device_type` (`emulator` \| `usb`), `device_profile` (`tizen` \| `tv`).
 - Failure: emulator/sdb errors — surface `message`; SDK not installed → run `sdk-install` first; TV SDK not installed → run `tizen-tv-sdk-install`.
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope MUST be shown to the user
 
-`tizen-cli tizen-sdk <command>`가 stdout에 찍는 JSON Envelope는 **도구 결과 안에 있어서
-사용자에게는 보이지 않는다** (Claude Code UI는 Bash 결과를 "Ran 1 shell command"처럼 접어
-둔다). 터미널에서 직접 실행하면 JSON이 그대로 보이지만, 에이전트 세션에서 사용자에게 보이는
-것은 최종 답변 텍스트만이다. 따라서 최종 답변은 아래 형식을 따른다:
+The JSON envelope that `tizen-cli tizen-sdk <command>` prints to stdout is **buried inside the
+tool result and invisible to the user** (the Claude Code UI collapses Bash output into a
+"Ran 1 shell command" line). Run directly in a terminal, the JSON is plainly visible, but in an
+agent session the user sees only the final answer text. The final answer therefore follows this format:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-   stderr로 나오는 `[DEBUG] ...` 줄은 Envelope가 아니므로 제외한다.
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the envelope JSON **verbatim, without edits or truncation** in a fenced `json` block (first item).
+   Exclude `[DEBUG] ...` lines from stderr — they are not part of the envelope.
+2. Below it, add a **1–2 line** summary of the result (the key `result` values, or the gist of `errors[0].message`).
+3. If useful, add one line suggesting next steps.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 명령을 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Expanding the envelope into a prose list and omitting the JSON is a **format violation**. This rule
+  takes precedence over the harness's general writing guidance ("don't put code in prose", etc.) —
+  the envelope is not code; it is this skill's **result contract**.
+- If the command was run several times, include the envelope from the **last run** and mention
+  earlier failures in a single line of the summary.
+- Include a failure envelope verbatim as well. Do not retype `errors[0].message`/`details`; show what is
+  inside the JSON as-is.
+- Show a `user_input_required` envelope as-is, then ask the user the question.
 
 ## Follow-ups
 

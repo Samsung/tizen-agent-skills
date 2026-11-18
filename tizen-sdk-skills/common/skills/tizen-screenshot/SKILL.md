@@ -186,7 +186,7 @@ capture from `/dev/fb0` may be only the kernel console rather than the app UI, a
 user needs to know that before trusting the image.
 
 Showing the image does **not** replace showing the envelope — both are required. See
-"결과 보고" below for the exact final-message format (and the one field you may elide).
+"Result reporting" below for the exact final-message format (and the one field you may elide).
 
 ### Recovering truncated base64
 
@@ -238,39 +238,46 @@ outside the workspace and (Linux) kills detached jobs when the call ends. An env
 sandbox", means exactly that — re-run `suggested_fix.command` (the same command line, `escalate: true`)
 with escalated permissions; do not retry inside the sandbox and do not fall back to raw tools.
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope must always be shown to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope is **inside the tool result, so the user cannot see it**
+(the Claude Code UI folds Bash/Agent results away as "Ran 1 shell command"). What the user
+sees is only the final answer text, so the final answer must follow the format below
+**no matter which execution path was used (subagent delegation or direct CLI Runner run)**:
 
-1. Envelope JSON을 fenced `json` 블록에 싣는다 (첫 항목). **`result.image.base64` 값 하나만**
-   아래 규칙대로 플레이스홀더로 치환하고, 나머지 필드는 수정·축약 없이 그대로 싣는다.
-2. 그 아래에 스크린샷 이미지를 렌더링한다 (`base64`가 있으면 그것을, 없으면 `image.path`를 Read).
-3. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 — `capture_method`, 해상도, 저장 경로.
-   `capture_method`가 `framebuffer`면 커널 콘솔만 찍혔을 수 있다고, `warnings`에
-   `uniform_image`가 있으면 단색 화면(꺼짐/렌더링 실패 가능)이라고 한 줄 경고한다.
-   `capture_method`에 `(hwc off)`가 붙어 있으면 HWC를 잠시 끄고 캡처한 뒤 다시 켰다고 알린다. `warnings`에 `hwc_recovery_unverified`가 있으면 HWC를 다시 켜지 못했을 수 있으므로 기기에서 HWC를 수동으로 확인하라고 안내한다. VNC 연결 실패 경고(시간 초과 / 연결 거부 / 연결 실패 / 인증 실패)가 있으면 시도한 서버 주소를 함께 전달한다.
-4. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Put the Envelope JSON in a fenced `json` block (first item). **Only the `result.image.base64` value**
+   is replaced with a placeholder per the rules below; every other field goes in verbatim, without
+   modification or truncation.
+2. Below it, render the screenshot image (the `base64` if present, otherwise Read `image.path`).
+3. Below it, append a **1–2 line** summary of the result — `capture_method`, resolution, saved path.
+   If `capture_method` is `framebuffer`, warn in one line that only the kernel console may have been
+   captured; if `warnings` contains `uniform_image`, warn in one line that the screen is a uniform
+   color (possibly off / a rendering failure).
+   If `capture_method` has `(hwc off)` appended, mention that HWC was temporarily turned off for the
+   capture and then turned back on. If `warnings` contains `hwc_recovery_unverified`, note that HWC may
+   not have been turned back on and tell the user to verify HWC manually on the device. If there is a
+   VNC connection failure warning (timeout / connection refused / connection failed / authentication
+   failure), pass along the server address that was tried.
+4. If needed, add one line suggesting next steps.
 
-### `base64` 필드만 예외 — 플레이스홀더로 치환
+### Only the `base64` field is an exception — replace with a placeholder
 
-이 스킬의 성공 Envelope는 이미지 바이트를 `result.image.base64`에 인라인한다 (512 KB 이하 원본,
-또는 JPEG 썸네일). 이 문자열은 수만~수십만 자라서 그대로 싣면 최종 답변이 base64 덩어리로
-채워지고 하네스가 출력을 파일로 밀어내 버린다. 따라서 **이 필드의 값만** 다음 형식으로 바꾼다:
+This skill's success Envelope inlines the image bytes in `result.image.base64` (a source image
+up to 512 KB, or a JPEG thumbnail). That string is tens to hundreds of thousands of characters
+long; including it verbatim would fill the final answer with a base64 blob and push the harness's
+output out to a file. Therefore **only this field's value** is replaced with the following format:
 
 ```
 "base64": "<base64 omitted: 41512 chars, image/png 1920x1080 — rendered below>"
 ```
 
-- 길이(`chars`)와 `mime_type`/`width`/`height`는 Envelope의 실제 값을 넣는다.
-- `base64_is_thumbnail`이 true면 `thumbnail_mime_type`/`thumbnail_width`를 쓰고 `(thumbnail)`을 덧붙인다.
-- `base64_omitted_reason`이 대신 있는 경우는 치환할 것이 없으므로 그대로 싣는다.
-- **다른 필드는 절대 건드리지 않는다.** `result.stdout`(러너 로그)도 원문 유지 — 어느 fallback이
-  실패했는지 사용자가 볼 수 있는 유일한 기록이다.
+- Fill in the length (`chars`) and `mime_type`/`width`/`height` with the Envelope's actual values.
+- If `base64_is_thumbnail` is true, use `thumbnail_mime_type`/`thumbnail_width` and append `(thumbnail)`.
+- If `base64_omitted_reason` is present instead, there is nothing to replace — include it as-is.
+- **Never touch any other field.** Keep `result.stdout` (the runner log) verbatim as well — it is
+  the only record the user can consult for which fallback failed.
 
-**Success 예시 (최종 답변 형태):**
+**Success example (final answer form):**
 
 ````markdown
 ```json
@@ -299,20 +306,21 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 }
 ```
 
-(이미지 렌더링)
+(image rendered)
 
-emulator-26101 화면을 host-side `xwd`로 캡처했습니다 (1920x1080, 31 KB) → `/home/user/work/emulator_screenshot.png`
+Captured the emulator-26101 screen with host-side `xwd` (1920x1080, 31 KB) → `/home/user/work/emulator_screenshot.png`
 ````
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 이미지를 보여줬다고
-  해서 Envelope를 생략할 수 있는 것이 아니다 — 둘 다 필수다. 하네스의 일반 작성 규칙("산문에
-  코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가 아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope에는 `base64`가 없으므로 **원문 그대로** 싣는다. `errors[0].message`/`details`를
-  다시 타이핑하지 말고 JSON 안의 것을 그대로 보이게 한다. 실패 시 이미지 렌더링 단계는 생략한다.
-- `user_input_required` Envelope(예: 디바이스 2대 이상 연결)는 그대로 보여준 뒤 어느 serial을
-  쓸지 사용자에게 질문한다.
+- Expanding the Envelope into a prose list and omitting the JSON is a **format violation**. Showing
+  the image does not excuse omitting the Envelope — both are mandatory. This rule takes precedence
+  over the harness's general writing rules ("no code in prose", etc.) — the Envelope is not code but
+  this skill's **result contract**.
+- If the runner was run multiple times, include the Envelope from the **last run**, and mention earlier
+  failures in at most one line in the summary.
+- A failure Envelope has no `base64`, so include it **verbatim**. Do not retype `errors[0].message`/`details`;
+  show what is inside the JSON as-is. Skip the image rendering step on failure.
+- Show a `user_input_required` Envelope (e.g., two or more devices connected) as-is, then ask the user
+  which serial to use.
 
 ## Anti-patterns
 

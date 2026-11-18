@@ -78,18 +78,18 @@ The runner returns `result.project_path`, verified as `<WORKSPACE_DIR>/<WGT file
 - Proceed to build ONLY when the user's request explicitly includes it (e.g., "앱 만들어서 빌드까지 해줘").
 - User asked only to delete → run the `delete` action, report the envelope, then **STOP**. Never re-create the project afterwards unless the user asked for that too (e.g., "지우고 다시 만들어줘").
 
-### Claude Code (서브에이전트 위임)
+### Claude Code (subagent delegation)
 
-> Agent tool이 없으면 (예: Cline) 아래 "CLI Runners" 섹션으로 가세요.
+> If there is no Agent tool (e.g., Cline), go to the "CLI Runners" section below.
 
-1. Agent tool로 `tizen-create-project` 에이전트 호출 (개인 배포 또는 `tizen-sdk-skills:tizen-create-project`)
-2. 수집된 입력(프로젝트 타입, 템플릿, 이름, 경로)을 프롬프트로 전달
-3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
-   (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
+1. Call the `tizen-create-project` agent with the Agent tool (personal deployment or `tizen-sdk-skills:tizen-create-project`)
+2. Pass the collected inputs (project type, template, name, paths) in the prompt
+3. Pass the subagent's JSON Envelope to the user as-is — follow the "Result reporting" rules below
+   (include the original text in a fenced `json` block, with only a 1–2 line summary beneath it)
 
-**delete 요청은 위임 전에 경로 확인부터**: 서브에이전트는 사용자에게 질문할 수 없습니다.
-[Deleting a project](#deleting-a-project)의 Step 1(경로 확인)을 이 대화에서 먼저 마친 뒤,
-사용자가 확정한 절대 경로만 프롬프트로 전달하세요 — 부분 이름을 그대로 넘기지 마세요.
+**For a delete request, confirm the path before delegating**: the subagent cannot ask the user questions.
+Finish Step 1 (path confirmation) of [Deleting a project](#deleting-a-project) in this conversation first,
+then pass only the user-confirmed absolute path in the prompt — never pass a partial name as-is.
 
 ### CLI Runners (Cline / Claude Code, ALL platforms)
 
@@ -148,12 +148,12 @@ installed** — on typed calls such as `--type webapp` too, not just on the unty
 
 `result.tv` is the ONLY way to decide whether the TV SDK is installed — never inspect the SDK
 folders or run `tz` yourself. No `result.tv` → TV SDK not installed → do not list TV templates
-(at most one line: "TV SDK를 설치하면 TV 템플릿도 선택할 수 있습니다").
+(at most one line: "installing the TV SDK also makes TV templates available").
 
 | User asked                                                      | Run                                          | Show the user                                                                                                                                                                                          |
 | --------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Web app — "웹앱 만들어줘", "타이젠 웹앱 생성", "create a webapp" | `list-templates --type webapp`               | `result.templates.webapp` **and**, when `result.tv` exists, `result.tv.web` under its own heading — "Samsung TV 웹앱 템플릿 (`result.tv.profile`)". The user picks from either list.                        |
-| Any app, type not given — "타이젠 앱 만들어줘", "앱 생성해줘"    | `list-templates` (no `--type`) BEFORE asking the type | Every type's list from `result.templates` as its own group — `native`, `dotnet`, `webapp`, `rpk`, and **`platform`** ("Platform 앱 (GBS 빌드)": the plugin's GBS samples such as `dali-demo`, created with `--type platform`) — **plus** the TV list when `result.tv` exists — `result.tv.web` (웹) and `result.tv.dotnet` (닷넷) — and say in the type question (Q1) that TV templates are available. |
+| Web app — "웹앱 만들어줘", "타이젠 웹앱 생성", "create a webapp" | `list-templates --type webapp`               | `result.templates.webapp` **and**, when `result.tv` exists, `result.tv.web` under its own heading — "Samsung TV web app templates (`result.tv.profile`)". The user picks from either list.                        |
+| Any app, type not given — "타이젠 앱 만들어줘", "앱 생성해줘"    | `list-templates` (no `--type`) BEFORE asking the type | Every type's list from `result.templates` as its own group — `native`, `dotnet`, `webapp`, `rpk`, and **`platform`** ("Platform apps (GBS build)": the plugin's GBS samples such as `dali-demo`, created with `--type platform`) — **plus** the TV list when `result.tv` exists — `result.tv.web` (web) and `result.tv.dotnet` (.NET) — and say in the type question (Q1) that TV templates are available. |
 | TV app — "TV 앱 만들어줘", "TV 웹앱 생성"                        | `list-templates --type tv`                   | `result.tv.web` and `result.tv.dotnet` as two groups (the flat `result.templates.tv` mixes both).                                                                                                          |
 
 - A TV template is created with **`create --type tv --template <name>`** — never `--type webapp`,
@@ -162,7 +162,7 @@ folders or run `tz` yourself. No `result.tv` → TV SDK not installed → do not
 - Use template names exactly as they appear in the envelope (e.g. `Basic_Empty`); quote a name
   that contains a space.
 - The AskUserQuestion 4-option cap still applies: print the full lists as markdown text first,
-  then ask with the 3 most relevant templates + `더 보기…` (see [Parameters](#parameters)).
+  then ask with the 3 most relevant templates + `More…` (see [Parameters](#parameters)).
 
 > **Where templates come from.** The `plugins/cache/...` path in the snippets above is only where the
 > **runner** lives; templates are read from the **installed Tizen SDK** (`tz list templates`, under the
@@ -243,27 +243,27 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 fails with `InputValidationError: too_big`. Never put all six types in one
 question. Select the type in TWO steps instead:
 
-- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `기타 (rpk · tv · platform)…`
+- **Q1 (exactly 4 options):** `native` / `dotnet` / `webapp` / `Other (rpk · tv · platform)…`
   — list all six type names in the question TEXT so nothing is hidden. When the
   `list-templates` envelope has `result.tv`, also state in the question text that the TV SDK
   is installed and how many TV templates are available (see
   [Samsung TV templates come along](#samsung-tv-templates-come-along-when-the-tv-sdk-is-installed)).
-- **Q2 (only if 기타 was chosen, 3 options):** `rpk` / `tv` / `platform`
+- **Q2 (only if Other was chosen, 3 options):** `rpk` / `tv` / `platform`
 
 The 4-option cap applies to EVERY AskUserQuestion in this flow. When a template
 list has more than 4 entries, show the full list as markdown text first, then ask
-with the 3 most relevant templates plus a final `더 보기…` option that leads to a
+with the 3 most relevant templates plus a final `More…` option that leads to a
 follow-up question with the remaining ones.
 
 - **template** — exact name from list-templates output (required; never auto-pick)
 - **PARENT** — parent directory where `<APP>/` folder is created (required)
 - **APP** — app name = folder name (required; ALWAYS from user via AskUserQuestion).
   **Must contain at least 10 ASCII letters/digits** — the runner's `validatePackageId()`
-  keeps only `A-Za-z0-9` (`-`, `_`, spaces and non-ASCII characters such as 한글 do
+  keeps only `A-Za-z0-9` (`-`, `_`, spaces and non-ASCII characters such as Hangul do
   not count), lowercases them and takes the first 10 as the Tizen package ID; fewer
   than 10 is rejected with `invalid_parameters` (installing such a package would fail
   with `Load archive info fail` / `Operation not allowed [-4]`). Put the rule in the
-  question text ("영문/숫자 10자 이상") and make **every option or example you offer
+  question text ("at least 10 ASCII letters/digits") and make **every option or example you offer
   already pass it** so the user is never asked twice:
   - ✅ `MyTizenWebApp` (13), `MyTizenNativeApp` (16), `MyTizenDotnetApp` (16), `MyTizenApp01` (12), `MyDaliDemoApp` (13)
   - ❌ `MyApp` (5), `HelloApp` (8), `TestApp` (7), `Sample01` (8), `dali-demo` (8)
@@ -406,25 +406,25 @@ Example: open folder `C:/ws`, user names app `MyTizenWebApp`
 7. Standard JSON Envelope response with project info
 8. VS Code workspace file creation (not opened; pass `--open` to also open it in VS Code)
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — Always show the envelope to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope **lives inside the tool result, so the user never sees it**
+(the Claude Code UI collapses Bash/Agent results into something like "Ran 1 shell command"). What the user
+sees is only the final answer text, so the final answer must follow the format below on **any execution path
+(subagent delegation or direct CLI Runner run)**:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the Envelope JSON **verbatim, without edits or truncation**, in a fenced `json` block (first item).
+2. Beneath it, add a **1–2 line** summary of the result (the key values of `result`, or the gist of `errors[0].message`).
+3. Add one line suggesting next steps if useful.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Unrolling the envelope into a prose list and omitting the JSON is a **format violation**. This rule takes
+  precedence over the harness's general writing rules ("don't put code in prose", etc.) — the Envelope is not
+  code, it is this skill's **result contract**.
+- If you ran the runner more than once, include the Envelope from the **last run**, and mention earlier
+  failures only in a single line of the summary.
+- Include failure Envelopes verbatim too. Do not retype `errors[0].message`/`details` — show what is in the
+  JSON as-is.
+- Show a `user_input_required` Envelope as-is, then ask the user the question.
 
 ## Handoff
 

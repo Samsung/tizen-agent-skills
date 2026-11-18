@@ -50,26 +50,29 @@ The command installs netcoredbg on demand, starts the app, and exits. Interactiv
 - Success `result`: `launch_config` + `note` (launch; `app_state` = `suspended_under_debugger`, `launch_app_id` = the id actually launched) or `debug_command` (attach) + instructions.
 - Failure: `device_not_found` → run `device-manager`; missing `.pdb` symbols (`build_failed`) → rebuild with `--build-type Debug`; `invalid_parameters` "is not installed on the device" → the package id is not in `app_launcher -l`, `details` lists what is — do not guess ids, install first; `io_error` "did not start ... under netcoredbg" → `details` carries the raw `launch_app` output.
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope MUST be shown to the user
 
-`tizen-cli tizen-sdk <command>`가 stdout에 찍는 JSON Envelope는 **도구 결과 안에 있어서
-사용자에게는 보이지 않는다** (Claude Code UI는 Bash 결과를 "Ran 1 shell command"처럼 접어
-둔다). 터미널에서 직접 실행하면 JSON이 그대로 보이지만, 에이전트 세션에서 사용자에게 보이는
-것은 최종 답변 텍스트만이다. 따라서 최종 답변은 아래 형식을 따른다:
+The JSON Envelope that `tizen-cli tizen-sdk <command>` prints to stdout is **inside the tool
+result and therefore invisible to the user** (the Claude Code UI collapses Bash output into
+something like "Ran 1 shell command"). Run directly in a terminal, the JSON is visible as is,
+but in an agent session the user sees only the final answer text. The final answer must
+therefore follow this format:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-   stderr로 나오는 `[DEBUG] ...` 줄은 Envelope가 아니므로 제외한다.
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the Envelope JSON **verbatim, without modification or truncation**, in a fenced
+   `json` block (first item). Exclude the `[DEBUG] ...` lines printed to stderr — they are
+   not part of the Envelope.
+2. Below it, append a **1–2 line** result summary (the key values of `result` or the gist of
+   `errors[0].message`).
+3. If needed, add one line suggesting next steps.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 명령을 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Spelling the Envelope out as prose and omitting the JSON is a **format violation**. This
+  rule takes precedence over the harness's general authoring rules ("don't put code in
+  prose", etc.) — the Envelope is not code, it is this skill's **result contract**.
+- If the command was run multiple times, include the Envelope from the **last run** and
+  mention earlier failures only in a single line of the summary.
+- Include a failure Envelope verbatim as well. Do not retype `errors[0].message`/`details` —
+  show what is in the JSON as is.
+- Show a `user_input_required` Envelope as is, then ask the user the question.
 
 ## Follow-ups
 - No device → `tizen-cli tizen-sdk device-manager`

@@ -20,14 +20,15 @@ metadata:
 > `handoff-cli.js show` (see the `tizen-handoff` skill) to catch up on what the other agent did.
 > This runner records its own result there automatically; nothing to set up.
 
-### Claude Code (서브에이전트 위임)
 
-> Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
+### Claude Code (subagent delegation)
 
-1. Agent tool로 `tizen-install-app` 에이전트 호출 (개인 배포 또는 `tizen-sdk-skills:tizen-install-app`)
-2. 수집된 입력(패키지 경로, 설치 후 실행 여부)을 프롬프트로 전달
-3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
-   (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
+> If there is no Agent tool (e.g., Cline), go to the "CLI Runner" section below.
+
+1. Call the `tizen-install-app` agent with the Agent tool (personal deployment or `tizen-sdk-skills:tizen-install-app`)
+2. Pass the collected inputs (package path, whether to run after install) in the prompt
+3. Pass the subagent's JSON Envelope to the user as-is — follow the "Result reporting" rules below
+   (include the original text in a fenced `json` block, with only a 1–2 line summary beneath it)
 
 ### CLI Runner (Cline / Claude Code)
 
@@ -170,25 +171,25 @@ later without re-installing the RPM. Never run `sdb`, `rpm`, or the binary yours
 
 **Note:** If no device is connected, emulator cold boot may take 5–7 minutes.
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — Always show the envelope to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope **lives inside the tool result, so the user never sees it**
+(the Claude Code UI collapses Bash/Agent results into something like "Ran 1 shell command"). What the user
+sees is only the final answer text, so the final answer must follow the format below on **any execution path
+(subagent delegation or direct CLI Runner run)**:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the Envelope JSON **verbatim, without edits or truncation**, in a fenced `json` block (first item).
+2. Beneath it, add a **1–2 line** summary of the result (the key values of `result`, or the gist of `errors[0].message`).
+3. Add one line suggesting next steps if useful.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Unrolling the envelope into a prose list and omitting the JSON is a **format violation**. This rule takes
+  precedence over the harness's general writing rules ("don't put code in prose", etc.) — the Envelope is not
+  code, it is this skill's **result contract**.
+- If you ran the runner more than once, include the Envelope from the **last run**, and mention earlier
+  failures only in a single line of the summary.
+- Include failure Envelopes verbatim too. Do not retype `errors[0].message`/`details` — show what is in the
+  JSON as-is.
+- Show a `user_input_required` Envelope as-is, then ask the user the question.
 
 ## Handoff
 
@@ -197,36 +198,36 @@ CLI Runner 직접 실행)든** 아래 형식을 따른다:
 - SDK not installed → `tizen-sdk-install`
 - Device creation failed → `tizen-device-manager`
 - **`app_running: false` in a success envelope** → the app launched but exited right after start. For `.tpk`/`.wgt` the most common cause is a full `/opt` partition (crash dumps; `/opt` is separate from `/`): use the `tizen-sdb-helper` skill's storage-triage commands (`df -h /opt`) and `clean-crash-dumps` recipe — the cleanup requires `sdb root on` first. For `.rpm` the envelope `warnings` carry the device-side `app-log:` lines from `/tmp/<name>.log` plus a hint (display-server/`owner` problem, or missing `dali`/`dali-toolkit` runtime RPMs) — report those, not the `/opt` advice. In both cases, if that does not explain it, **offer `tizen-dlog-analyzer`** (next item).
-- **The `tizen-dlog-analyzer` warning** — when the launch failed after `--run` (`app_launched: false`) or the app exited right after start (`app_running: false`), the envelope `warnings` carry a line that names `tizen-dlog-analyzer` and its startup flow (`start start-monitoring` → `app-launch <app-id>` → user reproduces → `stop` → `check`; for an `.rpm`, which has no app id, the relaunch step is this skill's `--run` instead). **Offer it in your report without waiting to be asked**, e.g. "로그를 수집해서 원인을 분석해 볼까요? (`tizen-dlog-analyzer`)", and run it through that skill when the user agrees.
+- **The `tizen-dlog-analyzer` warning** — when the launch failed after `--run` (`app_launched: false`) or the app exited right after start (`app_running: false`), the envelope `warnings` carry a line that names `tizen-dlog-analyzer` and its startup flow (`start start-monitoring` → `app-launch <app-id>` → user reproduces → `stop` → `check`; for an `.rpm`, which has no app id, the relaunch step is this skill's `--run` instead). **Offer it in your report without waiting to be asked**, e.g. "Shall we collect the logs and analyze the cause? (`tizen-dlog-analyzer`)", and run it through that skill when the user agrees.
 - **Certificate/signing error** ("Invalid certificate chain", "Check certificate error") → the device does not trust the signing certificate. A build with **no signing profile** is signed with the SDK default developer certificates, which only the **emulator** accepts — on a real device this error is expected until a proper profile is used. Hand off to `tizen-certificate-manager` to create a signing profile for the target device (Samsung-certificate flow for Samsung hardware), rebuild with `tizen-build-project` passing the profile name, then retry install. The reverse case is also expected: a package signed with a **Samsung** profile installs only on the **TV emulator** (`--profile tv`) or a registered Samsung TV — on a standard Tizen emulator it fails with the same certificate error. Rebuild with a local profile for that emulator, or install on the TV emulator instead. **NEVER attempt `sdb root on` or manual cert installation.**
 
 **Suggested next steps (only when user asks; the `tizen-dlog-analyzer` step is offered unasked when the envelope carries its warning — see above):**
 
-- **로그 수집 후 분석 (모든 실행형 패키지)** — `tizen-dlog-analyzer`
+- **Log collection and analysis (all executable packages)** — `tizen-dlog-analyzer`
   ```
   <result.app_id> 앱 로그를 수집해서 분석해줘
   ```
-  설치·실행 직후가 로그 분석을 시작하기 가장 좋은 시점이다. `tizen-dlog-analyzer` 스킬의
-  "Workflow — monitoring an app the user is about to test" 흐름을 따르며, 두 경로 중 **하나만**
-  고른다 (dlog 수집기는 한 번에 하나만 돌고, 모니터가 도는 동안 `dlog-collect`는
-  `already_running`을 돌려준다):
-  - **앱 범위 (앱이 이미 실행 중, `app_running: true`)** — `dlog-collect <app-id>` → 턴을 끝내고
-    사용자가 앱을 조작하게 한다 (그 스킬의 Rule 3) → `stop-collect` → `error-analyze <app-id>
-    summary` (E/F 오류, 중복 제거).
-  - **시작 단계까지 (초기화 실패, 조기 크래시)** — `start start-monitoring` → 앱을 다시 실행한다
-    (`app-launch <app-id>`, 또는 이 스킬로 `--run` 재설치) → 턴을 끝낸다 → `stop` → `check`.
-  `<app-id>`는 이 Envelope의 `result.app_id`를 그대로 쓴다. `null`이면 (ID 줄을 못 읽은 경우)
-  사용자에게 앱 ID를 확인한다. 로그 명령은 모두 그 스킬의 러너로 실행하며 `sdb dlog`를 직접 치지
-  않는다.
+  Right after installation/launch is the best time to start log analysis. Follow the
+  "Workflow — monitoring an app the user is about to test" flow of the `tizen-dlog-analyzer` skill and pick **one** of the two
+  paths (only one dlog collector runs at a time, and while the monitor is running `dlog-collect`
+  returns `already_running`):
+  - **App scope (the app is already running, `app_running: true`)** — `dlog-collect <app-id>` → end the turn
+    and let the user interact with the app (Rule 3 of that skill) → `stop-collect` → `error-analyze <app-id>
+    summary` (E/F errors, deduplicated).
+  - **Up to startup (initialization failure, early crash)** — `start start-monitoring` → relaunch the app
+    (`app-launch <app-id>`, or re-install with `--run` via this skill) → end the turn → `stop` → `check`.
+  Use `result.app_id` from this Envelope as `<app-id>` as-is. If it is `null` (the ID line could not be read),
+  confirm the app ID with the user. Run all log commands through that skill's runner and never type `sdb dlog`
+  directly.
 
-- **WebApp 자동화 테스트 (권장)** — `tizen-playwright-test`
+- **WebApp automated testing (recommended)** — `tizen-playwright-test`
   ```
   <앱 이름> 을 위한 playwright 테스트를 홈 밑의 tizen-playwright-test 폴더에 스캐폴딩해줘
   ```
-  테스트 프로젝트 스캐폴딩 및 Playwright로 자동화 테스트 (웹앱 전용)
+  Scaffold the test project and run automated tests with Playwright (web apps only)
 
 - Re-run an executable app (use `--run`; valid for `.tpk`/`.wgt`/`.rpm`, never for `.rpk`)
 - Debugging: 
   - Native → `tizen-gdb-debug`
   - DotNET → `tizen-dotnet-debug`
-  - WebApp → `tizen-webapp-debug` (Chrome DevTools 또는 Playwright attach)
+  - WebApp → `tizen-webapp-debug` (Chrome DevTools or Playwright attach)

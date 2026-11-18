@@ -71,18 +71,18 @@ width/height flag — so the size list must come from the SDK, not from memory.
 If the user answers "아무거나" / "기본으로" to your question, that IS an answer — use
 `--size 1080`. The difference from skipping is that they were asked.
 
-### Claude Code (서브에이전트 위임)
+### Claude Code (subagent delegation)
 
-> Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
+> If there is no Agent tool (e.g., Cline), go to the "CLI Runner" section below.
 
-1. **⚠️ 필수: 먼저 위 Step 1대로 AskUserQuestion으로 사용자에게 사이즈를 물어보세요.**
-   서브에이전트에는 AskUserQuestion tool이 없으므로, 사이즈 선택은 호출자(당신)의
-   책임입니다. **물어보지 않고 서브에이전트에 위임하면 사용자는 선택 기회를 영구히
-   잃습니다** — 이는 버그입니다.
-2. Agent tool로 `tizen-create-emulator` 에이전트 호출 (개인 배포 또는 `tizen-sdk-skills:tizen-create-emulator`)
-3. 사용자의 요청 + 선택된 사이즈를 프롬프트로 전달 (예: "my-vm 이름으로 720 사이즈 에뮬레이터 생성")
-4. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
-   (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
+1. **⚠️ MANDATORY: First ask the user for the size with AskUserQuestion, as in Step 1 above.**
+   The subagent has no AskUserQuestion tool, so the size selection is the caller's (your)
+   responsibility. **If you delegate to the subagent without asking, the user permanently
+   loses the chance to choose** — that is a bug.
+2. Call the `tizen-create-emulator` agent with the Agent tool (personal deployment or `tizen-sdk-skills:tizen-create-emulator`)
+3. Pass the user's request + the chosen size in the prompt (e.g., "create a 720-size emulator named my-vm")
+4. Pass the subagent's JSON Envelope to the user as-is — follow the "Result reporting" rules below
+   (include the original text in a fenced `json` block, with only a 1–2 line summary below it)
 
 ### CLI Runner (Cline / Claude Code)
 
@@ -515,25 +515,25 @@ must be stopped first). Details and the remaining failure cases:
 > - If the user wants to **create AND launch** an emulator → use `tizen-create-emulator` with `--launch`, or run `tizen-create-emulator` then `tizen-launch-emulator`.
 > - If the user needs to **find a connected device** or **stop emulators** → use `tizen-device-manager`.
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope must always be shown to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope is **inside the tool result, so the user cannot see it**
+(the Claude Code UI folds Bash/Agent results away as "Ran 1 shell command"). What the user
+sees is only the final answer text, so the final answer must follow the format below
+**no matter which execution path was used (subagent delegation or direct CLI Runner run)**:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Put the Envelope JSON **verbatim, without modification or truncation** in a fenced `json` block (first item).
+2. Below it, append a **1–2 line** summary of the result (the key values of `result` or the gist of `errors[0].message`).
+3. If needed, add one line suggesting next steps.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Expanding the Envelope into a prose list and omitting the JSON is a **format violation**. This rule
+  takes precedence over the harness's general writing rules ("no code in prose", etc.) — the Envelope is not
+  code but this skill's **result contract**.
+- If the runner was run multiple times, include the Envelope from the **last run**, and mention earlier
+  failures in at most one line in the summary.
+- Include a failure Envelope verbatim as well. Do not retype `errors[0].message`/`details`;
+  show what is inside the JSON as-is.
+- Show a `user_input_required` Envelope as-is, then ask the user.
 
 ## Handoff
 

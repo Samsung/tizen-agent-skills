@@ -15,32 +15,32 @@ metadata:
     - local ZIP
 ---
 
-### Claude Code (서브에이전트 위임)
+### Claude Code (subagent delegation)
 
-> Agent tool이 없으면 (예: Cline) 아래 "CLI Runner" 섹션으로 가세요.
+> If the Agent tool is not available (e.g., Cline), go to the "CLI Runner" section below.
 
-1. Agent tool로 `tizen-tv-sdk-install-from-zip` 에이전트 호출
-2. 수집된 입력(zip-path, tv-version, force 옵션)을 프롬프트로 전달
-3. 서브에이전트의 JSON Envelope를 그대로 사용자에게 전달 — 아래 "결과 보고" 규칙을 따른다
-   (fenced `json` 블록으로 원문을 싣고, 그 아래 요약은 1~2줄만)
+1. Call the `tizen-tv-sdk-install-from-zip` agent with the Agent tool
+2. Pass the collected inputs (zip-path, tv-version, force options) in the prompt
+3. Pass the subagent's JSON Envelope to the user as-is — follow the "Result reporting" rules below
+   (include the original text in a fenced `json` block, with only a 1–2 line summary beneath it)
 
 ### Prerequisite: Tizen SDK must be installed
 
-TV SDK는 Tizen SDK의 **확장 패키지**이므로, Tizen SDK가 먼저 설치되어 있어야 합니다.
+The TV SDK is an **extension package** of the Tizen SDK, so the Tizen SDK must be installed first.
 
-- **Tizen SDK 설치됨** → TV SDK ZIP 설치 진행
-- **Tizen SDK 미설치** → 설치 중단, 대화형 메시지 반환:
-  - "Tizen SDK가 먼저 설치되어야 합니다. Tizen SDK 설치를 진행하시겠습니까?"
-  - **사용자 승인** → `tizen-sdk-install` 스킬 호출 → 완료 후 TV SDK ZIP 설치 재시도
-  - **사용자 거부** → 중단 종료
+- **Tizen SDK installed** → proceed with the TV SDK ZIP installation
+- **Tizen SDK not installed** → abort the installation and return an interactive message:
+  - "The Tizen SDK must be installed first. Do you want to proceed with the Tizen SDK installation?"
+  - **User approves** → invoke the `tizen-sdk-install` skill → retry the TV SDK ZIP installation after it completes
+  - **User declines** → abort and exit
 
 ### installTvSdkFromZip() Flow
 
 ```
-1. zipPath 파라미터 검증 (필수)
-2. Tizen SDK 설치 여부 확인 (sdk.info) ← 미설치 시 대화형 안내와 함께 중단
-3. TV SDK 이미 설치? (`.platform-installed`의 TV 버전 기록) ← 설치 시 success 반환
-4. TV SDK ZIP 설치 스크립트 명령 반환 (suggested_fix) — 에이전트가 Phase 2 background로 실행
+1. Validate the zipPath parameter (required)
+2. Check whether the Tizen SDK is installed (sdk.info) ← if not installed, abort with an interactive guide
+3. TV SDK already installed? (the TV version record in `.platform-installed`) ← if installed, return success
+4. Return the TV SDK ZIP installer script command (suggested_fix) — the agent runs Phase 2 in the background
 ```
 
 ### CLI Runner (Cline / Claude Code — Phase 1: Pre-check)
@@ -90,7 +90,7 @@ Exit code: `0` = success (TV SDK already installed), `1` = `needs_action` (TV SD
 ## Phase 2 — Install (when Phase 1 says "not installed")
 
 When the pre-check returns `status: "needs_action"` (`error_category: "install_required"`) with `suggested_fix.command`, run that installer
-command. The install takes a few minutes. **실행 방법은 하네스에 따라 다릅니다:**
+command. The install takes a few minutes. **How to run it depends on the harness:**
 
 ### Codex CLI — `job-cli.js run` + `wait` (one exec call waits ≤ 30 s)
 
@@ -114,89 +114,91 @@ which forwards the same ZIP path / SDK path flags). It returns a job receipt at 
 - Run the installer in foreground (may exceed the Bash tool's 10-min cap)
 - Poll/sleep while waiting
 
-### Cline — 분리 실행 + 번호를 붙인 `sleep 25 && --status` 폴링, 한 턴 최대 4회 (30초 타임아웃 · 동일 호출 5회 가드)
+### Cline — detached execution + numbered `sleep 25 && --status` polling, up to 4 polls per turn (30-second timeout · 5-identical-calls guard)
 
-Cline은 background 작업이 끝나도 에이전트를 다시 깨우지 않습니다 (`<task-notification>` 없음).
-또한 Cline의 `execute_command`에는 **30초 하드 타임아웃**이 있으므로, `--wait` (내부 60초 sleep)는
-30초 타임아웃에 걸려 백그라운드로 전환됩니다. 대신 **`nohup`으로 프로세스를 분리**하고,
-**`sleep 25 && --status`** 로 25초 간격 폴링하여 완료를 감지합니다.
+Cline does not wake the agent again when a background task finishes (no `<task-notification>`).
+Also, Cline's `execute_command` has a **30-second hard timeout**, so `--wait` (an internal 60-second sleep)
+hits the 30-second timeout and gets switched to the background. Instead, **detach the process with `nohup`** and
+poll every 25 seconds with **`sleep 25 && --status`** to detect completion.
 
-Cline에는 **같은 도구 호출이 연속 5번 반복되면 무한 루프로 간주해 중단**시키는 가드도 있습니다
-(`Detected 5 consecutive identical calls`; 오류가 6번 연속되면 태스크가 멈춥니다). 설치 동안
-25초 폴링이 수십 번 필요하므로 폴링 명령을 그대로 반복하면 5번째에서 반드시 걸립니다. 따라서
-**폴링 명령마다 시도 번호를 넣어** 호출이 서로 달라지게 하고 (`poll #1`, `poll #2`, …), **한 턴에
-최대 4번**만 폴링한 뒤 여전히 `STATUS=running`이면 설치가 백그라운드에서 계속 진행 중임과 상태 확인
-명령을 사용자에게 알리고 **턴을 종료**합니다. 사용자가 돌아오면 (예: "계속", "끝났어?")
-`--status` / `-Status`를 한 번 실행해 이어갑니다. 분리된 설치 프로세스는 Cline이 멈추거나 턴이
-끝나도 계속 진행됩니다.
+Cline also has a guard that **treats 5 consecutive repetitions of the same tool call as an infinite loop and aborts**
+(`Detected 5 consecutive identical calls`; if errors repeat 6 times in a row, the task stalls). An installation
+needs dozens of 25-second polls, so repeating the polling command verbatim will trip the guard on the 5th call.
+Therefore, **put an attempt number in each polling command** so the calls differ (`poll #1`, `poll #2`, …), and poll **at most
+4 times per turn**; if `STATUS=running` persists, tell the user that the installation is still running in the background and
+how to check the status, then **end the turn**. When the user returns (e.g., "계속", "끝났어?")
+run `--status` / `-Status` once to resume. The detached install process keeps running even if Cline stalls or the turn
+ends.
 
-**⚠️ `--wait`를 사용하지 마세요.** 60초 sleep이 Cline의 30초 타임아웃에 걸립니다.
-**⚠️ `sleep 30` 이상을 사용하지 마세요.** 30초 + `--status` 실행 시간이 타임아웃을 초과합니다.
-**⚠️ 포그라운드로 직접 실행하지 마세요.** 설치 로그가 컨텍스트 윈도우로 스트리밍됩니다.
-**⚠️ 같은 폴링 명령을 그대로 다시 실행하지 마세요.** 시도 번호 없이 반복하면 5번째 호출에서 Cline이 중단됩니다.
+**⚠️ Do not use `--wait`.** The 60-second sleep hits Cline's 30-second timeout.
+**⚠️ Do not use `sleep 30` or longer.** 30 seconds + `--status` execution time exceeds the timeout.
+**⚠️ Do not run it directly in the foreground.** The installation log streams into the context window.
+**⚠️ Do not re-run the same polling command verbatim.** Repeating it without an attempt number makes Cline abort on the 5th call.
 
 #### Linux / macOS (Bash)
 
-1. `nohup` 으로 Phase 1 envelope의 `suggested_fix.command`
-   (`bash "<installer-script>" --sdk-path=… --zip-path=… [--force]`)를 **인자까지 그대로** 분리 실행
-   (즉시 반환, PID 출력). 인자를 빼면 `--zip-path`·`--force`·`--sdk-path` 요청이 적용되지 않습니다:
+1. Detach and run the Phase 1 envelope's `suggested_fix.command`
+   (`bash "<installer-script>" --sdk-path=… --zip-path=… [--force]`) with `nohup`, **keeping the arguments intact**
+   (returns immediately, prints the PID). Dropping the arguments means the `--zip-path`/`--force`/`--sdk-path` requests are not applied:
 
    ```bash
    nohup <suggested_fix.command> > /tmp/tizen-tv-sdk-install-from-zip.log 2>&1 & \
    jobs -p
    ```
 
-2. 시도 번호를 붙여 `sleep 25 && --status` 로 폴링 (25초 대기 후 상태 출력, 30초 타임아웃 내 안전;
-   `#N`은 호출마다 1씩 증가):
+2. Poll with `sleep 25 && --status`, adding an attempt number (prints the status after a 25-second wait, safe within the 30-second timeout;
+   `#N` increments by 1 on each call):
 
    ```bash
    sleep 25 && echo "poll #1" && bash "<installer-script>" --sdk-path="<sdk-path>" --status
    ```
 
-   - `STATUS=running` → 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
-     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
-     설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
-     확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
-     (직접 확인: `bash "<installer-script>" --sdk-path="<sdk-path>" --status`)
-   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 +
-     `tail -20 /tmp/tizen-tv-sdk-install-from-zip.log` 원인 요지 1줄
+   - `STATUS=running` → re-run with the attempt number incremented (`poll #2`, `#3`, `#4`).
+     **If it is still `running` after the 4th poll**, stop polling, tell the user the following, and **end the turn**:
+     the installation is still running in the background. **No automatic notification of installation
+     completion is provided**, so if you need to confirm completion, ask the user to say
+     "설치 진행 상태를 알려줘" and then check the status and resume.
+     (Check directly: `bash "<installer-script>" --sdk-path="<sdk-path>" --status`)
+   - `STATUS=done EXIT=0` → done. Re-run the Phase 1 pre-check, then report the envelope
+   - `STATUS=done EXIT=1` → failed. Re-run the Phase 1 pre-check, then report the envelope +
+     one line on the gist of the cause from `tail -20 /tmp/tizen-tv-sdk-install-from-zip.log`
 
-   **`sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
-   `--status`만 단독으로 연속 실행하지 마세요. 즉시 반환되어 tight-loop 폴링이 됩니다.
-   항상 시도 번호를 붙인 `sleep 25 && --status`를 사용하세요.
+   **`sleep 25` completes safely within Cline's 30-second timeout.**
+   Do not run `--status` alone in a row — it returns immediately and becomes tight-loop polling.
+   Always use `sleep 25 && --status` with an attempt number.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
+3. After completion, re-run the Phase 1 pre-check CLI to verify the TV version was recorded in `.platform-installed`
 
 #### Windows (PowerShell)
 
-1. Phase 1 envelope의 `suggested_fix.command`
-   (`powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -SdkPath … -ZipPath … [-Force]`)를
-   **인자까지 그대로** 쓰고 끝에 `-Detach`만 붙여 분리 실행. 인자를 빼면 `-ZipPath`·`-Force`·`-SdkPath`
-   요청이 적용되지 않습니다:
+1. Take the Phase 1 envelope's `suggested_fix.command`
+   (`powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -SdkPath … -ZipPath … [-Force]`)
+   **with the arguments intact**, append `-Detach` at the end, and run it detached. Dropping the arguments means the `-ZipPath`/`-Force`/`-SdkPath`
+   requests are not applied:
 
    ```powershell
    <suggested_fix.command> -Detach
    ```
 
-2. 시도 번호를 붙여 `Start-Sleep 25; -Status` 로 폴링 (25초 대기 후 상태 출력; `#N`은 호출마다 1씩 증가):
+2. Poll with `Start-Sleep 25; -Status`, adding an attempt number (prints the status after a 25-second wait; `#N` increments by 1 on each call):
 
    ```powershell
    powershell -ExecutionPolicy Bypass -Command "Start-Sleep 25; Write-Host 'poll #1'; powershell -ExecutionPolicy Bypass -File '<installer.ps1 path>' -Status"
    ```
 
-   - `STATUS=running` → 시도 번호를 올려 다시 실행 (`poll #2`, `#3`, `#4`).
-     **4번째 폴링 후에도 `running`이면** 폴링을 멈추고 아래를 사용자에게 알린 뒤 **턴을 종료**합니다:
-     설치는 백그라운드에서 계속 진행 중입니다. **설치 완료의 자동 알림은 제공되지 않으므로**, 설치 완료
-     확인이 필요하시면 "설치 진행 상태를 알려줘"라고 물어봐 주시면 상태를 확인해 이어갑니다.
-     (직접 확인: `powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Status`)
-   - `STATUS=done EXIT=0` → 완료. Phase 1 pre-check 재실행 후 envelope 보고
-   - `STATUS=done EXIT=1` → 실패. Phase 1 pre-check 재실행 후 envelope 보고 + 로그 파일 원인 요지 1줄
+   - `STATUS=running` → re-run with the attempt number incremented (`poll #2`, `#3`, `#4`).
+     **If it is still `running` after the 4th poll**, stop polling, tell the user the following, and **end the turn**:
+     the installation is still running in the background. **No automatic notification of installation
+     completion is provided**, so if you need to confirm completion, ask the user to say
+     "설치 진행 상태를 알려줘" and then check the status and resume.
+     (Check directly: `powershell -ExecutionPolicy Bypass -File "<installer.ps1 path>" -Status`)
+   - `STATUS=done EXIT=0` → done. Re-run the Phase 1 pre-check, then report the envelope
+   - `STATUS=done EXIT=1` → failed. Re-run the Phase 1 pre-check, then report the envelope + one line on the gist of the cause from the log file
 
-   **`Start-Sleep 25`는 Cline의 30초 타임아웃 내에서 안전하게 완료됩니다.**
-   `-Status`만 단독으로 연속 실행하지 마세요. 항상 시도 번호를 붙인 `Start-Sleep 25; -Status`를 사용하세요.
+   **`Start-Sleep 25` completes safely within Cline's 30-second timeout.**
+   Do not run `-Status` alone in a row. Always use `Start-Sleep 25; -Status` with an attempt number.
 
-3. 완료 후 Phase 1 pre-check CLI 재실행하여 `.platform-installed`에 TV 버전이 기록됐는지 확인
+3. After completion, re-run the Phase 1 pre-check CLI to verify the TV version was recorded in `.platform-installed`
 
 If the run state is unknown (interrupted session), just re-run the Phase 1 pre-check CLI —
 it is idempotent and reports whether this ZIP's TV version is recorded in `.platform-installed`. Report that envelope.
@@ -205,47 +207,47 @@ it is idempotent and reports whether this ZIP's TV version is recorded in `.plat
 
 - Parse installer output as JSON (it's human-readable text only)
 
-## TV SDK 설치 확인 방법 (Verification)
+## How to Verify the TV SDK Installation (Verification)
 
-TV SDK 설치 여부를 확인할 때 다음 방법을 사용하세요:
+Use the following methods to check whether the TV SDK is installed:
 
-### ✅ 올바른 방법
+### ✅ Correct methods
 
-1. **`list-templates --type tv`** — TV 템플릿 목록을 확인합니다. 빈 배열(`[]`)이 반환되면 TV SDK가 미설치된 것입니다. TV 템플릿이 존재하면 설치된 것으로 판정합니다.
+1. **`list-templates --type tv`** — check the list of TV templates. If an empty array (`[]`) is returned, the TV SDK is not installed. If TV templates exist, it is considered installed.
 
-2. **`tv-sdk-install-from-zip` 재실행 (멱등성)** — `tv-sdk-install-from-zip` CLI는 `.platform-installed`에서 이 ZIP(또는 `--tv-version`)의 TV 기록을 확인하여 이미 설치되어 있으면 즉시 success를 반환합니다. 설치 여부 확인 용도로 재실행해도 안전합니다.
+2. **Re-run `tv-sdk-install-from-zip` (idempotency)** — the `tv-sdk-install-from-zip` CLI checks the TV record for this ZIP (or `--tv-version`) in `.platform-installed` and returns success immediately if it is already installed. Re-running it to check installation status is safe.
 
-### ❌ 잘못된 방법
+### ❌ Wrong method
 
-- **`list-platform --profile tv`** — 이 명령은 `--profile` 파라미터를 **무시**합니다. TV 프로필이 설치되지 않았어도 기본 플랫폼 목록을 반환하므로, TV SDK가 설치된 것으로 **오판(false positive)** 을 유발합니다.
+- **`list-platform --profile tv`** — this command **ignores** the `--profile` parameter. It returns the default platform list even when the TV profile is not installed, causing a **false positive** that the TV SDK is installed.
 
-### 요약
+### Summary
 
-| 방법                             | 신뢰성       | 비고                                         |
-| -------------------------------- | ------------ | -------------------------------------------- |
-| `list-templates --type tv`       | ✅ 신뢰 가능 | 빈 배열 = 미설치, 항목 있음 = 설치됨         |
-| `tv-sdk-install-from-zip` 재실행 | ✅ 신뢰 가능 | 멱등성 보장, `.platform-installed`의 TV 기록으로 판정 |
-| `list-platform --profile tv`     | ❌ 오판 위험 | `--profile` 무시됨, false positive 유발      |
+| Method                               | Reliability        | Notes                                        |
+| ------------------------------------ | ------------------ | -------------------------------------------- |
+| `list-templates --type tv`           | ✅ Reliable        | empty array = not installed, entries present = installed |
+| Re-run `tv-sdk-install-from-zip`     | ✅ Reliable        | idempotency guaranteed, judged by the TV record in `.platform-installed` |
+| `list-platform --profile tv`         | ❌ Risk of misjudgment | `--profile` ignored, causes false positives |
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope must always be shown to the user
 
-러너의 stdout JSON Envelope는 **도구 결과 안에 있어서 사용자에게는 보이지 않는다**
-(Claude Code UI는 Bash/Agent 결과를 "Ran 1 shell command"처럼 접어 둔다). 사용자에게
-보이는 것은 최종 답변 텍스트만이므로, 최종 답변은 **어느 실행 경로(서브에이전트 위임 /
-CLI Runner 직접 실행)든** 아래 형식을 따른다:
+The runner's stdout JSON Envelope is **inside the tool result, so the user cannot see it**
+(the Claude Code UI folds Bash/Agent results away as "Ran 1 shell command"). Only the final
+answer text is visible to the user, so the final answer must follow the format below on
+**any execution path (subagent delegation / direct CLI Runner execution)**:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the envelope JSON **as-is, unmodified and unabridged**, in a fenced `json` block (first item).
+2. Beneath it, add a result summary of **1–2 lines only** (the key value of `result` or the gist of `errors[0].message`).
+3. If helpful, add a one-line suggestion of next steps.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 러너를 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Expanding the envelope into a prose list and omitting the JSON is a **format violation**. This rule
+  takes precedence over the harness's general writing rules ("don't put code in prose", etc.) — the envelope
+  is not code; it is this skill's **result contract**.
+- If the runner was executed multiple times, include the envelope from the **last run**, and mention
+  earlier failures only in a single line in the summary.
+- Include a failure envelope's original text the same way. Do not retype `errors[0].message`/`details`;
+  show what is in the JSON as-is.
+- Show a `user_input_required` envelope as-is, then ask the user the question.
 
 ## Handoff
 

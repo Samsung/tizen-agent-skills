@@ -68,10 +68,10 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 
 | User intent (ko/en) | Command | Skill |
 |---|---|---|
-| 템플릿 목록 / list templates | `list-templates` | tizen-list-templates (tizen-cli 전용; common에서는 tizen-create-project의 list-templates 액션) |
+| 템플릿 목록 / list templates | `list-templates` | tizen-list-templates (tizen-cli only; in common this is tizen-create-project's list-templates action) |
 | 앱/프로젝트 생성 / create app | `create-project` | tizen-create-project |
-| 프로젝트 삭제 / delete project | `project-delete` | tizen-create-project (delete 액션) |
-| WGT 가져오기 / import a .wgt as a project | `import-wgt` | tizen-create-project (import-wgt 액션) |
+| 프로젝트 삭제 / delete project | `project-delete` | tizen-create-project (delete action) |
+| WGT 가져오기 / import a .wgt as a project | `import-wgt` | tizen-create-project (import-wgt action) |
 | 빌드 / build | `build-project` | tizen-build-project |
 
 ### Emulator and device (7)
@@ -83,7 +83,7 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 | 에뮬레이터 수정·초기화·이미지 캡처 / full em-cli surface | `emulator-manager` | tizen-create-emulator, tizen-launch-emulator |
 | 디바이스 찾기·에뮬레이터 종료 / find device, stop emulator | `device-manager` | tizen-device-manager |
 | 원격 디바이스 검색·연결 / network scan, sdb connect | `remote-device` | tizen-remote-device |
-| sdb 명령 / shell, port forward, reboot, launch·kill (로그 제외 — 로그는 `dlog-analyzer`) | `sdb-helper` | tizen-sdb-helper |
+| sdb 명령 / shell, port forward, reboot, launch·kill (logs excluded — logs go to `dlog-analyzer`) | `sdb-helper` | tizen-sdb-helper |
 | 파일 전송 / sdb push, pull | `file-transfer` | tizen-file-transfer |
 
 ### App, debugging, test (6)
@@ -91,10 +91,10 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 | User intent (ko/en) | Command | Skill |
 |---|---|---|
 | 앱 설치·실행 / install, run app | `install-app` | tizen-install-app |
-| 네이티브 디버깅 / GDB debug (**Native 전용**) | `gdb-debug` | tizen-gdb-debug |
-| 닷넷 디버깅 / netcoredbg (**DotNET 전용**) | `dotnet-debug` | tizen-dotnet-debug |
-| 웹앱 디버깅 / RWI, CDP (**WebApp 전용**) | `webapp-debug` | tizen-webapp-debug |
-| 웹앱 자동화 테스트 / Playwright, E2E (**WebApp 전용**) | `playwright-test` | tizen-playwright-test |
+| 네이티브 디버깅 / GDB debug (**Native only**) | `gdb-debug` | tizen-gdb-debug |
+| 닷넷 디버깅 / netcoredbg (**DotNET only**) | `dotnet-debug` | tizen-dotnet-debug |
+| 웹앱 디버깅 / RWI, CDP (**WebApp only**) | `webapp-debug` | tizen-webapp-debug |
+| 웹앱 자동화 테스트 / Playwright, E2E (**WebApp only**) | `playwright-test` | tizen-playwright-test |
 | 화면 캡처 / screenshot | `screenshot` | tizen-screenshot |
 
 ### Certificates and diagnostics (2)
@@ -116,10 +116,10 @@ two tizen-cli-only SKILL.md files on top of those 29 — this umbrella router an
 ```
 check-node → check-disk-space → sdk-install [→ platform-install / tv-sdk-install]
   → list-templates → create-project → build-project
-  → create-emulator → launch-emulator (또는 device-manager / remote-device)
+  → create-emulator → launch-emulator (or device-manager / remote-device)
   → install-app (--run)
   → gdb-debug (Native) / dotnet-debug (DotNET) / webapp-debug (WebApp)
-  → playwright-test (WebApp 자동화 테스트)
+  → playwright-test (WebApp automated testing)
 ```
 
 Off-pipeline commands, used when the request calls for them rather than in sequence:
@@ -127,7 +127,7 @@ Off-pipeline commands, used when the request calls for them rather than in seque
 `update-package`, `install-rootstrap`,
 `download-emulator-package`, `download-mobile-platform`, `dotnet-setup`, `project-delete`,
 `emulator-manager`, `sdb-helper`, `file-transfer`, `screenshot`, `certificate-manager`,
-`dlog-analyzer` (앱 실행 전에 `--action start`로 먼저 띄워 두는 것이 유효).
+`dlog-analyzer` (it is fine to start it beforehand with `--action start` before running the app).
 
 ## Notes
 

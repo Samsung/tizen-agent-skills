@@ -113,7 +113,7 @@ This agent handles emulator package download by running the installer script in 
 - If `--platform-version` is specified, targets `TIZEN-{version}-Emulator`; otherwise auto-detects the latest TIZEN-X.Y platform
 - Recursively resolves all Install-dependency packages
 - Downloads and merges each package into the SDK root
-- Also resolves the shared `Emulator` tools (emulator-manager 등) and refreshes any that are outdated — a new platform's plugin jar can require a newer shared manager (NoSuchFieldError: isVirgl class of failures)
+- Also resolves the shared `Emulator` tools (emulator-manager, etc.) and refreshes any that are outdated — a new platform's plugin jar can require a newer shared manager (NoSuchFieldError: isVirgl class of failures)
 - Creates/updates the `.emulator-package-installed` marker on success; it records one `Platform version: X.Y` line per installed platform, so installing 10.0 does NOT satisfy a later 11.0 request
 
 **Do NOT run scripts directly.** Always use this agent for consistent Standard JSON Envelope responses.

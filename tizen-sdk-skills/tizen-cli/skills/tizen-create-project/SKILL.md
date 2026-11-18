@@ -53,10 +53,10 @@ and install are OTHER skills; run them only when the user explicitly asked.
 
 **⚠️ If your question tool caps the number of options (e.g. AskUserQuestion allows
 AT MOST 4 per question — 5+ fails with `InputValidationError: too_big`), select in
-two steps:** Q1 with `native` / `dotnet` / `webapp` / `기타 (rpk · tv · platform)…`
+two steps:** Q1 with `native` / `dotnet` / `webapp` / `Other (rpk · tv · platform)…`
 (list all six names in the question text), then Q2 with `rpk` / `tv` / `platform` only
-when 기타 was chosen. The same cap applies to template selection — chunk lists
-longer than 4 behind a `더 보기…` follow-up question.
+when Other was chosen. The same cap applies to template selection — chunk lists
+longer than 4 behind a `More…` follow-up question.
 
 ## Prerequisites
 
@@ -72,11 +72,11 @@ on typed calls such as `--type webapp` too. That field is the only way to tell w
 TV SDK is installed; never probe the SDK folders yourself.
 
 - Web-app request ("웹앱 만들어줘", "create a webapp"): run `list-templates --type webapp` and
-  show `result.templates.webapp` **plus** `result.tv.web` (heading: "Samsung TV 웹앱 템플릿
-  (`result.tv.profile`)") when present. A TV pick is created with `--type tv`, never `--type webapp`.
+  show `result.templates.webapp` **plus** `result.tv.web` (heading: "Samsung TV web app
+  templates (`result.tv.profile`)") when present. A TV pick is created with `--type tv`, never `--type webapp`.
 - Generic request ("타이젠 앱 만들어줘", type not given): run `list-templates` (no `--type`)
   before asking the type and show every group of `result.templates` — including
-  `platform` ("Platform 앱", GBS samples such as `dali-demo`, created with `--type platform`) —
+  `platform` ("Platform apps", GBS samples such as `dali-demo`, created with `--type platform`) —
   plus the TV list (`result.tv.web` / `result.tv.dotnet`) when present; mention in the type
   question that the TV SDK is installed.
 - No `result.tv` → TV SDK not installed → do not list TV templates.
@@ -105,10 +105,10 @@ tizen-cli tizen-sdk create-project --type webapp --template Basic --parent-path 
 ```
 
 **App name rule.** Count only `A-Za-z0-9` (`-`, `_`, spaces and non-ASCII characters
-such as 한글 do not count) and require 10 or more — that is exactly what the runner's
+such as Hangul do not count) and require 10 or more — that is exactly what the runner's
 `validatePackageId()` checks before deriving the lowercased 10-character package ID.
 When asking the user for the name, state the rule in the question
-("영문/숫자 10자 이상") and offer only examples that already pass, so a rejected name
+("at least 10 ASCII letters/digits") and offer only examples that already pass, so a rejected name
 never forces a second round:
 
 - ✅ `MyTizenWebApp` (13), `MyTizenNativeApp` (16), `MyTizenDotnetApp` (16), `MyTizenApp01` (12), `MyDaliDemoApp` (13)
@@ -221,26 +221,30 @@ This is distinct from a .NET project configured with `pack_as_rpk: true`: that p
 - Build: `tizen-cli tizen-sdk build-project --project <project> [--arch <arch>]` — runs GBS internally (NOT `tz build`; do not run `gbs` by hand)
 - Install / run: `tizen-cli tizen-sdk install-app --package <path>.rpm --run` — GBS produces `.rpm` (under `~/GBS-ROOT/local/repos/<arch>/RPMS/`), not `.tpk`; the app is an executable installed at `/usr/bin/<name>` and `--run` launches it
 
-## 결과 보고 — Envelope는 반드시 사용자에게 보여준다
+## Result reporting — the envelope MUST be shown to the user
 
-`tizen-cli tizen-sdk <command>`가 stdout에 찍는 JSON Envelope는 **도구 결과 안에 있어서
-사용자에게는 보이지 않는다** (Claude Code UI는 Bash 결과를 "Ran 1 shell command"처럼 접어
-둔다). 터미널에서 직접 실행하면 JSON이 그대로 보이지만, 에이전트 세션에서 사용자에게 보이는
-것은 최종 답변 텍스트만이다. 따라서 최종 답변은 아래 형식을 따른다:
+The JSON Envelope that `tizen-cli tizen-sdk <command>` prints to stdout is **buried inside
+the tool result and invisible to the user** (the Claude Code UI collapses Bash output behind
+a "Ran 1 shell command" line). Run directly in a terminal the JSON is visible as-is, but in
+an agent session the user sees only the final answer text. Therefore the final answer MUST
+follow this format:
 
-1. Envelope JSON을 **수정·축약 없이 그대로** fenced `json` 블록에 싣는다 (첫 항목).
-   stderr로 나오는 `[DEBUG] ...` 줄은 Envelope가 아니므로 제외한다.
-2. 그 아래에 결과 요약을 **1~2줄**만 덧붙인다 (`result`의 핵심 값 또는 `errors[0].message` 요지).
-3. 필요하면 다음 단계 제안을 1줄 추가한다.
+1. Include the Envelope JSON **verbatim, unmodified and unabridged** in a fenced `json`
+   block (as the first item). Exclude the `[DEBUG] ...` lines that go to stderr — they are
+   not part of the Envelope.
+2. Below it, append a result summary of **1–2 lines** only (the key values of `result`, or
+   the gist of `errors[0].message`).
+3. If useful, add one line suggesting the next step.
 
-- Envelope를 산문 목록으로 풀어 쓰고 JSON을 생략하는 것은 **형식 위반**이다. 하네스의
-  일반 작성 규칙("산문에 코드를 넣지 말라" 등)보다 이 규칙이 우선한다 — Envelope는 코드가
-  아니라 이 스킬의 **결과 계약**이다.
-- 명령을 여러 번 실행했으면 **마지막 실행**의 Envelope를 싣고, 이전 실패는 요약 줄에서
-  한 줄로만 언급한다.
-- 실패 Envelope도 동일하게 원문을 싣는다. `errors[0].message`/`details`를 다시 타이핑하지
-  말고 JSON 안의 것을 그대로 보이게 한다.
-- `user_input_required` Envelope는 그대로 보여준 뒤 사용자에게 질문한다.
+- Expanding the Envelope into a prose list and dropping the JSON is a **format violation**.
+  This rule takes precedence over the harness's general writing guidance ("don't put code in
+  prose" and the like) — the Envelope is not merely code, it is this skill's **result
+  contract**.
+- If the command ran more than once, include the Envelope of the **last run** and mention
+  earlier failures in the summary line only, in a single line.
+- Include a failure Envelope verbatim as well. Do not retype `errors[0].message`/`details`
+  — show what is inside the JSON as-is.
+- Show a `user_input_required` Envelope as-is, then ask the user the question.
 
 ## Follow-ups
 
