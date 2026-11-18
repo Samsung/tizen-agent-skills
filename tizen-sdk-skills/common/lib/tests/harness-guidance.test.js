@@ -197,8 +197,14 @@ for (const file of skillDocs) {
       text.includes("after the 4th poll"),
       "says what to do after the 4th poll",
     );
-    assert.ok(text.includes("end the turn"), "ends the turn instead of looping");
-    assert.ok(text.includes("5 consecutive"), "explains the 5-identical-call guard");
+    assert.ok(
+      text.includes("end the turn"),
+      "ends the turn instead of looping",
+    );
+    assert.ok(
+      text.includes("5 consecutive"),
+      "explains the 5-identical-call guard",
+    );
     assert.ok(
       text.includes("keeps running"),
       "says the detached install keeps running",
@@ -208,7 +214,9 @@ for (const file of skillDocs) {
       "warns against repeating the poll verbatim",
     );
     assert.ok(
-      text.includes("No automatic notification of installation completion is provided"),
+      text.includes(
+        "No automatic notification of installation completion is provided",
+      ),
       "turn-ending message says no automatic completion notice comes",
     );
     assert.ok(
