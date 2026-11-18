@@ -15,6 +15,17 @@
 
 ### 추가
 
+- **릴리스 zip에서 tizen-sdk CLI 설치 (`common/setup/setup-tizen-cli.sh` /
+  `.ps1` / `.bat`)**. 클론이나 빌드 없이 빌드된 tizen-cli 플러그인을 설치합니다.
+  tizen-agent-skills 릴리스의 `tizen-sdk-v<version>.zip` 에셋을 찾아(기본값은
+  최신 릴리스, `--release <tag>`로 고정. 에셋 버전은 플러그인 자체 버전이라
+  익명 호출에 제한이 있는 GitHub API 대신 릴리스 페이지를 파싱합니다),
+  `dist/` 번들을 `~/.tizen-sdk-cli`에 설치하고 `tizen-sdk` 셈(`bin/`을 PATH에
+  추가)을 만들고, `--capabilities`로 검증한 뒤 설치가 성공하면 내려받은 zip을
+  삭제합니다. `--dir`로 다른 설치 디렉터리를 고르고, `--tizen-cli`로
+  `tizen-cli plugin install`까지 실행하고, `--keep`으로 zip을 유지할 수
+  있습니다. zip은 esbuild 번들이라 Node.js 22+만 있으면 됩니다.
+
 - **클론 없이 설치 (`common/setup/setup-remote.sh` / `.ps1` / `.bat`)**. 저장소를
   클론하지 않고 플러그인을 설치합니다. GitHub에서 tizen-agent-skills 소스 zip을
   내려받고(`--ref`로 브랜치나 릴리스 태그 지정, 기본값 `main`), 압축을 푼 복사본에서

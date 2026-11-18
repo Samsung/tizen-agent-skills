@@ -16,6 +16,19 @@ below use those release tags.
 
 ### Added
 
+- **`tizen-sdk` CLI install from a release zip (`common/setup/setup-tizen-cli.sh`
+  / `.ps1` / `.bat`)**. Installs the built tizen-cli plugin without cloning or
+  building: it resolves the `tizen-sdk-v<version>.zip` asset of a
+  tizen-agent-skills release (latest by default, `--release <tag>` to pin one;
+  the asset version is the plugin's own, so the release pages are parsed
+  instead of the rate-limited GitHub API), installs the `dist/` bundle into
+  `~/.tizen-sdk-cli` with a `tizen-sdk` shim (`bin/` on PATH), verifies with
+  `--capabilities`, and deletes the download when the install succeeds.
+  `--dir` picks another install directory, `--tizen-cli` also registers the
+  plugin with a `tizen-cli` host via `tizen-cli plugin install`, `--keep`
+  retains the zip. Only Node.js 22+ is required — the zip is the esbuild
+  bundle.
+
 - **No-clone setup (`common/setup/setup-remote.sh` / `.ps1` / `.bat`)**. Installs
   the plugin without cloning the repository: it downloads the
   tizen-agent-skills source zip from GitHub (`--ref` picks a branch or a

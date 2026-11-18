@@ -143,6 +143,22 @@ Add `-Harness claude` for a single host; `--ref`/`-Ref` picks a branch or a rele
 instead of `main`. See
 [README.md](README.md#setup-without-cloning-download-and-install) for all options.
 
+**Standalone `tizen-sdk` CLI without a build?** `setup-tizen-cli` installs it from the
+release zip — no clone, no pnpm:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd or PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+It installs into `~/.tizen-sdk-cli`, creates a `tizen-sdk` shim, verifies with
+`--capabilities`, and deletes the download when done. Node.js 22+ only.
+
 ### 3.1 Checking results
 
 **Natural-language request examples**

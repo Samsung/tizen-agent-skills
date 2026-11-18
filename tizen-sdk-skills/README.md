@@ -178,6 +178,26 @@ tizen-sdk --doctor
 - Without a build the launcher prints a `PLUGIN_NOT_BUILT` envelope with the build command.
 - The source, plugin manifest and host-integration details live under `tizen-cli/`.
 
+**No build?** `common/setup/setup-tizen-cli.sh` / `.ps1` installs the CLI straight from a
+release zip — no clone, no pnpm build:
+
+```bash
+# All platforms (macOS/Linux)
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd or PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+The script resolves the `tizen-sdk-v<version>.zip` asset of the latest release
+(`--release <tag>` / `-Release <tag>` to pin one), installs the bundle into `~/.tizen-sdk-cli`,
+creates a `tizen-sdk` shim, verifies with `--capabilities`, and deletes the download when
+done. `--tizen-cli` / `-TizenCli` also registers the plugin with a `tizen-cli` host.
+Only Node.js 22+ is required.
+
 See [tizen-cli/README.md](tizen-cli/README.md#standalone-use-without-the-tizen-cli-host) and
 [docs/tizen-cli/build-and-install.en.md](docs/tizen-cli/build-and-install.en.md).
 

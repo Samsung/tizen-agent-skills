@@ -143,6 +143,22 @@ powershell -ExecutionPolicy Bypass -File setup-remote.ps1
 브랜치나 릴리스 태그를 지정할 수 있습니다. 전체 옵션은
 [README.ko.md](README.ko.md#클론-없이-설치-다운로드-후-설치)를 참고하세요.
 
+**빌드 없이 독립 실행형 `tizen-sdk` CLI?** `setup-tizen-cli`은 릴리스 zip에서
+설치합니다 — 클론도 pnpm도 필요 없습니다:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.sh)
+```
+
+```bat
+:: Windows (cmd 또는 PowerShell)
+curl -fsSL -o setup-tizen-cli.ps1 https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/tizen-sdk-skills/common/setup/setup-tizen-cli.ps1
+powershell -ExecutionPolicy Bypass -File setup-tizen-cli.ps1
+```
+
+`~/.tizen-sdk-cli`에 설치하고 `tizen-sdk` 셈을 만들고, `--capabilities`로 검증한 뒤
+내려받은 zip을 삭제합니다. Node.js 22+만 있으면 됩니다.
+
 ### 3.1 결과 확인
 
 **자연어 요청 예시**
