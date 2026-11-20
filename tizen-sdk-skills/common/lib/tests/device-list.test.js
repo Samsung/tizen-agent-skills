@@ -18,6 +18,7 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { parseDeviceTable } = require("../core/device");
 const { resolveSerial } = require("../core/sdb");
+const { listOnlineDevices } = require("../core/samsung-duid");
 
 console.log("=== device-manager list Test ===\n");
 
@@ -405,10 +406,73 @@ if (process.platform === "win32") {
         .serial,
       "emulator-26101",
     );
+    const unsafe = pick("List of devices attached\\nemu$(id)\\tdevice\\n");
     check(
-      "  a serial that is not shell-safe is never picked",
-      pick("List of devices attached\\nemu$(id)\\tdevice\\n").errorCategory,
-      "device_not_found",
+      "  a serial that is not shell-safe is never picked, and is named",
+      [
+        unsafe.serial,
+        unsafe.errorCategory,
+        (unsafe.message || "").includes("emu$(id)"),
+      ],
+      [undefined, "invalid_parameters", true],
+    );
+    check(
+      "  a safe device is still picked next to an unsafe one",
+      pick(
+        "List of devices attached\\nemu$(id)\\tdevice\\nemulator-26101\\tdevice\\n",
+      ).serial,
+      "emulator-26101",
+    );
+
+    // samsung-duid: only `device` rows with a safe serial, name column kept
+    // (acquireDuidFromDevice returns it as deviceName)
+    process.env.FAKE_OUT =
+      "List of devices attached\\nemulator-26101\\tdevice\\ttizen-vm-default\\nR3CN1234\\tdevice\\n0000d859\\tno permissions\\n";
+    check(
+      "  samsung-duid listOnlineDevices keeps the name column",
+      listOnlineDevices(fakeSdb),
+      [
+        { serial: "emulator-26101", state: "device", name: "tizen-vm-default" },
+        { serial: "R3CN1234", state: "device" },
+      ],
+    );
+
+    // remote-device list: online_count counts only `device` entries
+    const binDir = path.join(dir, "bin");
+    fs.mkdirSync(binDir);
+    fs.copyFileSync(fakeSdb, path.join(binDir, "sdb"));
+    fs.chmodSync(path.join(binDir, "sdb"), 0o755);
+    const remote = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        "require(process.argv[1]).listRemoteDevices().then((e) => process.stdout.write(JSON.stringify(e)))",
+        path.join(__dirname, "..", "core", "remote-device.js"),
+      ],
+      {
+        encoding: "utf8",
+        timeout: 60000,
+        env: {
+          PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
+          HOME: dir,
+          FAKE_OUT:
+            "List of devices attached\\n203.0.113.5:26101\\tdevice\\tTV\\n198.51.100.7:26101\\toffline\\nemulator-26101\\tdevice\\n",
+        },
+      },
+    );
+    let remoteEnv = {};
+    try {
+      remoteEnv = JSON.parse(remote.stdout);
+    } catch (_e) {
+      /* checked below */
+    }
+    check(
+      "  remote-device list: device_count and online_count",
+      remoteEnv.result && [
+        remoteEnv.result.device_count,
+        remoteEnv.result.online_count,
+      ],
+      [2, 1],
     );
     check(
       "  an sdb error with no device is io_error, not device_not_found",

@@ -121,6 +121,7 @@ Exit code: `0` = success envelope, `1` = failure/error envelope (JSON on stdout)
 **Success result (scan):** `result.devices` = `[{ ip, port, status: connected|disconnected }]`, plus `subnets_scanned`, `device_count`.
 **Success result (connect):** `result.device_serial` = `<ip>:<port>` — use this serial with other skills (install-app, file-transfer, sdb-helper).
 **Success result (add/remove/edit):** `result.device_count` = entries remaining in the bookmark list, `result.list_path` = resolved path to `remote_device_scan.list`, `result.sdk_root` = the SDK the path was derived from. `edit` additionally returns the updated `name`/`ip`/`port` and `result.previous` = the values before the change.
+**Success result (list):** `result.devices` = `[{ device_serial, ip, port, status }]` (`status`: `connected`, or the sdb state such as `offline`), `result.device_count` (all remote entries) and `result.online_count` (entries in the `device` state, the only ones a command can target).
 **Success result (list-saved):** `result.devices` = `[{ name, ip, port }]`.
 
 **Note:** The device must have developer mode enabled and be on the same network. If scan finds nothing, ask the user for the device's IP and run the runner's `connect <ip>` action with it (never a raw `sdb connect`). Bookmarking (add/remove/edit/list-saved) is independent of sdb connection state — it only edits Device Manager's saved list, it does not connect/disconnect anything. To rename an existing bookmark, prefer `edit` over remove+add — it keeps the entry's position in the list.

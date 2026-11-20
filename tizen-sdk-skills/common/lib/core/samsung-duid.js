@@ -347,7 +347,7 @@ function queryCapability(sdbPath, serial) {
  * nothing odd from the sdb output reaches a command line.
  *
  * @param {string} sdbPath
- * @returns {Array<{serial: string, state: string}>}
+ * @returns {Array<{serial: string, state: string, name?: string}>}
  * @throws {Error} when `sdb devices` itself fails
  */
 function listOnlineDevices(sdbPath) {
@@ -616,6 +616,7 @@ module.exports = {
   acquireDuidFromDevice,
   acquireDuidsFromAllDevices,
   // Internal helpers (exported for testing)
+  listOnlineDevices,
   extractDuidFromCapability,
   extractDuidFromOutput,
   runDeviceShellCommand,

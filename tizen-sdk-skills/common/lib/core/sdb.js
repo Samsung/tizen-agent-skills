@@ -315,7 +315,7 @@ function parseDeviceTable(output) {
  * Device rows of `sdb devices` output (see parseDeviceTable).
  *
  * @param {string} output - stdout (+ stderr) from `sdb devices`
- * @returns {Array<{serial: string, state: string}>}
+ * @returns {Array<{serial: string, state: string, name?: string}>}
  */
 function parseDevices(output) {
   return parseDeviceTable(output).devices;
@@ -360,9 +360,16 @@ function resolveSerial(sdbPath, serial, opts = {}) {
   const { devices, errors, unlisted } = parseDeviceTable(output);
   // The picked serial goes into `-s "<serial>"` on a shell command line, so a
   // listed device whose serial is not shell-safe is never picked.
-  const online = devices.filter(
-    (d) => d.state === "device" && isValidSerial(d.serial),
-  );
+  const connected = devices.filter((d) => d.state === "device");
+  const online = connected.filter((d) => isValidSerial(d.serial));
+  const unsafe = connected.filter((d) => !isValidSerial(d.serial));
+  if (online.length === 0 && unsafe.length > 0) {
+    return {
+      errorCategory: "invalid_parameters",
+      message: `A connected device was skipped because its serial is not safe to pass to sdb: ${unsafe.map((d) => JSON.stringify(d.serial)).join(", ")}. Reconnect it under a serial with only letters, digits, '.', '_', ':' and '-'.`,
+      devices,
+    };
+  }
   if (online.length === 0) {
     // sdb can print `error: …` and exit 0: that is an sdb problem, not a
     // missing device, so do not send the user off to create an emulator.

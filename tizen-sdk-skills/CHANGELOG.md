@@ -124,10 +124,11 @@ below use those release tags.
   `List of devices attached` header, has a column gap (sdb pads each column and
   ends it with a tab) and a known state. `device-manager list` and the target
   pick therefore see the same devices.
-  The target pick also never picks a serial that is not shell-safe, reports an
-  sdb `error:` line as `io_error` instead of "no device", and names rows it did
-  not recognise; sdb-helper and remote-device listings add `online_count`; and
-  samsung-duid returns the device name instead of the state.
+  The target pick also never picks a serial that is not shell-safe (it names the
+  skipped serial as `invalid_parameters`), reports an sdb `error:` line as
+  `io_error` instead of "no device", and names rows it did not recognise; the
+  remote-device `list` result adds `online_count`; and samsung-duid returns the
+  device name instead of the state.
 
 ## [1.9.0] — 2026-11-16
 

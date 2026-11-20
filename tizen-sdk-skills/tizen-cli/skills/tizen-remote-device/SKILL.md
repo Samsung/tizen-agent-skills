@@ -52,6 +52,7 @@ tizen-cli tizen-sdk remote-device [--action <scan|connect|disconnect|list|add|re
 - `add`/`remove`/`edit` success `result`: `device_count` (entries remaining in the bookmark list), `list_path` (resolved path to Device Manager's `remote_device_scan.list`), `sdk_root` (the SDK that path was derived from). `edit` also returns the updated `name`/`ip`/`port` and a `previous` object with the values before the change.
 
   `list_path` is never hardcoded — SDK root = the configured path (`~/.tizen.sdk.path.config`) if it holds `sdk.info` or `tools/sdb[.exe]`, else two levels up from the sdb on `PATH` → `TIZEN_SDK_DATA_PATH` in `<sdk-root>/sdk.info` → else the `<sdk-root>-data` sibling. If a bookmark doesn't appear in the Device Manager GUI, compare `sdk_root` against the SDK the GUI runs from; if they differ, re-point the config with `tizen-cli tizen-sdk sdk-init`.
+- `list` success `result`: `devices[]` (`device_serial`, `ip`, `port`, `status`: `connected` or the sdb state such as `offline`), `device_count` (all remote entries), `online_count` (entries in the `device` state, the only ones a command can target).
 - `list-saved` success `result`: `devices[]` (`name`, `ip`, `port`), `device_count`.
 - Failure `device_not_found`: connect failed after 2 attempts — verify developer mode and the IP, re-run scan. For `remove`/`edit`, means the ip:port wasn't bookmarked.
 - Failure `invalid_parameters` on `add`: the ip:port is already bookmarked — use `--action edit --name <new name>` to rename it in place.
