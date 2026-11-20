@@ -20,14 +20,8 @@ const { summarizeOutput } = require("./output-summary");
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
 const fs = require("fs");
-const {
-  resolveSdb,
-  resolveSdbBinary,
-  ensureSdbServer,
-  runSdb,
-} = require("./sdb");
+const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
 const { CONFIG_FILE } = require("./sdk");
-const { isValidSerial } = require("./shell-safety");
 
 /**
  * Extract only key lines from device manager script stdout for envelope warnings
@@ -60,11 +54,13 @@ function classifySerial(serial) {
   return "usb";
 }
 
-// Device states sdb can print. A line is a device line when its first column
-// is a valid serial (not ending in ':', which marks a message such as
-// `sdb: …`) and its second column is one of these — the same rule for tab-
-// and space-separated tables. Anything else is reported as a warning, so a
-// state missing from this list is still visible, just not listed.
+// Device states sdb can print. A line after the header is a device line when
+// its serial (first column, not ending in ':', which marks a message such as
+// `sdb: …`) is followed by a column gap — a tab or 2+ spaces, as sdb aligns
+// its table — and then one of these states. A sentence such as
+// `target device not found` has single spaces and is not a device. Anything
+// else is reported as a warning, so a state missing from this list is still
+// visible, just not listed.
 const DEVICE_STATES = [
   "device",
   "offline",
@@ -107,13 +103,15 @@ function parseDeviceTable(output) {
       errors.push(line);
       continue;
     }
-    // The state is the first word(s) after the serial, whatever separates
-    // the columns (tabs, spaces or both); STATE_RE stops at the next
-    // whitespace, so a device-name column never ends up in it. Device lines
-    // only follow the header: a message printed before it is never a device.
+    // The state is the first word(s) after the serial; STATE_RE stops at the
+    // next whitespace, so a device-name column never ends up in it. Device
+    // lines only follow the header. The serial is not checked for shell
+    // safety: the listing never passes it to a shell, and sdb serials can be
+    // long or unusual (IPv6, host names).
     const serial = line.split(/\s+/, 1)[0];
-    const m = line.slice(serial.length).trim().match(STATE_RE);
-    if (!header || !m || !isValidSerial(serial) || serial.endsWith(":")) {
+    const after = line.slice(serial.length);
+    const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
+    if (!header || !m || serial.endsWith(":")) {
       other.push(line);
       continue;
     }
@@ -153,7 +151,7 @@ function listConnectedDevices(command, startTime) {
     // No SDK path setting (no config file, or an empty one) → sdk-init
     // fixes it; a configured SDK without sdb (and
     // none on PATH) is a broken install, not a missing setting.
-    return !sdkPathConfigured() || resolveSdb().error
+    return !sdkPathConfigured()
       ? formatError(
           command,
           "sdk_path_not_set",

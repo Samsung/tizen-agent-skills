@@ -311,18 +311,19 @@ export const DEVICE_SPECS: CommandSpec[] = [
       },
       {
         flags: "--timeout <seconds>",
-        description: "Emulator connection wait time in seconds (1-540)",
+        description:
+          "Emulator connection wait time in seconds (1-540; start only)",
         default: "300",
       },
       {
         flags: "--vm-name <name>",
-        description: "Emulator VM name to look for",
+        description: "Emulator VM name to look for (start only)",
         default: "tizen-vm-default",
       },
       {
         flags: "--profile <profile>",
         description:
-          "Emulator profile: tizen (standard) or tv (Samsung TV; requires TV SDK extension)",
+          "Emulator profile: tizen (standard) or tv (Samsung TV; requires TV SDK extension; start only)",
         choices: ["tizen", "tv"],
         default: "tizen",
       },

@@ -506,6 +506,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 ```
 node <plugin>/lib/cli/device-manager-cli.js [start] [timeoutSec] [vmName] [profile]
 node <plugin>/lib/cli/device-manager-cli.js stop                                # shut down all running emulator VMs (--action stop also works)
+node <plugin>/lib/cli/device-manager-cli.js list                                # list every device sdb reports (--action list also works)
 tizen-cli tizen-sdk device-manager [--action start|stop|list] [--timeout 300] [--vm-name <name>] [--profile tizen|tv]
 ```
 

@@ -485,6 +485,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 ```
 node <plugin>/lib/cli/device-manager-cli.js [start] [timeoutSec] [vmName] [profile]
 node <plugin>/lib/cli/device-manager-cli.js stop                                # 실행 중인 에뮬레이터 VM 모두 종료 (--action stop 도 가능)
+node <plugin>/lib/cli/device-manager-cli.js list                                # 연결된 모든 디바이스 목록 (--action list 도 가능)
 tizen-cli tizen-sdk device-manager [--action start|stop|list] [--timeout 300] [--vm-name <name>] [--profile tizen|tv]
 ```
 
@@ -1521,7 +1522,7 @@ node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
 | 6b  |                          | `deleteProject()`     | `project-manager-cli.js`  | 프로젝트 삭제 (`delete` 액션 — Tizen 프로젝트 마커 없는 경로 거부) |
 | 7   | `tizen-build-project`    | `buildProject()`      | `project-manager-cli.js`  | 프로젝트 빌드 (Debug/Release, `--clean`, GBS `--arch`) |
 | 8   | `tizen-certificate-manager` | `generateAuthorCertificate()` 외 | `cert-manager-cli.js` | 인증서/서명 프로파일 관리 (로컬 + Samsung online-CA) |
-| 9   | `tizen-device-manager`   | `manageDevice()`      | `device-manager-cli.js`   | 연결된 디바이스 탐지 (start) / 에뮬레이터 VM 종료 (stop) |
+| 9   | `tizen-device-manager`   | `manageDevice()`      | `device-manager-cli.js`   | 연결된 디바이스 탐지 (start) / 전체 목록 (list) / 에뮬레이터 VM 종료 (stop) |
 | 10  | `tizen-create-emulator`  | `createEmulator()`    | `emulator-manager-cli.js` | 커스텀 에뮬레이터 VM 생성 (크기/플랫폼/프로파일)      |
 | 10a |                          | `manageEmulator()`    | `emulator-manager-cli.js` | em-cli 전체 액션 (list/detail/modify/reset/create-image) |
 | 11  | `tizen-launch-emulator`  | `launchEmulator()`    | `emulator-manager-cli.js` | 기존 에뮬레이터 VM 실행 (sdb 연결 대기)               |

@@ -43,7 +43,6 @@ check(
       "* daemon started successfully *",
       "List of devices attached",
       "emulator-26101  device  tizen-vm-default",
-      "emulator-26105 device tizen-vm-2",
       "emulator-26107  host",
       "emulator-26109   device\tm-0311-1",
       "203.0.113.10:26101\toffline",
@@ -56,7 +55,6 @@ check(
   {
     devices: [
       { serial: "emulator-26101", state: "device" },
-      { serial: "emulator-26105", state: "device" },
       { serial: "emulator-26107", state: "host" },
       { serial: "emulator-26109", state: "device" },
       { serial: "203.0.113.10:26101", state: "offline" },
@@ -109,6 +107,22 @@ check(
   parseDeviceTable("List of devices attached\nemulator-26101\tDEVICE\n")
     .devices,
   [{ serial: "emulator-26101", state: "device" }],
+);
+check(
+  "  a sentence after the header is not a device",
+  parseDeviceTable("List of devices attached\ntarget device not found\n")
+    .devices,
+  [],
+);
+check(
+  "  unusual serials (IPv6, long) are listed",
+  parseDeviceTable(
+    `List of devices attached\n[fe80::1%eth0]:26101\tdevice\n${"a".repeat(80)}\toffline\n`,
+  ).devices,
+  [
+    { serial: "[fe80::1%eth0]:26101", state: "device" },
+    { serial: "a".repeat(80), state: "offline" },
+  ],
 );
 check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
