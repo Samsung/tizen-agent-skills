@@ -1099,6 +1099,9 @@ function listDevicesEnvelope(command, startTime, sdbPath) {
     command: "sdb devices",
     devices: devices.map((d) => ({ serial: d.serial, state: d.state })),
     device_count: devices.length,
+    // Only `device` rows can be targeted; `offline` / `no permissions` …
+    // are listed but unusable.
+    online_count: devices.filter((d) => d.state === "device").length,
     output: output.trim(),
   });
 }

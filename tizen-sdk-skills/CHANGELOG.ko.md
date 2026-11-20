@@ -111,6 +111,10 @@
   `List of devices attached` 헤더 뒤에 있고, 열 간격(sdb는 각 열을 공백으로
   채운 뒤 탭으로 끝냄)과 알려진 상태가 있어야 합니다. 그래서
   `device-manager list`와 대상 장치 선택이 같은 장치를 봅니다.
+  대상 장치 선택은 셸에 안전하지 않은 시리얼을 고르지 않고, sdb의 `error:` 줄을
+  "장치 없음"이 아닌 `io_error`로 알리며, 알아보지 못한 줄을 메시지에 보여 줍니다.
+  sdb-helper와 remote-device 목록에는 `online_count`가 추가되고, samsung-duid는
+  상태 대신 장치 이름을 돌려줍니다.
 
 ## [1.9.0] — 2026-11-16
 

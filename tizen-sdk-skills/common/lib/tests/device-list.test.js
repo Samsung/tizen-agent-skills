@@ -17,6 +17,7 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { parseDeviceTable } = require("../core/device");
+const { resolveSerial } = require("../core/sdb");
 
 console.log("=== device-manager list Test ===\n");
 
@@ -55,13 +56,13 @@ check(
   ),
   {
     devices: [
-      { serial: "emulator-26101", state: "device" },
+      { serial: "emulator-26101", state: "device", name: "tizen-vm-default" },
       { serial: "emulator-26107", state: "host" },
-      { serial: "emulator-26109", state: "device" },
+      { serial: "emulator-26109", state: "device", name: "m-0311-1" },
       { serial: "203.0.113.10:26101", state: "offline" },
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
-      { serial: "emulator-26103", state: "host" },
+      { serial: "emulator-26103", state: "host", name: "TV-name" },
       { serial: "0123456789ABCDEF", state: "no permissions" },
     ],
     errors: [],
@@ -379,6 +380,53 @@ if (process.platform === "win32") {
     "sdk_path_not_set",
   );
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+// Test 3: resolveSerial (the target pick every device command uses)
+console.log("\nTest 3: resolveSerial against a fake sdb");
+if (process.platform === "win32") {
+  console.log("  (skipped on Windows: the fake sdb is a shell script)");
+} else {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-serial-"));
+  const fakeSdb = path.join(dir, "sdb");
+  fs.writeFileSync(
+    fakeSdb,
+    '#!/bin/sh\n[ "$1" = devices ] || exit 0\nprintf "%b" "$FAKE_OUT"\n',
+    { mode: 0o755 },
+  );
+  const pick = (out) => {
+    process.env.FAKE_OUT = out;
+    return resolveSerial(fakeSdb);
+  };
+  try {
+    check(
+      "  one online device is picked",
+      pick("List of devices attached\\nemulator-26101\\tdevice\\ttizen-vm\\n")
+        .serial,
+      "emulator-26101",
+    );
+    check(
+      "  a serial that is not shell-safe is never picked",
+      pick("List of devices attached\\nemu$(id)\\tdevice\\n").errorCategory,
+      "device_not_found",
+    );
+    check(
+      "  an sdb error with no device is io_error, not device_not_found",
+      pick("error: protocol fault (couldn't read status)\\n").errorCategory,
+      "io_error",
+    );
+    const unknown = pick(
+      "List of devices attached\\nemulator-26101\\tsuspended\\n",
+    );
+    check(
+      "  an unrecognised row is named in device_not_found",
+      [unknown.errorCategory, (unknown.message || "").includes("suspended")],
+      ["device_not_found", true],
+    );
+  } finally {
+    delete process.env.FAKE_OUT;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log(

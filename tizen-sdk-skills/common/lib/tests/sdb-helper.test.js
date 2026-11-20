@@ -257,9 +257,9 @@ const output = [
   "",
 ].join("\n");
 check("  parses serial+state, skips header/garbage", parseDevices(output), [
-  { serial: "emulator-26101", state: "device" },
+  { serial: "emulator-26101", state: "device", name: "tizen-vm-default" },
   { serial: "1.2.3.4:26101", state: "offline" },
-  { serial: "SERIAL9", state: "unauthorized" },
+  { serial: "SERIAL9", state: "unauthorized", name: "some-name" },
   { serial: "0000d85900006200", state: "no permissions" },
 ]);
 check(

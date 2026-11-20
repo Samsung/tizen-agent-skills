@@ -265,7 +265,7 @@ const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
  * Parse the whole `sdb devices` table. States are returned in lower case.
  *
  * @param {string} output - `sdb devices` stdout + stderr
- * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
+ * @returns {{ devices: Array<{serial: string, state: string, name?: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
  *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
  *   other: any other line that is not a device, header or daemon banner;
  *   unlisted: the lines of `other` printed after the header (table rows that
@@ -292,8 +292,8 @@ function parseDeviceTable(output) {
     }
     // The state is the first word(s) after the serial; STATE_RE stops at the
     // next whitespace, so a device-name column never ends up in it. Device
-    // lines only follow the header. Serials are not checked for shell safety
-    // here: callers that put one on a command line check it themselves.
+    // lines only follow the header. Serials are not screened here:
+    // resolveSerial() screens the one it picks before it reaches a shell.
     const serial = line.split(/\s+/, 1)[0];
     const after = line.slice(serial.length);
     const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
@@ -302,7 +302,11 @@ function parseDeviceTable(output) {
       if (header) unlisted.push(line);
       continue;
     }
-    devices.push({ serial, state: m[1].toLowerCase() });
+    const device = { serial, state: m[1].toLowerCase() };
+    // Optional 3rd column (device / VM name), after another column gap
+    const rest = after.trim().slice(m[1].length);
+    if (/^(\t|\s{2,})/.test(rest)) device.name = rest.trim();
+    devices.push(device);
   }
   return { devices, errors, other, unlisted, header };
 }
@@ -353,13 +357,28 @@ function resolveSerial(sdbPath, serial, opts = {}) {
       message: `sdb devices failed: ${error.message}`,
     };
   }
-  const devices = parseDevices(output);
-  const online = devices.filter((d) => d.state === "device");
+  const { devices, errors, unlisted } = parseDeviceTable(output);
+  // The picked serial goes into `-s "<serial>"` on a shell command line, so a
+  // listed device whose serial is not shell-safe is never picked.
+  const online = devices.filter(
+    (d) => d.state === "device" && isValidSerial(d.serial),
+  );
   if (online.length === 0) {
+    // sdb can print `error: …` and exit 0: that is an sdb problem, not a
+    // missing device, so do not send the user off to create an emulator.
+    if (errors.length > 0) {
+      return {
+        errorCategory: "io_error",
+        message: `sdb devices reported an error: ${errors[0]}`,
+        devices,
+      };
+    }
+    const seen = unlisted.length
+      ? ` sdb also printed rows it did not recognise as devices: ${unlisted.join(" | ")}`
+      : "";
     return {
       errorCategory: "device_not_found",
-      message:
-        "No connected Tizen device or emulator found. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
+      message: `No connected Tizen device or emulator found. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.${seen}`,
       devices,
     };
   }
