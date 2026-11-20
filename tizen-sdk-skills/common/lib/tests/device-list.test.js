@@ -239,6 +239,22 @@ if (process.platform === "win32") {
     true,
   );
 
+  const unknownState = list(
+    "List of devices attached\\nemulator-26101\\tsuspended\\n",
+  );
+  check(
+    "  unrecognised line: no 'No device is connected' warning",
+    (unknownState.warnings || []).some((w) =>
+      w.startsWith("No device is connected"),
+    ),
+    false,
+  );
+  check(
+    "  unrecognised line is shown",
+    (unknownState.warnings || []).some((w) => w.includes("suspended")),
+    true,
+  );
+
   const failed = list("error: cannot connect to daemon\\n", 1);
   check("  failing sdb is an error", failed.status, "failure");
   check(
@@ -250,6 +266,7 @@ if (process.platform === "win32") {
   // (io_error), not a missing setting (sdk_path_not_set).
   const brokenHome = path.join(root, "broken-home");
   fs.mkdirSync(brokenHome);
+  fs.mkdirSync(path.join(root, "no-sdk"));
   fs.writeFileSync(
     path.join(brokenHome, ".tizen.sdk.path.config"),
     path.join(root, "no-sdk"),
@@ -272,6 +289,28 @@ if (process.platform === "win32") {
       brokenEnv.errors[0].error_category,
     "io_error",
   );
+  // A setting that names a missing directory: sdk-init fixes it.
+  fs.writeFileSync(
+    path.join(brokenHome, ".tizen.sdk.path.config"),
+    path.join(root, "gone"),
+  );
+  const stale = spawnSync(process.execPath, [cli, "list"], {
+    encoding: "utf8",
+    timeout: 60000,
+    env: { PATH: path.join(root, "home"), HOME: brokenHome },
+  });
+  let staleEnv = {};
+  try {
+    staleEnv = JSON.parse(stale.stdout);
+  } catch (_e) {
+    /* checked below */
+  }
+  check(
+    "  SDK path setting to a missing directory is sdk_path_not_set",
+    staleEnv.errors && staleEnv.errors[0] && staleEnv.errors[0].error_category,
+    "sdk_path_not_set",
+  );
+
   // An empty config file is no setting at all: sdk-init fixes it.
   fs.writeFileSync(path.join(brokenHome, ".tizen.sdk.path.config"), "");
   const empty = spawnSync(process.execPath, [cli, "list"], {

@@ -120,10 +120,11 @@ function parseDeviceTable(output) {
   return { devices, errors, other, header };
 }
 
-/** Whether sdk-init has written a non-empty SDK path setting. */
+/** Whether sdk-init has written an SDK path setting that names an existing directory. */
 function sdkPathConfigured() {
   try {
-    return fs.readFileSync(CONFIG_FILE, "utf-8").trim() !== "";
+    const sdkPath = fs.readFileSync(CONFIG_FILE, "utf-8").trim();
+    return sdkPath !== "" && fs.existsSync(sdkPath);
   } catch (_e) {
     return false;
   }
@@ -148,8 +149,8 @@ function listConnectedDevices(command, startTime) {
   // commands use.
   const resolved = resolveSdbBinary();
   if (resolved.error) {
-    // No SDK path setting (no config file, or an empty one) → sdk-init
-    // fixes it; a configured SDK without sdb (and
+    // No usable SDK path setting (no config file, an empty one, or one that
+    // names a missing directory) → sdk-init fixes it; a configured SDK without sdb (and
     // none on PATH) is a broken install, not a missing setting.
     return !sdkPathConfigured()
       ? formatError(
@@ -182,7 +183,8 @@ function listConnectedDevices(command, startTime) {
   }
 
   const { devices: table, errors, other, header } = parseDeviceTable(output);
-  if (!header && table.length === 0) {
+  // Device lines only follow the header, so no header means no table.
+  if (!header) {
     return formatError(
       command,
       "io_error",
@@ -197,9 +199,7 @@ function listConnectedDevices(command, startTime) {
     state: d.state,
     device_type: classifySerial(d.serial),
   }));
-  const online = devices.filter(
-    (d) => d.state.toLowerCase() === "device",
-  ).length;
+  const online = devices.filter((d) => d.state === "device").length;
 
   const envelope = new Envelope(command);
   envelope.startTime = startTime;
@@ -211,9 +211,17 @@ function listConnectedDevices(command, startTime) {
     },
     {
       warnings: [
-        ...(devices.length === 0
+        // A line sdb printed that is not recognised may still be a device
+        // (e.g. a state missing from DEVICE_STATES), so do not claim there is
+        // none — the `sdb:` lines below show what it printed.
+        ...(devices.length === 0 && other.length === 0
           ? [
               "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
+            ]
+          : []),
+        ...(devices.length === 0 && other.length > 0
+          ? [
+              "No device line was recognised; sdb printed the lines below, check them before creating an emulator.",
             ]
           : []),
         ...[...errors, ...other].map((l) => `sdb: ${l}`),
