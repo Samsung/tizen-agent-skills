@@ -49,6 +49,7 @@ check(
       "0000d85900006200  no permissions",
       "R3CN1234\tunknown",
       "emulator-26103\trecovery\tTV-name",
+      "0123456789ABCDEF\tno permissions; see [http://developer.android.com/tools/device.html]",
       "",
     ].join("\n"),
   ),
@@ -61,9 +62,11 @@ check(
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
       { serial: "emulator-26103", state: "recovery" },
+      { serial: "0123456789ABCDEF", state: "no permissions" },
     ],
     errors: [],
     other: [],
+    unlisted: [],
     header: true,
   },
 );
@@ -74,6 +77,7 @@ check(
     devices: [],
     errors: [],
     other: ["warning\tsomething happened"],
+    unlisted: ["warning\tsomething happened"],
     header: true,
   },
 );
@@ -88,6 +92,7 @@ check(
     other: [
       "sdb server version (39) doesn't match this client (41); killing...",
     ],
+    unlisted: [],
     header: true,
   },
 );
@@ -128,6 +133,7 @@ check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
   errors: [],
   other: [],
+  unlisted: [],
   header: true,
 });
 check(
@@ -139,6 +145,7 @@ check(
     devices: [],
     errors: ["error: protocol fault (couldn't read status): Success"],
     other: [],
+    unlisted: [],
     header: true,
   },
 );
@@ -255,6 +262,22 @@ if (process.platform === "win32") {
     true,
   );
 
+  const noDeviceWarning = (env) =>
+    (env.warnings || []).some((w) => w.startsWith("No device is connected"));
+  check(
+    "  error next to an empty table: no create-emulator advice",
+    noDeviceWarning(emptyWithError),
+    false,
+  );
+  const bannerOnly = list(
+    "sdb server version (39) doesn't match this client (41); killing...\\nList of devices attached\\n",
+  );
+  check(
+    "  a banner before the header keeps the normal no-device warning",
+    noDeviceWarning(bannerOnly),
+    true,
+  );
+
   const failed = list("error: cannot connect to daemon\\n", 1);
   check("  failing sdb is an error", failed.status, "failure");
   check(
@@ -267,6 +290,7 @@ if (process.platform === "win32") {
   const brokenHome = path.join(root, "broken-home");
   fs.mkdirSync(brokenHome);
   fs.mkdirSync(path.join(root, "no-sdk"));
+  fs.writeFileSync(path.join(root, "no-sdk", "sdk.info"), "");
   fs.writeFileSync(
     path.join(brokenHome, ".tizen.sdk.path.config"),
     path.join(root, "no-sdk"),
@@ -308,6 +332,31 @@ if (process.platform === "win32") {
   check(
     "  SDK path setting to a missing directory is sdk_path_not_set",
     staleEnv.errors && staleEnv.errors[0] && staleEnv.errors[0].error_category,
+    "sdk_path_not_set",
+  );
+
+  // A setting that names a directory that is not an SDK: sdk-init fixes it.
+  fs.mkdirSync(path.join(root, "not-sdk"));
+  fs.writeFileSync(
+    path.join(brokenHome, ".tizen.sdk.path.config"),
+    path.join(root, "not-sdk"),
+  );
+  const notSdk = spawnSync(process.execPath, [cli, "list"], {
+    encoding: "utf8",
+    timeout: 60000,
+    env: { PATH: path.join(root, "home"), HOME: brokenHome },
+  });
+  let notSdkEnv = {};
+  try {
+    notSdkEnv = JSON.parse(notSdk.stdout);
+  } catch (_e) {
+    /* checked below */
+  }
+  check(
+    "  SDK path setting to a non-SDK directory is sdk_path_not_set",
+    notSdkEnv.errors &&
+      notSdkEnv.errors[0] &&
+      notSdkEnv.errors[0].error_category,
     "sdk_path_not_set",
   );
 

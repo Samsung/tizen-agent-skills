@@ -20,7 +20,12 @@ const { summarizeOutput } = require("./output-summary");
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
 const fs = require("fs");
-const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
+const {
+  resolveSdbBinary,
+  ensureSdbServer,
+  runSdb,
+  looksLikeSdkRoot,
+} = require("./sdb");
 const { CONFIG_FILE } = require("./sdk");
 
 /**
@@ -75,21 +80,26 @@ const DEVICE_STATES = [
   "authorizing",
   "host",
 ];
-const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=\\s|$)`, "i");
+// The state may be followed by whitespace, the end of the line or
+// punctuation (`no permissions; see [http://…]`).
+const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
 
 /**
  * Parse the whole `sdb devices` table. States are returned in lower case.
  *
  * @param {string} output - `sdb devices` stdout + stderr
- * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], header: boolean }}
+ * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
  *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
  *   other: any other line that is not a device, header or daemon banner;
+ *   unlisted: the lines of `other` printed after the header (table rows that
+ *   were not recognised — possibly devices);
  *   header: whether the `List of devices attached` header was printed
  */
 function parseDeviceTable(output) {
   const devices = [];
   const errors = [];
   const other = [];
+  const unlisted = [];
   let header = false;
   for (const raw of String(output || "").split(/\r?\n/)) {
     const line = raw.trim();
@@ -113,18 +123,18 @@ function parseDeviceTable(output) {
     const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
     if (!header || !m || serial.endsWith(":")) {
       other.push(line);
+      if (header) unlisted.push(line);
       continue;
     }
     devices.push({ serial, state: m[1].toLowerCase() });
   }
-  return { devices, errors, other, header };
+  return { devices, errors, other, unlisted, header };
 }
 
-/** Whether sdk-init has written an SDK path setting that names an existing directory. */
+/** Whether sdk-init has written an SDK path setting that names an SDK root. */
 function sdkPathConfigured() {
   try {
-    const sdkPath = fs.readFileSync(CONFIG_FILE, "utf-8").trim();
-    return sdkPath !== "" && fs.existsSync(sdkPath);
+    return looksLikeSdkRoot(fs.readFileSync(CONFIG_FILE, "utf-8").trim());
   } catch (_e) {
     return false;
   }
@@ -150,7 +160,7 @@ function listConnectedDevices(command, startTime) {
   const resolved = resolveSdbBinary();
   if (resolved.error) {
     // No usable SDK path setting (no config file, an empty one, or one that
-    // names a missing directory) → sdk-init fixes it; a configured SDK without sdb (and
+    // does not name an SDK root) → sdk-init fixes it; a configured SDK without sdb (and
     // none on PATH) is a broken install, not a missing setting.
     return !sdkPathConfigured()
       ? formatError(
@@ -182,7 +192,13 @@ function listConnectedDevices(command, startTime) {
     );
   }
 
-  const { devices: table, errors, other, header } = parseDeviceTable(output);
+  const {
+    devices: table,
+    errors,
+    other,
+    unlisted,
+    header,
+  } = parseDeviceTable(output);
   // Device lines only follow the header, so no header means no table.
   if (!header) {
     return formatError(
@@ -211,17 +227,16 @@ function listConnectedDevices(command, startTime) {
     },
     {
       warnings: [
-        // A line sdb printed that is not recognised may still be a device
-        // (e.g. a state missing from DEVICE_STATES), so do not claim there is
-        // none — the `sdb:` lines below show what it printed.
-        ...(devices.length === 0 && other.length === 0
+        // With an sdb error, or a table row that was not recognised (e.g. a
+        // state missing from DEVICE_STATES), an empty list may be wrong, so
+        // do not send the user off to create an emulator — the `sdb:` lines
+        // below show what sdb printed. A message before the header (version
+        // mismatch banner) does not count.
+        ...(devices.length === 0
           ? [
-              "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
-            ]
-          : []),
-        ...(devices.length === 0 && other.length > 0
-          ? [
-              "No device line was recognised; sdb printed the lines below, check them before creating an emulator.",
+              errors.length === 0 && unlisted.length === 0
+                ? "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it."
+                : "No device was listed, but sdb printed the lines below (an error or an unrecognised row); check them before creating an emulator.",
             ]
           : []),
         ...[...errors, ...other].map((l) => `sdb: ${l}`),

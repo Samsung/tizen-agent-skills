@@ -43,7 +43,7 @@ const execFileAsync = promisify(execFile);
  */
 // Handoff note for the `list-devices` intents (English and Korean patterns).
 const LIST_DEVICES_HINT =
-  "To show EVERY device sdb reports (a list, all devices), run the device-manager runner with the list action (device-manager-cli.js list, or --action list). To find ONE device to work with, use the default start action, which returns a single serial.";
+  "To show EVERY device sdb reports (a list, all devices), run device-manager with the list action (`tizen-sdk device-manager --action list` in tizen-cli, or `node device-manager-cli.js list` with the runner). To find ONE device to work with, use the default start action, which returns a single serial.";
 
 const INTENT_PATTERNS = [
   // Discovery — handoff to tizen-device-manager (richer: emulator fallback)
