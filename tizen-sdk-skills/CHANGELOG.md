@@ -47,6 +47,11 @@ below use those release tags.
   `--skip-validation` and `--no-restart` are forwarded. Self-contained, so it
   can run straight from the download
   (`bash <(curl -fsSL <raw-url>)`); on Windows use the `.bat`/`.ps1` twin.
+- **`--path <dir>` on the SDK install runner** (`sdk-install-cli.js`). The
+  pre-check checks `<dir>` instead of the path from `~/.tizen.sdk.path.config`
+  (default `~/tizen-sdk`) and passes it to the installer as `--path` / `-Path`;
+  a leading `~` is expanded. It is also forwarded when `--repo-url` is given.
+  `--path` without a value fails with `invalid_parameters`.
 
 - **`--full` flag on the dlog-analyzer runner** (`dlog-analyzer-cli.js` and the
   `tizen-cli` command spec). The analyzer's token budget caps text output to

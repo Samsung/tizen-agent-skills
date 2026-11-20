@@ -1194,6 +1194,10 @@ async function ensureSdkPathConfig(sdkPath, command) {
  *   whole call is handled by installSdkFromRepo(), which validates the URL
  *   (pkg_list_{OS}-{64,32} must be served) before installing from it instead of
  *   from the timezone-selected CDN mirror.
+ * @param {string} [command]
+ * @param {number} [downloadJobs]
+ * @param {string} [installPath] - SDK install directory. Empty = readSdkPath()
+ *   (~/.tizen.sdk.path.config, else ~/tizen-sdk). A leading "~" is expanded.
  * @returns {object} Standard JSON Envelope
  *   - Already installed: success + warnings (exit here)
  *   - Not installed: failure — guide agent to perform background installation
@@ -1205,6 +1209,7 @@ async function installSdk(
   repoUrl = "",
   command = "tizen-sdk sdk-install",
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+  installPath = "",
 ) {
   // checkNode's warnings are collected in ctx by the steps and merged into
   // whichever envelope they return — one place, so a new return path cannot
@@ -1218,8 +1223,22 @@ async function installSdk(
     repoUrl,
     command,
     downloadJobs,
+    installPath,
   );
   return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * Resolve an explicit SDK install directory ("~" expanded, made absolute);
+ * empty falls back to readSdkPath().
+ */
+function resolveInstallPath(installPath) {
+  const raw = String(installPath || "").trim();
+  if (!raw) return readSdkPath();
+  const expanded = /^~(?=$|[\\/])/.test(raw)
+    ? path.join(os.homedir(), raw.slice(1))
+    : raw;
+  return path.resolve(expanded);
 }
 
 /**
@@ -1234,6 +1253,7 @@ async function installSdkSteps(
   repoUrl,
   command,
   downloadJobs,
+  installPath,
 ) {
   // Start time: pass to formatSdkInstall so duration_ms reflects actual work time
   const startTime = Date.now();
@@ -1256,7 +1276,13 @@ async function installSdkSteps(
   // A custom repository changes the package source, the validation step and the
   // installer script, so delegate wholesale instead of threading a flag through.
   if (repoUrl && String(repoUrl).trim()) {
-    return installSdkFromRepo(repoUrl, version, force, downloadJobs);
+    return installSdkFromRepo(
+      repoUrl,
+      version,
+      force,
+      downloadJobs,
+      installPath,
+    );
   }
 
   try {
@@ -1273,7 +1299,7 @@ async function installSdkSteps(
       `[tizen-sdk] Node.js OK (${nodeCheck.result.version}). Continuing.`,
     );
 
-    const sdkPath = readSdkPath();
+    const sdkPath = resolveInstallPath(installPath);
 
     console.error("[tizen-sdk] Checking if SDK is already installed...");
 
@@ -2840,6 +2866,8 @@ function readInstalledRepository(sdkPath) {
  * @param {string} [platformVersion] - Tizen platform version (e.g. "11.0").
  *   Empty = auto-select the highest version the repository offers.
  * @param {boolean} [force] - force reinstall even if already installed
+ * @param {number} [downloadJobs]
+ * @param {string} [installPath] - SDK install directory (see installSdk)
  * @returns {object} Standard JSON Envelope
  */
 async function installSdkFromRepo(
@@ -2847,6 +2875,7 @@ async function installSdkFromRepo(
   platformVersion = "",
   force = false,
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+  installPath = "",
 ) {
   // Same as installSdk: checkNode's warnings are merged in one place.
   const ctx = { nodeWarnings: [] };
@@ -2856,6 +2885,7 @@ async function installSdkFromRepo(
     platformVersion,
     force,
     downloadJobs,
+    installPath,
   );
   return withNodeWarnings(env, ctx.nodeWarnings);
 }
@@ -2870,6 +2900,7 @@ async function installSdkFromRepoSteps(
   platformVersion,
   force,
   downloadJobs,
+  installPath,
 ) {
   const startTime = Date.now();
   const command = "tizen-sdk sdk-install-custom-repo";
@@ -2911,7 +2942,7 @@ async function installSdkFromRepoSteps(
     const normalizedUrl = validation.result.repository_url;
     const pkgListFile = validation.result.pkg_list_file;
 
-    const sdkPath = readSdkPath();
+    const sdkPath = resolveInstallPath(installPath);
 
     // 3. Already installed?
     console.error("[tizen-sdk-repo] Checking if SDK is already installed...");

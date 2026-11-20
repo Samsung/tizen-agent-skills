@@ -807,7 +807,7 @@ console.error = () => {};
       );
       check(
         "installSdk --repo-url hands the version to installSdkFromRepo",
-        /installSdkFromRepo\(repoUrl, version, force, downloadJobs\)/.test(
+        /installSdkFromRepo\(\s*repoUrl,\s*version,\s*force,\s*downloadJobs,\s*installPath,?\s*\)/.test(
           body,
         ),
         true,

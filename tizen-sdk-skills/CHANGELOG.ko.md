@@ -43,6 +43,11 @@
   `--skip-validation`과 `--no-restart`는 그대로 전달됩니다. 자기 완결적이라
   다운로드한 스크립트를 바로 실행할 수 있고(`bash <(curl -fsSL <raw-url>)`),
   Windows에서는 `.bat`/`.ps1` 버전을 씁니다.
+- **SDK 설치 러너에 `--path <dir>` 옵션** (`sdk-install-cli.js`). 사전 점검이
+  `~/.tizen.sdk.path.config`(기본 `~/tizen-sdk`) 대신 `<dir>`을 확인하고, 설치
+  스크립트에 `--path` / `-Path`로 넘깁니다. 맨 앞의 `~`는 홈 디렉터리로
+  바뀌며, `--repo-url`과 함께 써도 전달됩니다. 값 없이 `--path`만 주면
+  `invalid_parameters`로 실패합니다.
 
 - **dlog-analyzer 러너에 `--full` 플래그** (`dlog-analyzer-cli.js`와
   `tizen-cli` 명령 사양). 분석기의 토큰 예산은 에이전트의 컨텍스트 창을 보호하려고
