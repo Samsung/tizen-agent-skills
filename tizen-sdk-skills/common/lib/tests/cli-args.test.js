@@ -484,24 +484,27 @@ const noSdbEnv = {
   USERPROFILE: noSdbRoot,
   PATH: path.join(noSdbRoot, "bin"),
 };
-for (const form of [
-  ["list", "abc"],
-  ["--action", "list", "abc"],
-  ["--action=list", "abc"],
-]) {
-  const { env } = runDeviceCliProc(form, noSdbEnv);
-  check(
-    `  ${form.join(" ")}: command carries the list action`,
-    env && env.command,
-    "tizen-sdk device-manager list",
-  );
-  check(
-    `  ${form.join(" ")}: stray positional ignored (no timeout error)`,
-    env && env.errors && env.errors[0] && env.errors[0].error_category,
-    "sdk_path_not_set",
-  );
+try {
+  for (const form of [
+    ["list", "abc"],
+    ["--action", "list", "abc"],
+    ["--action=list", "abc"],
+  ]) {
+    const { env } = runDeviceCliProc(form, noSdbEnv);
+    check(
+      `  ${form.join(" ")}: command carries the list action`,
+      env && env.command,
+      "tizen-sdk device-manager list",
+    );
+    check(
+      `  ${form.join(" ")}: stray positional ignored (no timeout error)`,
+      env && env.errors && env.errors[0] && env.errors[0].error_category,
+      "sdk_path_not_set",
+    );
+  }
+} finally {
+  fs.rmSync(noSdbRoot, { recursive: true, force: true });
 }
-fs.rmSync(noSdbRoot, { recursive: true, force: true });
 
 // 6e. Unknown / valueless --action → invalid_parameters from the core.
 for (const form of [["--action", "bogus"], ["--action"]]) {

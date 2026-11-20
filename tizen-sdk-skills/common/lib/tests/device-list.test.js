@@ -45,6 +45,7 @@ check(
       "emulator-26101  device  tizen-vm-default",
       "emulator-26105 device tizen-vm-2",
       "emulator-26107  host",
+      "emulator-26109   device\tm-0311-1",
       "203.0.113.10:26101\toffline",
       "0000d85900006200  no permissions",
       "R3CN1234\tunknown",
@@ -57,6 +58,7 @@ check(
       { serial: "emulator-26101", state: "device" },
       { serial: "emulator-26105", state: "device" },
       { serial: "emulator-26107", state: "host" },
+      { serial: "emulator-26109", state: "device" },
       { serial: "203.0.113.10:26101", state: "offline" },
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
@@ -95,6 +97,18 @@ check(
   "  `sdb: …` prose line is not a device",
   parseDeviceTable("sdb: device offline\nsdb: unknown option\n").devices,
   [],
+);
+check(
+  "  a message before the header is never a device",
+  parseDeviceTable("target device not found\nList of devices attached\n")
+    .devices,
+  [],
+);
+check(
+  "  state is lower case",
+  parseDeviceTable("List of devices attached\nemulator-26101\tDEVICE\n")
+    .devices,
+  [{ serial: "emulator-26101", state: "device" }],
 );
 check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
@@ -243,6 +257,24 @@ if (process.platform === "win32") {
       brokenEnv.errors[0] &&
       brokenEnv.errors[0].error_category,
     "io_error",
+  );
+  // An empty config file is no setting at all: sdk-init fixes it.
+  fs.writeFileSync(path.join(brokenHome, ".tizen.sdk.path.config"), "");
+  const empty = spawnSync(process.execPath, [cli, "list"], {
+    encoding: "utf8",
+    timeout: 60000,
+    env: { PATH: path.join(root, "home"), HOME: brokenHome },
+  });
+  let emptyEnv = {};
+  try {
+    emptyEnv = JSON.parse(empty.stdout);
+  } catch (_e) {
+    /* checked below */
+  }
+  check(
+    "  empty SDK path config is sdk_path_not_set",
+    emptyEnv.errors && emptyEnv.errors[0] && emptyEnv.errors[0].error_category,
+    "sdk_path_not_set",
   );
   fs.rmSync(root, { recursive: true, force: true });
 }

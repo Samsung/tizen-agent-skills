@@ -485,7 +485,7 @@ node <plugin>/lib/cli/cert-manager-cli.js create-samsung-profile --profile-name 
 ```
 node <plugin>/lib/cli/device-manager-cli.js [start] [timeoutSec] [vmName] [profile]
 node <plugin>/lib/cli/device-manager-cli.js stop                                # 실행 중인 에뮬레이터 VM 모두 종료 (--action stop 도 가능)
-tizen-cli tizen-sdk device-manager [--action start|stop] [--timeout 300] [--vm-name <name>] [--profile tizen|tv]
+tizen-cli tizen-sdk device-manager [--action start|stop|list] [--timeout 300] [--vm-name <name>] [--profile tizen|tv]
 ```
 
 **자동화 단계 (start):**

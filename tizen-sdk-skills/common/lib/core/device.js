@@ -20,7 +20,12 @@ const { summarizeOutput } = require("./output-summary");
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
 const fs = require("fs");
-const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
+const {
+  resolveSdb,
+  resolveSdbBinary,
+  ensureSdbServer,
+  runSdb,
+} = require("./sdb");
 const { CONFIG_FILE } = require("./sdk");
 const { isValidSerial } = require("./shell-safety");
 
@@ -77,7 +82,7 @@ const DEVICE_STATES = [
 const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=\\s|$)`, "i");
 
 /**
- * Parse the whole `sdb devices` table.
+ * Parse the whole `sdb devices` table. States are returned in lower case.
  *
  * @param {string} output - `sdb devices` stdout + stderr
  * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], header: boolean }}
@@ -102,23 +107,28 @@ function parseDeviceTable(output) {
       errors.push(line);
       continue;
     }
+    // The state is the first word(s) after the serial, whatever separates
+    // the columns (tabs, spaces or both); STATE_RE stops at the next
+    // whitespace, so a device-name column never ends up in it. Device lines
+    // only follow the header: a message printed before it is never a device.
     const serial = line.split(/\s+/, 1)[0];
-    // Tab-separated: the state is the 2nd field alone, so a device-name
-    // column never ends up in it.
-    const rest = line.includes("\t")
-      ? line
-          .split("\t")
-          .map((f) => f.trim())
-          .filter(Boolean)[1] || ""
-      : line.slice(serial.length).trim();
-    const m = rest.match(STATE_RE);
-    if (!m || !isValidSerial(serial) || serial.endsWith(":")) {
+    const m = line.slice(serial.length).trim().match(STATE_RE);
+    if (!header || !m || !isValidSerial(serial) || serial.endsWith(":")) {
       other.push(line);
       continue;
     }
-    devices.push({ serial, state: m[1] });
+    devices.push({ serial, state: m[1].toLowerCase() });
   }
   return { devices, errors, other, header };
+}
+
+/** Whether sdk-init has written a non-empty SDK path setting. */
+function sdkPathConfigured() {
+  try {
+    return fs.readFileSync(CONFIG_FILE, "utf-8").trim() !== "";
+  } catch (_e) {
+    return false;
+  }
 }
 
 /**
@@ -140,9 +150,10 @@ function listConnectedDevices(command, startTime) {
   // commands use.
   const resolved = resolveSdbBinary();
   if (resolved.error) {
-    // No SDK path configured → sdk-init fixes it; a configured SDK without
-    // sdb (and none on PATH) is a broken install, not a missing setting.
-    return !fs.existsSync(CONFIG_FILE)
+    // No SDK path setting (no config file, or an empty one) → sdk-init
+    // fixes it; a configured SDK without sdb (and
+    // none on PATH) is a broken install, not a missing setting.
+    return !sdkPathConfigured() || resolveSdb().error
       ? formatError(
           command,
           "sdk_path_not_set",
