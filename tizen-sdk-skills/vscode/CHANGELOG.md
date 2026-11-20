@@ -4,7 +4,9 @@ All notable changes to the Tizen AI Extension will be documented in this file.
 
 The extension ships the skill and agent asset tree, so entries below cover both the extension itself and the skills it installs into Claude Code / Cline / Codex CLI. Changes to the skills are marked **(skills)**.
 
-## [Unreleased]
+## [1.10.0] — 2026-11-20
+
+The extension version tracks the updated skill and agent asset tree. **(skills)** `device-manager --action list` lists every device sdb reports; every device command reads `sdb devices` with one shared parser (a message is no longer taken for a device, and `no permissions` devices are listed); the bundled `tizen-dlog-analyzer` is 0.3.0 with one macOS bundle per CPU architecture; the dlog-analyzer runner accepts `--full`; the SDK install runner accepts `--path <dir>` and checks free space on the install drive; and the new `tizen-handoff` skill records per-project handoff notes so Claude Code, Codex CLI and Cline can continue each other's work. See the project CHANGELOG for details.
 
 ### Fixed
 
