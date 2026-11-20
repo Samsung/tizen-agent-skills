@@ -44,7 +44,7 @@ const ACTIONS = ["start", "stop", "list"];
  * Split argv into { action, positional }.
  *
  * `--action` is honoured anywhere in argv (space or = form) and removed; a bare
- * leading `start`/`stop` is consumed as the action too. Everything left keeps the
+ * leading `start`/`stop`/`list` is consumed as the action too. Everything left keeps the
  * historical positional order [timeoutSec, vmName, profile], so
  * `node device-manager-cli.js 300 my-vm tv` behaves exactly as before, while
  * `node device-manager-cli.js stop` no longer reads "stop" as the timeout.

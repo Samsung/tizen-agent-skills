@@ -43,7 +43,7 @@ node "$CLI"
 # List EVERY device sdb reports (no waiting): node "$CLI" list   (or: node "$CLI" --action list)
 ```
 
-**All connected devices** ("show all connected devices", "sdb devices 목록", "연결된 디바이스 전체 목록"): run `node "$CLI" list`, not the default start action — start returns ONE serial and fails with `multiple_devices` when several are connected. `result.devices[]` = `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or any other state as sdb prints it; `device_type`: `emulator` / `usb` / `remote`), plus `device_count` and `online_count`. Zero devices is a success envelope with a warning.
+**All connected devices** ("show all connected devices", "sdb devices 목록", "연결된 디바이스 전체 목록"): run `node "$CLI" list`, not the default start action — start returns ONE serial (the first device sdb lists) and says nothing about the others. `result.devices[]` = `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or any other state as sdb prints it; `device_type`: `emulator` / `usb` / `remote`), plus `device_count` and `online_count`. Zero devices is a success envelope with a warning.
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 

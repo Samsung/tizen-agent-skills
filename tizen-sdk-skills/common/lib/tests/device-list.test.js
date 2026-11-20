@@ -75,6 +75,11 @@ check(
     ],
   },
 );
+check(
+  "  `sdb: …` prose line is not a device",
+  parseDeviceTable("sdb: device offline\nsdb: unknown option\n").devices,
+  [],
+);
 check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
   errors: [],

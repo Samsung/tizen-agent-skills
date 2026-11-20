@@ -475,9 +475,14 @@ for (const form of [
 // 6d2. `list` (bare or --action) is an action too, and it ignores the
 //      start-only positional arguments. HOME is empty and PATH has no sdb, so
 //      the listing stops at "sdb not found" without touching a device.
+// node is spawned by absolute path, so PATH can be an empty dir; USERPROFILE
+// is the home directory on Windows.
+const noSdbRoot = fs.mkdtempSync(path.join(os.tmpdir(), "device-list-home-"));
+fs.mkdirSync(path.join(noSdbRoot, "bin"));
 const noSdbEnv = {
-  HOME: fs.mkdtempSync(path.join(os.tmpdir(), "device-list-home-")),
-  PATH: path.dirname(process.execPath),
+  HOME: noSdbRoot,
+  USERPROFILE: noSdbRoot,
+  PATH: path.join(noSdbRoot, "bin"),
 };
 for (const form of [
   ["list", "abc"],
@@ -496,6 +501,7 @@ for (const form of [
     "sdk_path_not_set",
   );
 }
+fs.rmSync(noSdbRoot, { recursive: true, force: true });
 
 // 6e. Unknown / valueless --action → invalid_parameters from the core.
 for (const form of [["--action", "bogus"], ["--action"]]) {

@@ -71,7 +71,12 @@ const DEVICE_STATES = [
   "connecting",
   "authorizing",
 ];
-const SPACED_STATE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=\\s|$)`, "i");
+// The state must end the line or be followed by a column gap (2+ spaces), so
+// a prose line such as `sdb: device offline` does not match.
+const SPACED_STATE = new RegExp(
+  `^(${DEVICE_STATES.join("|")})(?=\\s{2,}|$)`,
+  "i",
+);
 
 /**
  * Parse the whole `sdb devices` table, keeping every device line whatever its
@@ -110,7 +115,8 @@ function parseDeviceTable(output) {
       const m = line.slice(serial.length).trim().match(SPACED_STATE);
       state = m && m[1];
     }
-    if (!state || !isValidSerial(serial)) {
+    // `sdb:` / `error:`-style prefixes pass isValidSerial (it allows ':')
+    if (!state || !isValidSerial(serial) || serial.endsWith(":")) {
       other.push(line);
       continue;
     }
