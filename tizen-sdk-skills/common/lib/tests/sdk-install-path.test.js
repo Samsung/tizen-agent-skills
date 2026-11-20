@@ -283,6 +283,143 @@ if (!BASH) {
   }
 }
 
+// --- explicit install path (--path) ---------------------------------------------
+console.log("\n--- explicit install path (--path) ---");
+{
+  const {
+    resolveInstallPath,
+    nearestExistingDir,
+    sdkPrecheckRerunHint,
+    readSdkPath,
+  } = require("../core/sdk");
+  const home = os.homedir();
+  check(
+    "resolveInstallPath: empty → readSdkPath()",
+    resolveInstallPath(""),
+    readSdkPath(),
+  );
+  check(
+    "resolveInstallPath: ~/x expands under the home directory",
+    resolveInstallPath("~/tizen-sdk2"),
+    path.join(home, "tizen-sdk2"),
+  );
+  check(
+    "resolveInstallPath: bare ~ is the home directory",
+    resolveInstallPath("~"),
+    path.resolve(home),
+  );
+  check(
+    "resolveInstallPath: relative path resolves against the cwd",
+    resolveInstallPath("rel/sdk"),
+    path.resolve("rel/sdk"),
+  );
+  check(
+    "resolveInstallPath: ~user is not expanded",
+    resolveInstallPath("~other/sdk"),
+    path.resolve("~other/sdk"),
+  );
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "sdk-path-"));
+  try {
+    check(
+      "nearestExistingDir: missing leaf → closest existing parent",
+      nearestExistingDir(path.join(tmp, "a", "b")),
+      path.resolve(tmp),
+    );
+    check(
+      "nearestExistingDir: existing dir is returned as is",
+      nearestExistingDir(tmp),
+      path.resolve(tmp),
+    );
+
+    check(
+      "sdkPrecheckRerunHint: no installPath → wording unchanged",
+      sdkPrecheckRerunHint("x").includes("--path"),
+      false,
+    );
+    check(
+      "sdkPrecheckRerunHint: installPath is repeated in the re-run",
+      sdkPrecheckRerunHint("x", { installPath: "/opt/sdk2" }).includes(
+        'the same version (and label) and --path "/opt/sdk2" as this run',
+      ),
+      true,
+    );
+    check(
+      "sdkPrecheckRerunHint: custom repo keeps installPath too",
+      sdkPrecheckRerunHint("x", {
+        customRepo: true,
+        installPath: "/opt/sdk2",
+      }).includes('the same repository URL and version and --path "/opt/sdk2"'),
+      true,
+    );
+
+    // End-to-end through the runner: the SDK is not installed at the target,
+    // so the pre-check returns the installer command without running it.
+    const CLI = path.resolve(__dirname, "../cli/sdk-install-cli.js");
+    const runCliArgs = (args) => {
+      const r = spawnSync(process.execPath, [CLI, ...args], {
+        encoding: "utf-8",
+        timeout: 120000,
+      });
+      const text = r.stdout.trim() || r.stderr.trim();
+      let env = null;
+      try {
+        env = JSON.parse(text.slice(text.indexOf("{")));
+      } catch (_e) {
+        // left null → the checks below fail with the raw status
+      }
+      return { status: r.status, env };
+    };
+    const target = path.join(tmp, "sdk2");
+    const quoted = `--path "${target}"`;
+    const quotedWin = `-Path "${target.replace(/\\/g, "/")}"`;
+    for (const args of [
+      ["--path", target],
+      [`--path=${target}`],
+      ["-Path", target],
+    ]) {
+      const { env } = runCliArgs(args);
+      const fix = (env && env.errors && env.errors[0]) || {};
+      const sf = fix.suggested_fix || {};
+      const cmd = String(sf.command || "");
+      const label = args.join(" ").replace(tmp, "<tmp>");
+      check(
+        `runner ${label}: needs_action (path not read as the version)`,
+        env && env.status,
+        "needs_action",
+      );
+      check(
+        `runner ${label}: installer command targets the path`,
+        cmd.includes(quoted) || cmd.includes(quotedWin),
+        true,
+      );
+      check(
+        `runner ${label}: background_command targets the path`,
+        String(sf.background_command || "").includes(target) ||
+          String(sf.background_command || "").includes(
+            target.replace(/\\/g, "/"),
+          ),
+        true,
+      );
+      check(
+        `runner ${label}: re-run hint repeats --path`,
+        String(fix.message || "").includes(`--path "${target}"`),
+        true,
+      );
+    }
+    for (const args of [["--path"], ["--path="], ["10.0", "-Path"]]) {
+      const { status, env } = runCliArgs(args);
+      check(
+        `runner ${args.join(" ")}: invalid_parameters`,
+        [status, env && env.errors && env.errors[0] && env.errors[0].code],
+        [1, "invalid_parameters"],
+      );
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+}
+
 console.log(
   `\n${failures === 0 ? "All sdk-install-path tests passed" : `${failures} FAILED`}`,
 );

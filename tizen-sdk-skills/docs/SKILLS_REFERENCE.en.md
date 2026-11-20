@@ -135,15 +135,17 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
 **CLI Runner:**
 
 ```
-node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
+node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force] [--path <dir>]
 ```
+
+`--path <dir>` (alias `-Path`) installs into `<dir>` instead of the path from `~/.tizen.sdk.path.config` (default `~/tizen-sdk`); a leading `~` is expanded.
 
 **Pre-check Flow:**
 
 ```
 1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. SDK already installed? → if yes, return success
-3. Disk space check (15 GB, home drive) → if insufficient, abort with details
+3. Disk space check (15 GB, install drive) → if insufficient, abort with details
 4. Return installer command for Phase 2 (background install)
 ```
 
@@ -1103,7 +1105,7 @@ A Tizen package repository serves the package index at its root:
 1. Node.js check → Node.js missing (`node_not_found`) or below v18 (`node_version_unsupported`): abort with an OS-specific guide; v18–v21: continue, with an upgrade-to-22+ warning in the result's `warnings`; v22+: continue
 2. Repository URL validation (pkg_list_{OS}-{64,32}) → if invalid, ABORT (nothing downloaded)
 3. SDK already installed? → success + warning that --force is needed to switch repositories
-4. Disk space check (15 GB, home drive) → if insufficient, abort with details
+4. Disk space check (15 GB, install drive) → if insufficient, abort with details
 5. Return installer command for Phase 2 (background install)
 ```
 

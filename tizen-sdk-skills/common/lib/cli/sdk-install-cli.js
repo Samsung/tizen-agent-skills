@@ -6,12 +6,14 @@
  * CLI runner for installSdk() execution
  *
  * Run directly without the agent having to create temporary script files:
- *   node <plugin>/lib/sdk-install-cli.js [version] [label] [--force] [--repo-url <url>]
+ *   node <plugin>/lib/sdk-install-cli.js [version] [label] [--force] [--repo-url <url>] [--path <dir>]
+ *   (-Force / -Path are accepted as PowerShell-style aliases)
  *
  * Examples:
  *   node ~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/sdk-install-cli.js
  *   node .../sdk-install-cli.js 10.0 tizen --force
  *   node .../sdk-install-cli.js --repo-url http://my-mirror/tizenstudio
+ *   node .../sdk-install-cli.js --path ~/tizen-sdk2
  *
  * [version] is the Tizen platform version (X.Y, e.g. 10.0). Omit it to install
  * the newest version the repository offers. A malformed version fails with
@@ -24,6 +26,10 @@
  * pkg_list_{OS}-{64,32}. sdk-install-custom-repo-cli.js is the dedicated
  * runner for that flow (it also accepts a platform version).
  *
+ * --path <dir> installs into <dir> instead of the path from
+ * ~/.tizen.sdk.path.config (default ~/tizen-sdk). It is passed to the
+ * installer as --path / -Path, and the config file is updated after install.
+ *
  * This file is in a version directory, so sdk-commands is loaded with relative paths
  * (no dynamic version lookup needed — already running in the correct version).
  *
@@ -31,7 +37,12 @@
  */
 
 const { installSdk } = require("../core/sdk-commands");
-const { runCli, getFlagValue, getDownloadJobsOrExit } = require("./cli-runner");
+const {
+  runCli,
+  getFlagValue,
+  getDownloadJobsOrExit,
+  exitWithUsageError,
+} = require("./cli-runner");
 
 const COMMAND = "tizen-sdk sdk-install";
 const args = process.argv.slice(2);
@@ -39,6 +50,11 @@ const force = args.includes("--force") || args.includes("-Force");
 
 // --repo-url <url> or --repo-url=<url>
 const repoUrl = getFlagValue(args, "--repo-url");
+// --path <dir>, --path=<dir>, or the PowerShell-style -Path <dir>
+const installPath = getFlagValue(args, "--path") || getFlagValue(args, "-Path");
+if (!installPath && args.some((a) => /^(--path|-Path)(=|$)/.test(a))) {
+  exitWithUsageError(COMMAND, "--path <dir>", "--path requires a directory");
+}
 // Validated here (envelope on error); the raw value is kept only to drop it
 // from the positionals below.
 const downloadJobs = getDownloadJobsOrExit(COMMAND, args);
@@ -47,11 +63,20 @@ const jobsValue = getFlagValue(args, "--download-jobs");
 // Drop flag VALUES from the positionals, otherwise they would be read as the
 // version argument.
 const positional = args.filter(
-  (a) => !a.startsWith("-") && a !== repoUrl && a !== jobsValue,
+  (a) =>
+    !a.startsWith("-") && a !== repoUrl && a !== jobsValue && a !== installPath,
 );
 const version = positional[0] || "";
 const label = positional[1] || "tizen";
 
 runCli(COMMAND, () =>
-  installSdk(version, label, force, repoUrl, COMMAND, downloadJobs),
+  installSdk(
+    version,
+    label,
+    force,
+    repoUrl,
+    COMMAND,
+    downloadJobs,
+    installPath,
+  ),
 );

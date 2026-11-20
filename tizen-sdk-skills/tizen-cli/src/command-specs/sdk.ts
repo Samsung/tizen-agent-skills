@@ -58,6 +58,11 @@ export const SDK_SPECS: CommandSpec[] = [
         description:
           "Install from a custom package repository URL instead of the timezone-selected CDN mirror (equivalent to sdk-install-custom-repo; the URL must serve pkg_list_{OS}-{64,32})",
       },
+      {
+        flags: "--path <dir>",
+        description:
+          "SDK install directory (a leading ~ is expanded). Default: the path in ~/.tizen.sdk.path.config, else ~/tizen-sdk",
+      },
       DOWNLOAD_JOBS_OPTION,
     ],
     handler: (o) =>
@@ -68,6 +73,7 @@ export const SDK_SPECS: CommandSpec[] = [
         o.repoUrl || "",
         "tizen-sdk sdk-install",
         o.downloadJobs,
+        o.path || "",
       ),
   },
   {

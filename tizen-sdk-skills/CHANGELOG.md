@@ -47,6 +47,13 @@ below use those release tags.
   `--skip-validation` and `--no-restart` are forwarded. Self-contained, so it
   can run straight from the download
   (`bash <(curl -fsSL <raw-url>)`); on Windows use the `.bat`/`.ps1` twin.
+- **`--path <dir>` on the SDK install runner** (`sdk-install-cli.js`, alias
+  `-Path`) and on `tizen-cli tizen-sdk sdk-install`. The pre-check checks
+  `<dir>` instead of the path from `~/.tizen.sdk.path.config` (default
+  `~/tizen-sdk`) and passes it to the installer as `--path` / `-Path`; a
+  leading `~` is expanded. It is also forwarded when `--repo-url` is given, and
+  the re-run hint in the envelope repeats it so the verification checks the
+  same directory. `--path` without a value fails with `invalid_parameters`.
 
 - **`--full` flag on the dlog-analyzer runner** (`dlog-analyzer-cli.js` and the
   `tizen-cli` command spec). The analyzer's token budget caps text output to
@@ -95,6 +102,11 @@ below use those release tags.
   when they stop.
 
 ### Changed
+
+- **The SDK install pre-check measures free space on the install drive**
+  (`sdk-install-cli.js`, `sdk-install-custom-repo-cli.js`): the nearest existing
+  directory of the SDK path instead of the home directory, so a configured or
+  `--path` target on another drive is checked against the right disk.
 
 - **Bundled `tizen-dlog-analyzer` binaries updated to 0.3.0 and the macOS binary is now picked
   per CPU architecture.** All four PyInstaller one-file bundles were rebuilt and
