@@ -12,6 +12,31 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.7.0] — 2026-11-20
+
+Repository-wide release that ships `tizen-sdk-skills` 1.10.0 and `tizen-action-skills` 1.0.0.
+The plugin moved by a minor version, so the release does too.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.9.0 to 1.10.0. Highlights:
+  - `device-manager --action list` lists every device `sdb devices` reports, with its state
+    and type plus `device_count` / `online_count`, and every device command now reads
+    `sdb devices` with the same shared parser, so a message is no longer taken for a device
+    and `no permissions` devices are listed.
+  - New `tizen-handoff` skill: Claude Code, Codex CLI and Cline record per-project handoff
+    notes outside the project and can continue each other's Tizen work.
+  - No-clone setup (`common/setup/setup-remote.sh` / `.ps1` / `.bat`) and a `tizen-sdk` CLI
+    install from a release zip (`common/setup/setup-tizen-sdk.sh` / `.ps1` / `.bat`).
+  - Bundled `tizen-dlog-analyzer` updated to 0.3.0 with one macOS bundle per CPU
+    architecture; the dlog-analyzer runner accepts `--full` to opt out of the token budget.
+
+  See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
+  assets stamped with the plugin version are therefore `tizen-sdk-v1.10.0.zip`,
+  `tizen-ai-extension-v1.10.0.vsix` and `tizen-sdk-skills-source-v1.10.0.zip`, plus
+  `tizen-action-skills-source-v1.0.0.zip` for the unchanged action plugin.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.10.0.
+
 ## [1.6.0] — 2026-11-16
 
 Repository-wide release that ships `tizen-sdk-skills` 1.9.0 and `tizen-action-skills` 1.0.0.

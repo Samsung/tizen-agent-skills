@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [1.10.0] — 2026-11-20
+
 ### 추가
 
 - **`device-manager --action list` (`device-manager-cli.js list`)**. `sdb devices`가
@@ -2248,7 +2250,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.6.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.7.0...HEAD
+[1.10.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.6.0...tizen-agent-skills-v1.7.0
 [1.9.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.5.0...tizen-agent-skills-v1.6.0
 [1.8.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.4.0...tizen-agent-skills-v1.5.0
 [1.7.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.3.1...tizen-agent-skills-v1.4.0
