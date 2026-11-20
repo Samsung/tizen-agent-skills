@@ -1,6 +1,6 @@
 ---
 name: tizen-device-manager
-description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill ONLY to find connected Tizen devices via sdb or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to dlog-analyzer even when it mentions the emulator or device (that command detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
+description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill ONLY to find connected Tizen devices via sdb (one device, or ALL of them with `list` — "show all connected devices", "연결된 디바이스 전체 목록") or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to dlog-analyzer even when it mentions the emulator or device (that command detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
 
 metadata:
   author: Samsung Electronics

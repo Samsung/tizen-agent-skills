@@ -43,25 +43,42 @@ check(
       "* daemon started successfully *",
       "List of devices attached",
       "emulator-26101  device  tizen-vm-default",
-      "192.168.0.10:26101\toffline",
+      "203.0.113.10:26101\toffline",
       "0000d85900006200  no permissions",
       "R3CN1234\tunknown",
+      "emulator-26103\trecovery\tTV-name",
       "",
     ].join("\n"),
   ),
   {
     devices: [
       { serial: "emulator-26101", state: "device" },
-      { serial: "192.168.0.10:26101", state: "offline" },
+      { serial: "203.0.113.10:26101", state: "offline" },
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
+      { serial: "emulator-26103", state: "recovery" },
     ],
     errors: [],
+    other: [],
+  },
+);
+check(
+  "  stderr message is not a device",
+  parseDeviceTable(
+    "sdb server version (39) doesn't match this client (41); killing...\nList of devices attached\n",
+  ),
+  {
+    devices: [],
+    errors: [],
+    other: [
+      "sdb server version (39) doesn't match this client (41); killing...",
+    ],
   },
 );
 check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
   errors: [],
+  other: [],
 });
 check(
   "  error lines collected, not listed as devices",
@@ -71,6 +88,7 @@ check(
   {
     devices: [],
     errors: ["error: protocol fault (couldn't read status): Success"],
+    other: [],
   },
 );
 
@@ -130,6 +148,24 @@ if (process.platform === "win32") {
       (fault.errors && fault.errors[0] && fault.errors[0].message) ||
       ""
     ).includes("protocol fault"),
+    true,
+  );
+
+  const partial = list(
+    "error: protocol fault (remote target dropped)\\nList of devices attached\\nemulator-26101\\tDEVICE\\n",
+  );
+  check("  error next to a device is a warning", partial.status, "success");
+  check(
+    "  that device is listed and counted online (any case)",
+    partial.result && [
+      partial.result.device_count,
+      partial.result.online_count,
+    ],
+    [1, 1],
+  );
+  check(
+    "  the error line is in warnings",
+    (partial.warnings || []).some((w) => w.includes("protocol fault")),
     true,
   );
 

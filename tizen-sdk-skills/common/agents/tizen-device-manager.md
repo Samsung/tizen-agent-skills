@@ -1,6 +1,6 @@
 ---
 name: tizen-device-manager
-description: 'Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this agent ONLY to find connected Tizen devices via sdb or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when it mentions the emulator or device (that runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.'
+description: 'Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this agent ONLY to find connected Tizen devices via sdb (one device, or ALL of them with `list` — "show all connected devices", "연결된 디바이스 전체 목록") or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when it mentions the emulator or device (that runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.'
 
 tools: Bash, Read, Glob, Grep
 model: sonnet
@@ -40,7 +40,10 @@ node "$CLI"
 #   profile    - emulator profile: 'tizen' (default) or 'tv' (Samsung TV)
 # Example (TV emulator): node "$CLI" 300 tizen-tv-vm tv
 # Stop all running emulator VMs: node "$CLI" stop   (or: node "$CLI" --action stop)
+# List EVERY device sdb reports (no waiting): node "$CLI" list   (or: node "$CLI" --action list)
 ```
+
+**All connected devices** ("show all connected devices", "sdb devices 목록", "연결된 디바이스 전체 목록"): run `node "$CLI" list`, not the default start action — start returns ONE serial and fails with `multiple_devices` when several are connected. `result.devices[]` = `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or any other state as sdb prints it; `device_type`: `emulator` / `usb` / `remote`), plus `device_count` and `online_count`. Zero devices is a success envelope with a warning.
 
 > **Runner not found?** If none of the `~/.claude`, `~/.cline`, `~/.codex`, `~/.gemini` caches contains the runner, the tizen-sdk-skills plugin is NOT installed on this machine — install it first; do not improvise with other tools. (Contributors working inside the tizen-sdk-skills source repository can use the in-repo runner instead: `node common/lib/cli/<runner>.js`.)
 

@@ -20,6 +20,7 @@ const { summarizeOutput } = require("./output-summary");
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
 const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
+const { isValidSerial } = require("./shell-safety");
 
 /**
  * Extract only key lines from device manager script stdout for envelope warnings
@@ -52,23 +53,39 @@ function classifySerial(serial) {
   return "usb";
 }
 
-// States parseDevices() knows; anything else in the second column (for example
-// `no permissions` from a Linux host without a udev rule, `unknown`,
-// `recovery`) is kept as the rest of the line.
-const KNOWN_STATE = /^(device|offline|locked|unauthorized)$/i;
+// Device states sdb can print. A tab-separated `<serial>\t<state>[\t<name>]`
+// line is a device line whatever its state; a space-separated one only when
+// its state is one of these, so a stderr message such as
+// `sdb server version (x) doesn't match this client (y)` (stdout and stderr
+// are read together) is not taken for a device.
+const DEVICE_STATES = [
+  "device",
+  "offline",
+  "locked",
+  "unauthorized",
+  "no permissions",
+  "unknown",
+  "recovery",
+  "bootloader",
+  "sideload",
+  "connecting",
+  "authorizing",
+];
+const SPACED_STATE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=\\s|$)`, "i");
 
 /**
  * Parse the whole `sdb devices` table, keeping every device line whatever its
  * state, and collecting what sdb printed that is not a device.
  *
  * @param {string} output - `sdb devices` stdout + stderr
- * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[] }}
- *   errors: `error: …` / `protocol fault` lines sdb printed (it can exit 0
- *   after them)
+ * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[] }}
+ *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
+ *   other: any other line that is not a device, header or daemon banner
  */
 function parseDeviceTable(output) {
   const devices = [];
   const errors = [];
+  const other = [];
   for (const raw of String(output || "").split(/\r?\n/)) {
     const line = raw.trim();
     // Header and the `* daemon not running … *` / `* daemon started … *` banners
@@ -79,16 +96,27 @@ function parseDeviceTable(output) {
       errors.push(line);
       continue;
     }
-    const parts = line.split(/\s+/);
-    if (parts.length < 2) continue;
-    // Some sdb versions add a 3rd column (the device name), so a known state
-    // is the 2nd column alone; an unknown one may be several words.
-    const state = KNOWN_STATE.test(parts[1])
-      ? parts[1]
-      : parts.slice(1).join(" ");
-    devices.push({ serial: parts[0], state });
+    let serial;
+    let state;
+    if (line.includes("\t")) {
+      // `<serial>\t<state>[\t<name>]` — the state is the 2nd field alone, so
+      // a device-name column never ends up in it.
+      [serial, state] = line
+        .split("\t")
+        .map((f) => f.trim())
+        .filter(Boolean);
+    } else {
+      serial = line.split(/\s+/, 1)[0];
+      const m = line.slice(serial.length).trim().match(SPACED_STATE);
+      state = m && m[1];
+    }
+    if (!state || !isValidSerial(serial)) {
+      other.push(line);
+      continue;
+    }
+    devices.push({ serial, state });
   }
-  return { devices, errors };
+  return { devices, errors, other };
 }
 
 /**
@@ -97,8 +125,9 @@ function parseDeviceTable(output) {
  * Unlike the start action (which waits for ONE device and returns its serial),
  * this returns the whole table: serial, state (device / offline / locked /
  * unauthorized, or whatever else sdb printed, e.g. `no permissions`) and type.
- * Zero devices is a successful listing, not an error; an `error:` line from
- * sdb is an error even when sdb exits 0.
+ * Zero devices is a successful listing, not an error. An `error:` line from
+ * sdb fails the listing only when no device was listed (sdb can exit 0 after
+ * one); next to devices it is a warning, like any other non-device line.
  *
  * @param {string} command - envelope command label
  * @param {number} startTime - request start (ms since epoch)
@@ -137,8 +166,8 @@ function listConnectedDevices(command, startTime) {
     );
   }
 
-  const { devices: table, errors } = parseDeviceTable(output);
-  if (errors.length > 0) {
+  const { devices: table, errors, other } = parseDeviceTable(output);
+  if (errors.length > 0 && table.length === 0) {
     return formatError(
       command,
       "io_error",
@@ -153,7 +182,9 @@ function listConnectedDevices(command, startTime) {
     state: d.state,
     device_type: classifySerial(d.serial),
   }));
-  const online = devices.filter((d) => d.state === "device").length;
+  const online = devices.filter(
+    (d) => d.state.toLowerCase() === "device",
+  ).length;
 
   const envelope = new Envelope(command);
   envelope.startTime = startTime;
@@ -164,12 +195,14 @@ function listConnectedDevices(command, startTime) {
       online_count: online,
     },
     {
-      warnings:
-        devices.length === 0
+      warnings: [
+        ...(devices.length === 0
           ? [
               "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
             ]
-          : [],
+          : []),
+        ...[...errors, ...other].map((l) => `sdb: ${l}`),
+      ],
     },
   );
 }
@@ -209,6 +242,12 @@ async function manageDevice(
   const startTime = Date.now();
 
   try {
+    // list: report every device `sdb devices` shows. No script, no waiting;
+    // the start-only arguments (timeout, VM name, profile) are ignored.
+    if (action === "list") {
+      return listConnectedDevices(command, startTime);
+    }
+
     const timeout = parseInt(timeoutSec, 10);
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 540) {
       return formatError(
@@ -227,7 +266,7 @@ async function manageDevice(
       );
     }
     // Validate action
-    if (action !== "start" && action !== "stop" && action !== "list") {
+    if (action !== "start" && action !== "stop") {
       return formatError(
         command,
         "invalid_parameters",
@@ -242,11 +281,6 @@ async function manageDevice(
         "invalid_parameters",
         `Invalid profile: ${profile}. Must be 'tizen' or 'tv'.`,
       );
-    }
-
-    // list: report every device `sdb devices` shows. No script, no waiting.
-    if (action === "list") {
-      return listConnectedDevices(command, startTime);
     }
 
     const resolved = resolveScript("tizen-device-manager");

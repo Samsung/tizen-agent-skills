@@ -1,6 +1,6 @@
 ---
 name: tizen-device-manager
-description: 'Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill ONLY to find connected Tizen devices via sdb or to stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when the sentence mentions the emulator or device (its runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.'
+description: 'Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, 에뮬레이터 종료, sdb devices, emulator stop, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, 타이젠 TV 에뮬레이터, Samsung TV emulator, TV emulator, TV 에뮬. Use this skill ONLY to find connected Tizen devices via sdb (one device, or ALL of them with `list` — "show all connected devices", "연결된 디바이스 전체 목록") or to stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to tizen-dlog-analyzer even when the sentence mentions the emulator or device (its runner detects the device itself). For creating an emulator VM — and for LISTING the existing / available emulator VMs ("list emulators", "에뮬레이터 목록": `list-vm`) — use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.'
 
 
 metadata:
@@ -14,6 +14,8 @@ metadata:
     - 타이젠 디바이스
     - emulator launch
     - 디바이스 연결
+    - 연결된 디바이스 목록
+    - list connected devices
     - TV 에뮬레이터
     - Samsung TV emulator
     - TV emulator
@@ -99,7 +101,7 @@ node "$CLI" --action start|stop|list [timeoutSec] [vmName] [profile]
 0. **action** (`start` | `stop` | `list`, default `start`) — `start` finds a connected device and returns ONE serial; `list` returns EVERY device `sdb devices` reports (serial, state, type) without waiting; `stop` shuts down all running emulator VMs. Give it as the first bare word (`list`, `stop`) or as `--action list` (same spelling as `tizen-cli tizen-sdk device-manager --action list`).
 1. **timeoutSec** (1–540, default 300) — emulator connection wait time in seconds (start action only)
 2. **vmName** (default `tizen-vm-default`) — emulator VM name to look for (start action only)
-3. **profile** (`tizen` | `tv`, default `tizen`) — emulator profile: `tizen` (standard) or `tv` (Samsung TV; requires TV SDK extension)
+3. **profile** (`tizen` | `tv`, default `tizen`) — emulator profile: `tizen` (standard) or `tv` (Samsung TV; requires TV SDK extension) (start action only)
 
 Example (start, default Tizen): `node "$CLI" 300 my-tizen-vm`
 Example (start, TV emulator): `node "$CLI" 300 tizen-tv-vm tv`

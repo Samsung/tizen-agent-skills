@@ -16,6 +16,8 @@
  */
 
 const { spawnSync } = require("child_process");
+const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { parseArgs, UsageError } = require("../cli/cli-runner");
 
@@ -387,10 +389,11 @@ function runDotnetCliProc(args) {
 console.log("\nTest 6: device-manager-cli.js action parsing");
 const DEVICE_CLI = path.join(__dirname, "..", "cli", "device-manager-cli.js");
 
-function runDeviceCliProc(args) {
+function runDeviceCliProc(args, procEnv) {
   const r = spawnSync(process.execPath, [DEVICE_CLI, ...args], {
     encoding: "utf8",
     timeout: 30000,
+    ...(procEnv ? { env: procEnv } : {}),
   });
   let env = null;
   try {
@@ -469,23 +472,28 @@ for (const form of [
   );
 }
 
-// 6d2. `list` (bare or --action) is an action too; the invalid timeout stops it
-//      before sdb is touched, so no SDK or device is needed.
+// 6d2. `list` (bare or --action) is an action too, and it ignores the
+//      start-only positional arguments. HOME is empty and PATH has no sdb, so
+//      the listing stops at "sdb not found" without touching a device.
+const noSdbEnv = {
+  HOME: fs.mkdtempSync(path.join(os.tmpdir(), "device-list-home-")),
+  PATH: path.dirname(process.execPath),
+};
 for (const form of [
   ["list", "abc"],
   ["--action", "list", "abc"],
   ["--action=list", "abc"],
 ]) {
-  const { env } = runDeviceCliProc(form);
+  const { env } = runDeviceCliProc(form, noSdbEnv);
   check(
     `  ${form.join(" ")}: command carries the list action`,
     env && env.command,
     "tizen-sdk device-manager list",
   );
   check(
-    `  ${form.join(" ")}: positional timeout still validated`,
-    firstMessage(env).includes("Invalid timeout: abc"),
-    true,
+    `  ${form.join(" ")}: stray positional ignored (no timeout error)`,
+    env && env.errors && env.errors[0] && env.errors[0].error_category,
+    "sdk_path_not_set",
   );
 }
 
