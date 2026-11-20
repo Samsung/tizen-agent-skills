@@ -19,6 +19,8 @@ const { summarizeOutput } = require("./output-summary");
 // Shared Java/JNA crash detection + raw-output carry, so device-manager errors
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
+const fs = require("fs");
+const { resolveSdb, ensureSdbServer, runSdb, parseDevices } = require("./sdb");
 
 /**
  * Extract only key lines from device manager script stdout for envelope warnings
@@ -39,8 +41,98 @@ function summarizeDeviceManagerOutput(output) {
 }
 
 /**
+ * Classify an sdb serial: `emulator-<port>` is an emulator, `<host>:<port>`
+ * is a network (remote) device, anything else is a USB device.
+ *
+ * @param {string} serial
+ * @returns {"emulator"|"remote"|"usb"}
+ */
+function classifySerial(serial) {
+  if (/^emulator-/i.test(serial)) return "emulator";
+  if (serial.includes(":")) return "remote";
+  return "usb";
+}
+
+/**
+ * List every device `sdb devices` reports, whatever its state.
+ *
+ * Unlike the start action (which waits for ONE device and returns its serial),
+ * this returns the whole table: serial, state (device / offline / locked /
+ * unauthorized) and type. Zero devices is a successful listing, not an error.
+ *
+ * @param {string} command - envelope command label
+ * @param {number} startTime - request start (ms since epoch)
+ * @returns {object} Standard JSON Envelope
+ */
+function listConnectedDevices(command, startTime) {
+  const resolved = resolveSdb();
+  if (resolved.error) {
+    return formatError(
+      command,
+      "sdk_path_not_set",
+      resolved.error,
+      "tizen-sdk sdk-init --sdk-path <path>",
+      startTime,
+    );
+  }
+  const { sdbPath } = resolved;
+  if (!fs.existsSync(sdbPath)) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb binary not found at: ${sdbPath}. Ensure the Tizen SDK is properly installed.`,
+      null,
+      startTime,
+    );
+  }
+
+  console.error("[tizen-device] Listing devices reported by sdb");
+  // A cold sdb client spawns the server daemon, which inherits a stdout pipe
+  // and would hang execSync (see runSdb): start it first, then read the table.
+  ensureSdbServer(sdbPath);
+  let output;
+  try {
+    output = runSdb(sdbPath, "devices", { viaTempFile: true });
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb devices failed: ${error.message}`,
+      null,
+      startTime,
+    );
+  }
+
+  const devices = parseDevices(output).map((d) => ({
+    serial: d.serial,
+    state: d.state,
+    device_type: classifySerial(d.serial),
+  }));
+  const online = devices.filter((d) => d.state === "device").length;
+
+  const envelope = new Envelope(command);
+  envelope.startTime = startTime;
+  return envelope.success(
+    {
+      devices,
+      device_count: devices.length,
+      online_count: online,
+    },
+    {
+      warnings:
+        devices.length === 0
+          ? [
+              "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
+            ]
+          : [],
+    },
+  );
+}
+
+/**
  * Detect connected device via sdb, or stop running emulator VMs.
  * With action='stop', shuts down all running emulator VMs instead.
+ * With action='list', lists every device sdb reports (no waiting, no script).
  *
  * Executes scripts/tizen-device-manager and parses stdout `DEVICE_SERIAL=...` line
  * (for start) or `EMULATOR_STOPPED=...` line (for stop) to return Standard JSON Envelope.
@@ -51,7 +143,7 @@ function summarizeDeviceManagerOutput(output) {
  *
  * @param {number|string} [timeoutSec=300] - emulator connection wait time (seconds, 1-540)
  * @param {string} [vmName='tizen-vm-default'] - name of emulator VM to look for
- * @param {string} [action='start'] - action: 'start' (find connected device) or 'stop' (shut down emulators)
+ * @param {string} [action='start'] - action: 'start' (find connected device), 'stop' (shut down emulators) or 'list' (list all sdb devices)
  * @param {string} [profile='tizen'] - emulator profile: 'tizen' (standard) or 'tv' (Samsung TV)
  * @returns {object} Standard JSON Envelope
  */
@@ -63,8 +155,11 @@ async function manageDevice(
   command = "tizen-sdk device-manager",
 ) {
   // If caller didn't override command, derive it from action
-  if (command === "tizen-sdk device-manager" && action === "stop") {
-    command = "tizen-sdk device-manager stop";
+  if (
+    command === "tizen-sdk device-manager" &&
+    (action === "stop" || action === "list")
+  ) {
+    command = `tizen-sdk device-manager ${action}`;
   }
   const startTime = Date.now();
 
@@ -87,11 +182,11 @@ async function manageDevice(
       );
     }
     // Validate action
-    if (action !== "start" && action !== "stop") {
+    if (action !== "start" && action !== "stop" && action !== "list") {
       return formatError(
         command,
         "invalid_parameters",
-        `Invalid action: ${action}. Must be 'start' or 'stop'.`,
+        `Invalid action: ${action}. Must be 'start', 'stop' or 'list'.`,
       );
     }
 
@@ -102,6 +197,11 @@ async function manageDevice(
         "invalid_parameters",
         `Invalid profile: ${profile}. Must be 'tizen' or 'tv'.`,
       );
+    }
+
+    // list: report every device `sdb devices` shows. No script, no waiting.
+    if (action === "list") {
+      return listConnectedDevices(command, startTime);
     }
 
     const resolved = resolveScript("tizen-device-manager");

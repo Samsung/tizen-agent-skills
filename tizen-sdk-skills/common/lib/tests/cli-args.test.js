@@ -469,6 +469,26 @@ for (const form of [
   );
 }
 
+// 6d2. `list` (bare or --action) is an action too; the invalid timeout stops it
+//      before sdb is touched, so no SDK or device is needed.
+for (const form of [
+  ["list", "abc"],
+  ["--action", "list", "abc"],
+  ["--action=list", "abc"],
+]) {
+  const { env } = runDeviceCliProc(form);
+  check(
+    `  ${form.join(" ")}: command carries the list action`,
+    env && env.command,
+    "tizen-sdk device-manager list",
+  );
+  check(
+    `  ${form.join(" ")}: positional timeout still validated`,
+    firstMessage(env).includes("Invalid timeout: abc"),
+    true,
+  );
+}
+
 // 6e. Unknown / valueless --action → invalid_parameters from the core.
 for (const form of [["--action", "bogus"], ["--action"]]) {
   const { r, env } = runDeviceCliProc(form);

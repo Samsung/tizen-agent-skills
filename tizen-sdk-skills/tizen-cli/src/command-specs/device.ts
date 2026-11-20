@@ -300,13 +300,13 @@ export const DEVICE_SPECS: CommandSpec[] = [
   {
     name: "device-manager",
     description:
-      "Find a connected Tizen device via sdb. Does NOT create or launch emulators — use create-emulator and launch-emulator for that. Use --action stop to shut down all running emulator VMs. Use --profile tv to look for a Samsung TV emulator.",
+      "Find a connected Tizen device via sdb (--action start, returns one device) or list ALL devices sdb reports with serial, state and type (--action list). Does NOT create or launch emulators — use create-emulator and launch-emulator for that. Use --action stop to shut down all running emulator VMs. Use --profile tv to look for a Samsung TV emulator.",
     options: [
       {
         flags: "--action <action>",
         description:
-          "Action: start (find connected device) or stop (shut down emulators)",
-        choices: ["start", "stop"],
+          "Action: start (find a connected device), list (list all devices sdb reports) or stop (shut down emulators)",
+        choices: ["start", "list", "stop"],
         default: "start",
       },
       {

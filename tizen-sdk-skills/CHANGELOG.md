@@ -16,6 +16,13 @@ below use those release tags.
 
 ### Added
 
+- **`device-manager --action list` (`device-manager-cli.js list`)**. Lists every
+  device `sdb devices` reports — serial, state (`device` / `offline` / `locked` /
+  `unauthorized`) and type (`emulator` / `usb` / `remote`), with `device_count`
+  and `online_count` — without waiting or running the device script. Zero
+  devices is a success envelope with a warning, not `device_not_found`. The
+  default `start` action still returns a single device; the command description
+  and both `tizen-device-manager` SKILL.md files now say which action does what.
 - **`tizen-sdk` CLI install from a release zip (`common/setup/setup-tizen-sdk.sh`
   / `.ps1` / `.bat`)**. Installs the built tizen-cli plugin without cloning or
   building: it resolves the `tizen-sdk-v<version>.zip` asset of a

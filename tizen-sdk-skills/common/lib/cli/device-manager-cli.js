@@ -15,12 +15,14 @@
  *   node .../device-manager-cli.js 300 tizen-tv-vm tv   # TV emulator
  *   node .../device-manager-cli.js stop                 # Shut down all running emulator VMs
  *   node .../device-manager-cli.js --action stop        # Same, tizen-cli spelling
+ *   node .../device-manager-cli.js list                 # Every device `sdb devices` shows
  *
  * Arguments (all optional):
- *   action     - 'start' (default; find connected device) or 'stop' (shut down
- *                running emulator VMs). Given as the first bare token or as
- *                `--action <start|stop>` / `--action=<start|stop>`, matching
- *                `tizen-sdk device-manager --action stop`.
+ *   action     - 'start' (default; find connected device), 'stop' (shut down
+ *                running emulator VMs) or 'list' (list ALL devices sdb reports,
+ *                with serial, state and type). Given as the first bare token or
+ *                as `--action <start|stop|list>` / `--action=<start|stop|list>`,
+ *                matching `tizen-sdk device-manager --action list`.
  *   timeoutSec - Emulator connection wait time in seconds (1~540; default 300; start only)
  *   vmName     - Emulator VM name to look for (default tizen-vm-default; start only)
  *   profile    - Emulator profile: 'tizen' (default) or 'tv' (Samsung TV)
@@ -36,7 +38,7 @@
 const { manageDevice } = require("../core/sdk-commands");
 const { runCli, getFlagValue } = require("./cli-runner");
 
-const ACTIONS = ["start", "stop"];
+const ACTIONS = ["start", "stop", "list"];
 
 /**
  * Split argv into { action, positional }.
