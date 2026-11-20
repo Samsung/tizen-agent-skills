@@ -43,6 +43,8 @@ check(
       "* daemon started successfully *",
       "List of devices attached",
       "emulator-26101  device  tizen-vm-default",
+      "emulator-26105 device tizen-vm-2",
+      "emulator-26107  host",
       "203.0.113.10:26101\toffline",
       "0000d85900006200  no permissions",
       "R3CN1234\tunknown",
@@ -53,6 +55,8 @@ check(
   {
     devices: [
       { serial: "emulator-26101", state: "device" },
+      { serial: "emulator-26105", state: "device" },
+      { serial: "emulator-26107", state: "host" },
       { serial: "203.0.113.10:26101", state: "offline" },
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
@@ -60,6 +64,17 @@ check(
     ],
     errors: [],
     other: [],
+    header: true,
+  },
+);
+check(
+  "  tab line with an unknown state is not a device",
+  parseDeviceTable("List of devices attached\nwarning\tsomething happened\n"),
+  {
+    devices: [],
+    errors: [],
+    other: ["warning\tsomething happened"],
+    header: true,
   },
 );
 check(
@@ -73,6 +88,7 @@ check(
     other: [
       "sdb server version (39) doesn't match this client (41); killing...",
     ],
+    header: true,
   },
 );
 check(
@@ -84,6 +100,7 @@ check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
   devices: [],
   errors: [],
   other: [],
+  header: true,
 });
 check(
   "  error lines collected, not listed as devices",
@@ -94,6 +111,7 @@ check(
     devices: [],
     errors: ["error: protocol fault (couldn't read status): Success"],
     other: [],
+    header: true,
   },
 );
 
@@ -146,7 +164,11 @@ if (process.platform === "win32") {
   );
 
   const fault = list("error: protocol fault (couldn't read status)\\n");
-  check("  sdb error with exit 0 is an error", fault.status, "failure");
+  check(
+    "  sdb error and no table (exit 0) is an error",
+    fault.status,
+    "failure",
+  );
   check(
     "  error message names sdb's line",
     (
@@ -174,12 +196,53 @@ if (process.platform === "win32") {
     true,
   );
 
+  const emptyWithError = list("error: closed\\nList of devices attached\\n");
+  check(
+    "  empty table next to an error is a success",
+    [
+      emptyWithError.status,
+      emptyWithError.result && emptyWithError.result.device_count,
+    ],
+    ["success", 0],
+  );
+  check(
+    "  that error line is a warning",
+    (emptyWithError.warnings || []).some((w) => w.includes("error: closed")),
+    true,
+  );
+
   const failed = list("error: cannot connect to daemon\\n", 1);
   check("  failing sdb is an error", failed.status, "failure");
   check(
     "  failing sdb output carried",
     JSON.stringify(failed).includes("cannot connect to daemon"),
     true,
+  );
+  // A configured SDK without sdb, and no sdb on PATH: a broken install
+  // (io_error), not a missing setting (sdk_path_not_set).
+  const brokenHome = path.join(root, "broken-home");
+  fs.mkdirSync(brokenHome);
+  fs.writeFileSync(
+    path.join(brokenHome, ".tizen.sdk.path.config"),
+    path.join(root, "no-sdk"),
+  );
+  const broken = spawnSync(process.execPath, [cli, "list"], {
+    encoding: "utf8",
+    timeout: 60000,
+    env: { PATH: path.join(root, "home"), HOME: brokenHome },
+  });
+  let brokenEnv = {};
+  try {
+    brokenEnv = JSON.parse(broken.stdout);
+  } catch (_e) {
+    /* checked below */
+  }
+  check(
+    "  configured SDK without sdb is io_error",
+    brokenEnv.errors &&
+      brokenEnv.errors[0] &&
+      brokenEnv.errors[0].error_category,
+    "io_error",
   );
   fs.rmSync(root, { recursive: true, force: true });
 }

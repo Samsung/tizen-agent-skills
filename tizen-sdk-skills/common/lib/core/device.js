@@ -19,7 +19,9 @@ const { summarizeOutput } = require("./output-summary");
 // Shared Java/JNA crash detection + raw-output carry, so device-manager errors
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
+const fs = require("fs");
 const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
+const { CONFIG_FILE } = require("./sdk");
 const { isValidSerial } = require("./shell-safety");
 
 /**
@@ -53,11 +55,11 @@ function classifySerial(serial) {
   return "usb";
 }
 
-// Device states sdb can print. A tab-separated `<serial>\t<state>[\t<name>]`
-// line is a device line whatever its state; a space-separated one only when
-// its state is one of these, so a stderr message such as
-// `sdb server version (x) doesn't match this client (y)` (stdout and stderr
-// are read together) is not taken for a device.
+// Device states sdb can print. A line is a device line when its first column
+// is a valid serial (not ending in ':', which marks a message such as
+// `sdb: …`) and its second column is one of these — the same rule for tab-
+// and space-separated tables. Anything else is reported as a warning, so a
+// state missing from this list is still visible, just not listed.
 const DEVICE_STATES = [
   "device",
   "offline",
@@ -70,59 +72,53 @@ const DEVICE_STATES = [
   "sideload",
   "connecting",
   "authorizing",
+  "host",
 ];
-// The state must end the line or be followed by a column gap (2+ spaces), so
-// a prose line such as `sdb: device offline` does not match.
-const SPACED_STATE = new RegExp(
-  `^(${DEVICE_STATES.join("|")})(?=\\s{2,}|$)`,
-  "i",
-);
+const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=\\s|$)`, "i");
 
 /**
- * Parse the whole `sdb devices` table, keeping every device line whatever its
- * state, and collecting what sdb printed that is not a device.
+ * Parse the whole `sdb devices` table.
  *
  * @param {string} output - `sdb devices` stdout + stderr
- * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[] }}
+ * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], header: boolean }}
  *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
- *   other: any other line that is not a device, header or daemon banner
+ *   other: any other line that is not a device, header or daemon banner;
+ *   header: whether the `List of devices attached` header was printed
  */
 function parseDeviceTable(output) {
   const devices = [];
   const errors = [];
   const other = [];
+  let header = false;
   for (const raw of String(output || "").split(/\r?\n/)) {
     const line = raw.trim();
-    // Header and the `* daemon not running … *` / `* daemon started … *` banners
-    if (!line || /^list of devices/i.test(line) || line.startsWith("*")) {
+    if (/^list of devices/i.test(line)) {
+      header = true;
       continue;
     }
+    // The `* daemon not running … *` / `* daemon started … *` banners
+    if (!line || line.startsWith("*")) continue;
     if (/^error:|protocol fault/i.test(line)) {
       errors.push(line);
       continue;
     }
-    let serial;
-    let state;
-    if (line.includes("\t")) {
-      // `<serial>\t<state>[\t<name>]` — the state is the 2nd field alone, so
-      // a device-name column never ends up in it.
-      [serial, state] = line
-        .split("\t")
-        .map((f) => f.trim())
-        .filter(Boolean);
-    } else {
-      serial = line.split(/\s+/, 1)[0];
-      const m = line.slice(serial.length).trim().match(SPACED_STATE);
-      state = m && m[1];
-    }
-    // `sdb:` / `error:`-style prefixes pass isValidSerial (it allows ':')
-    if (!state || !isValidSerial(serial) || serial.endsWith(":")) {
+    const serial = line.split(/\s+/, 1)[0];
+    // Tab-separated: the state is the 2nd field alone, so a device-name
+    // column never ends up in it.
+    const rest = line.includes("\t")
+      ? line
+          .split("\t")
+          .map((f) => f.trim())
+          .filter(Boolean)[1] || ""
+      : line.slice(serial.length).trim();
+    const m = rest.match(STATE_RE);
+    if (!m || !isValidSerial(serial) || serial.endsWith(":")) {
       other.push(line);
       continue;
     }
-    devices.push({ serial, state });
+    devices.push({ serial, state: m[1] });
   }
-  return { devices, errors, other };
+  return { devices, errors, other, header };
 }
 
 /**
@@ -131,9 +127,9 @@ function parseDeviceTable(output) {
  * Unlike the start action (which waits for ONE device and returns its serial),
  * this returns the whole table: serial, state (device / offline / locked /
  * unauthorized, or whatever else sdb printed, e.g. `no permissions`) and type.
- * Zero devices is a successful listing, not an error. An `error:` line from
- * sdb fails the listing only when no device was listed (sdb can exit 0 after
- * one); next to devices it is a warning, like any other non-device line.
+ * Zero devices is a successful listing, not an error. The listing fails only
+ * when sdb printed no device table at all (no header and no device line);
+ * otherwise `error:` and other non-device lines become warnings.
  *
  * @param {string} command - envelope command label
  * @param {number} startTime - request start (ms since epoch)
@@ -144,13 +140,17 @@ function listConnectedDevices(command, startTime) {
   // commands use.
   const resolved = resolveSdbBinary();
   if (resolved.error) {
-    return formatError(
-      command,
-      "sdk_path_not_set",
-      resolved.error,
-      "tizen-sdk sdk-init --sdk-path <path>",
-      startTime,
-    );
+    // No SDK path configured → sdk-init fixes it; a configured SDK without
+    // sdb (and none on PATH) is a broken install, not a missing setting.
+    return !fs.existsSync(CONFIG_FILE)
+      ? formatError(
+          command,
+          "sdk_path_not_set",
+          resolved.error,
+          "tizen-sdk sdk-init --sdk-path <path>",
+          startTime,
+        )
+      : formatError(command, "io_error", resolved.error, null, startTime);
   }
   const { sdbPath } = resolved;
 
@@ -172,12 +172,12 @@ function listConnectedDevices(command, startTime) {
     );
   }
 
-  const { devices: table, errors, other } = parseDeviceTable(output);
-  if (errors.length > 0 && table.length === 0) {
+  const { devices: table, errors, other, header } = parseDeviceTable(output);
+  if (!header && table.length === 0) {
     return formatError(
       command,
       "io_error",
-      `sdb devices reported an error: ${errors[0]}`,
+      `sdb devices printed no device table${errors.length ? `: ${errors[0]}` : ""}`,
       null,
       startTime,
       rawOutputTail(output),
