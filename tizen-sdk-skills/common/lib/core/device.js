@@ -25,6 +25,7 @@ const {
   ensureSdbServer,
   runSdb,
   looksLikeSdkRoot,
+  parseDeviceTable,
 } = require("./sdb");
 const { CONFIG_FILE } = require("./sdk");
 
@@ -57,66 +58,6 @@ function classifySerial(serial) {
   if (/^emulator-/i.test(serial)) return "emulator";
   if (serial.includes(":")) return "remote";
   return "usb";
-}
-
-// A device line (after the header): serial, a column gap (tab or 2+ spaces),
-// then one of these states. Other lines become warnings.
-const DEVICE_STATES = [
-  "device",
-  "offline",
-  "locked",
-  "unauthorized",
-  "no permissions",
-  "unknown",
-  "host",
-];
-const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
-
-/**
- * Parse the whole `sdb devices` table. States are returned in lower case.
- *
- * @param {string} output - `sdb devices` stdout + stderr
- * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
- *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
- *   other: any other line that is not a device, header or daemon banner;
- *   unlisted: the lines of `other` printed after the header (table rows that
- *   were not recognised — possibly devices);
- *   header: whether the `List of devices attached` header was printed
- */
-function parseDeviceTable(output) {
-  const devices = [];
-  const errors = [];
-  const other = [];
-  const unlisted = [];
-  let header = false;
-  for (const raw of String(output || "").split(/\r?\n/)) {
-    const line = raw.trim();
-    if (/^list of devices/i.test(line)) {
-      header = true;
-      continue;
-    }
-    // The `* daemon not running … *` / `* daemon started … *` banners
-    if (!line || line.startsWith("*")) continue;
-    if (/^error:|protocol fault/i.test(line)) {
-      errors.push(line);
-      continue;
-    }
-    // The state is the first word(s) after the serial; STATE_RE stops at the
-    // next whitespace, so a device-name column never ends up in it. Device
-    // lines only follow the header. The serial is not checked for shell
-    // safety: the listing never passes it to a shell, and sdb serials can be
-    // long or unusual (IPv6, host names).
-    const serial = line.split(/\s+/, 1)[0];
-    const after = line.slice(serial.length);
-    const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
-    if (!header || !m || serial.endsWith(":")) {
-      other.push(line);
-      if (header) unlisted.push(line);
-      continue;
-    }
-    devices.push({ serial, state: m[1].toLowerCase() });
-  }
-  return { devices, errors, other, unlisted, header };
 }
 
 /** Whether sdk-init has written an SDK path setting that names an SDK root. */

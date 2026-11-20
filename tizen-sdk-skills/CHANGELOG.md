@@ -112,6 +112,19 @@ below use those release tags.
   envelope the binary produces carries a warning naming the fallback so a
   partial install is visible.
 
+### Fixed
+
+- **Every device command reads `sdb devices` with the same rules as
+  `device-manager list`.** `parseDevices` (used to pick a target device by
+  screenshot, install, sdb-helper, remote-device and samsung-duid) accepted any
+  line whose second word was a state, so a message such as
+  `target device not found` could be taken for a device named `target`, and it
+  dropped devices in states like `no permissions`. It now uses the shared
+  `parseDeviceTable` in `common/lib/core/sdb.js`: a device row follows the
+  `List of devices attached` header, has a column gap (sdb pads each column and
+  ends it with a tab) and a known state. `device-manager list` and the target
+  pick therefore see the same devices.
+
 ## [1.9.0] — 2026-11-16
 
 ### Added

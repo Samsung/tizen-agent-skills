@@ -248,17 +248,25 @@ check("  unmatched request returns null", matchIntent("qwertyuiop"), null);
 console.log("\nTest 2: parseDevices");
 const output = [
   "List of devices attached",
-  "emulator-26101  device  tizen-vm-default",
-  "1.2.3.4:26101   offline",
-  "SERIAL9         unauthorized  some-name",
+  "emulator-26101      \tdevice    \ttizen-vm-default",
+  "1.2.3.4:26101       \toffline   \t",
+  "SERIAL9             \tunauthorized\tsome-name",
+  "0000d85900006200    \tno permissions",
   "garbage line without state",
+  "target device not found",
   "",
 ].join("\n");
 check("  parses serial+state, skips header/garbage", parseDevices(output), [
   { serial: "emulator-26101", state: "device" },
   { serial: "1.2.3.4:26101", state: "offline" },
   { serial: "SERIAL9", state: "unauthorized" },
+  { serial: "0000d85900006200", state: "no permissions" },
 ]);
+check(
+  "  a message before the header is not a device",
+  parseDevices("target device not found\nList of devices attached\n"),
+  [],
+);
 
 // Test 3: buildCommand — screenshot returns a fallback chain
 console.log("\nTest 3: buildCommand screenshot contract");

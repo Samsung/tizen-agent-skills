@@ -100,6 +100,18 @@
   빌드와 비트 단위로 같지 않으므로, 네 번들 중 하나라도 받거나 미러링한 사본은 `NOTICE.md`의
   해시로 검증하세요.
 
+### 수정
+
+- **모든 장치 명령이 `device-manager list`와 같은 규칙으로 `sdb devices`를
+  읽습니다.** 대상 장치를 고르는 데 쓰이던 `parseDevices`(스크린샷, 설치,
+  sdb-helper, remote-device, samsung-duid)는 둘째 단어가 상태 이름이기만 하면
+  장치로 받아서, `target device not found` 같은 메시지를 `target`이라는 장치로
+  착각할 수 있었고 `no permissions` 같은 상태의 장치는 빠뜨렸습니다. 이제
+  `common/lib/core/sdb.js`의 공용 `parseDeviceTable`을 씁니다. 장치 줄은
+  `List of devices attached` 헤더 뒤에 있고, 열 간격(sdb는 각 열을 공백으로
+  채운 뒤 탭으로 끝냄)과 알려진 상태가 있어야 합니다. 그래서
+  `device-manager list`와 대상 장치 선택이 같은 장치를 봅니다.
+
 ## [1.9.0] — 2026-11-16
 
 ### 추가

@@ -81,15 +81,15 @@ check("  no interfaces -> empty", computeSubnets({}), []);
 console.log("\nTest 3: parseRemoteConnections");
 const devicesOutput = [
   "List of devices attached",
-  "emulator-26101      device  tizen-vm-default",
-  "192.168.1.100:26101 device  SamsungTV",
-  "10.0.0.5:26102      offline",
-  "USBSERIAL123        device",
+  "emulator-26101      \tdevice    \ttizen-vm-default",
+  "203.0.113.100:26101 \tdevice    \tSamsungTV",
+  "198.51.100.5:26102  \toffline   \t",
+  "USBSERIAL123        \tdevice    \t",
   "",
 ].join("\n");
 check("  extracts remote entries only", parseRemoteConnections(devicesOutput), [
-  { ip: "192.168.1.100", port: 26101, state: "device" },
-  { ip: "10.0.0.5", port: 26102, state: "offline" },
+  { ip: "203.0.113.100", port: 26101, state: "device" },
+  { ip: "198.51.100.5", port: 26102, state: "offline" },
 ]);
 
 // Test 4: parseDeviceListLine — Device Manager's "name/ip/port" bookmark format
