@@ -47,7 +47,7 @@ When the SDK is not installed, `sdk-install-cli.js` **first** checks if Node.js 
 
 ### Automatic Disk Space Check (15 GB, built into sdk-install-cli.js)
 
-After Node.js is confirmed, `sdk-install-cli.js` **automatically** checks disk space on the user's home drive before returning the installer command. No separate `check-disk-space-cli.js` run is needed.
+After Node.js is confirmed, `sdk-install-cli.js` **automatically** checks disk space on the drive of the SDK install path before returning the installer command. No separate `check-disk-space-cli.js` run is needed.
 
 - **15 GB or more free** → installation proceeds (installer command returned in `suggested_fix`)
 - **Less than 15 GB** → installation **aborted** with an error envelope showing:
