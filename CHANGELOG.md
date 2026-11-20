@@ -30,6 +30,9 @@ The plugin moved by a minor version, so the release does too.
     install from a release zip (`common/setup/setup-tizen-sdk.sh` / `.ps1` / `.bat`).
   - Bundled `tizen-dlog-analyzer` updated to 0.3.0 with one macOS bundle per CPU
     architecture; the dlog-analyzer runner accepts `--full` to opt out of the token budget.
+  - The SDK install runner and `tizen-cli tizen-sdk sdk-install` accept `--path <dir>` to
+    install somewhere other than the configured path, and the pre-check measures free space
+    on the install drive instead of the home drive.
 
   See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
   assets stamped with the plugin version are therefore `tizen-sdk-v1.10.0.zip`,
