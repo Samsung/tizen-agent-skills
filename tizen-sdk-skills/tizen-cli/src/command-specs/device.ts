@@ -300,29 +300,30 @@ export const DEVICE_SPECS: CommandSpec[] = [
   {
     name: "device-manager",
     description:
-      "Find a connected Tizen device via sdb. Does NOT create or launch emulators — use create-emulator and launch-emulator for that. Use --action stop to shut down all running emulator VMs. Use --profile tv to look for a Samsung TV emulator.",
+      "Find a connected Tizen device via sdb (--action start, returns one device) or list ALL devices sdb reports with serial, state and type (--action list). Does NOT create or launch emulators — use create-emulator and launch-emulator for that. Use --action stop to shut down all running emulator VMs. Use --profile tv to look for a Samsung TV emulator.",
     options: [
       {
         flags: "--action <action>",
         description:
-          "Action: start (find connected device) or stop (shut down emulators)",
-        choices: ["start", "stop"],
+          "Action: start (find a connected device), list (list all devices sdb reports) or stop (shut down emulators)",
+        choices: ["start", "list", "stop"],
         default: "start",
       },
       {
         flags: "--timeout <seconds>",
-        description: "Emulator connection wait time in seconds (1-540)",
+        description:
+          "Emulator connection wait time in seconds (1-540; start only)",
         default: "300",
       },
       {
         flags: "--vm-name <name>",
-        description: "Emulator VM name to look for",
+        description: "Emulator VM name to look for (start only)",
         default: "tizen-vm-default",
       },
       {
         flags: "--profile <profile>",
         description:
-          "Emulator profile: tizen (standard) or tv (Samsung TV; requires TV SDK extension)",
+          "Emulator profile: tizen (standard) or tv (Samsung TV; requires TV SDK extension; start only)",
         choices: ["tizen", "tv"],
         default: "tizen",
       },

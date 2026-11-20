@@ -12,17 +12,17 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **296** |
+| YAML 테스트 케이스 총 개수 | **297** |
 | CSV TC ID 가 매핑된 케이스 | **256** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
 | └─ Prompt 레인 (`TC-P-*`) | 120 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **40** |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **41** |
 
 ### 도메인별 분포
 
 | 도메인 (`tc/<group>/`) | 케이스 수 |
 | --- | ---: |
-| `device` | 104 |
+| `device` | 105 |
 | `sdk` | 66 |
 | `debug` | 32 |
 | `project` | 28 |
@@ -35,7 +35,7 @@
 
 | tier | 케이스 수 |
 | --- | ---: |
-| `device` | 143 |
+| `device` | 144 |
 | `mutating` | 79 |
 | `safe` | 74 |
 
@@ -352,6 +352,7 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/sdk/check-disk-space.happy.yaml](tc/sdk/check-disk-space.happy.yaml) | `tizen-sdk.check-disk-space.happy` | `check-disk-space` | safe | CLI | check-disk-space returns success with disk_free info |
 | [tc/sdk/check-node.happy.yaml](tc/sdk/check-node.happy.yaml) | `tizen-sdk.check-node.happy` | `check-node` | safe | CLI | check-node returns success with node_version matching v<digits> |
 | [tc/sdk/install-rootstrap.missing-required.yaml](tc/sdk/install-rootstrap.missing-required.yaml) | `tizen-sdk.install-rootstrap.missing-required` | `install-rootstrap` | safe | CLI | install-rootstrap fails with invalid_argument when --zip-path is missing |
+| [tc/device/device-manager.list.yaml](tc/device/device-manager.list.yaml) | `tizen-sdk.device-manager.list` | `device-manager` | device | CLI | device-manager --action list returns every sdb device with counts |
 | [tc/sdk/platform-install.invalid-version.yaml](tc/sdk/platform-install.invalid-version.yaml) | `tizen-sdk.platform-install.invalid-version` | `platform-install` | safe | CLI | platform-install fails with invalid_argument when --platform-version is not X.Y |
 | [tc/sdk/platform-install.missing-required.yaml](tc/sdk/platform-install.missing-required.yaml) | `tizen-sdk.platform-install.missing-required` | `platform-install` | safe | CLI | platform-install fails with invalid_argument when --platform-version is missing |
 | [tc/sdk/sdk-init.invalid-path.yaml](tc/sdk/sdk-init.invalid-path.yaml) | `tizen-sdk.sdk-init.invalid-path` | `sdk-init` | safe | CLI | sdk-init fails when path does not exist |

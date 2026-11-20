@@ -37,7 +37,7 @@ tizen-sdk <command> [--options...]             # 독립 런처 (bin/tizen-sdk.js
 | `create-emulator` | 커스텀 Tizen 에뮬레이터 VM 생성 (플랫폼/템플릿/VM 조회 및 삭제도 지원) |
 | `launch-emulator` | em-cli로 기존 Tizen 에뮬레이터 VM 실행 |
 | `emulator-manager` | em-cli 전체 기능: 생성, 삭제, 실행, 조회, 수정, 리셋, 이미지 캡처 |
-| `device-manager` | sdb로 디바이스 탐지, 또는 에뮬레이터 중지 |
+| `device-manager` | sdb로 디바이스 탐지, 전체 디바이스 목록, 또는 에뮬레이터 중지 |
 | `install-app` | 디바이스에 .tpk/.wgt/.rpm 설치 (및 선택적 실행) |
 | `sdb-helper` | 자연어 요청으로 적절한 sdb 명령 실행 |
 | `screenshot` | Tizen 에뮬레이터 또는 디바이스에서 스크린샷 캡처 |
@@ -84,7 +84,7 @@ Commander 프로그램에서 자동 생성됩니다. 전체 참조는 아래와 
 | `create-emulator` | — | `--action` (기본: `create`, enum: `create`\|`list-platform`\|`list-template`\|`list-vm`\|`delete`), `--vm-name`, `--platform`, `--size`, `--assume-defaults`, `--template`, `--profile` (기본: `tizen`), `--launch`, `--timeout`, `--raw-image-path` |
 | `launch-emulator` | — | `--vm-name` (기본: 첫 번째 VM), `--timeout` (기본: `300`) |
 | `emulator-manager` | — | `--action` (기본: `create`, enum: `create`\|`delete`\|`launch`\|`list-vm`\|`list-platform`\|`list-template`\|`detail`\|`modify`\|`reset`\|`create-image`), `--vm-name`, `--size`, `--assume-defaults`, `--template`, `--platform`, `--profile` (기본: `tizen`), `--launch`, `--skin`, `--ram-size`, `--file-sharing-path`, `--hw-virtualization`, `--hw-gl-acceleration`, `--custom-path`, `--raw-image-path`, `--output-dir`, `--compress`, `--confirm`, `--detail`, `--count`, `--timeout` (기본: `300`), `--emulator-path` |
-| `device-manager` | — | `--action` (기본: `start`, enum: `start`\|`stop`), `--timeout` (기본: `300`), `--vm-name` (기본: `tizen-vm-default`), `--profile` (기본: `tizen`, enum: `tizen`\|`tv`) |
+| `device-manager` | — | `--action` (기본: `start`, enum: `start`\|`stop`\|`list`), `--timeout` (기본: `300`), `--vm-name` (기본: `tizen-vm-default`), `--profile` (기본: `tizen`, enum: `tizen`\|`tv`) |
 | `install-app` | `--package` | `--serial`, `--run`, `--reset-rds` |
 | `sdb-helper` | `--request` | `--serial` |
 | `screenshot` | — | `--serial`, `--output` (기본: `./emulator_screenshot.png`) |

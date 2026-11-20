@@ -15,6 +15,14 @@
 
 ### 추가
 
+- **`device-manager --action list` (`device-manager-cli.js list`)**. `sdb devices`가
+  보고하는 모든 장치를 시리얼, 상태(`device` / `offline` / `locked` /
+  `unauthorized`, 그 밖에 `no permissions` 같은 sdb 상태. 알아보지 못한 줄은
+  경고로 보고), 유형(`emulator` / `usb` / `remote`)과 함께 나열하고
+  `device_count`, `online_count`를 반환합니다. 대기하거나 장치 스크립트를
+  실행하지 않습니다. 장치가 0대여도 `device_not_found`가 아니라 경고가 붙은
+  성공 Envelope입니다. 기본 `start` 동작은 그대로 장치 하나를 반환하며,
+  명령 설명과 `tizen-device-manager` SKILL.md 두 곳에 동작별 역할을 적었습니다.
 - **릴리스 zip에서 tizen-sdk CLI 설치 (`common/setup/setup-tizen-sdk.sh` /
   `.ps1` / `.bat`)**. 클론이나 빌드 없이 빌드된 tizen-cli 플러그인을 설치합니다.
   tizen-agent-skills 릴리스의 `tizen-sdk-v<version>.zip` 에셋을 찾아(기본값은

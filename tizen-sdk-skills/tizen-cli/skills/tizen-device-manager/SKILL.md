@@ -1,6 +1,6 @@
 ---
 name: tizen-device-manager
-description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill ONLY to find connected Tizen devices via sdb or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to dlog-analyzer even when it mentions the emulator or device (that command detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
+description: Tizen device manager, 타이젠 디바이스 관리, 디바이스 연결, sdb devices, 디바이스 찾기, 에뮬레이터 중지, TV 에뮬레이터, Samsung TV emulator, TV emulator. Use this skill ONLY to find connected Tizen devices via sdb (one device, or ALL of them with `list` — "show all connected devices", "연결된 디바이스 전체 목록") or stop/shut down running emulator VMs. NOT for problem reports — a crash, error, freeze, high CPU usage, memory growth, video/audio not playing, slow emulator, or any "investigate / analyze this issue" request belongs to dlog-analyzer even when it mentions the emulator or device (that command detects the device itself). For creating an emulator VM, use tizen-create-emulator. For launching an existing emulator VM, use tizen-launch-emulator. Supports both standard Tizen and Samsung TV emulator profiles.
 
 metadata:
   author: Samsung Electronics
@@ -37,12 +37,14 @@ tizen-cli tizen-sdk device-manager
 
 | Option                | Required | Default            | Description                                                                          |
 | --------------------- | -------- | ------------------ | ------------------------------------------------------------------------------------ |
-| `--action <action>`   | no       | `start`            | `start` (find connected device) or `stop` (shut down emulators)                      |
-| `--timeout <seconds>` | no       | `300`              | Emulator connection wait time (1–540)                                                |
-| `--vm-name <name>`    | no       | `tizen-vm-default` | Emulator VM name to look for (this command never creates or starts a VM)             |
-| `--profile <profile>` | no       | `tizen`            | Emulator profile: `tizen` (standard) or `tv` (Samsung TV; requires TV SDK extension) |
+| `--action <action>`   | no       | `start`            | `start` (find ONE connected device), `list` (list ALL devices sdb reports) or `stop` |
+| `--timeout <seconds>` | no       | `300`              | Emulator connection wait time (1–540) (start only)                                   |
+| `--vm-name <name>`    | no       | `tizen-vm-default` | Emulator VM name to look for (start only; this command never creates or starts a VM) |
+| `--profile <profile>` | no       | `tizen`            | Emulator profile: `tizen` (standard) or `tv` (Samsung TV; requires TV SDK extension) (start only) |
 
-Behavior: if a device is already connected via sdb it is returned immediately. If no device is found, the envelope returns `device_not_found` and directs the user to `tizen-create-emulator` (to create a VM) and `tizen-launch-emulator` (to launch a VM). This skill does **not** create or launch emulators itself — that is handled by the dedicated skills to avoid ambiguity.
+To see every connected device ("sdb devices" list), use `tizen-cli tizen-sdk device-manager --action list`. `result.devices[]` holds `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or another sdb state such as `no permissions` / `unknown` / `host`; a line it does not recognise becomes a warning; `device_type`: `emulator` / `usb` / `remote`), with `device_count` and `online_count`. Zero devices is a success envelope with a warning, not an error.
+
+Behavior (`start`): if a device is already connected via sdb it is returned immediately. If no device is found, the envelope returns `device_not_found` and directs the user to `tizen-create-emulator` (to create a VM) and `tizen-launch-emulator` (to launch a VM). This skill does **not** create or launch emulators itself — that is handled by the dedicated skills to avoid ambiguity.
 
 ### TV Emulator
 

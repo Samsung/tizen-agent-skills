@@ -41,6 +41,10 @@ const execFileAsync = promisify(execFile);
  * Intent classification — maps natural-language keywords to intent IDs.
  * Order matters: first match wins.
  */
+// Handoff note for the `list-devices` intents (English and Korean patterns).
+const LIST_DEVICES_HINT =
+  "To show EVERY device sdb reports (a list, all devices), run device-manager with the list action (`tizen-sdk device-manager --action list` in tizen-cli, or `node device-manager-cli.js list` with the runner). To find ONE device to work with, use the default start action, which returns a single serial.";
+
 const INTENT_PATTERNS = [
   // Discovery — handoff to tizen-device-manager (richer: emulator fallback)
   {
@@ -48,6 +52,7 @@ const INTENT_PATTERNS = [
     regex: /\b(list|show|find).*(devices?|connected)\b/i,
     gated: false,
     handoff: "tizen-device-manager",
+    handoffHint: LIST_DEVICES_HINT,
   },
   {
     id: "device-info",
@@ -234,6 +239,7 @@ const INTENT_PATTERNS = [
       /^sdb devices\b|^(?:sdb ?(?:로|으로)? ?)?(?:(?:현재 ?)?연결된 ?)?(?:디바이스|기기|장치) ?(?:목록|리스트)? ?(?:을|를|좀)? ?(?:(?:보여|알려|찾아|확인 ?해|조회 ?해) ?(?:줘요|줘|주세요|줄래)?|볼래|확인|조회)? ?[.?!]*$/i,
     gated: false,
     handoff: "tizen-device-manager",
+    handoffHint: LIST_DEVICES_HINT,
   },
 ];
 

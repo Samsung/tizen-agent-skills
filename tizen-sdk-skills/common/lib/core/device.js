@@ -19,6 +19,14 @@ const { summarizeOutput } = require("./output-summary");
 // Shared Java/JNA crash detection + raw-output carry, so device-manager errors
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
+const fs = require("fs");
+const {
+  resolveSdbBinary,
+  ensureSdbServer,
+  runSdb,
+  looksLikeSdkRoot,
+} = require("./sdb");
+const { CONFIG_FILE } = require("./sdk");
 
 /**
  * Extract only key lines from device manager script stdout for envelope warnings
@@ -39,8 +47,196 @@ function summarizeDeviceManagerOutput(output) {
 }
 
 /**
+ * Classify an sdb serial: `emulator-<port>` is an emulator, `<host>:<port>`
+ * is a network (remote) device, anything else is a USB device.
+ *
+ * @param {string} serial
+ * @returns {"emulator"|"remote"|"usb"}
+ */
+function classifySerial(serial) {
+  if (/^emulator-/i.test(serial)) return "emulator";
+  if (serial.includes(":")) return "remote";
+  return "usb";
+}
+
+// A device line (after the header): serial, a column gap (tab or 2+ spaces),
+// then one of these states. Other lines become warnings.
+const DEVICE_STATES = [
+  "device",
+  "offline",
+  "locked",
+  "unauthorized",
+  "no permissions",
+  "unknown",
+  "host",
+];
+const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
+
+/**
+ * Parse the whole `sdb devices` table. States are returned in lower case.
+ *
+ * @param {string} output - `sdb devices` stdout + stderr
+ * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
+ *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
+ *   other: any other line that is not a device, header or daemon banner;
+ *   unlisted: the lines of `other` printed after the header (table rows that
+ *   were not recognised — possibly devices);
+ *   header: whether the `List of devices attached` header was printed
+ */
+function parseDeviceTable(output) {
+  const devices = [];
+  const errors = [];
+  const other = [];
+  const unlisted = [];
+  let header = false;
+  for (const raw of String(output || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^list of devices/i.test(line)) {
+      header = true;
+      continue;
+    }
+    // The `* daemon not running … *` / `* daemon started … *` banners
+    if (!line || line.startsWith("*")) continue;
+    if (/^error:|protocol fault/i.test(line)) {
+      errors.push(line);
+      continue;
+    }
+    // The state is the first word(s) after the serial; STATE_RE stops at the
+    // next whitespace, so a device-name column never ends up in it. Device
+    // lines only follow the header. The serial is not checked for shell
+    // safety: the listing never passes it to a shell, and sdb serials can be
+    // long or unusual (IPv6, host names).
+    const serial = line.split(/\s+/, 1)[0];
+    const after = line.slice(serial.length);
+    const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
+    if (!header || !m || serial.endsWith(":")) {
+      other.push(line);
+      if (header) unlisted.push(line);
+      continue;
+    }
+    devices.push({ serial, state: m[1].toLowerCase() });
+  }
+  return { devices, errors, other, unlisted, header };
+}
+
+/** Whether sdk-init has written an SDK path setting that names an SDK root. */
+function sdkPathConfigured() {
+  try {
+    return looksLikeSdkRoot(fs.readFileSync(CONFIG_FILE, "utf-8").trim());
+  } catch (_e) {
+    return false;
+  }
+}
+
+/**
+ * List every device `sdb devices` reports, whatever its state.
+ *
+ * Unlike the start action (which waits for ONE device and returns its serial),
+ * this returns the whole table: serial, state (device / offline / locked /
+ * unauthorized, or whatever else sdb printed, e.g. `no permissions`) and type.
+ * Zero devices is a successful listing, not an error. The listing fails only
+ * when sdb printed no device table at all (no header and no device line);
+ * otherwise `error:` and other non-device lines become warnings.
+ *
+ * @param {string} command - envelope command label
+ * @param {number} startTime - request start (ms since epoch)
+ * @returns {object} Standard JSON Envelope
+ */
+function listConnectedDevices(command, startTime) {
+  // Configured SDK first, then sdb on PATH — the same lookup the other sdb
+  // commands use.
+  const resolved = resolveSdbBinary();
+  if (resolved.error) {
+    // No usable SDK path setting (no config file, an empty one, or one that
+    // does not name an SDK root) → sdk-init fixes it; a configured SDK without sdb (and
+    // none on PATH) is a broken install, not a missing setting.
+    return !sdkPathConfigured()
+      ? formatError(
+          command,
+          "sdk_path_not_set",
+          resolved.error,
+          "tizen-sdk sdk-init --sdk-path <path>",
+          startTime,
+        )
+      : formatError(command, "io_error", resolved.error, null, startTime);
+  }
+  const { sdbPath } = resolved;
+
+  console.error("[tizen-device] Listing devices reported by sdb");
+  // A cold sdb client spawns the server daemon, which inherits a stdout pipe
+  // and would hang execSync (see runSdb): start it first, then read the table.
+  ensureSdbServer(sdbPath);
+  let output;
+  try {
+    output = runSdb(sdbPath, "devices", { viaTempFile: true });
+  } catch (error) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb devices failed: ${error.message}`,
+      null,
+      startTime,
+      rawOutputTail(error.stdout),
+    );
+  }
+
+  const {
+    devices: table,
+    errors,
+    other,
+    unlisted,
+    header,
+  } = parseDeviceTable(output);
+  // Device lines only follow the header, so no header means no table.
+  if (!header) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb devices printed no device table${errors.length ? `: ${errors[0]}` : ""}`,
+      null,
+      startTime,
+      rawOutputTail(output),
+    );
+  }
+  const devices = table.map((d) => ({
+    serial: d.serial,
+    state: d.state,
+    device_type: classifySerial(d.serial),
+  }));
+  const online = devices.filter((d) => d.state === "device").length;
+
+  const envelope = new Envelope(command);
+  envelope.startTime = startTime;
+  return envelope.success(
+    {
+      devices,
+      device_count: devices.length,
+      online_count: online,
+    },
+    {
+      warnings: [
+        // With an sdb error, or a table row that was not recognised (e.g. a
+        // state missing from DEVICE_STATES), an empty list may be wrong, so
+        // do not send the user off to create an emulator — the `sdb:` lines
+        // below show what sdb printed. A message before the header (version
+        // mismatch banner) does not count.
+        ...(devices.length === 0
+          ? [
+              errors.length === 0 && unlisted.length === 0
+                ? "No device is connected. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it."
+                : "No device was listed, but sdb printed the lines below (an error or an unrecognised row); check them before creating an emulator.",
+            ]
+          : []),
+        ...[...errors, ...other].map((l) => `sdb: ${l}`),
+      ],
+    },
+  );
+}
+
+/**
  * Detect connected device via sdb, or stop running emulator VMs.
  * With action='stop', shuts down all running emulator VMs instead.
+ * With action='list', lists every device sdb reports (no waiting, no script).
  *
  * Executes scripts/tizen-device-manager and parses stdout `DEVICE_SERIAL=...` line
  * (for start) or `EMULATOR_STOPPED=...` line (for stop) to return Standard JSON Envelope.
@@ -51,7 +247,7 @@ function summarizeDeviceManagerOutput(output) {
  *
  * @param {number|string} [timeoutSec=300] - emulator connection wait time (seconds, 1-540)
  * @param {string} [vmName='tizen-vm-default'] - name of emulator VM to look for
- * @param {string} [action='start'] - action: 'start' (find connected device) or 'stop' (shut down emulators)
+ * @param {string} [action='start'] - action: 'start' (find connected device), 'stop' (shut down emulators) or 'list' (list all sdb devices)
  * @param {string} [profile='tizen'] - emulator profile: 'tizen' (standard) or 'tv' (Samsung TV)
  * @returns {object} Standard JSON Envelope
  */
@@ -63,12 +259,21 @@ async function manageDevice(
   command = "tizen-sdk device-manager",
 ) {
   // If caller didn't override command, derive it from action
-  if (command === "tizen-sdk device-manager" && action === "stop") {
-    command = "tizen-sdk device-manager stop";
+  if (
+    command === "tizen-sdk device-manager" &&
+    (action === "stop" || action === "list")
+  ) {
+    command = `tizen-sdk device-manager ${action}`;
   }
   const startTime = Date.now();
 
   try {
+    // list: report every device `sdb devices` shows. No script, no waiting;
+    // the start-only arguments (timeout, VM name, profile) are ignored.
+    if (action === "list") {
+      return listConnectedDevices(command, startTime);
+    }
+
     const timeout = parseInt(timeoutSec, 10);
     if (!Number.isFinite(timeout) || timeout < 1 || timeout > 540) {
       return formatError(
@@ -91,7 +296,7 @@ async function manageDevice(
       return formatError(
         command,
         "invalid_parameters",
-        `Invalid action: ${action}. Must be 'start' or 'stop'.`,
+        `Invalid action: ${action}. Must be 'start', 'stop' or 'list'.`,
       );
     }
 
@@ -207,4 +412,5 @@ async function manageDevice(
 
 module.exports = {
   manageDevice,
+  parseDeviceTable,
 };
