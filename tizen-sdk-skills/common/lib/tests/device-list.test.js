@@ -2,7 +2,8 @@
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
 /**
- * device-manager list tests
+ * `sdb devices` parsing tests — device-manager list and the shared parser
+ * in sdb.js that every device command uses
  *
  *   - parseDeviceTable: every device line is kept whatever its state
  *     (`no permissions`, `unknown`, a 3rd name column), daemon banners are
@@ -10,6 +11,10 @@
  *   - `device-manager-cli.js list` against a fake sdb on PATH with no SDK
  *     configured (POSIX only): sdb is found on PATH, an sdb error that exits
  *     0 is an error envelope, and a failing sdb carries its output
+ *   - against a fake sdb (POSIX only): resolveSerial() (the target pick —
+ *     unsafe serials skipped and named, sdb errors as io_error, unrecognised
+ *     rows named), samsung-duid listOnlineDevices() (name column kept) and
+ *     remote-device list (device_count / online_count)
  */
 
 const fs = require("fs");
