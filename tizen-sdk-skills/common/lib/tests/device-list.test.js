@@ -2,7 +2,8 @@
 // Copyright 2026 Samsung Electronics Co., Ltd.
 
 /**
- * device-manager list tests
+ * `sdb devices` parsing tests — device-manager list and the shared parser
+ * in sdb.js that every device command uses
  *
  *   - parseDeviceTable: every device line is kept whatever its state
  *     (`no permissions`, `unknown`, a 3rd name column), daemon banners are
@@ -10,6 +11,10 @@
  *   - `device-manager-cli.js list` against a fake sdb on PATH with no SDK
  *     configured (POSIX only): sdb is found on PATH, an sdb error that exits
  *     0 is an error envelope, and a failing sdb carries its output
+ *   - against a fake sdb (POSIX only): resolveSerial() (the target pick —
+ *     unsafe serials skipped and named, sdb errors as io_error, unrecognised
+ *     rows named), samsung-duid listOnlineDevices() (name column kept) and
+ *     remote-device list (device_count / online_count)
  */
 
 const fs = require("fs");
@@ -17,6 +22,8 @@ const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { parseDeviceTable } = require("../core/device");
+const { resolveSerial } = require("../core/sdb");
+const { listOnlineDevices } = require("../core/samsung-duid");
 
 console.log("=== device-manager list Test ===\n");
 
@@ -55,13 +62,13 @@ check(
   ),
   {
     devices: [
-      { serial: "emulator-26101", state: "device" },
+      { serial: "emulator-26101", state: "device", name: "tizen-vm-default" },
       { serial: "emulator-26107", state: "host" },
-      { serial: "emulator-26109", state: "device" },
+      { serial: "emulator-26109", state: "device", name: "m-0311-1" },
       { serial: "203.0.113.10:26101", state: "offline" },
       { serial: "0000d85900006200", state: "no permissions" },
       { serial: "R3CN1234", state: "unknown" },
-      { serial: "emulator-26103", state: "host" },
+      { serial: "emulator-26103", state: "host", name: "TV-name" },
       { serial: "0123456789ABCDEF", state: "no permissions" },
     ],
     errors: [],
@@ -379,6 +386,116 @@ if (process.platform === "win32") {
     "sdk_path_not_set",
   );
   fs.rmSync(root, { recursive: true, force: true });
+}
+
+// Test 3: resolveSerial (the target pick every device command uses)
+console.log("\nTest 3: resolveSerial against a fake sdb");
+if (process.platform === "win32") {
+  console.log("  (skipped on Windows: the fake sdb is a shell script)");
+} else {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "resolve-serial-"));
+  const fakeSdb = path.join(dir, "sdb");
+  fs.writeFileSync(
+    fakeSdb,
+    '#!/bin/sh\n[ "$1" = devices ] || exit 0\nprintf "%b" "$FAKE_OUT"\n',
+    { mode: 0o755 },
+  );
+  const pick = (out) => {
+    process.env.FAKE_OUT = out;
+    return resolveSerial(fakeSdb);
+  };
+  try {
+    check(
+      "  one online device is picked",
+      pick("List of devices attached\\nemulator-26101\\tdevice\\ttizen-vm\\n")
+        .serial,
+      "emulator-26101",
+    );
+    const unsafe = pick("List of devices attached\\nemu$(id)\\tdevice\\n");
+    check(
+      "  a serial that is not shell-safe is never picked, and is named",
+      [
+        unsafe.serial,
+        unsafe.errorCategory,
+        (unsafe.message || "").includes("emu$(id)"),
+      ],
+      [undefined, "invalid_parameters", true],
+    );
+    check(
+      "  a safe device is still picked next to an unsafe one",
+      pick(
+        "List of devices attached\\nemu$(id)\\tdevice\\nemulator-26101\\tdevice\\n",
+      ).serial,
+      "emulator-26101",
+    );
+
+    // samsung-duid: only `device` rows with a safe serial, name column kept
+    // (acquireDuidFromDevice returns it as deviceName)
+    process.env.FAKE_OUT =
+      "List of devices attached\\nemulator-26101\\tdevice\\ttizen-vm-default\\nR3CN1234\\tdevice\\n0000d859\\tno permissions\\n";
+    check(
+      "  samsung-duid listOnlineDevices keeps the name column",
+      listOnlineDevices(fakeSdb),
+      [
+        { serial: "emulator-26101", state: "device", name: "tizen-vm-default" },
+        { serial: "R3CN1234", state: "device" },
+      ],
+    );
+
+    // remote-device list: online_count counts only `device` entries
+    const binDir = path.join(dir, "bin");
+    fs.mkdirSync(binDir);
+    fs.copyFileSync(fakeSdb, path.join(binDir, "sdb"));
+    fs.chmodSync(path.join(binDir, "sdb"), 0o755);
+    const remote = spawnSync(
+      process.execPath,
+      [
+        "-e",
+        "require(process.argv[1]).listRemoteDevices().then((e) => process.stdout.write(JSON.stringify(e)))",
+        path.join(__dirname, "..", "core", "remote-device.js"),
+      ],
+      {
+        encoding: "utf8",
+        timeout: 60000,
+        env: {
+          PATH: `${binDir}${path.delimiter}${process.env.PATH}`,
+          HOME: dir,
+          FAKE_OUT:
+            "List of devices attached\\n203.0.113.5:26101\\tdevice\\tTV\\n198.51.100.7:26101\\toffline\\nemulator-26101\\tdevice\\n",
+        },
+      },
+    );
+    let remoteEnv = {};
+    try {
+      remoteEnv = JSON.parse(remote.stdout);
+    } catch (_e) {
+      /* checked below */
+    }
+    check(
+      "  remote-device list: device_count and online_count",
+      remoteEnv.result && [
+        remoteEnv.result.device_count,
+        remoteEnv.result.online_count,
+      ],
+      [2, 1],
+    );
+    check(
+      "  an sdb error with no device is io_error, not device_not_found",
+      pick("error: protocol fault (couldn't read status)\\n").errorCategory,
+      "io_error",
+    );
+    const unknown = pick(
+      "List of devices attached\\nemulator-26101\\tsuspended\\n",
+    );
+    check(
+      "  an unrecognised row is named in device_not_found",
+      [unknown.errorCategory, (unknown.message || "").includes("suspended")],
+      ["device_not_found", true],
+    );
+  } finally {
+    delete process.env.FAKE_OUT;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 console.log(

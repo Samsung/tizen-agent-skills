@@ -43,12 +43,7 @@
 const fs = require("fs");
 const { execFileSync } = require("child_process");
 
-const {
-  resolveSdbBinary,
-  runSdb,
-  parseDevices,
-  onlineDevices,
-} = require("./sdb");
+const { resolveSdbBinary, runSdb, parseDevices } = require("./sdb");
 const { isValidSerial } = require("./shell-safety");
 
 /** Maximum number of DUIDs allowed in a single distributor certificate request. */
@@ -345,13 +340,14 @@ function queryCapability(sdbPath, serial) {
 /**
  * Online devices from `sdb devices`, via the shared sdb plumbing: the
  * temp-file path survives a cold sdb server (a piped first call hangs until
- * the timeout — see sdb.js), parseDevices() understands the 3-column output,
- * and onlineDevices() drops offline/unauthorized entries that the previous
+ * the timeout — see sdb.js), parseDevices() understands the 3-column output
+ * (the name column becomes deviceName), and only `device` rows are kept —
+ * offline/unauthorized entries, which the previous
  * hand-rolled parser picked as "the first device". Serials are screened so
  * nothing odd from the sdb output reaches a command line.
  *
  * @param {string} sdbPath
- * @returns {Array<{serial: string, state: string}>}
+ * @returns {Array<{serial: string, state: string, name?: string}>}
  * @throws {Error} when `sdb devices` itself fails
  */
 function listOnlineDevices(sdbPath) {
@@ -361,8 +357,9 @@ function listOnlineDevices(sdbPath) {
   } catch (err) {
     throw new Error(`Failed to list devices: ${err.message}`, { cause: err });
   }
-  return onlineDevices(parseDevices(output)).filter((d) =>
-    isValidSerial(d.serial),
+  // Keeps the name column (onlineDevices() would drop it).
+  return parseDevices(output).filter(
+    (d) => d.state === "device" && isValidSerial(d.serial),
   );
 }
 
@@ -409,7 +406,7 @@ function acquireDuidFromDevice(serial) {
       );
     }
     targetSerial = devices[0].serial;
-    deviceName = devices[0].state;
+    deviceName = devices[0].name || "";
   }
 
   // Query device capabilities
@@ -476,7 +473,7 @@ function acquireDuidsFromAllDevices() {
   const results = [];
   const errors = [];
 
-  for (const { serial, state: deviceName } of listOnlineDevices(sdbPath)) {
+  for (const { serial, name: deviceName = "" } of listOnlineDevices(sdbPath)) {
     try {
       // Query device capabilities
       let capabilityOutput;
@@ -619,6 +616,7 @@ module.exports = {
   acquireDuidFromDevice,
   acquireDuidsFromAllDevices,
   // Internal helpers (exported for testing)
+  listOnlineDevices,
   extractDuidFromCapability,
   extractDuidFromOutput,
   runDeviceShellCommand,

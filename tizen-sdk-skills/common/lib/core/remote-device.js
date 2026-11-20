@@ -620,6 +620,7 @@ async function listRemoteDevices(command = "tizen-sdk remote-device list") {
     envelope.startTime = startTime;
     return envelope.success({
       device_count: connections.length,
+      online_count: connections.filter((c) => c.state === "device").length,
       devices: connections.map((c) => ({
         device_serial: `${c.ip}:${c.port}`,
         ip: c.ip,

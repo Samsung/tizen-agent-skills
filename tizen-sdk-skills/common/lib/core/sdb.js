@@ -245,37 +245,80 @@ function runSdb(sdbPath, args, opts = {}) {
   }
 }
 
+// A device line (after the header): serial, a column gap (tab or 2+ spaces),
+// then one of these states. sdb pads each column and ends it with a tab
+// (`emulator-26101      \tdevice    \ttizen-vm-default`), so a long serial
+// still has the tab; a sentence such as `target device not found` has single
+// spaces and is not a device.
+const DEVICE_STATES = [
+  "device",
+  "offline",
+  "locked",
+  "unauthorized",
+  "no permissions",
+  "unknown",
+  "host",
+];
+const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
+
 /**
- * Parse `sdb devices` output into an array of device objects.
- * Skips the "List of devices attached" header.
- * Matches on the state column (device/offline/locked), not column position.
+ * Parse the whole `sdb devices` table. States are returned in lower case.
  *
- * @param {string} output - stdout from `sdb devices`
- * @returns {Array<{serial: string, state: string}>}
+ * @param {string} output - `sdb devices` stdout + stderr
+ * @returns {{ devices: Array<{serial: string, state: string, name?: string}>, errors: string[], other: string[], unlisted: string[], header: boolean }}
+ *   errors: `error: …` / `protocol fault` lines (sdb can exit 0 after them);
+ *   other: any other line that is not a device, header or daemon banner;
+ *   unlisted: the lines of `other` printed after the header (table rows that
+ *   were not recognised — possibly devices);
+ *   header: whether the `List of devices attached` header was printed
+ */
+function parseDeviceTable(output) {
+  const devices = [];
+  const errors = [];
+  const other = [];
+  const unlisted = [];
+  let header = false;
+  for (const raw of String(output || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^list of devices/i.test(line)) {
+      header = true;
+      continue;
+    }
+    // The `* daemon not running … *` / `* daemon started … *` banners
+    if (!line || line.startsWith("*")) continue;
+    if (/^error:|protocol fault/i.test(line)) {
+      errors.push(line);
+      continue;
+    }
+    // The state is the first word(s) after the serial; STATE_RE stops at the
+    // next whitespace, so a device-name column never ends up in it. Device
+    // lines only follow the header. Serials are not screened here:
+    // resolveSerial() screens the one it picks before it reaches a shell.
+    const serial = line.split(/\s+/, 1)[0];
+    const after = line.slice(serial.length);
+    const m = /^(\t|\s{2,})/.test(after) && after.trim().match(STATE_RE);
+    if (!header || !m || serial.endsWith(":")) {
+      other.push(line);
+      if (header) unlisted.push(line);
+      continue;
+    }
+    const device = { serial, state: m[1].toLowerCase() };
+    // Optional 3rd column (device / VM name), after another column gap
+    const rest = after.trim().slice(m[1].length);
+    if (/^(\t|\s{2,})/.test(rest)) device.name = rest.trim();
+    devices.push(device);
+  }
+  return { devices, errors, other, unlisted, header };
+}
+
+/**
+ * Device rows of `sdb devices` output (see parseDeviceTable).
+ *
+ * @param {string} output - stdout (+ stderr) from `sdb devices`
+ * @returns {Array<{serial: string, state: string, name?: string}>}
  */
 function parseDevices(output) {
-  const lines = output
-    .split("\n")
-    .map((l) => l.trim())
-    .filter(Boolean);
-  const devices = [];
-  for (const line of lines) {
-    // Skip header lines
-    if (/list of devices/i.test(line)) continue;
-    // Each device line: "<serial>    <state>    [optional name/extra]"
-    // Some Tizen sdb versions output a 3rd column (device name, e.g.
-    // "emulator-26101  device  tizen-vm-default"), so we only check the
-    // 2nd column for the state value, not the entire remainder of the line.
-    const parts = line.split(/\s+/);
-    if (parts.length >= 2) {
-      const serial = parts[0];
-      const state = parts[1];
-      if (/^(device|offline|locked|unauthorized)$/i.test(state)) {
-        devices.push({ serial, state });
-      }
-    }
-  }
-  return devices;
+  return parseDeviceTable(output).devices;
 }
 
 /**
@@ -314,13 +357,35 @@ function resolveSerial(sdbPath, serial, opts = {}) {
       message: `sdb devices failed: ${error.message}`,
     };
   }
-  const devices = parseDevices(output);
-  const online = devices.filter((d) => d.state === "device");
+  const { devices, errors, unlisted } = parseDeviceTable(output);
+  // The picked serial goes into `-s "<serial>"` on a shell command line, so a
+  // listed device whose serial is not shell-safe is never picked.
+  const connected = devices.filter((d) => d.state === "device");
+  const online = connected.filter((d) => isValidSerial(d.serial));
+  const unsafe = connected.filter((d) => !isValidSerial(d.serial));
+  if (online.length === 0 && unsafe.length > 0) {
+    return {
+      errorCategory: "invalid_parameters",
+      message: `A connected device was skipped because its serial is not safe to pass to sdb: ${unsafe.map((d) => JSON.stringify(d.serial)).join(", ")}. Reconnect it under a serial with only letters, digits, '.', '_', ':' and '-'.`,
+      devices,
+    };
+  }
   if (online.length === 0) {
+    // sdb can print `error: …` and exit 0: that is an sdb problem, not a
+    // missing device, so do not send the user off to create an emulator.
+    if (errors.length > 0) {
+      return {
+        errorCategory: "io_error",
+        message: `sdb devices reported an error: ${errors[0]}`,
+        devices,
+      };
+    }
+    const seen = unlisted.length
+      ? ` sdb also printed rows it did not recognise as devices: ${unlisted.join(" | ")}`
+      : "";
     return {
       errorCategory: "device_not_found",
-      message:
-        "No connected Tizen device or emulator found. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.",
+      message: `No connected Tizen device or emulator found. Use tizen-create-emulator to create a VM, then tizen-launch-emulator to launch it.${seen}`,
       devices,
     };
   }
@@ -437,6 +502,7 @@ module.exports = {
   looksLikeSdkRoot,
   resolveSdkDataPath,
   runSdb,
+  parseDeviceTable,
   parseDevices,
   resolveSerial,
   onlineDevices,
