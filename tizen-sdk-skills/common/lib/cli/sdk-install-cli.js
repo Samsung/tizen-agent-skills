@@ -51,12 +51,8 @@ const force = args.includes("--force") || args.includes("-Force");
 // --repo-url <url> or --repo-url=<url>
 const repoUrl = getFlagValue(args, "--repo-url");
 // --path <dir>, --path=<dir>, or the PowerShell-style -Path <dir>
-const installPath =
-  getFlagValue(args, "--path") || getFlagValue(args, "-Path");
-if (
-  !installPath &&
-  args.some((a) => /^(--path|-Path)(=|$)/.test(a))
-) {
+const installPath = getFlagValue(args, "--path") || getFlagValue(args, "-Path");
+if (!installPath && args.some((a) => /^(--path|-Path)(=|$)/.test(a))) {
   exitWithUsageError(COMMAND, "--path <dir>", "--path requires a directory");
 }
 // Validated here (envelope on error); the raw value is kept only to drop it
@@ -68,10 +64,7 @@ const jobsValue = getFlagValue(args, "--download-jobs");
 // version argument.
 const positional = args.filter(
   (a) =>
-    !a.startsWith("-") &&
-    a !== repoUrl &&
-    a !== jobsValue &&
-    a !== installPath,
+    !a.startsWith("-") && a !== repoUrl && a !== jobsValue && a !== installPath,
 );
 const version = positional[0] || "";
 const label = positional[1] || "tizen";
