@@ -1242,6 +1242,20 @@ function resolveInstallPath(installPath) {
 }
 
 /**
+ * The closest existing directory at or above p — the SDK directory usually
+ * does not exist yet, and the disk probe needs a real path on the same drive.
+ */
+function nearestExistingDir(p) {
+  let dir = path.resolve(p);
+  while (!fs.existsSync(dir)) {
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return dir;
+}
+
+/**
  * installSdk() body; records checkNode's warnings in ctx.nodeWarnings.
  * Call installSdk(), not this: only installSdk() merges those warnings.
  */
@@ -1370,11 +1384,15 @@ async function installSdkSteps(
       );
     }
 
-    // Not installed → auto-check disk space (user home drive, 15GB threshold)
+    // Not installed → auto-check disk space on the install drive (15GB threshold)
     console.error(
       "[tizen-sdk] SDK not installed. Checking disk space (15 GB required)...",
     );
-    const diskCheck = await checkDiskSpace(os.homedir(), 15, command);
+    const diskCheck = await checkDiskSpace(
+      nearestExistingDir(sdkPath),
+      15,
+      command,
+    );
 
     if (diskCheck.status !== "success") {
       // Insufficient disk space → abort installation
@@ -1506,6 +1524,7 @@ async function installSdkSteps(
           harnessGuidance("detach") +
           sdkPrecheckRerunHint(
             "<sdk-path>/sdk.info exists and the requested platform is installed",
+            { installPath: installPath ? sdkPath : "" },
           ) +
           "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
           "or node job-cli.js list for a job started via background_command. " +
@@ -1671,13 +1690,19 @@ function installerFix(
  * 10.0 that never got installed was then reported as a completed install.
  *
  * @param {string} verify - what the re-run confirms
- * @param {{customRepo?: boolean}} [opts]
+ * @param {{customRepo?: boolean, installPath?: string}} [opts] - installPath:
+ *   the resolved directory when the run was given --path, so the re-run checks
+ *   the same directory instead of the configured / default one
  * @returns {string} one sentence ending with a trailing space
  */
-function sdkPrecheckRerunHint(verify, { customRepo = false } = {}) {
-  const same = customRepo
+function sdkPrecheckRerunHint(
+  verify,
+  { customRepo = false, installPath = "" } = {},
+) {
+  let same = customRepo
     ? "the same repository URL and version"
     : "the same version (and label)";
+  if (installPath) same += ` and --path "${installPath}"`;
   return `Either way, afterwards re-run this CLI with ${same} as this run but without --force, to verify ${verify}. `;
 }
 
@@ -3019,11 +3044,11 @@ async function installSdkFromRepoSteps(
       );
     }
 
-    // 4. Disk space (user home drive, 15 GB threshold)
+    // 4. Disk space on the install drive (15 GB threshold)
     console.error(
       "[tizen-sdk-repo] SDK not installed. Checking disk space (15 GB required)...",
     );
-    const diskCheck = await checkDiskSpace(os.homedir(), 15);
+    const diskCheck = await checkDiskSpace(nearestExistingDir(sdkPath), 15);
     if (diskCheck.status !== "success") {
       console.error(
         "[tizen-sdk-repo] Insufficient disk space. Aborting installation.",
@@ -3153,7 +3178,7 @@ async function installSdkFromRepoSteps(
         harnessGuidance("detach") +
         sdkPrecheckRerunHint(
           "<sdk-path>/sdk.info exists, the requested platform is installed and <sdk-path>/.package/repository.info records the custom repository",
-          { customRepo: true },
+          { customRepo: true, installPath: installPath ? sdkPath : "" },
         ) +
         "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
       installerCommand,
@@ -4539,6 +4564,8 @@ module.exports = {
   buildJobCommand,
   installerFix,
   installerPathArgs,
+  resolveInstallPath,
+  nearestExistingDir,
   harnessGuidance,
   sdkPrecheckRerunHint,
   DEFAULT_SDK_PATH,

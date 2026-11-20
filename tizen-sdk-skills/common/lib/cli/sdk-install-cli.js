@@ -7,6 +7,7 @@
  *
  * Run directly without the agent having to create temporary script files:
  *   node <plugin>/lib/sdk-install-cli.js [version] [label] [--force] [--repo-url <url>] [--path <dir>]
+ *   (-Force / -Path are accepted as PowerShell-style aliases)
  *
  * Examples:
  *   node ~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/<VERSION>/lib/sdk-install-cli.js
@@ -49,11 +50,12 @@ const force = args.includes("--force") || args.includes("-Force");
 
 // --repo-url <url> or --repo-url=<url>
 const repoUrl = getFlagValue(args, "--repo-url");
-// --path <dir> or --path=<dir>
-const installPath = getFlagValue(args, "--path");
+// --path <dir>, --path=<dir>, or the PowerShell-style -Path <dir>
+const installPath =
+  getFlagValue(args, "--path") || getFlagValue(args, "-Path");
 if (
   !installPath &&
-  args.some((a) => a === "--path" || a.startsWith("--path="))
+  args.some((a) => /^(--path|-Path)(=|$)/.test(a))
 ) {
   exitWithUsageError(COMMAND, "--path <dir>", "--path requires a directory");
 }

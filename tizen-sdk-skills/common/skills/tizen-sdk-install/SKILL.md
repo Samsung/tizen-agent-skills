@@ -80,9 +80,10 @@ bash, `-Path` on PowerShell — both `suggested_fix.command` and `background_com
 `Ignoring TIZEN_SDK_PATH=…`, and the installer refuses to unpack into a Tizen Studio directory
 (`tools/ide` present). A user who already has Tizen Studio at `~/tizen-studio` still gets a separate
 `~/tizen-sdk` (issue #70). To install elsewhere (e.g. "~/tizen-sdk2에 설치해줘"), pass
-`--path <dir>` to `sdk-install-cli.js` (`node "$CLI" --path ~/tizen-sdk2`; a leading `~` is expanded) —
-the pre-check then checks that directory and puts it in the installer command, and the config file is
-updated after the install. Re-run the verification step with the same `--path`.
+`--path <dir>` (alias `-Path`) to `sdk-install-cli.js` (`node "$CLI" --path ~/tizen-sdk2`; a leading
+`~` is expanded) — the pre-check then checks that directory, measures free space on its drive, and puts
+it in the installer command; the config file is updated after the install. Re-run the verification
+step with the same `--path` (the envelope's re-run hint repeats it).
 
 ### Automatic SDK Init (sdk-init after install)
 
