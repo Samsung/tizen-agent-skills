@@ -19,8 +19,7 @@ const { summarizeOutput } = require("./output-summary");
 // Shared Java/JNA crash detection + raw-output carry, so device-manager errors
 // give the same headless-usable guidance as the emulator domain (issue #40).
 const { javaJnaHint, rawOutputTail } = require("./emulator");
-const fs = require("fs");
-const { resolveSdb, ensureSdbServer, runSdb, parseDevices } = require("./sdb");
+const { resolveSdbBinary, ensureSdbServer, runSdb } = require("./sdb");
 
 /**
  * Extract only key lines from device manager script stdout for envelope warnings
@@ -53,19 +52,62 @@ function classifySerial(serial) {
   return "usb";
 }
 
+// States parseDevices() knows; anything else in the second column (for example
+// `no permissions` from a Linux host without a udev rule, `unknown`,
+// `recovery`) is kept as the rest of the line.
+const KNOWN_STATE = /^(device|offline|locked|unauthorized)$/i;
+
+/**
+ * Parse the whole `sdb devices` table, keeping every device line whatever its
+ * state, and collecting what sdb printed that is not a device.
+ *
+ * @param {string} output - `sdb devices` stdout + stderr
+ * @returns {{ devices: Array<{serial: string, state: string}>, errors: string[] }}
+ *   errors: `error: …` / `protocol fault` lines sdb printed (it can exit 0
+ *   after them)
+ */
+function parseDeviceTable(output) {
+  const devices = [];
+  const errors = [];
+  for (const raw of String(output || "").split(/\r?\n/)) {
+    const line = raw.trim();
+    // Header and the `* daemon not running … *` / `* daemon started … *` banners
+    if (!line || /^list of devices/i.test(line) || line.startsWith("*")) {
+      continue;
+    }
+    if (/^error:|protocol fault/i.test(line)) {
+      errors.push(line);
+      continue;
+    }
+    const parts = line.split(/\s+/);
+    if (parts.length < 2) continue;
+    // Some sdb versions add a 3rd column (the device name), so a known state
+    // is the 2nd column alone; an unknown one may be several words.
+    const state = KNOWN_STATE.test(parts[1])
+      ? parts[1]
+      : parts.slice(1).join(" ");
+    devices.push({ serial: parts[0], state });
+  }
+  return { devices, errors };
+}
+
 /**
  * List every device `sdb devices` reports, whatever its state.
  *
  * Unlike the start action (which waits for ONE device and returns its serial),
  * this returns the whole table: serial, state (device / offline / locked /
- * unauthorized) and type. Zero devices is a successful listing, not an error.
+ * unauthorized, or whatever else sdb printed, e.g. `no permissions`) and type.
+ * Zero devices is a successful listing, not an error; an `error:` line from
+ * sdb is an error even when sdb exits 0.
  *
  * @param {string} command - envelope command label
  * @param {number} startTime - request start (ms since epoch)
  * @returns {object} Standard JSON Envelope
  */
 function listConnectedDevices(command, startTime) {
-  const resolved = resolveSdb();
+  // Configured SDK first, then sdb on PATH — the same lookup the other sdb
+  // commands use.
+  const resolved = resolveSdbBinary();
   if (resolved.error) {
     return formatError(
       command,
@@ -76,15 +118,6 @@ function listConnectedDevices(command, startTime) {
     );
   }
   const { sdbPath } = resolved;
-  if (!fs.existsSync(sdbPath)) {
-    return formatError(
-      command,
-      "io_error",
-      `sdb binary not found at: ${sdbPath}. Ensure the Tizen SDK is properly installed.`,
-      null,
-      startTime,
-    );
-  }
 
   console.error("[tizen-device] Listing devices reported by sdb");
   // A cold sdb client spawns the server daemon, which inherits a stdout pipe
@@ -100,10 +133,22 @@ function listConnectedDevices(command, startTime) {
       `sdb devices failed: ${error.message}`,
       null,
       startTime,
+      rawOutputTail(error.stdout),
     );
   }
 
-  const devices = parseDevices(output).map((d) => ({
+  const { devices: table, errors } = parseDeviceTable(output);
+  if (errors.length > 0) {
+    return formatError(
+      command,
+      "io_error",
+      `sdb devices reported an error: ${errors[0]}`,
+      null,
+      startTime,
+      rawOutputTail(output),
+    );
+  }
+  const devices = table.map((d) => ({
     serial: d.serial,
     state: d.state,
     device_type: classifySerial(d.serial),
@@ -307,4 +352,5 @@ async function manageDevice(
 
 module.exports = {
   manageDevice,
+  parseDeviceTable,
 };

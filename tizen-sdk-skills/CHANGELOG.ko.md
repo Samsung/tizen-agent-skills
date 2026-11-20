@@ -17,7 +17,7 @@
 
 - **`device-manager --action list` (`device-manager-cli.js list`)**. `sdb devices`가
   보고하는 모든 장치를 시리얼, 상태(`device` / `offline` / `locked` /
-  `unauthorized`), 유형(`emulator` / `usb` / `remote`)과 함께 나열하고
+  `unauthorized`, 그 밖의 상태는 `no permissions`처럼 sdb가 출력한 그대로), 유형(`emulator` / `usb` / `remote`)과 함께 나열하고
   `device_count`, `online_count`를 반환합니다. 대기하거나 장치 스크립트를
   실행하지 않습니다. 장치가 0대여도 `device_not_found`가 아니라 경고가 붙은
   성공 Envelope입니다. 기본 `start` 동작은 그대로 장치 하나를 반환하며,

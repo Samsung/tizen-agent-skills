@@ -18,7 +18,7 @@ below use those release tags.
 
 - **`device-manager --action list` (`device-manager-cli.js list`)**. Lists every
   device `sdb devices` reports — serial, state (`device` / `offline` / `locked` /
-  `unauthorized`) and type (`emulator` / `usb` / `remote`), with `device_count`
+  `unauthorized`, or any other state as sdb prints it, e.g. `no permissions`) and type (`emulator` / `usb` / `remote`), with `device_count`
   and `online_count` — without waiting or running the device script. Zero
   devices is a success envelope with a warning, not `device_not_found`. The
   default `start` action still returns a single device; the command description

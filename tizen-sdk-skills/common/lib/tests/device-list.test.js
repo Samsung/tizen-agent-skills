@@ -1,0 +1,149 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2026 Samsung Electronics Co., Ltd.
+
+/**
+ * device-manager list tests
+ *
+ *   - parseDeviceTable: every device line is kept whatever its state
+ *     (`no permissions`, `unknown`, a 3rd name column), daemon banners are
+ *     skipped, and `error:` / `protocol fault` lines are collected
+ *   - `device-manager-cli.js list` against a fake sdb on PATH with no SDK
+ *     configured (POSIX only): sdb is found on PATH, an sdb error that exits
+ *     0 is an error envelope, and a failing sdb carries its output
+ */
+
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+const { spawnSync } = require("child_process");
+const { parseDeviceTable } = require("../core/device");
+
+console.log("=== device-manager list Test ===\n");
+
+let failures = 0;
+
+function check(name, actual, expected) {
+  const ok = JSON.stringify(actual) === JSON.stringify(expected);
+  if (!ok) failures++;
+  console.log(
+    `${ok ? "PASS" : "FAIL"} ${name}` +
+      (ok
+        ? ""
+        : ` — got ${JSON.stringify(actual)}, expected ${JSON.stringify(expected)}`),
+  );
+}
+
+// Test 1: parseDeviceTable
+console.log("Test 1: parseDeviceTable");
+check(
+  "  every state kept, banners and header skipped",
+  parseDeviceTable(
+    [
+      "* daemon not running. starting it now on port 26099 *",
+      "* daemon started successfully *",
+      "List of devices attached",
+      "emulator-26101  device  tizen-vm-default",
+      "192.168.0.10:26101\toffline",
+      "0000d85900006200  no permissions",
+      "R3CN1234\tunknown",
+      "",
+    ].join("\n"),
+  ),
+  {
+    devices: [
+      { serial: "emulator-26101", state: "device" },
+      { serial: "192.168.0.10:26101", state: "offline" },
+      { serial: "0000d85900006200", state: "no permissions" },
+      { serial: "R3CN1234", state: "unknown" },
+    ],
+    errors: [],
+  },
+);
+check("  empty table", parseDeviceTable("List of devices attached\n\n"), {
+  devices: [],
+  errors: [],
+});
+check(
+  "  error lines collected, not listed as devices",
+  parseDeviceTable(
+    "error: protocol fault (couldn't read status): Success\nList of devices attached\n",
+  ),
+  {
+    devices: [],
+    errors: ["error: protocol fault (couldn't read status): Success"],
+  },
+);
+
+// Test 2: the CLI against a fake sdb on PATH
+console.log("\nTest 2: device-manager-cli.js list with a fake sdb on PATH");
+if (process.platform === "win32") {
+  console.log("  (skipped on Windows: the fake sdb is a shell script)");
+} else {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "device-list-"));
+  const bin = path.join(root, "bin");
+  const home = path.join(root, "home");
+  fs.mkdirSync(bin);
+  fs.mkdirSync(home);
+  fs.writeFileSync(
+    path.join(bin, "sdb"),
+    '#!/bin/sh\n[ "$1" = devices ] || exit 0\nprintf "%b" "$FAKE_OUT"\nexit "${FAKE_RC:-0}"\n',
+    { mode: 0o755 },
+  );
+  const cli = path.join(__dirname, "..", "cli", "device-manager-cli.js");
+  const list = (out, rc = 0) => {
+    const r = spawnSync(process.execPath, [cli, "list"], {
+      encoding: "utf8",
+      timeout: 60000,
+      env: {
+        PATH: `${bin}${path.delimiter}${process.env.PATH}`,
+        HOME: home,
+        FAKE_OUT: out,
+        FAKE_RC: String(rc),
+      },
+    });
+    try {
+      return JSON.parse(r.stdout);
+    } catch (_e) {
+      return { parse_error: r.stdout + r.stderr };
+    }
+  };
+
+  const ok = list(
+    "List of devices attached\\nemulator-26101\\tdevice\\n0000d859\\tno permissions\\n",
+  );
+  check("  sdb on PATH used (no SDK configured)", ok.status, "success");
+  check("  no-permissions device listed", ok.result && ok.result.devices, [
+    { serial: "emulator-26101", state: "device", device_type: "emulator" },
+    { serial: "0000d859", state: "no permissions", device_type: "usb" },
+  ]);
+  check(
+    "  counts",
+    ok.result && [ok.result.device_count, ok.result.online_count],
+    [2, 1],
+  );
+
+  const fault = list("error: protocol fault (couldn't read status)\\n");
+  check("  sdb error with exit 0 is an error", fault.status, "failure");
+  check(
+    "  error message names sdb's line",
+    (
+      (fault.errors && fault.errors[0] && fault.errors[0].message) ||
+      ""
+    ).includes("protocol fault"),
+    true,
+  );
+
+  const failed = list("error: cannot connect to daemon\\n", 1);
+  check("  failing sdb is an error", failed.status, "failure");
+  check(
+    "  failing sdb output carried",
+    JSON.stringify(failed).includes("cannot connect to daemon"),
+    true,
+  );
+  fs.rmSync(root, { recursive: true, force: true });
+}
+
+console.log(
+  `\n=== ${failures === 0 ? "ALL TESTS PASSED" : `${failures} TEST(S) FAILED`} ===`,
+);
+process.exit(failures === 0 ? 0 : 1);
