@@ -134,15 +134,17 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
 **CLI 러너:**
 
 ```
-node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force]
+node <plugin>/lib/cli/sdk-install-cli.js [version] [label] [--force] [--path <dir>]
 ```
+
+`--path <dir>`(별칭 `-Path`)을 주면 `~/.tizen.sdk.path.config`의 경로(기본값 `~/tizen-sdk`) 대신 `<dir>`에 설치합니다. 앞의 `~`는 홈 디렉터리로 확장됩니다.
 
 **사전 체크 흐름:**
 
 ```
 1. Node.js 체크 → 미설치(`node_not_found`) 또는 v18 미만(`node_version_unsupported`)이면 OS별 설치 가이드와 함께 중단, v18–v21은 결과의 `warnings`에 22+ 업그레이드 경고를 담고 계속, v22+는 계속
 2. SDK 이미 설치됨? → 설치된 경우 success 반환
-3. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단
+3. 디스크 공간 체크 (15 GB, 설치 드라이브) → 부족 시 상세 정보와 함께 중단
 4. Phase 2(백그라운드 설치)용 설치 명령 반환
 ```
 
@@ -1079,7 +1081,7 @@ Tizen 패키지 저장소는 루트에 패키지 목록 파일을 제공합니�
 1. Node.js 체크 → 미설치(`node_not_found`) 또는 v18 미만(`node_version_unsupported`)이면 OS별 설치 가이드와 함께 중단, v18–v21은 결과의 `warnings`에 22+ 업그레이드 경고를 담고 계속, v22+는 계속
 2. 저장소 URL 검증 (pkg_list_{OS}-{64,32}) → 유효하지 않으면 중단 (다운로드 없음)
 3. SDK 이미 설치됨? → success + "저장소를 바꾸려면 --force 필요" 경고
-4. 디스크 공간 체크 (15 GB, 홈 드라이브) → 부족 시 상세 정보와 함께 중단
+4. 디스크 공간 체크 (15 GB, 설치 드라이브) → 부족 시 상세 정보와 함께 중단
 5. Phase 2(백그라운드 설치)용 설치 명령 반환
 ```
 

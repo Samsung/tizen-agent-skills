@@ -45,6 +45,13 @@
   `--skip-validation`과 `--no-restart`는 그대로 전달됩니다. 자기 완결적이라
   다운로드한 스크립트를 바로 실행할 수 있고(`bash <(curl -fsSL <raw-url>)`),
   Windows에서는 `.bat`/`.ps1` 버전을 씁니다.
+- **SDK 설치 러너에 `--path <dir>` 옵션** (`sdk-install-cli.js`, 별칭 `-Path`,
+  `tizen-cli tizen-sdk sdk-install`에도 추가). 사전 점검이
+  `~/.tizen.sdk.path.config`(기본 `~/tizen-sdk`) 대신 `<dir>`을 확인하고, 설치
+  스크립트에 `--path` / `-Path`로 넘깁니다. 맨 앞의 `~`는 홈 디렉터리로
+  바뀌며, `--repo-url`과 함께 써도 전달됩니다. envelope의 재실행 안내에도
+  같은 `--path`가 들어가서 설치 후 확인이 같은 디렉터리를 봅니다. 값 없이
+  `--path`만 주면 `invalid_parameters`로 실패합니다.
 
 - **dlog-analyzer 러너에 `--full` 플래그** (`dlog-analyzer-cli.js`와
   `tizen-cli` 명령 사양). 분석기의 토큰 예산은 에이전트의 컨텍스트 창을 보호하려고
@@ -87,6 +94,11 @@
   멈출 때 인계하라는 규칙이 추가되었습니다.
 
 ### 변경
+
+- **SDK 설치 사전 점검이 설치 드라이브의 여유 공간을 측정**
+  (`sdk-install-cli.js`, `sdk-install-custom-repo-cli.js`): 홈 디렉터리 대신
+  SDK 경로에서 가장 가까운 실제 디렉터리를 측정하므로, 다른 드라이브에 있는
+  설정 경로나 `--path` 대상도 올바른 디스크 기준으로 검사합니다.
 
 - **번들 `tizen-dlog-analyzer` 바이너리를 0.3.0으로 업데이트하고 macOS 바이너리를 CPU
   아키텍처별로 고릅니다.** PyInstaller 단일 파일 번들 네 개를 모두 리빌드했고 `NOTICE.md`에

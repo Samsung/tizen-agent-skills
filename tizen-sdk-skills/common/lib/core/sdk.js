@@ -1194,6 +1194,10 @@ async function ensureSdkPathConfig(sdkPath, command) {
  *   whole call is handled by installSdkFromRepo(), which validates the URL
  *   (pkg_list_{OS}-{64,32} must be served) before installing from it instead of
  *   from the timezone-selected CDN mirror.
+ * @param {string} [command]
+ * @param {number} [downloadJobs]
+ * @param {string} [installPath] - SDK install directory. Empty = readSdkPath()
+ *   (~/.tizen.sdk.path.config, else ~/tizen-sdk). A leading "~" is expanded.
  * @returns {object} Standard JSON Envelope
  *   - Already installed: success + warnings (exit here)
  *   - Not installed: failure — guide agent to perform background installation
@@ -1205,6 +1209,7 @@ async function installSdk(
   repoUrl = "",
   command = "tizen-sdk sdk-install",
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+  installPath = "",
 ) {
   // checkNode's warnings are collected in ctx by the steps and merged into
   // whichever envelope they return — one place, so a new return path cannot
@@ -1218,8 +1223,36 @@ async function installSdk(
     repoUrl,
     command,
     downloadJobs,
+    installPath,
   );
   return withNodeWarnings(env, ctx.nodeWarnings);
+}
+
+/**
+ * Resolve an explicit SDK install directory ("~" expanded, made absolute);
+ * empty falls back to readSdkPath().
+ */
+function resolveInstallPath(installPath) {
+  const raw = String(installPath || "").trim();
+  if (!raw) return readSdkPath();
+  const expanded = /^~(?=$|[\\/])/.test(raw)
+    ? path.join(os.homedir(), raw.slice(1))
+    : raw;
+  return path.resolve(expanded);
+}
+
+/**
+ * The closest existing directory at or above p — the SDK directory usually
+ * does not exist yet, and the disk probe needs a real path on the same drive.
+ */
+function nearestExistingDir(p) {
+  let dir = path.resolve(p);
+  while (!fs.existsSync(dir)) {
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return dir;
 }
 
 /**
@@ -1234,6 +1267,7 @@ async function installSdkSteps(
   repoUrl,
   command,
   downloadJobs,
+  installPath,
 ) {
   // Start time: pass to formatSdkInstall so duration_ms reflects actual work time
   const startTime = Date.now();
@@ -1256,7 +1290,13 @@ async function installSdkSteps(
   // A custom repository changes the package source, the validation step and the
   // installer script, so delegate wholesale instead of threading a flag through.
   if (repoUrl && String(repoUrl).trim()) {
-    return installSdkFromRepo(repoUrl, version, force, downloadJobs);
+    return installSdkFromRepo(
+      repoUrl,
+      version,
+      force,
+      downloadJobs,
+      installPath,
+    );
   }
 
   try {
@@ -1273,7 +1313,7 @@ async function installSdkSteps(
       `[tizen-sdk] Node.js OK (${nodeCheck.result.version}). Continuing.`,
     );
 
-    const sdkPath = readSdkPath();
+    const sdkPath = resolveInstallPath(installPath);
 
     console.error("[tizen-sdk] Checking if SDK is already installed...");
 
@@ -1344,11 +1384,15 @@ async function installSdkSteps(
       );
     }
 
-    // Not installed → auto-check disk space (user home drive, 15GB threshold)
+    // Not installed → auto-check disk space on the install drive (15GB threshold)
     console.error(
       "[tizen-sdk] SDK not installed. Checking disk space (15 GB required)...",
     );
-    const diskCheck = await checkDiskSpace(os.homedir(), 15, command);
+    const diskCheck = await checkDiskSpace(
+      nearestExistingDir(sdkPath),
+      15,
+      command,
+    );
 
     if (diskCheck.status !== "success") {
       // Insufficient disk space → abort installation
@@ -1480,6 +1524,7 @@ async function installSdkSteps(
           harnessGuidance("detach") +
           sdkPrecheckRerunHint(
             "<sdk-path>/sdk.info exists and the requested platform is installed",
+            { installPath: installPath ? sdkPath : "" },
           ) +
           "If the run state is unknown, query it with the installer's -Status (Windows) / --status (bash) flag, " +
           "or node job-cli.js list for a job started via background_command. " +
@@ -1645,13 +1690,19 @@ function installerFix(
  * 10.0 that never got installed was then reported as a completed install.
  *
  * @param {string} verify - what the re-run confirms
- * @param {{customRepo?: boolean}} [opts]
+ * @param {{customRepo?: boolean, installPath?: string}} [opts] - installPath:
+ *   the resolved directory when the run was given --path, so the re-run checks
+ *   the same directory instead of the configured / default one
  * @returns {string} one sentence ending with a trailing space
  */
-function sdkPrecheckRerunHint(verify, { customRepo = false } = {}) {
-  const same = customRepo
+function sdkPrecheckRerunHint(
+  verify,
+  { customRepo = false, installPath = "" } = {},
+) {
+  let same = customRepo
     ? "the same repository URL and version"
     : "the same version (and label)";
+  if (installPath) same += ` and --path "${installPath}"`;
   return `Either way, afterwards re-run this CLI with ${same} as this run but without --force, to verify ${verify}. `;
 }
 
@@ -2840,6 +2891,8 @@ function readInstalledRepository(sdkPath) {
  * @param {string} [platformVersion] - Tizen platform version (e.g. "11.0").
  *   Empty = auto-select the highest version the repository offers.
  * @param {boolean} [force] - force reinstall even if already installed
+ * @param {number} [downloadJobs]
+ * @param {string} [installPath] - SDK install directory (see installSdk)
  * @returns {object} Standard JSON Envelope
  */
 async function installSdkFromRepo(
@@ -2847,6 +2900,7 @@ async function installSdkFromRepo(
   platformVersion = "",
   force = false,
   downloadJobs = DEFAULT_DOWNLOAD_JOBS,
+  installPath = "",
 ) {
   // Same as installSdk: checkNode's warnings are merged in one place.
   const ctx = { nodeWarnings: [] };
@@ -2856,6 +2910,7 @@ async function installSdkFromRepo(
     platformVersion,
     force,
     downloadJobs,
+    installPath,
   );
   return withNodeWarnings(env, ctx.nodeWarnings);
 }
@@ -2870,6 +2925,7 @@ async function installSdkFromRepoSteps(
   platformVersion,
   force,
   downloadJobs,
+  installPath,
 ) {
   const startTime = Date.now();
   const command = "tizen-sdk sdk-install-custom-repo";
@@ -2911,7 +2967,7 @@ async function installSdkFromRepoSteps(
     const normalizedUrl = validation.result.repository_url;
     const pkgListFile = validation.result.pkg_list_file;
 
-    const sdkPath = readSdkPath();
+    const sdkPath = resolveInstallPath(installPath);
 
     // 3. Already installed?
     console.error("[tizen-sdk-repo] Checking if SDK is already installed...");
@@ -2988,11 +3044,11 @@ async function installSdkFromRepoSteps(
       );
     }
 
-    // 4. Disk space (user home drive, 15 GB threshold)
+    // 4. Disk space on the install drive (15 GB threshold)
     console.error(
       "[tizen-sdk-repo] SDK not installed. Checking disk space (15 GB required)...",
     );
-    const diskCheck = await checkDiskSpace(os.homedir(), 15);
+    const diskCheck = await checkDiskSpace(nearestExistingDir(sdkPath), 15);
     if (diskCheck.status !== "success") {
       console.error(
         "[tizen-sdk-repo] Insufficient disk space. Aborting installation.",
@@ -3122,7 +3178,7 @@ async function installSdkFromRepoSteps(
         harnessGuidance("detach") +
         sdkPrecheckRerunHint(
           "<sdk-path>/sdk.info exists, the requested platform is installed and <sdk-path>/.package/repository.info records the custom repository",
-          { customRepo: true },
+          { customRepo: true, installPath: installPath ? sdkPath : "" },
         ) +
         "Do NOT re-run this CLI to install — --force only skips the already-installed check.",
       installerCommand,
@@ -4508,6 +4564,8 @@ module.exports = {
   buildJobCommand,
   installerFix,
   installerPathArgs,
+  resolveInstallPath,
+  nearestExistingDir,
   harnessGuidance,
   sdkPrecheckRerunHint,
   DEFAULT_SDK_PATH,

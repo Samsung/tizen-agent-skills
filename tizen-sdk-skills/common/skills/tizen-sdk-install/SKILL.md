@@ -47,7 +47,7 @@ When the SDK is not installed, `sdk-install-cli.js` **first** checks if Node.js 
 
 ### Automatic Disk Space Check (15 GB, built into sdk-install-cli.js)
 
-After Node.js is confirmed, `sdk-install-cli.js` **automatically** checks disk space on the user's home drive before returning the installer command. No separate `check-disk-space-cli.js` run is needed.
+After Node.js is confirmed, `sdk-install-cli.js` **automatically** checks disk space on the drive of the SDK install path before returning the installer command. No separate `check-disk-space-cli.js` run is needed.
 
 - **15 GB or more free** → installation proceeds (installer command returned in `suggested_fix`)
 - **Less than 15 GB** → installation **aborted** with an error envelope showing:
@@ -79,8 +79,11 @@ bash, `-Path` on PowerShell — both `suggested_fix.command` and `background_com
 `TIZEN_SDK_PATH` from the user's shell profile is **not** a source: when it differs the pre-check logs
 `Ignoring TIZEN_SDK_PATH=…`, and the installer refuses to unpack into a Tizen Studio directory
 (`tools/ide` present). A user who already has Tizen Studio at `~/tizen-studio` still gets a separate
-`~/tizen-sdk` (issue #70). To install elsewhere, run `tizen-sdk-init --sdk-path <dir>` first or pass
-`--path <dir>` / `-Path <dir>` to the installer command.
+`~/tizen-sdk` (issue #70). To install elsewhere (e.g. "~/tizen-sdk2에 설치해줘"), pass
+`--path <dir>` (alias `-Path`) to `sdk-install-cli.js` (`node "$CLI" --path ~/tizen-sdk2`; a leading
+`~` is expanded) — the pre-check then checks that directory, measures free space on its drive, and puts
+it in the installer command; the config file is updated after the install. Re-run the verification
+step with the same `--path` (the envelope's re-run hint repeats it).
 
 ### Automatic SDK Init (sdk-init after install)
 

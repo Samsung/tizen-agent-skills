@@ -199,7 +199,7 @@ Configures the Tizen SDK installation path by writing it to `~/.tizen.sdk.path.c
 - Supports Linux/macOS/Windows (WSL2/PowerShell)
 - Automatic PATH configuration
 - **Automatic Node.js check** (22+ required) as the very first step — aborts with an OS-specific install guide if Node.js is missing or below v18; v18–v21 continues with an upgrade warning
-- **Automatic 15 GB disk space check** on the user's home drive before installation — aborts with a clear error if insufficient
+- **Automatic 15 GB disk space check** on the install drive before installation — aborts with a clear error if insufficient
 
 
 #### CLI Runner
