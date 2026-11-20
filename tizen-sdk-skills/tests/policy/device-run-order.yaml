@@ -101,6 +101,7 @@ phases:
     tcs:
       - tizen-sdk.create-emulator.launch
       - tizen-sdk.device-manager.happy
+      - tizen-sdk.device-manager.list
       - tizen-sdk.device-manager.timeout
       - tizen-sdk.screenshot.happy # ./emulator_screenshot.png in cwd
       - tizen-sdk.screenshot.serial # asserts emulator-26101

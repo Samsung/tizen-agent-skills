@@ -108,7 +108,7 @@ Example (start, TV emulator): `node "$CLI" 300 tizen-tv-vm tv`
 Example (stop): `node "$CLI" stop` (or `node "$CLI" --action stop`)
 Example (list all): `node "$CLI" list` — "show all connected devices", "sdb devices 목록", "연결된 디바이스 전체 목록"
 
-`list` result: `result.devices[]` = `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or another sdb state such as `no permissions` / `unknown` / `recovery` / `host`; a line it does not recognise becomes a warning; `device_type`: `emulator` / `usb` / `remote`), plus `device_count` and `online_count`. Zero devices is still a success envelope (with a warning pointing to `tizen-create-emulator` / `tizen-launch-emulator`).
+`list` result: `result.devices[]` = `{ serial, state, device_type }` (`state`: `device` / `offline` / `locked` / `unauthorized`, or another sdb state such as `no permissions` / `unknown` / `host`; a line it does not recognise becomes a warning; `device_type`: `emulator` / `usb` / `remote`), plus `device_count` and `online_count`. Zero devices is still a success envelope (with a warning pointing to `tizen-create-emulator` / `tizen-launch-emulator`).
 
 Exit code: `0` = success envelope (with `result.device_serial` for start, `result.devices` for list, `result.emulators_stopped` for stop), `1` = failure/error envelope.
 

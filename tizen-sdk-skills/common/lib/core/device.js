@@ -59,13 +59,8 @@ function classifySerial(serial) {
   return "usb";
 }
 
-// Device states sdb can print. A line after the header is a device line when
-// its serial (first column, not ending in ':', which marks a message such as
-// `sdb: …`) is followed by a column gap — a tab or 2+ spaces, as sdb aligns
-// its table — and then one of these states. A sentence such as
-// `target device not found` has single spaces and is not a device. Anything
-// else is reported as a warning, so a state missing from this list is still
-// visible, just not listed.
+// A device line (after the header): serial, a column gap (tab or 2+ spaces),
+// then one of these states. Other lines become warnings.
 const DEVICE_STATES = [
   "device",
   "offline",
@@ -73,15 +68,8 @@ const DEVICE_STATES = [
   "unauthorized",
   "no permissions",
   "unknown",
-  "recovery",
-  "bootloader",
-  "sideload",
-  "connecting",
-  "authorizing",
   "host",
 ];
-// The state may be followed by whitespace, the end of the line or
-// punctuation (`no permissions; see [http://…]`).
 const STATE_RE = new RegExp(`^(${DEVICE_STATES.join("|")})(?=[\\s;(,]|$)`, "i");
 
 /**

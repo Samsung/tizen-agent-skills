@@ -1,0 +1,20 @@
+# List every device sdb reports
+id: tizen-sdk.device-manager.list
+plugin: tizen-sdk
+command: device-manager
+tier: device
+status: approved
+since_cli: 1.0.0
+description: "device-manager --action list returns every sdb device with counts"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "device-manager", "--action", "list"]
+    timeout_sec: 60
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.command", equals: "tizen-sdk device-manager list" }
+        - { path: "$.result.devices", min_length: 1 }
+        - { path: "$.result.devices[0].serial", min_length: 1 }
+        - { path: "$.result.devices[0].device_type", matches: "^(emulator|usb|remote)$" }

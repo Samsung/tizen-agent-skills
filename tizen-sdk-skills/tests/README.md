@@ -4,14 +4,14 @@ English | [한국어](README.ko.md)
 
 Self-contained test suite for the `tizen-sdk` plugin. Verifies that each of the 36 plugin commands produces the correct JSON envelope output and that LLM agents (Cline, Claude, tizen-cli) resolve natural-language prompts to the correct commands.
 
-**296 test cases** across 8 domains, covering 34 of the 36 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` (mutating) and `platform-list` (safe) are classified in `policy/tiers.yaml` but have no TCs yet; `platform-list` needs an installed SDK, so it cannot run in the SDK-free safe tier.
+**297 test cases** across 8 domains, covering 34 of the 36 commands plus CLI meta-interfaces (`--capabilities`, `--doctor`, `--schema`). `tv-sdk-install-from-zip` (mutating) and `platform-list` (safe) are classified in `policy/tiers.yaml` but have no TCs yet; `platform-list` needs an installed SDK, so it cannot run in the SDK-free safe tier.
 
 ## Architecture Diagram
 
 ```mermaid
 graph TB
     subgraph "Test Suite Components"
-        TC["tc/*.yaml<br/>296 Test Cases (289 YAML files)"]
+        TC["tc/*.yaml<br/>297 Test Cases (290 YAML files)"]
         SCHEMA["schema/tc-schema.json<br/>JSON Schema validator"]
         POLICY["policy/tiers.yaml<br/>36 commands → tier classification"]
         RUNNER["runner.mjs<br/>CLI-lane test runner"]
@@ -40,7 +40,7 @@ graph TB
     subgraph "Tier System"
         SAFE["safe (7 cmds / 74 TCs)<br/>No side effects<br/>CI gate ✅"]
         MUTATING["mutating (15 cmds / 79 TCs)<br/>Install/modify/delete<br/>⚠️ With setup"]
-        DEVICE["device (14 cmds / 143 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
+        DEVICE["device (14 cmds / 144 TCs)<br/>Requires emulator/device<br/>❌ Manual: scripts/run-device-tier.mjs"]
         POLICY --> SAFE
         POLICY --> MUTATING
         POLICY --> DEVICE
@@ -153,10 +153,10 @@ start); `runner.mjs` and the launcher only check that `dist/tizen-sdk.js` exists
 
 | Layer           | TCs | What                                   | How                                                                                      |
 | --------------- | --- | -------------------------------------- | ---------------------------------------------------------------------------------------- |
-| **cli lane**    | 175 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
+| **cli lane**    | 176 | Command produces correct envelope      | `runner.mjs` executes `tizen-sdk <command>` and checks status, jsonpath, errors          |
 | **prompt lane** | 121 | LLM resolves prompt to correct command | Cline/Claude reads TC, sends prompt, verifies tool call (see `skills/run-test-suite.md`) |
 
-Every TC defines exactly one lane, so the two counts add up to the 296 TCs.
+Every TC defines exactly one lane, so the two counts add up to the 297 TCs.
 
 ### vs. Existing Unit Tests (`common/lib/tests/`)
 
@@ -195,8 +195,8 @@ tests/
     run-device-tier.mjs          ← ordered, self-cleaning device-tier run (see "Device tier")
     run-mutating-tier.mjs        ← ordered, self-cleaning mutating-tier run (see "Mutating tier")
     lib/driver-common.mjs        ← shared helpers of the three scripts above (incl. FIXTURE_NEEDS)
-  tc/                     ← 296 test cases in 289 YAML files
-    device/               ← 104 TCs (create-emulator, launch-emulator, emulator-manager,
+  tc/                     ← 297 test cases in 290 YAML files
+    device/               ← 105 TCs (create-emulator, launch-emulator, emulator-manager,
                                      device-manager, install-app, file-transfer,
                                      remote-device, screenshot, sdb-helper)
     sdk/                  ←  66 TCs (check-node, check-disk-space, sdk-init, sdk-install,
@@ -504,7 +504,7 @@ path; repair with `tizen-sdk sdk-init --sdk-path <your SDK dir>`.
 | ------------- | ----- | ------------------------------------------------------------------ |
 | `draft`       | 10    | Authored, never executed — assertions unproven                     |
 | `candidate`   | 0     | Executed and passing, but not every lane verified yet              |
-| `approved`    | 286   | Every lane executed and passing; a regression is a release blocker |
+| `approved`    | 287   | Every lane executed and passing; a regression is a release blocker |
 | `quarantined` | 0     | Known unstable or environment-broken; excluded by default          |
 
 Schema validation (`--dry-run`) never justifies a promotion — it only checks the YAML shape.
@@ -532,8 +532,8 @@ promoted once it has run in the CI gate.
 | --------- | -------- | ------- | ------------------------ | ------------- |
 | safe      | 7        | 74      | No side effects          | ✅ Yes        |
 | mutating  | 15       | 79      | Install/modify/delete    | ⚠️ With setup |
-| device    | 14       | 143     | Requires emulator/device | ❌ Manual     |
-| **Total** | **36**   | **296** |                          |               |
+| device    | 14       | 144     | Requires emulator/device | ❌ Manual     |
+| **Total** | **36**   | **297** |                          |               |
 
 See `policy/tiers.yaml` for the full classification. CI runs the `approved` safe TCs on
 every PR (see "CI gate" under Runner Options); the device tier is run manually through
