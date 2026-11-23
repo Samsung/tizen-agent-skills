@@ -584,6 +584,20 @@ const ERROR_CODES = {
     error_code: "TIZEN_SDK_CERT_E020",
     error_category: "samsung_api_failed",
   },
+
+  // ECP (Emulator Control Panel, ecp-cli) 관련
+  SDK_NOT_CONFIGURED: {
+    error_code: "TIZEN_SDK_ECP_E001",
+    error_category: "sdk_not_configured",
+  },
+  BINARY_NOT_FOUND: {
+    error_code: "TIZEN_SDK_ECP_E002",
+    error_category: "binary_not_found",
+  },
+  MISSING_ARGUMENT: {
+    error_code: "TIZEN_SDK_ECP_E008",
+    error_category: "missing_argument",
+  },
 };
 
 /**

@@ -26,7 +26,7 @@
  *     details, so the agent can see the command surface and re-ask.
  */
 
-const { execSync } = require("child_process");
+const { execSync, execFileSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 const { Envelope } = require("../envelope/envelope");
@@ -201,6 +201,30 @@ function extractProfile(request) {
 }
 
 /**
+ * Tokenize a whole request for the pass-through (unknown command) intent:
+ * strip quotes, drop filler words, the "version"/"profile" keywords, bare
+ * version numbers ("9.0") and the words that name the emulator itself
+ * ("emulator", "vm"), so the remaining tokens are the ecp-cli command the
+ * agent meant. The resolved --target token is filtered out later, in
+ * buildArgs().
+ *
+ * @param {string} request
+ * @returns {string[]}
+ */
+function requestTokens(request) {
+  return request
+    .split(/\s+/)
+    .map((t) => t.replace(/^["']|["']$/g, ""))
+    .filter(
+      (t) =>
+        t &&
+        !FILLER_WORDS.has(t.toLowerCase()) &&
+        !/^(version|profile|emulator|vm)$/i.test(t) &&
+        !/^\d+(\.\d+)+$/.test(t), // bare version numbers ("9.0", "10.0.0")
+    );
+}
+
+/**
  * Extract a target from the request text: an sdb serial ("emulator-26101") or
  * an explicit "on/for/to <vm>" phrase. Returns null when nothing matches — the
  * caller then auto-selects the running emulator. Words that belong to other
@@ -256,6 +280,9 @@ function asksForHelp(request) {
   );
 }
 
+/** "battery" in English or Korean — the command word ecp-cli knows. */
+const BATTERY_WORD_RE = /\bbattery\b|배터리/i;
+
 /**
  * Match a natural-language request to one intent. Pure string analysis — no
  * I/O — so tests can exercise it directly.
@@ -278,16 +305,23 @@ function matchEcpIntent(request, opts = {}) {
   if (asksForHelp(request)) {
     return { intent: INTENTS.HELP, target, version, profile, args: [] };
   }
-  if (/\bbattery\b/i.test(request)) {
+  const batteryWord = request.match(BATTERY_WORD_RE);
+  if (batteryWord) {
     return {
       intent: INTENTS.BATTERY,
       target,
       version,
       profile,
-      args: commandArgsAfter(request, "battery"),
+      args: commandArgsAfter(request, batteryWord[0].toLowerCase()),
     };
   }
-  return { intent: INTENTS.COMMAND, target, version, profile, args: [] };
+  return {
+    intent: INTENTS.COMMAND,
+    target,
+    version,
+    profile,
+    args: requestTokens(request),
+  };
 }
 
 /**
@@ -325,21 +359,49 @@ function buildArgs(m, resolvedTarget) {
 }
 
 /**
+ * Escape the characters cmd.exe treats as command separators, redirects or
+ * variables, so a token extracted from the natural-language request can never
+ * terminate the command and inject a second one.
+ *
+ * @param {string} token
+ * @returns {string}
+ */
+function escapeCmdToken(token) {
+  return token.replace(/[&|<>()^%!"',;=\s]/g, (ch) => `^${ch}`);
+}
+
+/**
  * Run ecp-cli with the given arguments.
+ *
+ * .exe and POSIX binaries are spawned with an argv array — no host shell is
+ * involved, so the request tokens cannot be interpreted as shell syntax. The
+ * .bat/.cmd Windows candidates must go through cmd.exe; there every token is
+ * caret-escaped and the code page is pinned to UTF-8 (otherwise ko-Windows
+ * CP949 output is decoded as mojibake).
  *
  * @param {string} ecpCliPath - absolute ecp-cli path
  * @param {string[]} args - argument vector
  * @returns {{output: string}|{error: Error, output: string}}
  */
 function execEcpCli(ecpCliPath, args) {
-  const cmdLine = `"${ecpCliPath}" ${args.join(" ")}`;
+  const execOpts = {
+    encoding: "utf-8",
+    stdio: ["pipe", "pipe", "pipe"],
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: 60000,
+  };
   try {
-    const output = execSync(cmdLine, {
-      encoding: "utf-8",
-      stdio: ["pipe", "pipe", "pipe"],
-      maxBuffer: 16 * 1024 * 1024,
-      timeout: 60000,
-    });
+    let output;
+    if (process.platform === "win32" && /\.(bat|cmd)$/i.test(ecpCliPath)) {
+      output = execSync(
+        `chcp 65001 >nul & "${ecpCliPath}" ${args
+          .map(escapeCmdToken)
+          .join(" ")}`,
+        execOpts,
+      );
+    } else {
+      output = execFileSync(ecpCliPath, args, execOpts);
+    }
     return { output: String(output || "") };
   } catch (error) {
     return {
@@ -487,4 +549,6 @@ module.exports = {
   resolveEcpCli,
   listRunningEmulators,
   runEcpCommand,
+  requestTokens,
+  escapeCmdToken,
 };
