@@ -11,7 +11,7 @@
 
 ## 개요
 
-`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **30개 자동화 스킬**을 제공합니다.
+`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **31개 자동화 스킬**을 제공합니다.
 
 모든 스킬은 **Standard JSON Envelope** 형식으로 응답하여 일관된 에러 처리와 기계 판독 가능한 출력을 보장합니다.
 
@@ -20,7 +20,7 @@
 ## 주요 기능
 
 - ✅ **원커맨드 SDK 설정** — Node.js 체크 → 디스크 공간 체크 → SDK 설치, 완전 자동화
-- ✅ **30개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
+- ✅ **31개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
 
 - ✅ **크로스 플랫폼** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **멀티 하네스 지원** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (하나의 `common/`을 공유, 하네스별 setup은 `common/setup/setup.{sh,ps1} --harness <이름>`)
@@ -1448,6 +1448,39 @@ node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
 **참고:** 노트는 프로젝트 **밖**인 `~/.tizen-sdk-skills/handoff/<project>-<id>/`에 저장되므로 앱에 패키징되거나 git에 커밋되지 않습니다. 러너가 처음 무언가를 기록할 때 폴더가 자동 생성되므로 별도 설정 단계가 없습니다. `STATE.md`와 `DECISIONS.md`는 에이전트가 작성하고, `LOG.md`·`BUILDS.md`·`DEVICES.md`·`DEBUG.md`·`ENVIRONMENT.md`는 러너가 추가하므로 편집하지 않습니다. 읽기 전용 호출(list, check, status)은 기록하지 않으며, 인증서 명령은 액션과 상태만 기록하고 결과 데이터는 절대 기록하지 않습니다. `TIZEN_HANDOFF=0`은 기록을 끄고, `TIZEN_HANDOFF=existing`은 폴더가 이미 있는 경우에만 기록하며, `TIZEN_HANDOFF_HOME`은 상위 폴더를 옮깁니다. 128 KB를 넘는 추가 전용 파일은 `archive/`로 이동합니다.
 
 **의존성:** 없음 (SDK·디바이스 불필요)
+
+---
+
+### 30. tizen-ecp
+
+**설명:** 실행 중인 에뮬레이터에 대해 Emulator Control Panel(ecp-cli) 요청 하나를 실행 — 플랫폼 버전이 지원하는 기기 목록 조회(`ecp-cli --version <V> --profile <P> help`), 사용 가능한 명령 조회(`help`), `battery` 등 기기 명령 실행.
+
+**사용 시점:** 자연어로 실행 중인 에뮬레이터를 제어("배터리 상태", "배터리 50으로 설정")하거나 플랫폼 버전이 지원하는 기기를 확인("version 9.0, profile tv에서 사용 가능한 기기"). ECP 명령은 실행 중인 에뮬레이터가 반드시 필요하며, 없으면 `tizen-launch-emulator`를 가리키는 `device_not_found` 실패 봉투를 반환합니다.
+
+**파라미터:**
+
+| 파라미터  | 타입   | 기본값        | 설명                                                              |
+| --------- | ------ | ------------- | ------------------------------------------------------------------ |
+| `request`  | string | _(필수)_      | 자연어 ECP 요청 (예: "battery status")                              |
+| `target`   | string | `null`        | 에뮬레이터 VM 이름 또는 `emulator-<port>` 시리얼 (생략 시 자동 선택) |
+| `version`  | string | `null`        | 기기 목록 조회용 플랫폼 버전 (요청에서 추출)                         |
+| `profile`  | string | `null`        | 기기 목록 조회용 프로필: tv / tizen / mobile / wearable              |
+
+**CLI 러너:**
+
+```
+node <plugin>/lib/cli/ecp-cli.js --request <text> [--target <vm|serial>] [--version <VERSION>] [--profile <PROFILE>]
+```
+
+**CLI 예제:**
+
+```bash
+node .../ecp-cli.js --request "what devices are available for version 9.0, profile tv"
+node .../ecp-cli.js --request "battery status"
+node .../ecp-cli.js --request "battery set 50" --target emulator-26101
+```
+
+**의존성:** `tizen-sdk-init` (SDK 경로), 에뮬레이터 패키지(`<SDK>/tools/emulator/bin`의 `ecp-cli`), 실행 중인 에뮬레이터 (`tizen-launch-emulator`)
 
 ---
 

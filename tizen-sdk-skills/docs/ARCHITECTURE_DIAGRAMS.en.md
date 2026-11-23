@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (30 skills, 24 agents, 36 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.1). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (31 skills, 25 agents, 37 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.1). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -22,12 +22,12 @@ graph TB
         CODEX["Codex CLI<br/>skills + agents(.toml) + hooks.json"]
         GEMINI["Gemini CLI<br/>skills + agents + BeforeTool adapter"]
         VSCODE["VS Code extension<br/>installs & syncs the plugin for Claude/Cline/Codex"]
-        CLI["tizen-sdk standalone CLI<br/>runs all 36 commands without an AI host"]
+        CLI["tizen-sdk standalone CLI<br/>runs all 37 commands without an AI host"]
     end
 
     subgraph COMMON["common/ — single source of truth"]
         SKILLS["skills/<br/>30 SKILL.md<br/>(trigger phrases + how to call the runner)"]
-        AGENTS["agents/<br/>24 agent .md<br/>(sub-agent delegation)"]
+        AGENTS["agents/<br/>25 agent .md<br/>(sub-agent delegation)"]
         HOOKS["hooks/<br/>3 guard scripts + 13 rules"]
         LIB["lib/<br/>cli/ → core/ → envelope/"]
         SCRIPTS["scripts/<br/>tizen-*/ .ps1 + .sh feature scripts"]
@@ -363,7 +363,7 @@ Skills are named `tizen-<command>`; the CLI form is `tizen-sdk <command>`. The e
 
 ```mermaid
 graph LR
-    ROOT["tizen-sdk<br/>36 commands"]
+    ROOT["tizen-sdk<br/>37 commands"]
 
     ROOT --> SDK["SDK (14)"]
     ROOT --> CHECK["Check (2)"]

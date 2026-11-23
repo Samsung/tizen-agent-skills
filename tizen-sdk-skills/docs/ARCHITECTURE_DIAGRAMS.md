@@ -4,7 +4,7 @@
 
 `tizen-sdk-skills` 저장소 전체를 한눈에 보여주는 다이어그램 모음입니다. AI 코딩 어시스턴트(Claude Code, Cline, Codex CLI, Gemini CLI, VS Code 확장)와 독립 실행형 `tizen-sdk` CLI가 **하나의 `common/`** 을 어떻게 공유하고, 자연어 요청이 어떤 계층을 거쳐 실제 Tizen SDK 도구(`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`)까지 도달하는지, 그 결과가 어떻게 Standard JSON Envelope로 돌아오는지를 그림으로 설명합니다.
 
-> 다이어그램의 개수(스킬 30, 에이전트 24, 커맨드 36, 에러 코드 61, TC 296)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.6.1) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
+> 다이어그램의 개수(스킬 31, 에이전트 25, 커맨드 37, 에러 코드 61, TC 296)는 공개 배포 트리 기준이며 [README.md](../README.md)의 "Project at a Glance"(v1.6.1) 표와 같습니다. 다시 측정하려면 그 표의 마지막 열에 있는 명령을 쓰세요.
 
 ---
 
@@ -22,12 +22,12 @@ graph TB
         CODEX["Codex CLI<br/>skills + agents(.toml) + hooks.json"]
         GEMINI["Gemini CLI<br/>skills + agents + BeforeTool adapter"]
         VSCODE["VS Code 확장<br/>Claude/Cline/Codex에 플러그인 설치·동기화"]
-        CLI["tizen-sdk 독립 CLI<br/>AI 호스트 없이 36개 커맨드 직접 실행"]
+        CLI["tizen-sdk 독립 CLI<br/>AI 호스트 없이 37개 커맨드 직접 실행"]
     end
 
     subgraph COMMON["common/ — 단일 진실 공급원"]
         SKILLS["skills/<br/>30개 SKILL.md<br/>(트리거 문구 + 러너 호출법)"]
-        AGENTS["agents/<br/>24개 agent .md<br/>(서브에이전트 위임용)"]
+        AGENTS["agents/<br/>25개 agent .md<br/>(서브에이전트 위임용)"]
         HOOKS["hooks/<br/>3개 가드 스크립트 + 13개 규칙"]
         LIB["lib/<br/>cli/ → core/ → envelope/"]
         SCRIPTS["scripts/<br/>tizen-*/ .ps1 + .sh 기능 스크립트"]
@@ -363,7 +363,7 @@ graph LR
 
 ```mermaid
 graph LR
-    ROOT["tizen-sdk<br/>36 commands"]
+    ROOT["tizen-sdk<br/>37 commands"]
 
     ROOT --> SDK["SDK (14)"]
     ROOT --> CHECK["Check (2)"]

@@ -390,6 +390,43 @@ export const DEVICE_SPECS: CommandSpec[] = [
       sdkCommands.runSdbCommand(o.request, o.serial, "tizen-sdk sdb-helper"),
   },
   {
+    name: "ecp",
+    description:
+      "Run one Emulator Control Panel (ecp-cli) request against a RUNNING emulator — list the devices a platform version supports (--version <V> --profile <P> help), list the commands (help), or run a device command such as battery. Requires at least one running emulator.",
+    collectAllMissing: true,
+    options: [
+      {
+        flags: "--request <text>",
+        description:
+          'Natural-language ECP request (e.g., "battery status", "what devices are available for version 9.0, profile tv")',
+        required: true,
+      },
+      {
+        flags: "--target <vm|serial>",
+        description:
+          "Emulator VM name or emulator-<port> serial (omit to use the running emulator)",
+      },
+      {
+        flags: "--version <VERSION>",
+        description:
+          "Platform version for the device-list intent (e.g. 9.0); extracted from --request if omitted",
+      },
+      {
+        flags: "--profile <PROFILE>",
+        description:
+          "Profile for the device-list intent: tv / tizen / mobile / wearable; extracted from --request if omitted",
+      },
+    ],
+    handler: (o) =>
+      sdkCommands.runEcpCommand(
+        o.request,
+        o.target,
+        o.version,
+        o.profile,
+        "tizen-sdk ecp",
+      ),
+  },
+  {
     name: "screenshot",
     description:
       "Capture a screenshot from a Tizen emulator or device with automatic fallback methods (host-side xwd for emulators, framebuffer for physical devices)",

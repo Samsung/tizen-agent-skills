@@ -12,7 +12,7 @@ English | [한국어](SKILLS_REFERENCE.md)
 
 ## Overview
 
-`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **30 automation skills** that can be triggered via natural language.
+`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **31 automation skills** that can be triggered via natural language.
 
 All skills return responses in **Standard JSON Envelope** format, ensuring consistent error handling and machine-readable output.
 
@@ -21,7 +21,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **30 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **31 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -1467,6 +1467,39 @@ node <plugin>/lib/cli/handoff-cli.js init --project "<project-dir>"
 **Notes:** The notes live **outside** the project, in `~/.tizen-sdk-skills/handoff/<project>-<id>/`, so they are never packaged into an app or committed to git; the folder is created the first time a runner records something, so there is no setup step. `STATE.md` and `DECISIONS.md` are written by agents; `LOG.md`, `BUILDS.md`, `DEVICES.md`, `DEBUG.md` and `ENVIRONMENT.md` are appended by the runners and must not be edited. Read-only runner calls (list, check, status) are not recorded, and certificate commands record the action and status only, never result data. `TIZEN_HANDOFF=0` turns recording off, `TIZEN_HANDOFF=existing` records only where the folder already exists, and `TIZEN_HANDOFF_HOME` moves the parent folder. Append-only files over 128 KB are rotated into `archive/`.
 
 **Dependencies:** None (no SDK or device required)
+
+---
+
+### 30. tizen-ecp
+
+**Description:** Run ONE Emulator Control Panel (ecp-cli) request against a RUNNING emulator — list the devices a platform version supports (`ecp-cli --version <V> --profile <P> help`), list the available commands (`help`), or run a device command such as `battery`.
+
+**Use Case:** Control a running emulator from natural language ("battery status", "set the battery level to 50") or find out which devices a platform version offers ("what devices are available for version 9.0, profile tv"). At least one emulator MUST be running — with none up the runner returns a `device_not_found` failure pointing at `tizen-launch-emulator`.
+
+**Parameters:**
+
+| Parameter  | Type   | Default      | Description                                                              |
+| ---------- | ------ | ------------ | ------------------------------------------------------------------------ |
+| `request`  | string | _(required)_ | Natural-language ECP request (e.g., "battery status")                     |
+| `target`   | string | `null`       | Emulator VM name or `emulator-<port>` serial (auto-select if omitted)     |
+| `version`  | string | `null`       | Platform version for the device-list intent (extracted from the request)  |
+| `profile`  | string | `null`       | Profile for the device-list intent: tv / tizen / mobile / wearable        |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/ecp-cli.js --request <text> [--target <vm|serial>] [--version <VERSION>] [--profile <PROFILE>]
+```
+
+**CLI Examples:**
+
+```bash
+node .../ecp-cli.js --request "what devices are available for version 9.0, profile tv"
+node .../ecp-cli.js --request "battery status"
+node .../ecp-cli.js --request "battery set 50" --target emulator-26101
+```
+
+**Dependencies:** `tizen-sdk-init` (SDK path), the emulator package (`ecp-cli` in `<SDK>/tools/emulator/bin`), and a running emulator (`tizen-launch-emulator`)
 
 ---
 

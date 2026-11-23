@@ -36,7 +36,7 @@
 
 ---
 
-## 전체 맵핑 표 (36개 커맨드 → 30개 스킬)
+## 전체 맵핑 표 (37개 커맨드 → 31개 스킬)
 
 그룹 구분은 [tizen-cli 우산 스킬의 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)과 동일합니다.
 
@@ -78,7 +78,7 @@
 
 ¹ tizen-cli 스킬 집합에는 이 커맨드 전용 `tizen-list-templates` SKILL.md가 별도로 존재합니다 (아래 참조).
 
-### 에뮬레이터 / 디바이스 (커맨드 7 → 스킬 6)
+### 에뮬레이터 / 디바이스 (커맨드 8 → 스킬 7)
 
 | 커맨드 | 스킬 | 대응 |
 |---|---|---|
@@ -88,6 +88,7 @@
 | `device-manager` | `tizen-device-manager` | 1:1 |
 | `remote-device` | `tizen-remote-device` | 1:1 (scan/connect/… 8개 액션 내장) |
 | `sdb-helper` | `tizen-sdb-helper` | 1:1 |
+| `ecp` | `tizen-ecp` | 1:1 (Emulator Control Panel — 실행 중 에뮬레이터 전용) |
 | `file-transfer` | `tizen-file-transfer` | 1:1 |
 
 ### 앱 / 디버깅 / 테스트 (커맨드 6 → 스킬 6)
@@ -118,7 +119,7 @@
 
 | 위치 | SKILL.md 수 | 용도 | 구성 |
 |---|---|---|---|
-| `common/skills/` | **30** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 30개 스킬 |
+| `common/skills/` | **31** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 31개 스킬 |
 | `tizen-cli/skills/` | **31** | tizen-cli 구동 에이전트 — `tizen-cli tizen-sdk <command>` 호출 | 위 29개 + 2개 추가 (아래) |
 
 `tizen-cli/skills/`에만 있는 2개:
@@ -126,7 +127,7 @@
 1. **`tizen-sdk`** (우산 라우터) — 36개 커맨드 전체의 라우팅 테이블을 담은 진입점 스킬. common 쪽에는 대응물이 없습니다 (Cline/Claude Code는 스킬 설명 자체로 라우팅).
 2. **`tizen-list-templates`** — tizen-cli에서는 `list-templates`가 독립 커맨드이므로 전용 스킬로 분리. common 쪽에서는 `tizen-create-project` 스킬의 list-templates 액션으로 처리됩니다.
 
-즉 문서에서 "30개 스킬"은 **common/skills 기준**, "36개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
+즉 문서에서 "31개 스킬"은 **common/skills 기준**, "37개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
 
 ---
 
@@ -134,5 +135,5 @@
 
 - [SDK_COMMANDS_ARCHITECTURE.md](SDK_COMMANDS_ARCHITECTURE.md) — CLI 러너 → sdk-commands.js → 도메인 모듈 호출 흐름
 - [COMMAND_MAPPING.md](COMMAND_MAPPING.md) — 커맨드 스펙 ↔ envelope `command` 필드 문자열 매핑
-- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 30개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
+- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 31개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
 - [tizen-cli 우산 스킬 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)

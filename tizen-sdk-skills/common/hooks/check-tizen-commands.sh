@@ -438,5 +438,14 @@ if [ -n "$sleep_secs" ]; then
   fi
 fi
 
+# Rule 21 — hand-typed ecp-cli (Emulator Control Panel). The raw binary lives at
+# {SDK}/tools/emulator/bin/ecp-cli (native executable — never `node` it) and ECP
+# commands need a RUNNING emulator plus intent matching, both of which the
+# tizen-ecp runner (ecp-cli.js) owns. Exempt: the runner itself, whose file name
+# ends in ecp-cli.js.
+if has '(^|[[:space:]"/\\])ecp-cli(\.bat|\.cmd|\.exe)?([[:space:]"]|$)' && ! has 'ecp-cli\.js'; then
+  deny "Do not run the raw ecp-cli binary by hand. Use the tizen-ecp runner: node <plugin>/lib/cli/ecp-cli.js --request \"<the user's ask>\" [--target <vm|serial>] [--version <VERSION>] [--profile <PROFILE>]. It locates ecp-cli in the SDK, verifies an emulator is running (ECP commands control a RUNNING emulator), matches the intent (list devices for a platform version, help, battery, …) and prints a Standard JSON Envelope. Report the envelope; never run the native binary directly."
+fi
+
 # No rule matched — allow the command.
 exit 0

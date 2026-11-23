@@ -22,8 +22,8 @@ flowchart LR
         direction TB
         Dev["Developer<br/>① 자연어 요청<br/>② tizen-sdk CLI 직접 실행"]
         Host["AI 호스트<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
-        Skill["스킬 30개 · 에이전트 24개<br/>요청 → 스킬 라우팅"]
-        Runner["CLI 러너 (common/lib/cli)<br/>명령 36개"]
+        Skill["스킬 31개 · 에이전트 25개<br/>요청 → 스킬 라우팅"]
+        Runner["CLI 러너 (common/lib/cli)<br/>명령 37개"]
         Tools["Tizen SDK 도구<br/>tz · sdb · em-cli<br/>gbs (Platform 빌드만)"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
@@ -172,7 +172,7 @@ powershell -ExecutionPolicy Bypass -File setup-tizen-sdk.ps1
 **CLI 상태 확인**
 
 - `tizen-sdk --doctor`: SDK 경로, 캐시, 러너 상태를 보고합니다.
-- `tizen-sdk --capabilities`: 36개 명령 중 지금 사용 가능한 명령을 보여 줍니다.
+- `tizen-sdk --capabilities`: 37개 명령 중 지금 사용 가능한 명령을 보여 줍니다.
 - `tizen-sdk <명령> --help`: 해당 명령의 옵션을 보여 줍니다. 빌드 전에는 `PLUGIN_NOT_BUILT` 엔벨로프가 나옵니다.
 
 **새 버전 알림**

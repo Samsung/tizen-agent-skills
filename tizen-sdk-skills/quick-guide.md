@@ -22,8 +22,8 @@ flowchart LR
         direction TB
         Dev["Developer<br/>① Natural-language request<br/>② Run tizen-sdk CLI directly"]
         Host["AI host<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
-        Skill["30 skills · 24 agents<br/>request → skill routing"]
-        Runner["CLI runner (common/lib/cli)<br/>36 commands"]
+        Skill["31 skills · 25 agents<br/>request → skill routing"]
+        Runner["CLI runner (common/lib/cli)<br/>37 commands"]
         Tools["Tizen SDK tools<br/>tz · sdb · em-cli<br/>gbs (Platform builds only)"]
         Dev -->|①| Host --> Skill --> Runner
         Dev -.->|②| Runner
@@ -172,7 +172,7 @@ It installs into `~/.tizen-sdk-cli`, creates a `tizen-sdk` shim, verifies with
 **CLI status checks**
 
 - `tizen-sdk --doctor`: reports the SDK path, cache and runner status.
-- `tizen-sdk --capabilities`: shows which of the 36 commands are available right now.
+- `tizen-sdk --capabilities`: shows which of the 37 commands are available right now.
 - `tizen-sdk <command> --help`: shows that command's options. Before the build, you get a `PLUGIN_NOT_BUILT` envelope.
 
 **New version notices**
