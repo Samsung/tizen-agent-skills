@@ -22,8 +22,11 @@
  *   - The request is matched to ONE intent; the runner locates ecp-cli, checks
  *     for a running emulator, resolves the target, and prints a Standard JSON
  *     Envelope.
- *   - An unrecognized intent returns the `ecp-cli help` output in the error
- *     details, so the agent can see the command surface and re-ask.
+ *   - An unrecognized command word is passed through verbatim; when ecp-cli
+ *     rejects it, the failure envelope carries ecp-cli's own output in
+ *     `details`, so the agent can see the command surface and re-ask. A
+ *     request that tokenizes to nothing runs bare ecp-cli, whose help output
+ *     lands in the success envelope's `output`.
  */
 
 const { execSync, execFileSync } = require("child_process");
