@@ -73,6 +73,14 @@ check $H deny 'tz build -p /w/app'
 check $H deny 'cd /w/app && tz build -p /w/app'
 check $H deny 'cd /w/app && gdbserver :1234 ./app'
 check $H deny 'tools/sdb/sdb devices'
+# Rule 21 — raw ecp-cli (Emulator Control Panel) is denied; the runner is allowed.
+check $H deny '/opt/tizen-sdk/tools/emulator/bin/ecp-cli --version 9.0 --profile tv help'
+check $H deny '"/opt/tizen-sdk/tools/emulator/bin/ecp-cli.bat" battery status'
+check $H deny 'ecp-cli battery status'
+check $H allow 'node sdb-helper-cli.js --request \"forward port 8080\"'
+check $H allow 'node ecp-cli.js --request \"battery status\"'
+check $H allow 'node \"$CLI\" --request \"battery status\" --target emulator-26101'
+check $H allow 'ls ~/.claude/plugins/cache/tizen-platform/tizen-sdk-skills/*/lib/cli/ecp-cli.js'
 # "git-foo" is not git — the route must require a whole word
 check $H deny 'git-foo tz build -p x'
 # A git prefix must not exempt what FOLLOWS it. Regression: the route exempted

@@ -4,7 +4,7 @@
 # safe default: nothing runs until a human classifies it.
 #
 # Source: tizen-cli/src/command-specs/*.ts
-# 36 commands total across 8 domain modules (safe 7 / mutating 15 / device 14).
+# 37 commands total across 8 domain modules (safe 7 / mutating 15 / device 15).
 # scripts/verify-doc-stats.mjs fails when this list and tizen-cli/plugin.json
 # (minus the internal-only command group) disagree.
 
@@ -45,6 +45,7 @@ commands:
   tizen-sdk.device-manager: { tier: device, requires: [kvm] }
   tizen-sdk.install-app: { tier: device, requires: [kvm] }
   tizen-sdk.sdb-helper: { tier: device, requires: [kvm] }
+  tizen-sdk.ecp: { tier: device, requires: [kvm] }
   tizen-sdk.screenshot: { tier: device, requires: [kvm] }
   tizen-sdk.file-transfer: { tier: device, requires: [kvm] }
   tizen-sdk.remote-device: { tier: device, requires: [net-device] }

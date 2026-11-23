@@ -22,6 +22,22 @@ below use those release tags.
   `shell: true`; it now runs `sh -c 'command -v "$1"'` and passes the command
   name as `$1`.
 
+### Added
+
+- **`tizen-ecp` skill / agent — Emulator Control Panel (ecp-cli)**. Runs ONE
+  Emulator Control Panel request against a **running** emulator via the new
+  `ecp-cli.js` runner (`common/lib/cli/`, core in `common/lib/core/ecp.js`):
+  `ecp-cli --version <V> --profile <P> help` lists the devices a platform
+  version supports, `help` lists the command surface, and device commands such
+  as `battery` run through `ecp-cli [--target <vm|serial>] …` with intent
+  matching on the natural-language request (`--request`, plus optional
+  `--target` / `--version` / `--profile`). At least one emulator must be
+  running — with none up the runner returns a `TIZEN_SDK_ECP_E004`
+  `device_not_found` envelope pointing at `tizen-launch-emulator`. New
+  `tizen-sdk ecp` command in the standalone CLI (tizen-cli), a PreToolUse hook
+  rule that denies hand-typed raw `ecp-cli` calls (Rule 21), and a
+  `tizen-ecp` mirror skill for tizen-cli.
+
 ## [1.10.0] — 2026-11-20
 
 ### Added

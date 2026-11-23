@@ -166,7 +166,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js launcher
 
 node bin/tizen-sdk.js --doctor           # SDK path, cache and runner status
-node bin/tizen-sdk.js --capabilities     # which of the 36 commands are usable right now
+node bin/tizen-sdk.js --capabilities     # which of the 37 commands are usable right now
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -321,6 +321,7 @@ correspondence.
 | `device-manager` | Device | Find a connected device or stop emulators (problem reports go to `dlog-analyzer`) |
 | `install-app` | Device | Install (and optionally run) a .tpk/.wgt/.rpm |
 | `sdb-helper` | Device | Run sdb commands from natural-language requests |
+| `ecp` | Device | Run Emulator Control Panel (ecp-cli) requests — list devices per platform version, battery and other device commands — against a running emulator |
 | `screenshot` | Device | Capture a screenshot from an emulator or device |
 | `file-transfer` | Device | Push/pull files via sdb |
 | `remote-device` | Device | Scan, connect, disconnect, manage remote devices |
@@ -342,7 +343,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │                           #   see _repo-root/UPLOAD.md)
 ├── common/                 # Shared by all harnesses (single source of truth)
 │   ├── .claude-plugin/     #   Claude Code plugin metadata (plugin.json)
-│   ├── agents/             #   24 agent .md files (runner lookup covers .claude/.cline/.codex/.gemini)
+│   ├── agents/             #   25 agent .md files (runner lookup covers .claude/.cline/.codex/.gemini)
 │   ├── skills/             #   30 SKILL.md directories (runner lookup covers .claude/.cline/.codex/.gemini)
 │   ├── lib/                #   CommonJS domain logic — CLI runners, core, envelope, tests
 │   │   ├── cli/            #     CLI entry points (one per command, run via `node <file>`)
@@ -466,23 +467,23 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-11-18 against v1.9.0. Every row can be re-measured with the
+Measured on 2026-11-23 against v1.10.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
 | Area | Count | How to re-measure |
 |------|-------|-------------------|
 | Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
-| Skills (`common/skills/`) | 30 (`tizen-cli/skills/` has 31: 29 of these — all but `tizen-handoff` — plus 2 CLI-only) | `ls -d common/skills/*/ \| wc -l` |
-| Agents (`common/agents/`) | 24 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI commands | 36 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| Skills (`common/skills/`) | 31 (`tizen-cli/skills/` has 32: 30 of these — all but `tizen-handoff` — plus 2 CLI-only) | `ls -d common/skills/*/ \| wc -l` |
+| Agents (`common/agents/`) | 25 | `ls common/agents/*.md \| wc -l` |
+| tizen-sdk CLI commands | 37 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 64 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
-| Hooks | 3 PreToolUse guard scripts with 14 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
+| Hooks | 3 PreToolUse guard scripts with 15 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
 | Unit tests (`common/lib/tests/`) | 100 files | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 122 cases in 3 files | `cd vscode && npm test` |
-| Hook tests | 254 cases | `bash common/hooks/hooks.test.sh` |
+| Hook tests | 261 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 216 Markdown files (`docs/` 93 in en/ko pairs), 61 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Documentation | 219 Markdown files (`docs/` 93 in en/ko pairs), 63 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 

@@ -161,7 +161,7 @@ cd tizen-cli
 pnpm install && pnpm run build   # -> dist/tizen-sdk.js + bin/tizen-sdk.js 런처
 
 node bin/tizen-sdk.js --doctor           # SDK 경로, 캐시, 러너 상태
-node bin/tizen-sdk.js --capabilities     # 36개 명령 중 지금 사용 가능한 명령
+node bin/tizen-sdk.js --capabilities     # 37개 명령 중 지금 사용 가능한 명령
 node bin/tizen-sdk.js check-node
 node bin/tizen-sdk.js build-project --project ~/tizen-apps/MyApp
 
@@ -308,6 +308,7 @@ VS Code 확장은 세션 시작 확인을 설치하지 않으므로 릴리스 Wa
 | `device-manager` | Device | 디바이스 탐지 또는 에뮬레이터 중지 (문제 보고는 `dlog-analyzer`로) |
 | `install-app` | Device | .tpk/.wgt/.rpm 설치 (및 선택적 실행) |
 | `sdb-helper` | Device | 자연어 요청으로 sdb 명령 실행 |
+| `ecp` | Device | 실행 중인 에뮬레이터 대상 Emulator Control Panel(ecp-cli) 요청 실행 — 플랫폼 버전별 기기 목록, 배터리 등 기기 명령 |
 | `screenshot` | Device | 에뮬레이터 또는 디바이스 스크린샷 캡처 |
 | `file-transfer` | Device | sdb로 파일 푸시/풀 |
 | `remote-device` | Device | 원격 디바이스 스캔, 연결, 해제, 관리 |
@@ -447,22 +448,22 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 
 ### 프로젝트 현황
 
-2026-11-18, v1.9.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
+2026-11-23, v1.10.0 기준 실측값입니다. 각 행은 마지막 열의 명령으로 다시 측정할 수
 있으며, 스킬·에이전트·커맨드·테스트 스위트가 추가될 때마다 이 표를 갱신합니다.
 
 | 항목 | 수치 | 재측정 방법 |
 |------|------|-------------|
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
-| 스킬 (`common/skills/`) | 30개 (`tizen-cli/skills/`는 31개: `tizen-handoff`를 뺀 29개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
-| 에이전트 (`common/agents/`) | 24개 | `ls common/agents/*.md \| wc -l` |
-| tizen-sdk CLI 커맨드 | 36개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
+| 스킬 (`common/skills/`) | 31개 (`tizen-cli/skills/`는 32개: `tizen-handoff`를 뺀 30개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
+| 에이전트 (`common/agents/`) | 25개 | `ls common/agents/*.md \| wc -l` |
+| tizen-sdk CLI 커맨드 | 37개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 64개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
-| 훅 | PreToolUse 가드 스크립트 3개(가드 규칙 14개)와 세션 시작 업데이트 확인(`check-update.js`) | `common/hooks/` |
+| 훅 | PreToolUse 가드 스크립트 3개(가드 규칙 15개)와 세션 시작 업데이트 확인(`check-update.js`) | `common/hooks/` |
 | 단위 테스트 (`common/lib/tests/`) | 100 파일 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 122 케이스 | `cd vscode && npm test` |
-| 훅 테스트 | 254 케이스 | `bash common/hooks/hooks.test.sh` |
+| 훅 테스트 | 261 케이스 | `bash common/hooks/hooks.test.sh` |
 | 통합 TC (`tests/tc/`) | 296 TC / 289 YAML — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| 문서 | Markdown 216개 (`docs/` 93개, en/ko 쌍), SKILL.md 61개 | `git ls-files \| grep -c '\.md$'` |
+| 문서 | Markdown 219개 (`docs/` 93개, en/ko 쌍), SKILL.md 63개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈
 

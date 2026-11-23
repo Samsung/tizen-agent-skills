@@ -124,7 +124,7 @@ TCs start with `status: draft`.
 - Every paired file carries a language switch line directly under its H1 —
   `English | [한국어](X.ko.md)` in the English file and
   `[English](X.en.md) | 한국어` in the Korean file, linking to its counterpart.
-- Keep the command and skill counts ("36 commands", "30 skills") consistent
+- Keep the command and skill counts ("37 commands", "31 skills") consistent
   across `README*.md`, `docs/SKILLS_REFERENCE*.md`, `tests/README.md` and the
   "Project at a Glance" table in `README*.md`.
 - New Markdown follows the repository Prettier settings (80 columns, LF line

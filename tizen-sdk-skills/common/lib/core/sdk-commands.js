@@ -34,6 +34,7 @@ const webappDebug = require("./webapp-debug");
 const playwrightTest = require("./playwright-test");
 const preflight = require("./preflight");
 const sdbHelper = require("./sdb-helper");
+const ecp = require("./ecp");
 const screenshot = require("./screenshot");
 const fileTransfer = require("./file-transfer");
 const remoteDevice = require("./remote-device");
@@ -124,6 +125,9 @@ module.exports = {
 
   // sdb-helper
   runSdbCommand: sdbHelper.runSdbCommand,
+
+  // ecp (Emulator Control Panel CLI)
+  runEcpCommand: ecp.runEcpCommand,
 
   // screenshot
   captureScreenshot: screenshot.captureScreenshot,

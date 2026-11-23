@@ -14,7 +14,7 @@
 
 | 파트 | 내용 | 바로가기 |
 |------|------|----------|
-| Part 1 | 30개 스킬 레퍼런스 (파라미터, CLI 러너, 응답 형식) | [스킬 레퍼런스](#tizen-sdk-skills--스킬-레퍼런스) |
+| Part 1 | 31개 스킬 레퍼런스 (파라미터, CLI 러너, 응답 형식) | [스킬 레퍼런스](#tizen-sdk-skills--스킬-레퍼런스) |
 | Part 2 | 커맨드 계층 아키텍처 및 호출 흐름 | [커맨드 아키텍처](#tizen-sdk-커맨드-계층--아키텍처-및-호출-흐름) |
 | Part 3 | 엔드투엔드 사용 사례 & 시나리오 가이드 | [사용 사례 & 시나리오](#tizen-sdk-skills--사용-사례--시나리오-가이드) |
 
@@ -31,7 +31,7 @@
 
 ## 개요
 
-`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **30개 자동화 스킬**을 제공합니다.
+`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **31개 자동화 스킬**을 제공합니다.
 
 모든 스킬은 **Standard JSON Envelope** 형식으로 응답하여 일관된 에러 처리와 기계 판독 가능한 출력을 보장합니다.
 
@@ -40,7 +40,7 @@
 ## 주요 기능
 
 - ✅ **원커맨드 SDK 설정** — Node.js 체크 → 디스크 공간 체크 → SDK 설치, 완전 자동화
-- ✅ **30개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
+- ✅ **31개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
 
 - ✅ **크로스 플랫폼** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **멀티 하네스 지원** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (하나의 `common/`을 공유, 하네스별 setup은 `common/setup/setup.{sh,ps1} --harness <이름>`)
@@ -1982,7 +1982,7 @@ module.exports = {
 ## 관련 문서
 
 - [중간 계층 소개](SDK_LAYERS_OVERVIEW.md) — 각 계층이 왜 필요한지, 왜 .ps1을 직접 호출하지 않는지 설명
-- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 30개 스킬이 36개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)
+- [스킬 ↔ 커맨드 맵핑](SKILLS_COMMANDS_MAPPING.md) — 31개 스킬이 37개 커맨드에 어떻게 대응하는지 (개수가 다른 이유 포함)
 
 ---
 

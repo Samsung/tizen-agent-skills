@@ -20,6 +20,20 @@
   확인이 인자 배열과 `shell: true`를 함께 넘기던 것을, 이제
   `sh -c 'command -v "$1"'`로 실행하고 명령 이름은 `$1`로 넘깁니다.
 
+### 추가
+
+- **`tizen-ecp` 스킬/에이전트 — Emulator Control Panel (ecp-cli)**. **실행 중인**
+  에뮬레이터에 대해 Emulator Control Panel 요청 하나를 새 `ecp-cli.js` 러너
+  (`common/lib/cli/`, 코어는 `common/lib/core/ecp.js`)로 실행합니다:
+  `ecp-cli --version <V> --profile <P> help`로 플랫폼 버전이 지원하는 기기 목록을
+  조회하고, `help`로 명령 표면을 확인하며, `battery` 같은 기기 명령은
+  `ecp-cli [--target <vm|serial>] …` 형태로 자연어 요청(`--request`, 선택적
+  `--target` / `--version` / `--profile`)에 대한 인트 매칭을 거쳐 실행합니다.
+  에뮬레이터가 하나 이상 실행 중이어야 하며, 없으면 `tizen-launch-emulator`를
+  가리키는 `TIZEN_SDK_ECP_E004` `device_not_found` 봉투를 반환합니다. 독립 CLI에
+  `tizen-sdk ecp` 커맨드 추가, 직접 `ecp-cli` 실행을 차단하는 PreToolUse 훅 규칙
+  (Rule 21), tizen-cli용 `tizen-ecp` 미러 스킬도 함께 추가했습니다.
+
 ## [1.10.0] — 2026-11-20
 
 ### 추가

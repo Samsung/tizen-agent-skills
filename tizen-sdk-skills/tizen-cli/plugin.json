@@ -31,6 +31,7 @@
     "device-manager",
     "install-app",
     "sdb-helper",
+    "ecp",
     "screenshot",
     "file-transfer",
     "remote-device",
