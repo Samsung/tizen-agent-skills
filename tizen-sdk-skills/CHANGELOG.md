@@ -14,6 +14,14 @@ below use those release tags.
 
 ## [Unreleased]
 
+### Fixed
+
+- **`tizen-sdk --doctor` no longer prints a Node.js `DEP0190`
+  DeprecationWarning to stderr.** The command check in
+  `tizen-cli/src/doctor.ts` passed an argument array together with
+  `shell: true`; it now runs `sh -c 'command -v "$1"'` and passes the command
+  name as `$1`.
+
 ## [1.10.0] — 2026-11-20
 
 ### Added

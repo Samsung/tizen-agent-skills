@@ -45,13 +45,13 @@ function commandExists(cmd: string): boolean {
     return false;
   }
   try {
-    // Use execFileSync (no shell) to avoid shell injection — S4721
+    // cmd is passed as an argument, never concatenated into a shell string — S4721
     if (process.platform === "win32") {
       execFileSync("where", [cmd], { stdio: ["ignore", "ignore", "ignore"] });
     } else {
-      execFileSync("command", ["-v", cmd], {
+      // `command` is a shell builtin, so run it through sh with cmd as $1
+      execFileSync("sh", ["-c", 'command -v "$1"', "sh", cmd], {
         stdio: ["ignore", "ignore", "ignore"],
-        shell: true,
       });
     }
     return true;

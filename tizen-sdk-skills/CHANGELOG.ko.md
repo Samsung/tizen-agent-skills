@@ -13,6 +13,13 @@
 
 ## [Unreleased]
 
+### 수정
+
+- **`tizen-sdk --doctor`가 더 이상 stderr에 Node.js `DEP0190`
+  DeprecationWarning을 출력하지 않습니다.** `tizen-cli/src/doctor.ts`의 명령
+  확인이 인자 배열과 `shell: true`를 함께 넘기던 것을, 이제
+  `sh -c 'command -v "$1"'`로 실행하고 명령 이름은 `$1`로 넘깁니다.
+
 ## [1.10.0] — 2026-11-20
 
 ### 추가
