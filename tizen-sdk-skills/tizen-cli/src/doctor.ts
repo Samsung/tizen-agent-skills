@@ -49,9 +49,9 @@ function commandExists(cmd: string): boolean {
     if (process.platform === "win32") {
       execFileSync("where", [cmd], { stdio: ["ignore", "ignore", "ignore"] });
     } else {
-      execFileSync("command", ["-v", cmd], {
+      // `command` is a shell builtin: run it through sh with cmd passed as $1
+      execFileSync("sh", ["-c", 'command -v "$1"', "sh", cmd], {
         stdio: ["ignore", "ignore", "ignore"],
-        shell: true,
       });
     }
     return true;
