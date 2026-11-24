@@ -79,7 +79,64 @@ BuildRequires:  pkgconfig(dali2-toolkit)
 
 ### 4. .gbs.conf
 
-A `.gbs.conf` file in the home directory is required for GBS builds. This file defines the Tizen platform repository profile that GBS uses.
+A `.gbs.conf` file (usually `~/.gbs.conf`; see the lookup order below) is required for GBS builds. This file defines the Tizen platform repository profile that GBS uses.
+
+This plugin does not create or edit `.gbs.conf`; write it yourself. An example `~/.gbs.conf` with two profiles, one for the Tizen 10.0 release repositories and one for the latest snapshot:
+
+```ini
+# ~/.gbs.conf
+
+[general]
+# Profile used by any gbs build that does not pick one (including this plugin's builds)
+profile = profile.tizen-10.0
+
+# ── Tizen 10.0 release ────────────────────────────────────────
+[profile.tizen-10.0]
+repos = repo.tizen-10.0-base, repo.tizen-10.0-unified
+buildroot = ~/GBS-ROOT-10.0/
+
+[repo.tizen-10.0-base]
+url = https://download.tizen.org/releases/milestone/TIZEN/Tizen-10.0/Tizen-10.0-Base/latest/repos/standard/packages/
+
+[repo.tizen-10.0-unified]
+url = https://download.tizen.org/releases/milestone/TIZEN/Tizen-10.0/Tizen-10.0-Unified/latest/repos/standard/packages/
+
+# ── Latest snapshot (next version under development) ──────────
+[profile.tizen-snapshot]
+repos = repo.snapshot-base, repo.snapshot-unified
+buildroot = ~/GBS-ROOT-snapshot/
+
+[repo.snapshot-base]
+url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Base/latest/repos/standard/packages/
+
+[repo.snapshot-unified]
+url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Unified/latest/repos/standard/packages/
+```
+
+| Section            | Key         | Meaning                                                                                         |
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
+| `[general]`        | `profile`   | Name of the profile section `gbs build` uses by default                                         |
+| `[general]`        | `buildroot` | Build root for every profile that does not set its own (optional)                               |
+| `[profile.<name>]` | `repos`     | Comma-separated `repo.<name>` sections to fetch `BuildRequires` packages from                   |
+| `[profile.<name>]` | `buildroot` | Build root for this profile; artifacts land in `<buildroot>/local/repos/<profile>/<arch>/RPMS/` |
+| `[repo.<name>]`    | `url`       | Package repository URL (the directory that holds `repodata/`)                                   |
+
+`<profile>` in the output path is the profile name without the `profile.` prefix, for example `tizen-10.0` for `profile.tizen-10.0`.
+
+All URLs above are public Tizen repositories (`download.tizen.org`). Set `[general]` `profile` to the profile whose repositories match the platform version your device or emulator runs.
+
+- **Switching profiles**: this plugin runs `gbs build -A <arch> --include-all` without `-P`, so switch by changing `[general]` `profile`. When you run GBS yourself you can also pick one with `gbs build -P profile.tizen-snapshot ...`.
+- **Separate build roots**: giving each profile its own `buildroot` keeps packages from different versions out of the same build root.
+- **`latest` paths**: they move when a new release is published. To pin a build, use a dated directory (for example `tizen-10.0-unified_<date>`) instead of `latest`. Pin Base and Unified to dated directories from the same release so the two repositories stay in step.
+
+GBS reads `.gbs.conf` from several places, and the first file that sets a key wins:
+
+1. `.gbs.conf` at the top of a `repo`-managed tree
+2. `.gbs.conf` in the project directory
+3. `~/.gbs.conf`
+4. `/etc/gbs.conf`
+
+The build root is chosen in this order: the `TIZEN_BUILD_ROOT` environment variable, the current profile's `buildroot`, `[general]` `buildroot`, then `~/GBS-ROOT`. After the build, the runner looks for new `.rpm` files in the project directory, the local repo that gbs reports in its output, the resolved build root, then `~/GBS-ROOT`.
 
 ---
 
@@ -201,12 +258,12 @@ When the GBS build succeeds, `.rpm` packages are generated under the GBS build r
 `~/GBS-ROOT` unless `TIZEN_BUILD_ROOT` or `buildroot` in `.gbs.conf` says otherwise:
 
 ```
-~/GBS-ROOT/local/repos/<arch>/RPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/RPMS/
 ├── <app-name>-<version>-<release>.<arch>.rpm          # Main package
 ├── <app-name>-debuginfo-<version>-<release>.<arch>.rpm  # Debug info
 └── <app-name>-debugsource-<version>-<release>.<arch>.rpm # Debug source
 
-~/GBS-ROOT/local/repos/<arch>/SRPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/SRPMS/
 └── <app-name>-<version>-<release>.src.rpm               # Source RPM
 ```
 
