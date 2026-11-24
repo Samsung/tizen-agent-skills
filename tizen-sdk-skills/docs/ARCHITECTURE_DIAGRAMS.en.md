@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (31 skills, 25 agents, 37 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.1). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (32 skills, 25 agents, 37 commands, 61 error codes, 296 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.1). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -105,7 +105,7 @@ graph LR
     C_LIB --> L_TESTS["tests/ unit tests (run-all.js)"]
 
     TCLI --> T_SRC["src/ index · commands · doctor<br/>envelope-adapter · command-specs/"]
-    TCLI --> T_SKILLS["skills/ 31 SKILL.md (for agents driving the CLI)"]
+    TCLI --> T_SKILLS["skills/ 32 SKILL.md (for agents driving the CLI)"]
     TCLI --> T_DIST["dist/tizen-sdk.js (build output)<br/>bin/tizen-sdk.js (launcher)"]
 
     style ROOT fill:#e1f5fe,stroke:#546e7a,color:#1a1a1a

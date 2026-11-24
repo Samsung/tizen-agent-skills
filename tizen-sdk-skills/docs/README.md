@@ -16,10 +16,11 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | [debug/scenario-native-debug-walkthrough.md](debug/scenario-native-debug-walkthrough.md) | **네이티브 앱 디버깅 E2E 시나리오** — 네이티브 앱 생성 → Debug 빌드 → 설치 → gdbserver/포트 포워딩 셋업 → 호스트 GDB 연결 + 검증 체크리스트 |
 | [debug/scenario-dotnet-debug-walkthrough.md](debug/scenario-dotnet-debug-walkthrough.md) | **.NET 앱 디버깅 E2E 시나리오** — 닷넷 앱 생성 → Debug 빌드 → 설치 → netcoredbg DAP 서버 셋업 → VS Code(F5) 연결 + 검증 체크리스트 |
 | [wsl/WSL_EMULATOR_GUIDE.md](wsl/WSL_EMULATOR_GUIDE.md) | **WSL 환경 에뮬레이터 가이드** — WSL2에서 Tizen 에뮬레이터 실행 시 설정, 프로필 선택(표준 vs TV), Buxton 권한 문제 해결, 성능 최적화 |
+| [emulator/emulator-manager-walkthrough.ko.md](emulator/emulator-manager-walkthrough.ko.md) | **에뮬레이터 관리 E2E 시나리오** — 에뮬레이터 패키지 다운로드 → 화면 크기 목록 → VM 생성(1080 / TV 4K / 커스텀 하드웨어) → 부팅 → sdb 확인 → 설정 수정·목록·삭제 → 앱 설치 |
 | [rds/RDS_FAST_DEPLOY_PLAN.md](rds/RDS_FAST_DEPLOY_PLAN.md) | **RDS / Fast Deploy 통합 계획** — `install-app`이 변경 파일만 push하는 delta 배포의 설계, 상태 파일 형식, vendoring 결정, `deploy_type`/`TIZEN_RDS_ENABLED`/`--reset-rds`, Tizen 11 에뮬레이터 실기기 검증 결과 |
 | [envelope/](envelope/) | **Standard JSON Envelope** — 응답 표준화 계층: [사용 가이드](envelope/ENVELOPE_USAGE_GUIDE.md), [호출 흐름](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit 해설](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [구현 요약](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK 설치 흐름** — [전체 흐름](sdk-install/INSTALLATION_FLOW.md), [에이전트-installSdk 통합](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [설치 검증](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [사용자 지정 저장소 설치](sdk-install/CUSTOM_REPOSITORY_INSTALL.md), [.NET 개발 환경 설정 E2E](sdk-install/DOTNET_SETUP_E2E.md) |
-| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 31개 스킬이 37개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
+| [SKILLS_COMMANDS_MAPPING.md](SKILLS_COMMANDS_MAPPING.md) | **스킬 ↔ 커맨드 맵핑** — 32개 스킬이 37개 tizen-cli 커맨드에 어떻게 대응하는지, 개수가 다른 이유 |
 
 구현 코드는 [common/lib/](../common/lib/README.md)에 있습니다.
 
@@ -30,7 +31,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 
 `tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 30가지 자동화 스킬을 제공합니다.
 
-### 30가지 핵심 스킬
+### 32가지 스킬
 
 | 스킬 | 설명 | 용도 |
 |------|------|------|
@@ -44,6 +45,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-build-project** | 프로젝트 자동 빌드 | Native/DotNET/WebApp/Platform(GBS) 프로젝트 빌드 |
 | **tizen-create-emulator** | em-cli로 커스텀 에뮬레이터 VM 생성 (화면 크기 선택, 기본 1080) | 에뮬레이터 VM 생성/목록/삭제, TV 프로필 지원 |
 | **tizen-launch-emulator** | 기존 에뮬레이터 VM 실행 (em-cli launch) | 에뮬레이터 부팅 및 sdb 연결 대기 |
+| **tizen-ecp** | 실행 중인 에뮬레이터에 Emulator Control Panel(ecp-cli) 요청 하나 실행 | 배터리 등 기기 제어, 플랫폼 버전별 지원 기기 목록 조회 |
 | **tizen-download-emulator-package** | 에뮬레이터 패키지(TIZEN-{버전}-Emulator) 다운로드 및 설치 | SDK 설치 후 에뮬레이터 실행 환경 구성 |
 | **tizen-platform-install** | Tizen 플랫폼 패키지(TIZEN-{버전}) 다운로드 및 설치 | 특정 플랫폼 버전용 빌드/에뮬레이터 환경 구성 |
 | **tizen-download-mobile-platform** | Tizen 모바일 플랫폼 패키지(MOBILE-{버전}) 다운로드 및 설치 | 모바일 프로필 개발, IOT-Headed 확장 선택 설치 |
@@ -64,6 +66,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-tv-sdk-install-from-zip** | TV SDK 확장 설치 (로컬 ZIP, 오프라인) | 오프라인 TV 앱 개발 |
 | **tizen-update-package** | Tizen SDK 패키지 업데이트 | 설치된 패키지의 새 버전 확인 및 업데이트 |
 | **tizen-handoff** | 프로젝트 핸드오프 노트 확인·시작 | 다른 에이전트(Claude Code, Codex CLI, Cline)가 하던 작업 이어받기 |
+| **tizen-guide** | 공개 문서(`llms.txt`) 기반 사용법 질문 응답 | 에이전트 안에서 알맞은 가이드를 찾고 근거 링크와 함께 답변 받기 |
 
 ---
 
@@ -163,6 +166,7 @@ Cline에서는 자연어로 요청하면 스킬이 자동으로 로드됩니다.
 | "TV SDK ZIP으로 설치해줘" | `tizen-tv-sdk-install-from-zip` |
 | "패키지 업데이트해줘" | `tizen-update-package` |
 | "Codex가 하던 작업 이어서 해줘" / "이어서 작업해줘" | `tizen-handoff` |
+| "인증서 만드는 방법 알려줘" / "TV 에뮬레이터 가이드 어디 있어?" | `tizen-guide` |
 
 ---
 
@@ -851,4 +855,4 @@ echo %TIZEN_SDK_PATH%   # Windows
 
 **플러그인 전체 버전**: `0.1.0`
 
-모든 31개 스킬은 동일한 버전으로 배포됩니다. 버전은 각 스킬 폴더의 `SKILL.md`에 명시되어 있습니다.
+모든 32개 스킬은 동일한 버전으로 배포됩니다. 버전은 각 스킬 폴더의 `SKILL.md`에 명시되어 있습니다.

@@ -329,7 +329,7 @@ tizen-sdk-skills/
 ├── common/                 # 모든 하네스가 공유 (단일 소스)
 │   ├── .claude-plugin/     #   Claude Code 플러그인 메타데이터 (plugin.json)
 │   ├── agents/             #   24개 agent .md (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
-│   ├── skills/             #   30개 SKILL.md 디렉토리 (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
+│   ├── skills/             #   32개 SKILL.md 디렉토리 (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
 │   ├── lib/                #   CommonJS 도메인 로직 — CLI 러너, core, envelope, 테스트
 │   │   ├── cli/            #     CLI 진입점 (명령어별 1개, `node <파일>`로 실행)
 │   │   ├── core/           #     sdk-commands.js, plugin-cache.js, certificate, device, emulator, debug, ...
@@ -356,7 +356,7 @@ tizen-sdk-skills/
 ├── tizen-cli/              # 독립 실행형 tizen-sdk CLI (canonical 소스)
 │   ├── src/                #   TypeScript 셸 (flat 36 커맨드, envelope 어댑터, --schema/--doctor)
 │   │   └── command-specs/  #   도메인별 선언적 스펙 (sdk, check, project, device, debug, test, certificate)
-│   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
+│   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 32개 (30개 + 우산 라우터 + tizen-list-templates)
 │   ├── esbuild.config.js   #   빌드 설정
 │   ├── plugin.json         #   CLI 매니페스트 (빌드 시 commands 자동 업데이트)
 │   └── package.json        #   npm/pnpm 패키지
@@ -454,7 +454,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 항목 | 수치 | 재측정 방법 |
 |------|------|-------------|
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
-| 스킬 (`common/skills/`) | 31개 (`tizen-cli/skills/`는 32개: `tizen-handoff`를 뺀 30개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
+| 스킬 (`common/skills/`) | 32개 (`tizen-cli/skills/`는 32개: `tizen-handoff`, `tizen-guide`를 뺀 30개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
 | 에이전트 (`common/agents/`) | 25개 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI 커맨드 | 37개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 64개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |

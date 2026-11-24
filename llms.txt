@@ -2,7 +2,7 @@
 
 > Samsung's open-source collection of Tizen development skills and plugins for AI coding agents. Each plugin covers one area of Tizen platform development and is installed on its own. Apache-2.0. Repository: https://github.com/Samsung/tizen-agent-skills
 
-Each top-level directory of the repository is one independently versioned plugin. The first plugin, tizen-sdk-skills (31 skills, 25 agents, a standalone `tizen-sdk` CLI with 37 commands and a VS Code extension), lets an AI assistant install the Tizen SDK, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run Tizen and Samsung TV emulators, manage devices over sdb, sign packages with Tizen certificates, debug remotely with GDB / netcoredbg / Chrome DevTools (CDP), analyse dlog output and run Playwright tests. More Tizen-related plugins will be added.
+Each top-level directory of the repository is one independently versioned plugin. The first plugin, tizen-sdk-skills (32 skills, 25 agents, a standalone `tizen-sdk` CLI with 37 commands and a VS Code extension), lets an AI assistant install the Tizen SDK, create and build Tizen Web (.wgt), Native (.tpk), .NET, RPK and RPM packages, run Tizen and Samsung TV emulators, manage devices over sdb, sign packages with Tizen certificates, debug remotely with GDB / netcoredbg / Chrome DevTools (CDP), analyse dlog output and run Playwright tests. More Tizen-related plugins will be added.
 
 ## Plugins
 
@@ -14,6 +14,8 @@ Each top-level directory of the repository is one independently versioned plugin
 - [Skills to commands mapping](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/docs/SKILLS_COMMANDS_MAPPING.en.md): How each `tizen-*` skill maps to a `tizen-sdk` CLI command
 - [tizen-sdk standalone CLI](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/tizen-cli/README.md): Run every command from a terminal or CI without an AI host
 - [Tizen AI Extension for VS Code](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-sdk-skills/vscode/README.md): Installs and syncs the plugin for Claude Code, Cline and Codex CLI from inside VS Code
+- [tizen-action-skills README](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-action-skills/README.md): Implementing Tizen Action Framework providers — quick start, requirements and layout ([Korean](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-action-skills/README.ko.md))
+- [tizen-action-skill README](https://github.com/Samsung/tizen-agent-skills/blob/main/tizen-action-skills/common/skills/tizen-action-skill/README.md): Bundled scripts, the provider workflow and commonly missed rules
 
 ## Installation
 

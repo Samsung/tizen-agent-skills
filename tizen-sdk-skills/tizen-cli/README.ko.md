@@ -147,7 +147,7 @@ src/               TypeScript 플러그인 셸 (커맨드 엔진 + command-specs
                    envelope adapter, --schema/--doctor/--capabilities) — ../common/lib/core 필요
 ../common/lib/     공유 CommonJS 도메인 로직 (단일 소스)
 ../common/scripts/ 플랫폼 .ps1/.sh 기능 스크립트 → dist/scripts로 복사
-skills/            tizen-sdk 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates) → dist/skills
+skills/            tizen-sdk 구동 에이전트용 SKILL.md 32개 (30개 + 우산 라우터 + tizen-list-templates) → dist/skills
 bin/               독립 런처 (tizen-sdk.js): 번들을 로드해
                    run()을 호출 → dist/bin으로 복사
 ```

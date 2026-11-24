@@ -148,7 +148,7 @@ src/               TypeScript plugin shell (command engine + declarative specs i
                    --schema/--doctor/--capabilities) — requires ../common/lib/core
 ../common/lib/     Shared CommonJS domain logic (single source of truth)
 ../common/scripts/ Platform .ps1/.sh feature scripts → copied to dist/scripts
-skills/            31 SKILL.md files for agents driving tizen-sdk (29 + umbrella router + tizen-list-templates) → dist/skills
+skills/            32 SKILL.md files for agents driving tizen-sdk (30 + umbrella router + tizen-list-templates) → dist/skills
 bin/               Standalone launcher (tizen-sdk.js): loads the bundle and calls
                    run() → copied to dist/bin
 ```
