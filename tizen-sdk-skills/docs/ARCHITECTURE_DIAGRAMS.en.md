@@ -105,7 +105,7 @@ graph LR
     C_LIB --> L_TESTS["tests/ unit tests (run-all.js)"]
 
     TCLI --> T_SRC["src/ index · commands · doctor<br/>envelope-adapter · command-specs/"]
-    TCLI --> T_SKILLS["skills/ 31 SKILL.md (for agents driving the CLI)"]
+    TCLI --> T_SKILLS["skills/ 32 SKILL.md (for agents driving the CLI)"]
     TCLI --> T_DIST["dist/tizen-sdk.js (build output)<br/>bin/tizen-sdk.js (launcher)"]
 
     style ROOT fill:#e1f5fe,stroke:#546e7a,color:#1a1a1a

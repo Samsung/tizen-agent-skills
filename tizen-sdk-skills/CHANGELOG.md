@@ -27,7 +27,7 @@ below use those release tags.
 - **`tizen-guide` skill — documentation guide.** Answers questions about how
   to use the tizen-agent-skills plugins and points to the right guide, using
   only the documents indexed by the repository-root `llms.txt` (local files
-  inside a clone, raw GitHub URLs otherwise) and citing each document used.
+  inside a clone on `main`, raw GitHub URLs otherwise) and citing each document used.
   Plugins added later are covered once their documents are in `llms.txt`. No
   runner and no `tizen-cli` command; requests to run something still go to the
   matching `tizen-*` skill.

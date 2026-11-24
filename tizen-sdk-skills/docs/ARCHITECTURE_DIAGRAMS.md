@@ -105,7 +105,7 @@ graph LR
     C_LIB --> L_TESTS["tests/ 단위 테스트 (run-all.js)"]
 
     TCLI --> T_SRC["src/ index · commands · doctor<br/>envelope-adapter · command-specs/"]
-    TCLI --> T_SKILLS["skills/ 31 SKILL.md (CLI 구동용)"]
+    TCLI --> T_SKILLS["skills/ 32 SKILL.md (CLI 구동용)"]
     TCLI --> T_DIST["dist/tizen-sdk.js (빌드 산출물)<br/>bin/tizen-sdk.js (런처)"]
 
     style ROOT fill:#e1f5fe,stroke:#546e7a,color:#1a1a1a

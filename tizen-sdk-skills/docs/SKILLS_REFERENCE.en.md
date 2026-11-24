@@ -1511,11 +1511,11 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 **Parameters:** None (the question itself)
 
-**CLI Runner:** None — documentation guide only. The agent reads the documents directly: local files when the working directory is inside a `tizen-agent-skills` clone, otherwise the raw GitHub URLs listed in `llms.txt`.
+**CLI Runner:** None — documentation guide only. The agent reads the documents directly: local files when the working directory is inside a `tizen-agent-skills` clone checked out on `main`, otherwise the raw GitHub URLs listed in `llms.txt` (so the cited `main` links always match what was read).
 
-**Notes:** Plugins added later are covered automatically once their documents are registered in `llms.txt`. The answer follows the user's language and prefers documents in that language (`docs/X.md` Korean, `docs/X.en.md` English; elsewhere `X.md` English, `X.ko.md` Korean). If the documents do not cover a question, the skill says so and points to GitHub Issues instead of guessing.
+**Notes:** Plugins added later are covered automatically once their documents are registered in `llms.txt`. The answer follows the user's language and prefers documents in that language (`docs/X.md` or `docs/X.ko.md` Korean, `docs/X.en.md` English; elsewhere `X.md` English, `X.ko.md` Korean). If the documents do not cover a question, the skill says so and points to GitHub Issues instead of guessing.
 
-**Dependencies:** None (no SDK or device required; network access to GitHub when not inside a clone)
+**Dependencies:** None (no SDK or device required; network access to GitHub unless inside a clone on `main`)
 
 ---
 
@@ -1616,6 +1616,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | Install custom rootstrap ZIP package (with security validation) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` etc. | `dlog-analyzer-cli.js` | Continuous dlog crash/exception collection & analysis (background) |
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
+| 30  | `tizen-ecp`              | `runEcpCommand()`     | `ecp-cli.js`              | Run one Emulator Control Panel request on a running emulator |
 | 31  | `tizen-guide`            | —                     | — (docs guide only)       | Answer how-to questions from the published docs (`llms.txt`) |
 
 ---

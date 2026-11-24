@@ -356,7 +356,7 @@ tizen-sdk-skills/
 ├── tizen-cli/              # 독립 실행형 tizen-sdk CLI (canonical 소스)
 │   ├── src/                #   TypeScript 셸 (flat 36 커맨드, envelope 어댑터, --schema/--doctor)
 │   │   └── command-specs/  #   도메인별 선언적 스펙 (sdk, check, project, device, debug, test, certificate)
-│   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 31개 (29개 + 우산 라우터 + tizen-list-templates)
+│   ├── skills/             #   CLI 구동 에이전트용 SKILL.md 32개 (30개 + 우산 라우터 + tizen-list-templates)
 │   ├── esbuild.config.js   #   빌드 설정
 │   ├── plugin.json         #   CLI 매니페스트 (빌드 시 commands 자동 업데이트)
 │   └── package.json        #   npm/pnpm 패키지

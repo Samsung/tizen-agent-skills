@@ -371,7 +371,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 ├── tizen-cli/              # standalone tizen-sdk CLI (canonical source)
 │   ├── src/                #   TypeScript shell (36 flat commands, envelope adapter, --schema/--doctor)
 │   │   └── command-specs/  #   Per-domain declarative specs (sdk, check, project, device, debug, test, certificate)
-│   ├── skills/             #   31 SKILL.md files for agents driving the CLI (29 + umbrella router + tizen-list-templates)
+│   ├── skills/             #   32 SKILL.md files for agents driving the CLI (30 + umbrella router + tizen-list-templates)
 │   ├── esbuild.config.js   #   Build config
 │   ├── plugin.json         #   CLI manifest (commands auto-updated on build)
 │   └── package.json        #   npm/pnpm package

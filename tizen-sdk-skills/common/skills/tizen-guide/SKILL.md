@@ -31,10 +31,14 @@ The index of every plugin's documents is the repository's `llms.txt`. Each plugi
 registers its README and main guides there, so new plugins are covered without
 changing this skill.
 
-- **Inside a clone** — if the working directory or one of its parents holds both
-  `llms.txt` and `tizen-sdk-skills/`, read the local files (Read / Grep). Map a
-  link `https://github.com/Samsung/tizen-agent-skills/blob/main/<path>` to the
-  local file `<repo-root>/<path>`.
+- **Inside a clone on `main`** — if the working directory or one of its parents
+  holds both `llms.txt` and `tizen-sdk-skills/`, and
+  `git -C <repo-root> rev-parse --abbrev-ref HEAD` prints `main`, read the local
+  files (Read / Grep). Map a link
+  `https://github.com/Samsung/tizen-agent-skills/blob/main/<path>` to the local
+  file `<repo-root>/<path>`. A clone on any other branch may differ from `main`,
+  so treat it as "otherwise" and read from GitHub; the cited links then match
+  what you read.
 - **Otherwise** — fetch
   `https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/llms.txt`.
   Read each linked document through its raw URL: replace
