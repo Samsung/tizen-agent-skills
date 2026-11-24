@@ -22,6 +22,18 @@
 
 ### 추가
 
+- **`tizen-gtest` 스킬/에이전트 — 네이티브 Google Test.** 기존 러너로 네이티브
+  Tizen 앱(`project_type: test_runner`)의 gtest 테스트를 생성·빌드·설치·실행합니다:
+  `project-manager-cli.js`의 `create --type native --template gtest`,
+  `build --build-type Test`, `install --run`으로 패키지를 만들어 설치하고,
+  `sdb-helper` 러너로 설치된 바이너리의 gtest stdout을 수집합니다
+  (`root on` → 실행 → `root off`). test_runner 앱이 실행 직후 종료되는 것은
+  정상이지 크래시가 아니며, 설치 Envelope의 경고가 오해를 부르지 않도록 스킬이
+  이를 명시합니다. `common/skills/tizen-gtest/SKILL.md`와
+  `common/agents/tizen-gtest.md`를 추가했고, 러너·CLI 커맨드는 새로 없습니다.
+  `README*.md`, `llms.txt`, `docs/`의 개수 표기도 함께 갱신했습니다
+  (스킬 33개 / 에이전트 26개).
+
 - **`tizen-guide` 스킬 — 문서 안내.** tizen-agent-skills 플러그인 사용법을
   묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에
   등록된 문서만 근거로 쓰며(GitHub `main`의 raw URL에서

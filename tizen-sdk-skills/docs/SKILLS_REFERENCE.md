@@ -20,7 +20,7 @@
 ## 주요 기능
 
 - ✅ **원커맨드 SDK 설정** — Node.js 체크 → 디스크 공간 체크 → SDK 설치, 완전 자동화
-- ✅ **32개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
+- ✅ **33개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
 
 - ✅ **크로스 플랫폼** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **멀티 하네스 지원** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (하나의 `common/`을 공유, 하네스별 setup은 `common/setup/setup.{sh,ps1} --harness <이름>`)
@@ -1500,6 +1500,39 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 ---
 
+### 32. tizen-gtest
+
+**설명:** **네이티브** Tizen 앱(`tizen_native_project.yaml`의 `project_type: test_runner`)의 Google Test(gtest)를 생성·빌드·설치·실행합니다.
+
+**사용 사례:** "네이티브 단위 테스트 돌려줘", "gtest 프로젝트 만들어줘", "gtest 실행해줘".
+
+**파라미터:**
+
+| 파라미터     | 타입   | 기본값       | 설명                                             |
+| ------------ | ------ | ------------ | ------------------------------------------------ |
+| projectPath  | string | _(필수)_     | 기존 gtest 프로젝트, 또는 생성용 부모 디렉터리+이름 |
+| deviceSerial | string | `null`       | 대상 디바이스 시리얼 (생략 시 자동 선택)          |
+
+**CLI 러너:**
+
+```
+node <plugin>/lib/cli/project-manager-cli.js create --type native --template gtest --parent-path <dir> --name <name>
+node <plugin>/lib/cli/project-manager-cli.js build --project <projectPath> --build-type Test
+node <plugin>/lib/cli/project-manager-cli.js install --package <test.tpk> --run
+```
+
+**자동화 단계:**
+
+1. 네이티브 `gtest` 템플릿으로 프로젝트 생성 (기존 프로젝트면 생략)
+2. `--build-type Test` 빌드 → `<project>/test/<pkgid>-<version>-<arch>.tpk`
+3. 패키지 설치 후 실행(`--run`) — test_runner 앱은 **즉시 종료되는 것이 정상**
+4. `tizen-sdb-helper`로 설치된 바이너리 실행(`root on` → 실행 → `root off`)해 gtest stdout 수집
+5. `[  PASSED  ]` / `[  FAILED  ]` 요약을 그대로 보고
+
+**의존성:** `tizen-create-project` (신규 생성), `tizen-build-project` (같은 러너), `tizen-install-app` (같은 러너), `tizen-sdb-helper` (결과 수집)
+
+---
+
 ## 스킬 의존성 흐름
 
 
@@ -1600,6 +1633,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | 프로젝트의 에이전트 간 핸드오프 노트 확인·생성 |
 | 30  | `tizen-ecp`              | `runEcpCommand()`     | `ecp-cli.js`              | 실행 중인 에뮬레이터에 Emulator Control Panel 요청 하나 실행 |
 | 31  | `tizen-guide`            | —                     | — (문서 안내 전용)        | 공개 문서(`llms.txt`) 기반 사용법 질문 응답        |
+| 32  | `tizen-gtest`            | `buildProject()` / `installApp()` | `project-manager-cli.js`  | 네이티브 gtest 빌드(`--build-type Test`)·설치·실행 |
 
 ---
 

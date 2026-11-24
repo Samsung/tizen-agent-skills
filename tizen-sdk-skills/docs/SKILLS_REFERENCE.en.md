@@ -21,7 +21,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **32 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **33 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -1519,6 +1519,39 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 ---
 
+### 32. tizen-gtest
+
+**Description:** Create, build, install and run Google Test (gtest) tests for a **native** Tizen app (`tizen_native_project.yaml` with `project_type: test_runner`).
+
+**Use Case:** "Run my native unit tests", "make a gtest project", "gtest 실행해줘".
+
+**Parameters:**
+
+| Parameter   | Type   | Default      | Description                                            |
+| ----------- | ------ | ------------ | ------------------------------------------------------ |
+| projectPath | string | _(required)_ | Existing gtest project, or parent dir + name to create |
+| deviceSerial| string | `null`       | Target device serial (auto-select if omitted)          |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/project-manager-cli.js create --type native --template gtest --parent-path <dir> --name <name>
+node <plugin>/lib/cli/project-manager-cli.js build --project <projectPath> --build-type Test
+node <plugin>/lib/cli/project-manager-cli.js install --package <test.tpk> --run
+```
+
+**Automated Steps:**
+
+1. Create the gtest project from the native `gtest` template (skip if it exists)
+2. Build with `--build-type Test` → `<project>/test/<pkgid>-<version>-<arch>.tpk`
+3. Install the package and launch it (`--run`) — the test_runner app **exits immediately by design**
+4. Run the installed binary via `tizen-sdb-helper` (`root on` → run → `root off`) to capture the gtest stdout
+5. Report the `[  PASSED  ]` / `[  FAILED  ]` summary verbatim
+
+**Dependencies:** `tizen-create-project` (new projects), `tizen-build-project` (same runner), `tizen-install-app` (same runner), `tizen-sdb-helper` (result capture)
+
+---
+
 ## Skill Dependency Flow
 
 ```
@@ -1618,6 +1651,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
 | 30  | `tizen-ecp`              | `runEcpCommand()`     | `ecp-cli.js`              | Run one Emulator Control Panel request on a running emulator |
 | 31  | `tizen-guide`            | —                     | — (docs guide only)       | Answer how-to questions from the published docs (`llms.txt`) |
+| 32  | `tizen-gtest`            | `buildProject()` / `installApp()` | `project-manager-cli.js`  | Build (`--build-type Test`), install and run native gtest tests |
 
 ---
 

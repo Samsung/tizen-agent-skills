@@ -24,6 +24,18 @@ below use those release tags.
 
 ### Added
 
+- **`tizen-gtest` skill/agent — native Google Test.** Creates, builds,
+  installs and runs gtest tests for a native Tizen app
+  (`project_type: test_runner`) through the existing runners:
+  `project-manager-cli.js` `create --type native --template gtest`,
+  `build --build-type Test` and `install --run`, then captures the installed
+  binary's gtest stdout through the `sdb-helper` runner (`root on` → run →
+  `root off`). A test_runner app exiting right after launch is expected, not a
+  crash — the skill says so where the install envelope's warning would
+  otherwise mislead. New `common/skills/tizen-gtest/SKILL.md` and
+  `common/agents/tizen-gtest.md`; no new runner or CLI command. Count updates
+  across `README*.md`, `llms.txt` and `docs/` (33 skills / 26 agents).
+
 - **`tizen-guide` skill — documentation guide.** Answers questions about how
   to use the tizen-agent-skills plugins and points to the right guide, using
   only the documents indexed by the repository-root `llms.txt` (read from

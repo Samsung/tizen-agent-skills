@@ -1,4 +1,4 @@
-# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 32개인데 커맨드는 37개인가
+# 스킬 ↔ 커맨드 맵핑 — 왜 스킬은 33개인데 커맨드는 37개인가
 
 [English](SKILLS_COMMANDS_MAPPING.en.md) | 한국어
 
@@ -10,7 +10,7 @@
 
 | 단위 | 개수 | 기준 위치 |
 |---|---|---|
-| **스킬** (Cline/Claude Code 자연어 트리거 단위) | **32** | `common/skills/*/SKILL.md` |
+| **스킬** (Cline/Claude Code 자연어 트리거 단위) | **33** | `common/skills/*/SKILL.md` |
 | **커맨드** (`tizen-cli tizen-sdk <command>`) | **37** | `tizen-cli/src/command-specs/*.ts` |
 | tizen-cli용 SKILL.md (참고) | 32 | `tizen-cli/skills/*/SKILL.md` — 아래 [스킬 집합이 두 개인 이유](#스킬-집합이-두-개인-이유) 참조 |
 
@@ -36,7 +36,7 @@
 
 ---
 
-## 전체 맵핑 표 (37개 커맨드 → 30개 스킬, tizen-handoff·tizen-guide 포함 32개)
+## 전체 맵핑 표 (37개 커맨드 → 30개 스킬, tizen-handoff·tizen-guide·tizen-gtest 포함 33개)
 
 그룹 구분은 [tizen-cli 우산 스킬의 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)과 동일합니다.
 
@@ -109,7 +109,7 @@
 | `certificate-manager` | `tizen-certificate-manager` | 1:1 (프로파일/배포자/Samsung 온라인 CA 액션 내장) |
 | `dlog-analyzer` | `tizen-dlog-analyzer` | 1:1 (start/stop/check/status/app-launch/app-terminate/dlog-collect/stop-collect/error-analyze 액션 내장) |
 
-**검증**: 커맨드 13+3+5+8+6+2 = 37, 스킬 10+3+2+7+6+2 = 30 (커맨드가 없는 `tizen-handoff`, `tizen-guide`를 더하면 32).
+**검증**: 커맨드 13+3+5+8+6+2 = 37, 스킬 10+3+2+7+6+2 = 30 (커맨드가 없는 `tizen-handoff`, `tizen-guide`, `tizen-gtest`를 더하면 33).
 
 ---
 
@@ -119,7 +119,7 @@
 
 | 위치 | SKILL.md 수 | 용도 | 구성 |
 |---|---|---|---|
-| `common/skills/` | **32** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 스킬 + 커맨드가 없는 `tizen-handoff`, `tizen-guide` (32개) |
+| `common/skills/` | **33** | Cline/Claude Code — 에이전트가 `node <cli-runner>`를 직접 실행 | 위 표의 스킬 + 커맨드가 없는 `tizen-handoff`, `tizen-guide`, `tizen-gtest` (33개) |
 | `tizen-cli/skills/` | **32** | tizen-cli 구동 에이전트 — `tizen-cli tizen-sdk <command>` 호출 | 위 30개 + 2개 추가 (아래) |
 
 `tizen-cli/skills/`에만 있는 2개:
@@ -127,7 +127,7 @@
 1. **`tizen-sdk`** (우산 라우터) — 37개 커맨드 전체의 라우팅 테이블을 담은 진입점 스킬. common 쪽에는 대응물이 없습니다 (Cline/Claude Code는 스킬 설명 자체로 라우팅).
 2. **`tizen-list-templates`** — tizen-cli에서는 `list-templates`가 독립 커맨드이므로 전용 스킬로 분리. common 쪽에서는 `tizen-create-project` 스킬의 list-templates 액션으로 처리됩니다.
 
-즉 문서에서 "32개 스킬"은 **common/skills 기준**, "37개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
+즉 문서에서 "33개 스킬"은 **common/skills 기준**, "37개 커맨드"는 **tizen-cli 커맨드 표면 기준**입니다. 두 숫자를 비교할 때는 이 기준 차이를 유의하세요.
 
 ---
 
@@ -135,5 +135,5 @@
 
 - [SDK_COMMANDS_ARCHITECTURE.md](SDK_COMMANDS_ARCHITECTURE.md) — CLI 러너 → sdk-commands.js → 도메인 모듈 호출 흐름
 - [COMMAND_MAPPING.md](COMMAND_MAPPING.md) — 커맨드 스펙 ↔ envelope `command` 필드 문자열 매핑
-- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 32개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
+- [SKILLS_REFERENCE.md](SKILLS_REFERENCE.md) — 33개 스킬 상세 레퍼런스 (파라미터, CLI 러너, 응답 형식)
 - [tizen-cli 우산 스킬 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)

@@ -1,4 +1,4 @@
-# Skill ↔ Command Mapping — Why 32 Skills but 37 Commands
+# Skill ↔ Command Mapping — Why 33 Skills but 37 Commands
 
 English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 
@@ -10,7 +10,7 @@ English | [한국어](SKILLS_COMMANDS_MAPPING.md)
 
 | Unit | Count | Source of truth |
 |---|---|---|
-| **Skills** (natural-language trigger unit for Cline/Claude Code) | **32** | `common/skills/*/SKILL.md` |
+| **Skills** (natural-language trigger unit for Cline/Claude Code) | **33** | `common/skills/*/SKILL.md` |
 | **Commands** (`tizen-cli tizen-sdk <command>`) | **37** | `tizen-cli/src/command-specs/*.ts` |
 | SKILL.md files for tizen-cli (for reference) | 32 | `tizen-cli/skills/*/SKILL.md` — see [Why there are two skill sets](#why-there-are-two-skill-sets) |
 
@@ -36,7 +36,7 @@ The remaining 30 commands map 1:1 to skills.
 
 ---
 
-## Full mapping table (37 commands → 30 skills; 32 with tizen-handoff and tizen-guide)
+## Full mapping table (37 commands → 30 skills; 33 with tizen-handoff, tizen-guide and tizen-gtest)
 
 Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cli/skills/tizen-sdk/SKILL.md).
 
@@ -109,7 +109,7 @@ Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cl
 | `certificate-manager` | `tizen-certificate-manager` | 1:1 (profile/distributor/Samsung online CA actions built in) |
 | `dlog-analyzer` | `tizen-dlog-analyzer` | 1:1 (start/stop/check/status/app-launch/app-terminate/dlog-collect/stop-collect/error-analyze actions built in) |
 
-**Check**: commands 13+3+5+8+6+2 = 37; skills 10+3+2+7+6+2 = 30 (plus `tizen-handoff` and `tizen-guide`, which have no command, for 32).
+**Check**: commands 13+3+5+8+6+2 = 37; skills 10+3+2+7+6+2 = 30 (plus `tizen-handoff`, `tizen-guide` and `tizen-gtest`, which have no command of their own, for 33).
 
 ---
 
@@ -119,7 +119,7 @@ Skill directories exist per harness, with different counts:
 
 | Location | SKILL.md count | Purpose | Contents |
 |---|---|---|---|
-| `common/skills/` | **32** | Cline/Claude Code — the agent runs `node <cli-runner>` directly | The 32 skills (the table above plus `tizen-handoff` and `tizen-guide`, which have no command) |
+| `common/skills/` | **33** | Cline/Claude Code — the agent runs `node <cli-runner>` directly | The 33 skills (the table above plus `tizen-handoff`, `tizen-guide` and `tizen-gtest`, which have no command) |
 | `tizen-cli/skills/` | **32** | Agents driving tizen-cli — call `tizen-cli tizen-sdk <command>` | The same 30 + 2 extras (below) |
 
 The 2 extras that exist only in `tizen-cli/skills/`:
@@ -127,7 +127,7 @@ The 2 extras that exist only in `tizen-cli/skills/`:
 1. **`tizen-sdk`** (umbrella router) — the entry-point skill containing the routing table for all 37 commands. It has no counterpart in common (Cline/Claude Code route via each skill's own description).
 2. **`tizen-list-templates`** — in tizen-cli, `list-templates` is a standalone command and therefore gets a dedicated skill. In common it is handled as the list-templates action of the `tizen-create-project` skill.
 
-In other words, "32 skills" in the docs is counted against **common/skills**, while "37 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
+In other words, "33 skills" in the docs is counted against **common/skills**, while "37 commands" is counted against the **tizen-cli command surface**. Keep this difference in bases in mind when comparing the two numbers.
 
 ---
 
@@ -135,5 +135,5 @@ In other words, "32 skills" in the docs is counted against **common/skills**, wh
 
 - [SDK_COMMANDS_ARCHITECTURE.en.md](SDK_COMMANDS_ARCHITECTURE.en.md) — call flow: CLI runners → sdk-commands.js → domain modules
 - [COMMAND_MAPPING.md](COMMAND_MAPPING.md) — command-spec ↔ envelope `command` field string mapping
-- [SKILLS_REFERENCE.en.md](SKILLS_REFERENCE.en.md) — detailed reference for all 32 skills (parameters, CLI runners, response formats)
+- [SKILLS_REFERENCE.en.md](SKILLS_REFERENCE.en.md) — detailed reference for all 33 skills (parameters, CLI runners, response formats)
 - [tizen-cli umbrella skill routing table](../tizen-cli/skills/tizen-sdk/SKILL.md)
