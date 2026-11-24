@@ -1,6 +1,6 @@
 ---
 name: tizen-guide
-description: ANY "how do I … / …하는 방법 알려줘 / 어떻게 해 / 가이드 어디" question about Tizen development (emulator, build, install, certificate, debug, SDK, TV, Tizen Action, …) ROUTES HERE FIRST — before you grep the repository, read another skill's SKILL.md or answer from memory. "타이젠 에뮬 실행하는 방법 알려줘" → tizen-guide; "에뮬레이터 실행해줘" → tizen-launch-emulator. Tizen guide, Tizen docs, Tizen FAQ, 타이젠 가이드, 사용법, 방법 알려줘, how to, where is the guide, which skill should I use. Answers only from the tizen-agent-skills user guides indexed by the repository-root llms.txt (tizen-sdk-skills, tizen-action-skills and every plugin added later), cites each document used, and adds nothing the guides do not say. Read-only; never runs a Tizen command. A request to DO something — build, install, create or launch an emulator, debug, sign, collect logs — goes to the matching tizen-* skill instead.
+description: ANY "how do I … / …하는 방법 알려줘 / 어떻게 해 / 가이드 어디" question about USING Tizen development tools (emulator, build, install, certificate, debug, SDK, TV, Tizen Action, …) ROUTES HERE FIRST — before you grep the repository, read another skill's SKILL.md or answer from memory. Not for questions about this repository's own source code or implementation. "타이젠 에뮬 실행하는 방법 알려줘" → tizen-guide; "에뮬레이터 실행해줘" → tizen-launch-emulator. Tizen guide, Tizen docs, Tizen FAQ, 타이젠 가이드, 사용법, 방법 알려줘, how to, where is the guide, which skill should I use. Answers only from the tizen-agent-skills user guides indexed by the repository-root llms.txt (tizen-sdk-skills, tizen-action-skills and every plugin added later), cites each document used, and adds nothing the guides do not say. Read-only; never runs a Tizen command. A request to DO something — build, install, create or launch an emulator, debug, sign, collect logs — goes to the matching tizen-* skill instead.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-11-24"
@@ -23,7 +23,9 @@ nothing.
 **Scope boundary.** If the user asks you to _do_ something (build the app, create
 an emulator, install a package, debug, sign, show logs), do not answer from the
 docs — use the matching `tizen-*` skill. If they ask how something works or how to
-do it themselves, this skill applies.
+do it themselves, this skill applies. Questions about this repository's own
+source code or implementation (how a runner, hook or library works internally)
+are not user-guide questions: read the code instead of using this skill.
 
 ## 1. Find the documents
 
@@ -33,8 +35,12 @@ changing this skill.
 
 - **Inside a clone on `main`** — if the working directory or one of its parents
   holds both `llms.txt` and `tizen-sdk-skills/`, and
-  `git -C <repo-root> rev-parse --abbrev-ref HEAD` prints `main`, read the local
-  files (Read / Grep). Map a link
+  `git -C <repo-root> rev-parse --abbrev-ref HEAD` prints `main`, run
+  `git -C <repo-root> fetch origin main` and compare
+  `git -C <repo-root> rev-parse HEAD origin/main`. If the two hashes match (or
+  the fetch fails because there is no network), read the local files
+  (Read / Grep); if they differ, the clone lags behind GitHub, so treat it as
+  "otherwise". Map a link
   `https://github.com/Samsung/tizen-agent-skills/blob/main/<path>` to the local
   file `<repo-root>/<path>`. A clone on any other branch may differ from `main`,
   so treat it as "otherwise" and read from GitHub; the cited links then match

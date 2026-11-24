@@ -1511,7 +1511,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 **Parameters:** None (the question itself)
 
-**CLI Runner:** None — documentation guide only. The agent reads the documents directly: local files when the working directory is inside a `tizen-agent-skills` clone checked out on `main`, otherwise the raw GitHub URLs listed in `llms.txt` (so the cited `main` links always match what was read).
+**CLI Runner:** None — documentation guide only. The agent reads the documents directly: local files when the working directory is inside a `tizen-agent-skills` clone checked out on an up-to-date `main` (same commit as `origin/main` after a fetch), otherwise the raw GitHub URLs listed in `llms.txt` (so the cited `main` links always match what was read).
 
 **Notes:** Plugins added later are covered automatically once their documents are registered in `llms.txt`. The answer follows the user's language and prefers documents in that language (`docs/X.md` or `docs/X.ko.md` Korean, `docs/X.en.md` English; elsewhere `X.md` English, `X.ko.md` Korean). If the documents do not cover a question, the skill says so and points to GitHub Issues instead of guessing.
 

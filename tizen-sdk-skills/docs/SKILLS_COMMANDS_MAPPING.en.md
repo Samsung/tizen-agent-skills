@@ -36,7 +36,7 @@ The remaining 30 commands map 1:1 to skills.
 
 ---
 
-## Full mapping table (37 commands → 32 skills)
+## Full mapping table (37 commands → 30 skills; 32 with tizen-handoff and tizen-guide)
 
 Grouping matches the [routing table in the tizen-cli umbrella skill](../tizen-cli/skills/tizen-sdk/SKILL.md).
 

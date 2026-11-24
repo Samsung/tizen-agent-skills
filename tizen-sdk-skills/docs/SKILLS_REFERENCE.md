@@ -1492,7 +1492,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 **파라미터:** 없음 (질문 자체)
 
-**CLI 러너:** 없음 — 문서 안내 전용입니다. 작업 폴더가 `main` 브랜치인 `tizen-agent-skills` clone 안이면 로컬 파일을, 아니면 `llms.txt`에 있는 GitHub raw URL을 에이전트가 직접 읽습니다. 그래서 인용하는 `main` 링크가 항상 읽은 내용과 일치합니다.
+**CLI 러너:** 없음 — 문서 안내 전용입니다. 작업 폴더가 최신 `main`(fetch 후 `origin/main`과 같은 커밋)인 `tizen-agent-skills` clone 안이면 로컬 파일을, 아니면 `llms.txt`에 있는 GitHub raw URL을 에이전트가 직접 읽습니다. 그래서 인용하는 `main` 링크가 항상 읽은 내용과 일치합니다.
 
 **참고:** 이후 추가되는 플러그인도 `llms.txt`에 문서를 등록하면 자동으로 안내 대상이 됩니다. 사용자 언어로 답하고 같은 언어의 문서를 우선합니다(`docs/X.md` 또는 `docs/X.ko.md` 한국어, `docs/X.en.md` 영어, 그 밖은 `X.md` 영어, `X.ko.md` 한국어). 문서에 없는 내용은 추측하지 않고 GitHub Issues로 안내합니다.
 

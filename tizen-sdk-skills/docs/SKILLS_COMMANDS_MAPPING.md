@@ -36,7 +36,7 @@
 
 ---
 
-## 전체 맵핑 표 (37개 커맨드 → 32개 스킬)
+## 전체 맵핑 표 (37개 커맨드 → 30개 스킬, tizen-handoff·tizen-guide 포함 32개)
 
 그룹 구분은 [tizen-cli 우산 스킬의 라우팅 테이블](../tizen-cli/skills/tizen-sdk/SKILL.md)과 동일합니다.
 
