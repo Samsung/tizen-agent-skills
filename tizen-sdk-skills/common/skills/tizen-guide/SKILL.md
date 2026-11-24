@@ -1,6 +1,6 @@
 ---
 name: tizen-guide
-description: Tizen guide, Tizen docs, Tizen FAQ, how to use tizen-agent-skills, 타이젠 가이드, 사용법, 방법 알려줘, 어떻게 해, 문서 어디, 가이드 찾아줘, how do I, how to, where is the guide, what does this skill do, which skill should I use. Answers questions about HOW to use the tizen-agent-skills plugins (tizen-sdk-skills, tizen-action-skills and every plugin added later) and points to the right guide, using only the repository's published documents found through its llms.txt index, and cites each document it used. Read-only and never runs a Tizen command. A request to DO something — build, install, create or launch an emulator, debug, sign, collect logs — goes to the matching tizen-* skill instead (tizen-build-project, tizen-install-app, tizen-create-emulator, …).
+description: ANY "how do I … / …하는 방법 알려줘 / 어떻게 해 / 가이드 어디" question about Tizen development (emulator, build, install, certificate, debug, SDK, TV, Tizen Action, …) ROUTES HERE FIRST — before you grep the repository, read another skill's SKILL.md or answer from memory. "타이젠 에뮬 실행하는 방법 알려줘" → tizen-guide; "에뮬레이터 실행해줘" → tizen-launch-emulator. Tizen guide, Tizen docs, Tizen FAQ, 타이젠 가이드, 사용법, 방법 알려줘, how to, where is the guide, which skill should I use. Answers only from the tizen-agent-skills user guides indexed by the repository-root llms.txt (tizen-sdk-skills, tizen-action-skills and every plugin added later), cites each document used, and adds nothing the guides do not say. Read-only; never runs a Tizen command. A request to DO something — build, install, create or launch an emulator, debug, sign, collect logs — goes to the matching tizen-* skill instead.
 metadata:
   author: Samsung Electronics
   last-updated: "2026-11-24"
@@ -57,14 +57,20 @@ memory.
 3. Read only what the question needs. Search a long document for the relevant
    heading instead of reading it whole.
 
+**Sources are user guides only.** Use the documents linked from `llms.txt`, the
+plugin documentation indexes and the guides under each plugin's `docs/` and
+`usage/`. Do **not** answer from `common/skills/*/SKILL.md`, `common/agents/*.md`
+or `common/hooks/*` — those are instructions for agents (their fallbacks and
+troubleshooting asides are not user-facing methods).
+
 ## 3. Pick the language
 
 Answer in the user's language and prefer documents in that language:
 
-| Location                                   | English   | Korean    |
-| ------------------------------------------ | --------- | --------- |
-| Repository root, plugin root, `tizen-cli/` | `X.md`    | `X.ko.md` |
-| `tizen-sdk-skills/docs/`                   | `X.en.md` | `X.md`    |
+| Location                                   | English   | Korean              |
+| ------------------------------------------ | --------- | ------------------- |
+| Repository root, plugin root, `tizen-cli/` | `X.md`    | `X.ko.md`           |
+| `tizen-sdk-skills/docs/`                   | `X.en.md` | `X.md` or `X.ko.md` |
 
 If only one language exists, use it and translate the answer.
 
@@ -72,6 +78,9 @@ If only one language exists, use it and translate the answer.
 
 - Base the answer only on what the documents say. Keep commands, paths and option
   names exactly as written there.
+- Do not add methods, tools, menus or alternatives from general knowledge (for
+  example Tizen Studio GUI steps) when the guides do not describe them. Present
+  only the ways the guides give.
 - End with a **References** list of the documents used, as GitHub blob URLs
   (`https://github.com/Samsung/tizen-agent-skills/blob/main/<path>`), even when
   you read them locally.
