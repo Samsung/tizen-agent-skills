@@ -121,6 +121,8 @@ url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Unified/latest/repo
 | `[profile.<이름>]` | `buildroot` | 이 프로파일의 빌드 루트. 산출물은 `<buildroot>/local/repos/<profile>/<arch>/RPMS/`에 생성 |
 | `[repo.<이름>]`    | `url`       | 패키지 저장소 URL (`repodata/`가 있는 디렉토리)                                           |
 
+산출물 경로의 `<profile>`은 `profile.` 접두어를 뺀 프로파일 이름입니다. 예를 들어 `profile.tizen-10.0`이면 `tizen-10.0`입니다.
+
 위 URL은 모두 공개 Tizen 저장소(`download.tizen.org`)입니다. 디바이스나 에뮬레이터의 플랫폼 버전과 같은 저장소를 쓰는 프로파일을 `[general]`의 `profile`로 지정하세요.
 
 - **프로파일 전환**: 이 플러그인은 `gbs build -A <arch> --include-all`을 실행하며 `-P`를 넘기지 않으므로, `[general]`의 `profile` 값을 바꿔서 전환합니다. GBS를 직접 실행할 때는 `gbs build -P profile.tizen-snapshot ...`처럼 지정할 수도 있습니다.

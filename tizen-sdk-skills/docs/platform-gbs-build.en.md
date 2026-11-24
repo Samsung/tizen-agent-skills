@@ -121,6 +121,8 @@ url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Unified/latest/repo
 | `[profile.<name>]` | `buildroot` | Build root for this profile; artifacts land in `<buildroot>/local/repos/<profile>/<arch>/RPMS/` |
 | `[repo.<name>]`    | `url`       | Package repository URL (the directory that holds `repodata/`)                                   |
 
+`<profile>` in the output path is the profile name without the `profile.` prefix, for example `tizen-10.0` for `profile.tizen-10.0`.
+
 All URLs above are public Tizen repositories (`download.tizen.org`). Set `[general]` `profile` to the profile whose repositories match the platform version your device or emulator runs.
 
 - **Switching profiles**: this plugin runs `gbs build -A <arch> --include-all` without `-P`, so switch by changing `[general]` `profile`. When you run GBS yourself you can also pick one with `gbs build -P profile.tizen-snapshot ...`.
