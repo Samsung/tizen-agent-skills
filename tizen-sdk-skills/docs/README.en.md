@@ -20,7 +20,7 @@ This document (README) is the **overall overview and user manual** for the plugi
 | [rds/RDS_FAST_DEPLOY_PLAN.en.md](rds/RDS_FAST_DEPLOY_PLAN.en.md) | **RDS / Fast Deploy integration plan** — design of the delta deploy behind `install-app` (only changed files are pushed), state file formats, vendoring decisions, `deploy_type` / `TIZEN_RDS_ENABLED` / `--reset-rds`, real-device verification on a Tizen 11 emulator |
 | [envelope/](envelope/) | **Standard JSON Envelope** — response standardization layer: [Usage Guide](envelope/ENVELOPE_USAGE_GUIDE.md), [Call Flow](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit Explained](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [Implementation Summary](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK Installation Flow** — [Full Flow](sdk-install/INSTALLATION_FLOW.md), [Agent-installSdk Integration](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [Installation Verification](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [Custom Repository Install](sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md), [.NET Environment Setup E2E](sdk-install/DOTNET_SETUP_E2E.en.md) |
-| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 32 skills map onto the 37 tizen-cli commands, and why the counts differ |
+| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 33 skills map onto the 37 tizen-cli commands, and why the counts differ |
 
 Implementation code is in [common/lib/](../common/lib/README.md).
 
@@ -865,7 +865,7 @@ echo %TIZEN_SDK_PATH%   # Windows
 
 **Plugin version**: `0.1.0`
 
-All 32 skills are released at the same version. The version is specified in each skill folder's `SKILL.md`.
+All 33 skills are released at the same version. The version is specified in each skill folder's `SKILL.md`.
 
 
 

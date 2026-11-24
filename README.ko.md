@@ -24,7 +24,7 @@
 <!-- plugins:start -->
 | 플러그인 | 하는 일 | 지원 호스트 | 버전 | 설치 및 문서 |
 |---|---|---|---|---|
-| [`tizen-sdk-skills/`](tizen-sdk-skills/) | 타이젠 SDK를 처음부터 끝까지 자동화: SDK 설치, 프로젝트 생성, 빌드, 에뮬레이터·디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서, dlog 분석, Playwright 테스트. 스킬 31개, 에이전트 25개, 독립 실행 `tizen-sdk` CLI, VS Code용 Tizen AI Extension 포함. | Claude Code, Cline, Codex CLI, Gemini CLI, VS Code, 독립 실행 CLI | 1.10.0 | [빠른 시작](tizen-sdk-skills/README.ko.md#빠른-시작) · [README](tizen-sdk-skills/README.ko.md) · [English](tizen-sdk-skills/README.md) · [스킬 레퍼런스](tizen-sdk-skills/docs/SKILLS_REFERENCE.md) |
+| [`tizen-sdk-skills/`](tizen-sdk-skills/) | 타이젠 SDK를 처음부터 끝까지 자동화: SDK 설치, 프로젝트 생성, 빌드, 에뮬레이터·디바이스 관리, 앱 설치, 원격 디버깅(GDB / netcoredbg / CDP), 인증서, dlog 분석, Playwright 테스트. 스킬 33개, 에이전트 26개, 독립 실행 `tizen-sdk` CLI, VS Code용 Tizen AI Extension 포함. | Claude Code, Cline, Codex CLI, Gemini CLI, VS Code, 독립 실행 CLI | 1.10.0 | [빠른 시작](tizen-sdk-skills/README.ko.md#빠른-시작) · [README](tizen-sdk-skills/README.ko.md) · [English](tizen-sdk-skills/README.md) · [스킬 레퍼런스](tizen-sdk-skills/docs/SKILLS_REFERENCE.md) |
 | [`tizen-action-skills/`](tizen-action-skills/) | Tizen Action Framework provider 개발: 기본 Action 카테고리 선택 또는 custom `.action`/`.entity` 작성, C#·C++·JavaScript·Flutter-Tizen/Dart용 `actionc`/TIDL stub 생성, provider metadata 등록, `action-tool` 검증. 스킬 1개. | Claude Code | 1.0.0 | [README](tizen-action-skills/README.ko.md) · [English](tizen-action-skills/README.md) |
 <!-- plugins:end -->
 
@@ -58,7 +58,7 @@
 | 환경 점검 (3) | `tizen-check-node`, `tizen-check-disk-space`, `tizen-dotnet-setup` |
 | 프로젝트·빌드 (2) | `tizen-create-project` (웹, 네이티브, .NET, TV, RPK, Platform/GBS), `tizen-build-project` |
 | 에뮬레이터·디바이스 (7) | `tizen-create-emulator`, `tizen-launch-emulator`, `tizen-device-manager`, `tizen-remote-device`, `tizen-sdb-helper`, `tizen-file-transfer`, `tizen-screenshot` |
-| 설치·디버깅·테스트 (6) | `tizen-install-app`, `tizen-gdb-debug` (네이티브), `tizen-dotnet-debug` (.NET / netcoredbg), `tizen-webapp-debug` (웹 / RWI / CDP), `tizen-playwright-test`, `tizen-dlog-analyzer` |
+| 설치·디버깅·테스트 (7) | `tizen-install-app`, `tizen-gdb-debug` (네이티브), `tizen-dotnet-debug` (.NET / netcoredbg), `tizen-webapp-debug` (웹 / RWI / CDP), `tizen-playwright-test`, `tizen-gtest` (네이티브 gtest), `tizen-dlog-analyzer` |
 | 인증서 (1) | `tizen-certificate-manager` (로컬 및 삼성 온라인 CA 프로파일) |
 
 상세 설명, 트리거 문구, `tizen-sdk` CLI 명령 36개는 플러그인의
