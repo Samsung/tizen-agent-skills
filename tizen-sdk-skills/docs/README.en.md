@@ -30,7 +30,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 
 `tizen-sdk-skills` provides 32 automation skills for Tizen application development.
 
-### 30 Core Skills
+### 32 Skills
 
 | Skill | Description | Use Case |
 |-------|-------------|----------|
@@ -44,6 +44,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 | **tizen-build-project** | Automated project build | Build Native/DotNET/WebApp/Platform (GBS) projects |
 | **tizen-create-emulator** | Create a custom emulator VM via em-cli (user-selected screen size, default 1080) | Create/list/delete emulator VMs, TV profile support |
 | **tizen-launch-emulator** | Launch an existing emulator VM (em-cli launch) | Boot an emulator and wait for sdb connection |
+| **tizen-ecp** | Run one Emulator Control Panel (ecp-cli) request on a running emulator | Battery and other device controls, list the devices a platform version supports |
 | **tizen-download-emulator-package** | Download and install the emulator package (TIZEN-{version}-Emulator) | Set up the emulator runtime after SDK installation |
 | **tizen-platform-install** | Download and install a Tizen platform package (TIZEN-{version}) | Set up build/emulator support for a specific platform version |
 | **tizen-download-mobile-platform** | Download and install the Tizen Mobile platform package (MOBILE-{version}) | Mobile-profile development, optional IOT-Headed extension |

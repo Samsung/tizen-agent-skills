@@ -31,7 +31,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 
 `tizen-sdk-skills`는 Tizen 애플리케이션 개발을 위한 30가지 자동화 스킬을 제공합니다.
 
-### 30가지 핵심 스킬
+### 32가지 스킬
 
 | 스킬 | 설명 | 용도 |
 |------|------|------|
@@ -45,6 +45,7 @@ Tizen 개발 환경 구성, 프로젝트 생성, 빌드, 배포, 디버깅을 �
 | **tizen-build-project** | 프로젝트 자동 빌드 | Native/DotNET/WebApp/Platform(GBS) 프로젝트 빌드 |
 | **tizen-create-emulator** | em-cli로 커스텀 에뮬레이터 VM 생성 (화면 크기 선택, 기본 1080) | 에뮬레이터 VM 생성/목록/삭제, TV 프로필 지원 |
 | **tizen-launch-emulator** | 기존 에뮬레이터 VM 실행 (em-cli launch) | 에뮬레이터 부팅 및 sdb 연결 대기 |
+| **tizen-ecp** | 실행 중인 에뮬레이터에 Emulator Control Panel(ecp-cli) 요청 하나 실행 | 배터리 등 기기 제어, 플랫폼 버전별 지원 기기 목록 조회 |
 | **tizen-download-emulator-package** | 에뮬레이터 패키지(TIZEN-{버전}-Emulator) 다운로드 및 설치 | SDK 설치 후 에뮬레이터 실행 환경 구성 |
 | **tizen-platform-install** | Tizen 플랫폼 패키지(TIZEN-{버전}) 다운로드 및 설치 | 특정 플랫폼 버전용 빌드/에뮬레이터 환경 구성 |
 | **tizen-download-mobile-platform** | Tizen 모바일 플랫폼 패키지(MOBILE-{버전}) 다운로드 및 설치 | 모바일 프로필 개발, IOT-Headed 확장 선택 설치 |
