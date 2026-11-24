@@ -79,7 +79,7 @@ BuildRequires:  pkgconfig(dali2-toolkit)
 
 ### 4. .gbs.conf
 
-GBS 빌드를 위해 홈 디렉토리에 `.gbs.conf` 파일이 필요합니다. 이 파일은 GBS가 사용할 Tizen 플랫폼 저장소 프로파일을 정의합니다.
+GBS 빌드를 위해 `.gbs.conf` 파일(보통 `~/.gbs.conf`, 아래 탐색 순서 참고)이 필요합니다. 이 파일은 GBS가 사용할 Tizen 플랫폼 저장소 프로파일을 정의합니다.
 
 이 플러그인은 `.gbs.conf`를 만들거나 수정하지 않으므로 직접 작성해야 합니다. Tizen 10.0 릴리스 저장소와 최신 스냅샷 저장소를 프로파일 두 개로 나눈 `~/.gbs.conf` 예시:
 
@@ -113,19 +113,19 @@ url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Base/latest/repos/s
 url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Unified/latest/repos/standard/packages/
 ```
 
-| 섹션               | 키          | 의미                                                                            |
-| ------------------ | ----------- | ------------------------------------------------------------------------------- |
-| `[general]`        | `profile`   | `gbs build`가 기본으로 사용할 프로파일 섹션 이름                                |
-| `[general]`        | `buildroot` | 자체 `buildroot`가 없는 모든 프로파일의 빌드 루트 (선택)                        |
-| `[profile.<이름>]` | `repos`     | `BuildRequires` 패키지를 가져올 `repo.<이름>` 섹션 목록 (쉼표로 구분)           |
-| `[profile.<이름>]` | `buildroot` | 이 프로파일의 빌드 루트. 산출물은 `<buildroot>/local/repos/<arch>/RPMS/`에 생성 |
-| `[repo.<이름>]`    | `url`       | 패키지 저장소 URL (`repodata/`가 있는 디렉토리)                                 |
+| 섹션               | 키          | 의미                                                                                      |
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------- |
+| `[general]`        | `profile`   | `gbs build`가 기본으로 사용할 프로파일 섹션 이름                                          |
+| `[general]`        | `buildroot` | 자체 `buildroot`가 없는 모든 프로파일의 빌드 루트 (선택)                                  |
+| `[profile.<이름>]` | `repos`     | `BuildRequires` 패키지를 가져올 `repo.<이름>` 섹션 목록 (쉼표로 구분)                     |
+| `[profile.<이름>]` | `buildroot` | 이 프로파일의 빌드 루트. 산출물은 `<buildroot>/local/repos/<profile>/<arch>/RPMS/`에 생성 |
+| `[repo.<이름>]`    | `url`       | 패키지 저장소 URL (`repodata/`가 있는 디렉토리)                                           |
 
 위 URL은 모두 공개 Tizen 저장소(`download.tizen.org`)입니다. 디바이스나 에뮬레이터의 플랫폼 버전과 같은 저장소를 쓰는 프로파일을 `[general]`의 `profile`로 지정하세요.
 
 - **프로파일 전환**: 이 플러그인은 `gbs build -A <arch> --include-all`을 실행하며 `-P`를 넘기지 않으므로, `[general]`의 `profile` 값을 바꿔서 전환합니다. GBS를 직접 실행할 때는 `gbs build -P profile.tizen-snapshot ...`처럼 지정할 수도 있습니다.
 - **빌드 루트 분리**: 프로파일마다 `buildroot`를 다르게 두면 버전이 다른 패키지가 한 빌드 루트에 섞이지 않습니다.
-- **`latest` 경로**: 새 릴리스가 나오면 바뀝니다. 빌드 결과를 고정하려면 `latest` 대신 날짜가 붙은 디렉토리(예: `tizen-10.0-unified_<날짜>`)를 지정하세요.
+- **`latest` 경로**: 새 릴리스가 나오면 바뀝니다. 빌드 결과를 고정하려면 `latest` 대신 날짜가 붙은 디렉토리(예: `tizen-10.0-unified_<날짜>`)를 지정하세요. Base와 Unified는 같은 릴리스의 날짜 디렉토리로 함께 고정해야 두 저장소가 어긋나지 않습니다.
 
 GBS는 여러 위치의 `.gbs.conf`를 읽으며, 같은 키는 먼저 찾은 파일의 값이 적용됩니다:
 
@@ -134,7 +134,7 @@ GBS는 여러 위치의 `.gbs.conf`를 읽으며, 같은 키는 먼저 찾은 �
 3. `~/.gbs.conf`
 4. `/etc/gbs.conf`
 
-빌드 루트는 `TIZEN_BUILD_ROOT` 환경 변수 → 현재 프로파일의 `buildroot` → `[general]`의 `buildroot` → `~/GBS-ROOT` 순서로 정해집니다. 빌드 러너도 같은 순서로 `.rpm` 산출물을 찾습니다.
+빌드 루트는 `TIZEN_BUILD_ROOT` 환경 변수 → 현재 프로파일의 `buildroot` → `[general]`의 `buildroot` → `~/GBS-ROOT` 순서로 정해집니다. 빌드 후 러너는 프로젝트 디렉토리 → gbs가 출력한 local repo → 결정된 빌드 루트 → `~/GBS-ROOT` 순서로 새 `.rpm` 파일을 찾습니다.
 
 ---
 
@@ -256,12 +256,12 @@ GBS 빌드가 성공하면 GBS 빌드 루트 아래에 `.rpm` 패키지가 생�
 `TIZEN_BUILD_ROOT`나 `.gbs.conf`의 `buildroot`가 지정되지 않으면 빌드 루트는 `~/GBS-ROOT`입니다:
 
 ```
-~/GBS-ROOT/local/repos/<arch>/RPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/RPMS/
 ├── <app-name>-<version>-<release>.<arch>.rpm          # 메인 패키지
 ├── <app-name>-debuginfo-<version>-<release>.<arch>.rpm  # 디버그 정보
 └── <app-name>-debugsource-<version>-<release>.<arch>.rpm # 디버그 소스
 
-~/GBS-ROOT/local/repos/<arch>/SRPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/SRPMS/
 └── <app-name>-<version>-<release>.src.rpm               # 소스 RPM
 ```
 

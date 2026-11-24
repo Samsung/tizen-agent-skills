@@ -79,7 +79,7 @@ BuildRequires:  pkgconfig(dali2-toolkit)
 
 ### 4. .gbs.conf
 
-A `.gbs.conf` file in the home directory is required for GBS builds. This file defines the Tizen platform repository profile that GBS uses.
+A `.gbs.conf` file (usually `~/.gbs.conf`; see the lookup order below) is required for GBS builds. This file defines the Tizen platform repository profile that GBS uses.
 
 This plugin does not create or edit `.gbs.conf`; write it yourself. An example `~/.gbs.conf` with two profiles, one for the Tizen 10.0 release repositories and one for the latest snapshot:
 
@@ -113,19 +113,19 @@ url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Base/latest/repos/s
 url = https://download.tizen.org/snapshots/TIZEN/Tizen/Tizen-Unified/latest/repos/standard/packages/
 ```
 
-| Section            | Key         | Meaning                                                                               |
-| ------------------ | ----------- | ------------------------------------------------------------------------------------- |
-| `[general]`        | `profile`   | Name of the profile section `gbs build` uses by default                               |
-| `[general]`        | `buildroot` | Build root for every profile that does not set its own (optional)                     |
-| `[profile.<name>]` | `repos`     | Comma-separated `repo.<name>` sections to fetch `BuildRequires` packages from         |
-| `[profile.<name>]` | `buildroot` | Build root for this profile; artifacts land in `<buildroot>/local/repos/<arch>/RPMS/` |
-| `[repo.<name>]`    | `url`       | Package repository URL (the directory that holds `repodata/`)                         |
+| Section            | Key         | Meaning                                                                                         |
+| ------------------ | ----------- | ----------------------------------------------------------------------------------------------- |
+| `[general]`        | `profile`   | Name of the profile section `gbs build` uses by default                                         |
+| `[general]`        | `buildroot` | Build root for every profile that does not set its own (optional)                               |
+| `[profile.<name>]` | `repos`     | Comma-separated `repo.<name>` sections to fetch `BuildRequires` packages from                   |
+| `[profile.<name>]` | `buildroot` | Build root for this profile; artifacts land in `<buildroot>/local/repos/<profile>/<arch>/RPMS/` |
+| `[repo.<name>]`    | `url`       | Package repository URL (the directory that holds `repodata/`)                                   |
 
 All URLs above are public Tizen repositories (`download.tizen.org`). Set `[general]` `profile` to the profile whose repositories match the platform version your device or emulator runs.
 
 - **Switching profiles**: this plugin runs `gbs build -A <arch> --include-all` without `-P`, so switch by changing `[general]` `profile`. When you run GBS yourself you can also pick one with `gbs build -P profile.tizen-snapshot ...`.
 - **Separate build roots**: giving each profile its own `buildroot` keeps packages from different versions out of the same build root.
-- **`latest` paths**: they move when a new release is published. To pin a build, use a dated directory (for example `tizen-10.0-unified_<date>`) instead of `latest`.
+- **`latest` paths**: they move when a new release is published. To pin a build, use a dated directory (for example `tizen-10.0-unified_<date>`) instead of `latest`. Pin Base and Unified to dated directories from the same release so the two repositories stay in step.
 
 GBS reads `.gbs.conf` from several places, and the first file that sets a key wins:
 
@@ -134,7 +134,7 @@ GBS reads `.gbs.conf` from several places, and the first file that sets a key wi
 3. `~/.gbs.conf`
 4. `/etc/gbs.conf`
 
-The build root is chosen in this order: the `TIZEN_BUILD_ROOT` environment variable, the current profile's `buildroot`, `[general]` `buildroot`, then `~/GBS-ROOT`. The build runner looks for `.rpm` artifacts in the same order.
+The build root is chosen in this order: the `TIZEN_BUILD_ROOT` environment variable, the current profile's `buildroot`, `[general]` `buildroot`, then `~/GBS-ROOT`. After the build, the runner looks for new `.rpm` files in the project directory, the local repo that gbs reports in its output, the resolved build root, then `~/GBS-ROOT`.
 
 ---
 
@@ -256,12 +256,12 @@ When the GBS build succeeds, `.rpm` packages are generated under the GBS build r
 `~/GBS-ROOT` unless `TIZEN_BUILD_ROOT` or `buildroot` in `.gbs.conf` says otherwise:
 
 ```
-~/GBS-ROOT/local/repos/<arch>/RPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/RPMS/
 ├── <app-name>-<version>-<release>.<arch>.rpm          # Main package
 ├── <app-name>-debuginfo-<version>-<release>.<arch>.rpm  # Debug info
 └── <app-name>-debugsource-<version>-<release>.<arch>.rpm # Debug source
 
-~/GBS-ROOT/local/repos/<arch>/SRPMS/
+~/GBS-ROOT/local/repos/<profile>/<arch>/SRPMS/
 └── <app-name>-<version>-<release>.src.rpm               # Source RPM
 ```
 
