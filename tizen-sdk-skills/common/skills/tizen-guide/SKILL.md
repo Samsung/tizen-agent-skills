@@ -33,25 +33,21 @@ The index of every plugin's documents is the repository's `llms.txt`. Each plugi
 registers its README and main guides there, so new plugins are covered without
 changing this skill.
 
-- **Inside a clone on `main`** — if the working directory or one of its parents
-  holds both `llms.txt` and `tizen-sdk-skills/`, and
-  `git -C <repo-root> rev-parse --abbrev-ref HEAD` prints `main`, run
-  `git -C <repo-root> fetch origin main` and compare
-  `git -C <repo-root> rev-parse HEAD origin/main`. If the two hashes match (or
-  the fetch fails because there is no network), read the local files
-  (Read / Grep); if they differ, the clone lags behind GitHub, so treat it as
-  "otherwise". Map a link
-  `https://github.com/Samsung/tizen-agent-skills/blob/main/<path>` to the local
-  file `<repo-root>/<path>`. A clone on any other branch may differ from `main`,
-  so treat it as "otherwise" and read from GitHub; the cited links then match
-  what you read.
-- **Otherwise** — fetch
-  `https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/llms.txt`.
-  Read each linked document through its raw URL: replace
+- **Always start from GitHub `main`**, whatever the working directory — fetch
+  `https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/llms.txt`
+  and read each linked document through its raw URL: replace
   `https://github.com/Samsung/tizen-agent-skills/blob/main/` with
-  `https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/`.
+  `https://raw.githubusercontent.com/Samsung/tizen-agent-skills/main/`. The
+  cited links then always match what you read, even in a fork or on another
+  branch.
+- **Offline fallback** — only if GitHub cannot be reached and the working
+  directory or one of its parents holds both `llms.txt` and `tizen-sdk-skills/`,
+  read those local files instead (Read / Grep; a link
+  `https://github.com/Samsung/tizen-agent-skills/blob/main/<path>` maps to
+  `<repo-root>/<path>`), and tell the user the local copy may differ from
+  `main`.
 
-If neither works (no clone and no network access), say so and give the user the
+If neither works (no network and no clone), say so and give the user the
 repository URL `https://github.com/Samsung/tizen-agent-skills`; do not answer from
 memory.
 
