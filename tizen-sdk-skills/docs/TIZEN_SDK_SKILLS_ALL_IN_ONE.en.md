@@ -14,7 +14,7 @@ English | [한국어](TIZEN_SDK_SKILLS_ALL_IN_ONE.md)
 
 | Part | Contents | Jump to |
 |------|----------|---------|
-| Part 1 | Reference for all 31 skills (parameters, CLI runners, response formats) | [Skills Reference](#tizen-sdk-skills--skills-reference) |
+| Part 1 | Reference for all 32 skills (parameters, CLI runners, response formats) | [Skills Reference](#tizen-sdk-skills--skills-reference) |
 | Part 2 | Command layer architecture and call flow | [Command Architecture](#tizen-sdk-command-layer--architecture--call-flow) |
 | Part 3 | End-to-end usage scenarios & walkthrough guide | [Usage Scenarios](#tizen-sdk-skills--usage-scenarios--walkthrough-guide) |
 
@@ -32,7 +32,7 @@ English | [한국어](TIZEN_SDK_SKILLS_ALL_IN_ONE.md)
 
 ## Overview
 
-`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **31 automation skills** that can be triggered via natural language.
+`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **32 automation skills** that can be triggered via natural language.
 
 All skills return responses in **Standard JSON Envelope** format, ensuring consistent error handling and machine-readable output.
 
@@ -41,7 +41,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **31 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **32 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -2000,7 +2000,7 @@ Functions that invoke scripts leaving (or potentially leaving) background proces
 ## Related Documents
 
 - [Intermediate Layer Introductions](SDK_LAYERS_OVERVIEW.en.md) — Why each layer is needed and why .ps1 is not called directly
-- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 31 skills map onto the 37 commands (and why the counts differ)
+- [Skill ↔ Command Mapping](SKILLS_COMMANDS_MAPPING.en.md) — How the 32 skills map onto the 37 commands (and why the counts differ)
 
 ---
 

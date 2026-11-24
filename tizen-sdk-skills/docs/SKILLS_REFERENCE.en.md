@@ -12,7 +12,7 @@ English | [한국어](SKILLS_REFERENCE.md)
 
 ## Overview
 
-`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **31 automation skills** that can be triggered via natural language.
+`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **32 automation skills** that can be triggered via natural language.
 
 All skills return responses in **Standard JSON Envelope** format, ensuring consistent error handling and machine-readable output.
 
@@ -21,7 +21,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **31 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **32 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -1503,6 +1503,22 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 ---
 
+### 31. tizen-guide
+
+**Description:** Answer questions about how to use the tizen-agent-skills plugins and point to the right guide, using only the repository's published documents (indexed by the root `llms.txt`), with links to every document used.
+
+**Use Case:** "How do I make a Tizen certificate?", "Where is the TV emulator setup guide?", "Which skill should I use to debug a web app?" — questions about how something works or how to do it, not requests to run it. A request to do something (build, install, create an emulator, debug) goes to the matching `tizen-*` skill.
+
+**Parameters:** None (the question itself)
+
+**CLI Runner:** None — documentation guide only. The agent reads the documents directly: local files when the working directory is inside a `tizen-agent-skills` clone, otherwise the raw GitHub URLs listed in `llms.txt`.
+
+**Notes:** Plugins added later are covered automatically once their documents are registered in `llms.txt`. The answer follows the user's language and prefers documents in that language (`docs/X.md` Korean, `docs/X.en.md` English; elsewhere `X.md` English, `X.ko.md` Korean). If the documents do not cover a question, the skill says so and points to GitHub Issues instead of guessing.
+
+**Dependencies:** None (no SDK or device required; network access to GitHub when not inside a clone)
+
+---
+
 ## Skill Dependency Flow
 
 ```
@@ -1600,6 +1616,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | Install custom rootstrap ZIP package (with security validation) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` etc. | `dlog-analyzer-cli.js` | Continuous dlog crash/exception collection & analysis (background) |
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
+| 31  | `tizen-guide`            | —                     | — (docs guide only)       | Answer how-to questions from the published docs (`llms.txt`) |
 
 ---
 

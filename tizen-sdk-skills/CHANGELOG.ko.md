@@ -22,6 +22,13 @@
 
 ### 추가
 
+- **`tizen-guide` 스킬 — 문서 안내.** tizen-agent-skills 플러그인 사용법을
+  묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에
+  등록된 문서만 근거로 쓰며(clone 안에서는 로컬 파일, 그 밖에서는 GitHub raw
+  URL), 참고한 문서 링크를 함께 제시합니다. 이후 추가되는 플러그인도
+  `llms.txt`에 문서를 등록하면 자동으로 안내 대상이 됩니다. 러너와 `tizen-cli`
+  커맨드는 없으며, 실행 요청은 계속 해당 `tizen-*` 스킬이 처리합니다.
+
 - **`tizen-ecp` 스킬/에이전트 — Emulator Control Panel (ecp-cli)**. **실행 중인**
   에뮬레이터에 대해 Emulator Control Panel 요청 하나를 새 `ecp-cli.js` 러너
   (`common/lib/cli/`, 코어는 `common/lib/core/ecp.js`)로 실행합니다:

@@ -24,6 +24,14 @@ below use those release tags.
 
 ### Added
 
+- **`tizen-guide` skill — documentation guide.** Answers questions about how
+  to use the tizen-agent-skills plugins and points to the right guide, using
+  only the documents indexed by the repository-root `llms.txt` (local files
+  inside a clone, raw GitHub URLs otherwise) and citing each document used.
+  Plugins added later are covered once their documents are in `llms.txt`. No
+  runner and no `tizen-cli` command; requests to run something still go to the
+  matching `tizen-*` skill.
+
 - **`tizen-ecp` skill / agent — Emulator Control Panel (ecp-cli)**. Runs ONE
   Emulator Control Panel request against a **running** emulator via the new
   `ecp-cli.js` runner (`common/lib/cli/`, core in `common/lib/core/ecp.js`):

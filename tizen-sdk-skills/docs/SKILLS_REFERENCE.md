@@ -11,7 +11,7 @@
 
 ## 개요
 
-`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **31개 자동화 스킬**을 제공합니다.
+`tizen-sdk-skills`는 **Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli**에서 동작하는 통합 스킬 컬렉션으로, Tizen 개발 환경 설정, 프로젝트 생성, 빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석을 자동화합니다. 자연어로 트리거할 수 있는 **32개 자동화 스킬**을 제공합니다.
 
 모든 스킬은 **Standard JSON Envelope** 형식으로 응답하여 일관된 에러 처리와 기계 판독 가능한 출력을 보장합니다.
 
@@ -20,7 +20,7 @@
 ## 주요 기능
 
 - ✅ **원커맨드 SDK 설정** — Node.js 체크 → 디스크 공간 체크 → SDK 설치, 완전 자동화
-- ✅ **31개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
+- ✅ **32개 스킬**로 Tizen 개발 전체 라이프사이클 커버 (빌드, 배포, 디버깅, 스크린샷 캡처, 로그 분석, 플랫폼/루트스트랩 설치)
 
 - ✅ **크로스 플랫폼** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **멀티 하네스 지원** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (하나의 `common/`을 공유, 하네스별 setup은 `common/setup/setup.{sh,ps1} --harness <이름>`)
@@ -1484,6 +1484,22 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 ---
 
+### 31. tizen-guide
+
+**설명:** tizen-agent-skills 플러그인 사용법을 묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에 등록된 공개 문서만 근거로 쓰고, 참고한 문서 링크를 함께 제시합니다.
+
+**사용 사례:** "타이젠 인증서는 어떻게 만들어?", "TV 에뮬레이터 설정 가이드 어디 있어?", "웹앱 디버깅은 어떤 스킬을 써?"처럼 방법이나 개념을 묻는 질문입니다. 빌드, 설치, 에뮬레이터 생성, 디버깅 같은 실행 요청은 해당 `tizen-*` 스킬이 처리합니다.
+
+**파라미터:** 없음 (질문 자체)
+
+**CLI 러너:** 없음 — 문서 안내 전용입니다. 작업 폴더가 `tizen-agent-skills` clone 안이면 로컬 파일을, 아니면 `llms.txt`에 있는 GitHub raw URL을 에이전트가 직접 읽습니다.
+
+**참고:** 이후 추가되는 플러그인도 `llms.txt`에 문서를 등록하면 자동으로 안내 대상이 됩니다. 사용자 언어로 답하고 같은 언어의 문서를 우선합니다(`docs/X.md` 한국어, `docs/X.en.md` 영어, 그 밖은 `X.md` 영어, `X.ko.md` 한국어). 문서에 없는 내용은 추측하지 않고 GitHub Issues로 안내합니다.
+
+**의존성:** 없음 (SDK·디바이스 불필요, clone 밖에서는 GitHub 네트워크 접근 필요)
+
+---
+
 ## 스킬 의존성 흐름
 
 
@@ -1582,6 +1598,7 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | 커스텀 루트스트랩 ZIP 패키지 설치 (보안 검증 포함) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` 외 | `dlog-analyzer-cli.js`  | dlog 크래시/예외 지속 수집·분석 (백그라운드)       |
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | 프로젝트의 에이전트 간 핸드오프 노트 확인·생성 |
+| 31  | `tizen-guide`            | —                     | — (문서 안내 전용)        | 공개 문서(`llms.txt`) 기반 사용법 질문 응답        |
 
 ---
 
