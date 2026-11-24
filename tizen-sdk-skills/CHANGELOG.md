@@ -16,6 +16,19 @@ below use those release tags.
 
 ### Fixed
 
+- **`tizen-ecp` battery commands no longer fail with "Not supported
+  commands."** The runner assumed an ecp-cli grammar (`battery set <n>`) that
+  no current platform build ships; the real battery grammar is
+  `battery level <n>`, `battery charger on|off`, `battery status`. The
+  battery intent now maps natural-language phrasing to that grammar
+  ("set the battery level to 50" → `battery level 50`, "battery 75" →
+  `battery level 75`, "turn the battery charger off" → `battery charger off`)
+  and no longer strips the word "level" as a filler. `"help <device>"` also
+  keeps the device token so ecp-cli prints that device's commands
+  (`help battery`), which it silently dropped before.
+
+### Added
+
 - **`tizen-sdk --doctor` no longer prints a Node.js `DEP0190`
   DeprecationWarning to stderr.** The command check in
   `tizen-cli/src/doctor.ts` passed an argument array together with

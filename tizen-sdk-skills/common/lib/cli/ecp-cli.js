@@ -13,7 +13,7 @@
  *   node .../ecp-cli.js --request "what devices are available for version 9.0, profile tv"
  *   node .../ecp-cli.js --request "help"
  *   node .../ecp-cli.js --request "battery status"
- *   node .../ecp-cli.js --request "battery set 50" --target emulator-26101
+ *   node .../ecp-cli.js --request "battery level 50" --target emulator-26101
  *
  * ECP commands control a RUNNING emulator: with no emulator running the runner
  * returns a failure envelope that points at tizen-launch-emulator.

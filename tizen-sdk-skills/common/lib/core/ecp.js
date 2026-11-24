@@ -135,7 +135,7 @@ function noRunningEmulatorError() {
 
 /**
  * Fillers dropped when extracting the arguments that follow a command word
- * (e.g. "set the battery level to 50" → battery set 50).
+ * (e.g. "battery help" → ["help"]).
  */
 const FILLER_WORDS = new Set([
   "the",
@@ -169,6 +169,31 @@ function commandArgsAfter(request, commandWord) {
     .split(/\s+/)
     .map((t) => t.replace(/^["']|["']$/g, ""))
     .filter((t) => t && !FILLER_WORDS.has(t.toLowerCase()));
+}
+
+/**
+ * Extract the battery subcommand from the request, following the ecp-cli
+ * battery grammar — `battery level <n>`, `battery charger on|off`,
+ * `battery status` (verified against the platform ecp-plugin jar; there is
+ * no "set" subcommand). "set the battery level to 50" → ["level", "50"],
+ * "turn the battery charger off" → ["charger", "off"], "battery status" →
+ * ["status"], "battery 75" → ["level", "75"]. Anything else falls back to
+ * commandArgsAfter() (e.g. "battery help" → ["help"]).
+ *
+ * @param {string} request - the whole request text
+ * @param {string} commandWord - the battery word as written ("battery", "배터리")
+ * @returns {string[]}
+ */
+function batteryArgs(request, commandWord) {
+  if (/charger|충전/i.test(request)) {
+    const state = request.match(/\b(on|off)\b/i);
+    return state ? ["charger", state[1].toLowerCase()] : ["charger"];
+  }
+  if (/\bstatus\b|상태/i.test(request)) return ["status"];
+  // An integer that is not a fragment of a version number ("9.0") is a level.
+  const level = request.match(/\b(\d{1,3})\s*%?\b(?!\.\d)/);
+  if (level) return ["level", level[1]];
+  return commandArgsAfter(request, commandWord);
 }
 
 /**
@@ -306,7 +331,32 @@ function matchEcpIntent(request, opts = {}) {
     return { intent: INTENTS.LIST_DEVICES, target, version, profile, args: [] };
   }
   if (asksForHelp(request)) {
-    return { intent: INTENTS.HELP, target, version, profile, args: [] };
+    // "help <device>" keeps the device token so ecp-cli prints THAT device's
+    // commands ("help battery" → help battery); anything else is bare help.
+    // Device names ("battery") are not stopwords here — only the words that
+    // introduce the option itself ("help for version 9.0") are dropped.
+    const after = request.match(/\bhelp\b(.*)$/i);
+    const device = after
+      ? after[1]
+          .trim()
+          .split(/\s+/)
+          .map((t) => t.replace(/^["']|["']$/g, ""))
+          .filter(
+            (t) =>
+              t &&
+              !/^(version|profile|help|vm|emulator|the|a|an|me|it|this|that|my|your|our|on|for|to)$/i.test(
+                t,
+              ) &&
+              !/^\d+(\.\d+)*$/.test(t),
+          )[0]
+      : undefined;
+    return {
+      intent: INTENTS.HELP,
+      target,
+      version,
+      profile,
+      args: device ? [device] : [],
+    };
   }
   const batteryWord = request.match(BATTERY_WORD_RE);
   if (batteryWord) {
@@ -315,7 +365,7 @@ function matchEcpIntent(request, opts = {}) {
       target,
       version,
       profile,
-      args: commandArgsAfter(request, batteryWord[0].toLowerCase()),
+      args: batteryArgs(request, batteryWord[0].toLowerCase()),
     };
   }
   return {
@@ -336,8 +386,8 @@ function matchEcpIntent(request, opts = {}) {
  */
 function buildArgs(m, resolvedTarget) {
   // The target was pulled out of the request text, so it must not leak into
-  // the pass-through arguments a second time ("battery set 50 on
-  // emulator-26101" → --target emulator-26101 battery set 50).
+  // the pass-through arguments a second time ("battery level 50 on
+  // emulator-26101" → --target emulator-26101 battery level 50).
   const commandArgs = m.args.filter(
     (t) =>
       !resolvedTarget ||
@@ -349,8 +399,9 @@ function buildArgs(m, resolvedTarget) {
       // ecp-cli --version <VERSION> --profile <PROFILE> help
       return ["--version", m.version, "--profile", m.profile, "help"];
     case INTENTS.HELP:
-      // ecp-cli [--target <t>] help — with a target it lists THAT device's commands
-      return [...targetArgs, "help"];
+      // ecp-cli [--target <t>] help [device] — a trailing device token makes
+      // ecp-cli print THAT device's commands ("help battery").
+      return [...targetArgs, "help", ...commandArgs];
     case INTENTS.BATTERY:
       // ecp-cli [--target <t>] battery [cmds]
       return [...targetArgs, "battery", ...commandArgs];
