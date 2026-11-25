@@ -191,8 +191,10 @@ function batteryArgs(request, commandWord) {
   }
   if (/\bstatus\b|상태/i.test(request)) return ["status"];
   // An integer that is not part of a version number ("9.0" on either side of
-  // the dot) is a level.
-  const level = request.match(/(?<!\d\.)\b(\d{1,3})\s*%?\b(?!\.\d)/);
+  // the dot) is a level. Any length is accepted: ecp-cli rejects values out of
+  // its range with a clear error, which beats a bare number argument ("battery
+  // 1000" → "battery level 1000", not "battery 1000").
+  const level = request.match(/(?<!\d\.)\b(\d+)\s*%?\b(?!\.\d)/);
   if (level) return ["level", level[1]];
   return commandArgsAfter(request, commandWord);
 }

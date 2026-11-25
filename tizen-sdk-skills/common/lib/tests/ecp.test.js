@@ -149,6 +149,11 @@ check(
   ["level", "75"],
 );
 check(
+  "a bare number longer than three digits still maps to the level subcommand",
+  matchEcpIntent("battery 1000").args,
+  ["level", "1000"],
+);
+check(
   "'battery charger off' keeps the charger state",
   matchEcpIntent("battery charger off").args,
   ["charger", "off"],
