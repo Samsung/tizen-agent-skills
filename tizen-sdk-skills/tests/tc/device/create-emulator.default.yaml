@@ -1,12 +1,14 @@
-# em-cli's own default-VM mode (create -d): default-tizen-10.0-x86_64 becomes
-# the canonical dotted name T-10.0-x86_64. Needs the tizen-10.0-x86_64 image.
+# Default-name creation (create -d): default-<platform> becomes the canonical
+# dotted name, e.g. default-tizen-10.0-x86_64 → T-10.0-x86_64. The platform is
+# not fixed: run-device-tier.mjs's prepareDefaultVm hook sets
+# ${DEFAULT_VM_PLATFORM} to the newest installed tizen image.
 id: tizen-sdk.create-emulator.default
 plugin: tizen-sdk
 command: create-emulator
 tier: device
 status: approved
 since_cli: 1.11.0
-description: "create-emulator --action create --default --platform tizen-10.0-x86_64 creates T-10.0-x86_64"
+description: "create-emulator --action create --default --platform <newest tizen image> creates its T-<version>-<arch> default VM"
 
 lanes:
   cli:
@@ -18,10 +20,10 @@ lanes:
         "create",
         "--default",
         "--platform",
-        "tizen-10.0-x86_64",
+        "${DEFAULT_VM_PLATFORM}",
       ]
     timeout_sec: 120
     expect:
       status: success
       jsonpath:
-        - { path: "$.result.vm_name", matches: "^T-10\\.0-x86_64$" }
+        - { path: "$.result.vm_name", matches: "^T-\\d+\\.\\d+-" }

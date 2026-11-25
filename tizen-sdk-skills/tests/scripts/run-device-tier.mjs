@@ -36,7 +36,8 @@
  *              device before c2; drop port forwards, kill debuggers/apps before every
  *              debug phase and before c6; delete the scaffolded test file
  *              before c3; strip 192.168.1.50/.51 bookmarks before e-network;
- *              delete T-10.0-x86_64 if present before e2-default-vm;
+ *              pick the newest installed tizen image and delete its default
+ *              VM if present before e2-default-vm;
  *              boot tv-vm between f1-tv-create and f2-tv-detect
  *   teardown   stop all emulators, delete test-vm, restore the bookmark list
  *
@@ -46,7 +47,8 @@
  * documentation defaults.
  *
  * DESTRUCTIVE with --yes: deletes/recreates the VMs named test-vm and tv-vm,
- * deletes the SDK default VM T-10.0-x86_64 (e2 creates and removes it again),
+ * deletes the SDK default VM of the newest installed tizen image (e.g.
+ * T-10.0-x86_64; e2 creates and removes it again),
  * factory-resets test-vm, stops EVERY running emulator, sweeps the local /24
  * on TCP 26101 three times, rewrites the Device Manager bookmark list
  * (restored from the backup afterwards), and installs / launches / kills the
@@ -100,7 +102,6 @@ const ORDER = join(TESTS, "policy", "device-run-order.yaml");
 
 const VM_TEST = "test-vm";
 const VM_TV = "tv-vm";
-const VM_DEFAULT = "T-10.0-x86_64";
 const BOOKMARK_IPS = new Set(["192.168.1.50", "192.168.1.51"]);
 const TV_BOOT_TIMEOUT_SEC = 480;
 
@@ -410,15 +411,47 @@ function stripBookmarksHook({ paths }) {
   return true;
 }
 
-/** e2: create-emulator.default fails with "already exists" when the default VM is there. */
-function deleteDefaultVm() {
+/**
+ * e2: the default-VM TCs take their platform from ${DEFAULT_VM_PLATFORM} and
+ * the VM name from ${DEFAULT_VM_NAME}. Use the newest installed tizen image
+ * (x86_64 first within a version) rather than a fixed version, and delete
+ * its default VM when present — create-emulator.default fails with
+ * "already exists" otherwise.
+ */
+function prepareDefaultVm({ runnerEnv }) {
+  const env = sdk(["emulator-manager", "--action", "list-platform"], {
+    timeoutSec: 90,
+  });
+  if (env.status !== "success") {
+    bad(`list-platform failed: ${firstError(env)}`);
+    return false;
+  }
+  const images = (env.result?.platforms || [])
+    .map((name) => ({ name, m: /^tizen-(\d+)\.(\d+)-(.+)$/.exec(name) }))
+    .filter(({ m }) => m)
+    .sort(
+      (a, b) =>
+        b.m[1] - a.m[1] ||
+        b.m[2] - a.m[2] ||
+        (b.m[3] === "x86_64") - (a.m[3] === "x86_64"),
+    );
+  if (!images.length) {
+    bad("no tizen-* platform image installed — e2-default-vm will fail");
+    return false;
+  }
+  const platform = images[0].name;
+  // Same derivation as deriveDefaultVmName() in common/lib/core/emulator.js.
+  const vm = `T-${platform.slice(platform.indexOf("-") + 1)}`;
+  runnerEnv.DEFAULT_VM_PLATFORM = platform;
+  runnerEnv.DEFAULT_VM_NAME = vm;
+  ok(`default VM under test: ${vm} (platform ${platform})`);
   const vms = listVms();
   if (!vms) return false;
-  if (!vms.includes(VM_DEFAULT)) {
-    ok(`${VM_DEFAULT} not present`);
+  if (!vms.includes(vm)) {
+    ok(`${vm} not present`);
     return true;
   }
-  return deleteVm(VM_DEFAULT);
+  return deleteVm(vm);
 }
 
 function bootTvVm({ opts }) {
@@ -465,7 +498,7 @@ const PHASE_HOOKS = {
   "c5d-gdb-serial": [debugCleanup],
   "c6-stop": [debugCleanup],
   "e-network": [stripBookmarksHook],
-  "e2-default-vm": [deleteDefaultVm],
+  "e2-default-vm": [prepareDefaultVm],
   "f2-tv-detect": [bootTvVm],
 };
 
@@ -681,7 +714,7 @@ async function main() {
   const hookFailures = []; // "hook (before phase)" — a precondition not established
   const teardownFailures = [];
   const started = Date.now();
-  const ctx = { paths, opts, fixtureEnv };
+  const ctx = { paths, opts, fixtureEnv, runnerEnv };
   process.on("SIGINT", onInterrupt);
   process.on("SIGTERM", onInterrupt);
   try {
