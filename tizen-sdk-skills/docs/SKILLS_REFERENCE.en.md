@@ -12,7 +12,7 @@ English | [한국어](SKILLS_REFERENCE.md)
 
 ## Overview
 
-`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **31 automation skills** that can be triggered via natural language.
+`tizen-sdk-skills` is an integrated skill collection for **Claude Code, Cline, Codex CLI, Gemini CLI, and tizen-cli** that automates Tizen development environment setup, project creation, building, deployment, debugging, device screenshot capture, and log analysis. It provides **32 automation skills** that can be triggered via natural language.
 
 All skills return responses in **Standard JSON Envelope** format, ensuring consistent error handling and machine-readable output.
 
@@ -21,7 +21,7 @@ All skills return responses in **Standard JSON Envelope** format, ensuring consi
 ## Features
 
 - ✅ **One-command SDK setup** — Node.js check → disk space check → SDK install, fully automated
-- ✅ **31 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
+- ✅ **33 skills** covering the full Tizen development lifecycle (build, deploy, debug, screenshot capture, log analysis, platform/rootstrap install)
 
 - ✅ **Cross-platform** — Windows (PowerShell/cmd), Linux, macOS
 - ✅ **Multi-harness support** — Claude Code, Cline, Codex CLI, Gemini CLI, tizen-cli (one shared `common/`; per-harness setup is `common/setup/setup.{sh,ps1} --harness <name>`)
@@ -1503,6 +1503,55 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 
 ---
 
+### 31. tizen-guide
+
+**Description:** Answer questions about how to use the tizen-agent-skills plugins and point to the right guide, using only the repository's published documents (indexed by the root `llms.txt`), with links to every document used.
+
+**Use Case:** "How do I make a Tizen certificate?", "Where is the TV emulator setup guide?", "Which skill should I use to debug a web app?" — questions about how something works or how to do it, not requests to run it. A request to do something (build, install, create an emulator, debug) goes to the matching `tizen-*` skill.
+
+**Parameters:** None (the question itself)
+
+**CLI Runner:** None — documentation guide only. The agent reads the documents directly from GitHub `main` (the raw URLs listed in `llms.txt`), whatever the working directory, so the cited links always match what was read. Only when GitHub cannot be reached does it fall back to a local `tizen-agent-skills` clone, and it says the local copy may differ from `main`.
+
+**Notes:** Plugins added later are covered automatically once their documents are registered in `llms.txt`. The answer follows the user's language and prefers documents in that language (`docs/X.md` or `docs/X.ko.md` Korean, `docs/X.en.md` English; elsewhere `X.md` English, `X.ko.md` Korean). If the documents do not cover a question, the skill says so and points to GitHub Issues instead of guessing.
+
+**Dependencies:** None (no SDK or device required; network access to GitHub; a local clone is used only offline)
+
+---
+
+### 32. tizen-gtest
+
+**Description:** Create, build, install and run Google Test (gtest) tests for a **native** Tizen app (`tizen_native_project.yaml` with `project_type: test_runner`).
+
+**Use Case:** "Run my native unit tests", "make a gtest project", "gtest 실행해줘".
+
+**Parameters:**
+
+| Parameter   | Type   | Default      | Description                                            |
+| ----------- | ------ | ------------ | ------------------------------------------------------ |
+| projectPath | string | _(required)_ | Existing gtest project, or parent dir + name to create |
+| deviceSerial| string | `null`       | Target device serial (auto-select if omitted)          |
+
+**CLI Runner:**
+
+```
+node <plugin>/lib/cli/project-manager-cli.js create --type native --template gtest --parent-path <dir> --name <name>
+node <plugin>/lib/cli/project-manager-cli.js build --project <projectPath> --build-type Test
+node <plugin>/lib/cli/project-manager-cli.js install --package <test.tpk> --run
+```
+
+**Automated Steps:**
+
+1. Create the gtest project from the native `gtest` template (skip if it exists)
+2. Build with `--build-type Test` → `<project>/test/<pkgid>-<version>-<arch>.tpk`
+3. Install the package and launch it (`--run`) — the test_runner app **exits immediately by design**
+4. Run the installed binary via `tizen-sdb-helper` (`root on` → run → `root off`) to capture the gtest stdout
+5. Report the `[  PASSED  ]` / `[  FAILED  ]` summary verbatim
+
+**Dependencies:** `tizen-create-project` (new projects), `tizen-build-project` (same runner), `tizen-install-app` (same runner), `tizen-sdb-helper` (result capture)
+
+---
+
 ## Skill Dependency Flow
 
 ```
@@ -1600,6 +1649,9 @@ node .../ecp-cli.js --request "battery set 50" --target emulator-26101
 | 27  | `tizen-install-rootstrap` | `installRootstrap()` | `install-rootstrap-cli.js` | Install custom rootstrap ZIP package (with security validation) |
 | 28  | `tizen-dlog-analyzer`   | `startDlogAnalyzer()` etc. | `dlog-analyzer-cli.js` | Continuous dlog crash/exception collection & analysis (background) |
 | 29  | `tizen-handoff`          | `showHandoff()` / `initHandoff()` | `handoff-cli.js`      | Read and create the project's cross-agent handoff notes   |
+| 30  | `tizen-ecp`              | `runEcpCommand()`     | `ecp-cli.js`              | Run one Emulator Control Panel request on a running emulator |
+| 31  | `tizen-guide`            | —                     | — (docs guide only)       | Answer how-to questions from the published docs (`llms.txt`) |
+| 32  | `tizen-gtest`            | `buildProject()` / `installApp()` | `project-manager-cli.js`  | Build (`--build-type Test`), install and run native gtest tests |
 
 ---
 

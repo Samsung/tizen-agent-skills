@@ -16,6 +16,18 @@ below use those release tags.
 
 ### Fixed
 
+- **`tizen-ecp` battery commands no longer fail with "Not supported
+  commands."** The runner assumed an ecp-cli grammar (`battery set <n>`) that
+  no current platform build ships; the real battery grammar is
+  `battery level <n>`, `battery charger on|off`, `battery status`. The
+  battery intent now maps natural-language phrasing to that grammar
+  ("set the battery level to 50" → `battery level 50`, "battery 75" →
+  `battery level 75`, "turn the battery charger off" → `battery charger off`)
+  before filler-word stripping runs, so the word "level" is no longer dropped
+  from battery phrases. `"help <device>"` also
+  keeps the device token so ecp-cli prints that device's commands
+  (`help battery`), which it silently dropped before.
+
 - **`tizen-sdk --doctor` no longer prints a Node.js `DEP0190`
   DeprecationWarning to stderr.** The command check in
   `tizen-cli/src/doctor.ts` passed an argument array together with
@@ -23,6 +35,26 @@ below use those release tags.
   name as `$1`.
 
 ### Added
+
+- **`tizen-gtest` skill/agent — native Google Test.** Creates, builds,
+  installs and runs gtest tests for a native Tizen app
+  (`project_type: test_runner`) through the existing runners:
+  `project-manager-cli.js` `create --type native --template gtest`,
+  `build --build-type Test` and `install --run`, then captures the installed
+  binary's gtest stdout through the `sdb-helper` runner (`root on` → run →
+  `root off`). A test_runner app exiting right after launch is expected, not a
+  crash — the skill says so where the install envelope's warning would
+  otherwise mislead. New `common/skills/tizen-gtest/SKILL.md` and
+  `common/agents/tizen-gtest.md`; no new runner or CLI command. Count updates
+  across `README*.md`, `llms.txt` and `docs/` (33 skills / 26 agents).
+
+- **`tizen-guide` skill — documentation guide.** Answers questions about how
+  to use the tizen-agent-skills plugins and points to the right guide, using
+  only the documents indexed by the repository-root `llms.txt` (read from
+  raw GitHub `main`; a local clone only when offline) and citing each document used.
+  Plugins added later are covered once their documents are in `llms.txt`. No
+  runner and no `tizen-cli` command; requests to run something still go to the
+  matching `tizen-*` skill.
 
 - **`tizen-ecp` skill / agent — Emulator Control Panel (ecp-cli)**. Runs ONE
   Emulator Control Panel request against a **running** emulator via the new

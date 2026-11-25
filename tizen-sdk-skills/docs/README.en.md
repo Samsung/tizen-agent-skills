@@ -16,10 +16,11 @@ This document (README) is the **overall overview and user manual** for the plugi
 | [debug/scenario-native-debug-walkthrough.en.md](debug/scenario-native-debug-walkthrough.en.md) | **Native app debugging E2E scenario** — native app creation → Debug build → install → gdbserver/port-forward setup → host GDB connection + verification checklist |
 | [debug/scenario-dotnet-debug-walkthrough.en.md](debug/scenario-dotnet-debug-walkthrough.en.md) | **.NET app debugging E2E scenario** — .NET app creation → Debug build → install → netcoredbg DAP server setup → VS Code (F5) connection + verification checklist |
 | [wsl/WSL_EMULATOR_GUIDE.en.md](wsl/WSL_EMULATOR_GUIDE.en.md) | **WSL emulator guide** — configuration for running the Tizen emulator on WSL2, profile selection (standard vs TV), Buxton permission troubleshooting, performance tuning |
+| [emulator/emulator-manager-walkthrough.en.md](emulator/emulator-manager-walkthrough.en.md) | **Emulator manager E2E scenario** — emulator package download → screen sizes → VM create (1080 / TV 4K / custom hardware) → launch → sdb check → modify / list / delete → app install |
 | [rds/RDS_FAST_DEPLOY_PLAN.en.md](rds/RDS_FAST_DEPLOY_PLAN.en.md) | **RDS / Fast Deploy integration plan** — design of the delta deploy behind `install-app` (only changed files are pushed), state file formats, vendoring decisions, `deploy_type` / `TIZEN_RDS_ENABLED` / `--reset-rds`, real-device verification on a Tizen 11 emulator |
 | [envelope/](envelope/) | **Standard JSON Envelope** — response standardization layer: [Usage Guide](envelope/ENVELOPE_USAGE_GUIDE.md), [Call Flow](envelope/ENVELOPE_CALL_FLOW.md), [formatSdkInit Explained](envelope/FORMAT_SDK_INIT_EXPLAINED.md), [Implementation Summary](envelope/ENVELOPE_IMPLEMENTATION_SUMMARY.md) |
 | [sdk-install/](sdk-install/) | **SDK Installation Flow** — [Full Flow](sdk-install/INSTALLATION_FLOW.md), [Agent-installSdk Integration](sdk-install/AGENT_TO_INSTALLSDK_INTEGRATION.md), [Installation Verification](sdk-install/SDK_INSTALLATION_VERIFICATION.md), [Custom Repository Install](sdk-install/CUSTOM_REPOSITORY_INSTALL.en.md), [.NET Environment Setup E2E](sdk-install/DOTNET_SETUP_E2E.en.md) |
-| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 31 skills map onto the 37 tizen-cli commands, and why the counts differ |
+| [SKILLS_COMMANDS_MAPPING.en.md](SKILLS_COMMANDS_MAPPING.en.md) | **Skill ↔ Command Mapping** — how the 33 skills map onto the 37 tizen-cli commands, and why the counts differ |
 
 Implementation code is in [common/lib/](../common/lib/README.md).
 
@@ -27,9 +28,9 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 
 ## Overview
 
-`tizen-sdk-skills` provides 31 automation skills for Tizen application development.
+`tizen-sdk-skills` provides 32 automation skills for Tizen application development.
 
-### 30 Core Skills
+### 32 Skills
 
 | Skill | Description | Use Case |
 |-------|-------------|----------|
@@ -43,6 +44,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 | **tizen-build-project** | Automated project build | Build Native/DotNET/WebApp/Platform (GBS) projects |
 | **tizen-create-emulator** | Create a custom emulator VM via em-cli (user-selected screen size, default 1080) | Create/list/delete emulator VMs, TV profile support |
 | **tizen-launch-emulator** | Launch an existing emulator VM (em-cli launch) | Boot an emulator and wait for sdb connection |
+| **tizen-ecp** | Run one Emulator Control Panel (ecp-cli) request on a running emulator | Battery and other device controls, list the devices a platform version supports |
 | **tizen-download-emulator-package** | Download and install the emulator package (TIZEN-{version}-Emulator) | Set up the emulator runtime after SDK installation |
 | **tizen-platform-install** | Download and install a Tizen platform package (TIZEN-{version}) | Set up build/emulator support for a specific platform version |
 | **tizen-download-mobile-platform** | Download and install the Tizen Mobile platform package (MOBILE-{version}) | Mobile-profile development, optional IOT-Headed extension |
@@ -63,6 +65,7 @@ Implementation code is in [common/lib/](../common/lib/README.md).
 | **tizen-tv-sdk-install-from-zip** | Install TV SDK extension from local ZIP (offline) | Offline TV app development |
 | **tizen-update-package** | Update Tizen SDK packages | Check for and install newer versions of installed packages |
 | **tizen-handoff** | Read and start a project's handoff notes | Continue work another agent (Claude Code, Codex CLI, Cline) left off |
+| **tizen-guide** | Answer how-to questions from the published docs (`llms.txt`) | Find the right guide and get a cited answer without leaving the agent |
 
 
 ---
@@ -163,6 +166,7 @@ In Cline, skills are automatically loaded when you make natural language request
 | "Install TV SDK from ZIP" | `tizen-tv-sdk-install-from-zip` |
 | "Update packages" | `tizen-update-package` |
 | "Continue where Codex left off" / "Pick up where Claude left off" | `tizen-handoff` |
+| "How do I make a certificate?" / "Where is the TV emulator guide?" | `tizen-guide` |
 
 ---
 
@@ -861,7 +865,7 @@ echo %TIZEN_SDK_PATH%   # Windows
 
 **Plugin version**: `0.1.0`
 
-All 31 skills are released at the same version. The version is specified in each skill folder's `SKILL.md`.
+All 33 skills are released at the same version. The version is specified in each skill folder's `SKILL.md`.
 
 
 

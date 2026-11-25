@@ -15,12 +15,43 @@
 
 ### 수정
 
+- **`tizen-ecp` 배터리 명령이 더 이상 "Not supported commands."로 실패하지
+  않습니다.** 러너가 현재 플랫폼 빌드에는 존재하지 않는 ecp-cli 문법
+  (`battery set <n>`)을 가정하고 있었습니다. 실제 배터리 문법은
+  `battery level <n>`, `battery charger on|off`, `battery status`입니다.
+  배터리 인텐트는 이제 자연어 표현을 이 문법에 맞춰 변환합니다
+  ("set the battery level to 50" → `battery level 50`, "battery 75" →
+  `battery level 75`, "turn the battery charger off" → `battery charger off`)
+  — 배터리 문법에 맞는 표현은 필러 단어 처리 전에 변환되므로 "level"이
+  배터리 구문에서 사라지지 않습니다. 또한 `"help <device>"`가
+  디바이스 토큰을 유지해 ecp-cli가 해당 디바이스의 명령을 출력합니다
+  (`help battery`) — 이전에는 조용히 버려졌습니다.
+
 - **`tizen-sdk --doctor`가 더 이상 stderr에 Node.js `DEP0190`
   DeprecationWarning을 출력하지 않습니다.** `tizen-cli/src/doctor.ts`의 명령
   확인이 인자 배열과 `shell: true`를 함께 넘기던 것을, 이제
   `sh -c 'command -v "$1"'`로 실행하고 명령 이름은 `$1`로 넘깁니다.
 
 ### 추가
+
+- **`tizen-gtest` 스킬/에이전트 — 네이티브 Google Test.** 기존 러너로 네이티브
+  Tizen 앱(`project_type: test_runner`)의 gtest 테스트를 생성·빌드·설치·실행합니다:
+  `project-manager-cli.js`의 `create --type native --template gtest`,
+  `build --build-type Test`, `install --run`으로 패키지를 만들어 설치하고,
+  `sdb-helper` 러너로 설치된 바이너리의 gtest stdout을 수집합니다
+  (`root on` → 실행 → `root off`). test_runner 앱이 실행 직후 종료되는 것은
+  정상이지 크래시가 아니며, 설치 Envelope의 경고가 오해를 부르지 않도록 스킬이
+  이를 명시합니다. `common/skills/tizen-gtest/SKILL.md`와
+  `common/agents/tizen-gtest.md`를 추가했고, 러너·CLI 커맨드는 새로 없습니다.
+  `README*.md`, `llms.txt`, `docs/`의 개수 표기도 함께 갱신했습니다
+  (스킬 33개 / 에이전트 26개).
+
+- **`tizen-guide` 스킬 — 문서 안내.** tizen-agent-skills 플러그인 사용법을
+  묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에
+  등록된 문서만 근거로 쓰며(GitHub `main`의 raw URL에서
+  읽고, 로컬 clone은 오프라인일 때만 사용), 참고한 문서 링크를 함께 제시합니다. 이후 추가되는 플러그인도
+  `llms.txt`에 문서를 등록하면 자동으로 안내 대상이 됩니다. 러너와 `tizen-cli`
+  커맨드는 없으며, 실행 요청은 계속 해당 `tizen-*` 스킬이 처리합니다.
 
 - **`tizen-ecp` 스킬/에이전트 — Emulator Control Panel (ecp-cli)**. **실행 중인**
   에뮬레이터에 대해 Emulator Control Panel 요청 하나를 새 `ecp-cli.js` 러너
