@@ -200,6 +200,8 @@ const ON_DISK_NOTE =
       assert.deepStrictEqual(env.result.packages, [
         { name: "TIZEN-Emulator", status: "installed", version: "emulator" },
       ]);
+      // 10.0 images are on disk too, but only 11.0 is recorded — the target.
+      assert.strictEqual(env.result.platform_version, "11.0");
     });
 
     await test("warning separates 'Recorded by this skill' from 'on disk'", async () => {
@@ -214,6 +216,7 @@ const ON_DISK_NOTE =
       assert.strictEqual(env.status, "success");
       assert.strictEqual(env.result.packages[0].name, "TIZEN-11.0-Emulator");
       assert.deepStrictEqual(env.result.installed_images, EXPECTED_IMAGES);
+      assert.strictEqual(env.result.platform_version, "11.0");
     });
 
     console.log(

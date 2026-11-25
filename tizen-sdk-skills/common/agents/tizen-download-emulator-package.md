@@ -300,9 +300,9 @@ you MUST ensure a default standard emulator VM exists:
 1. Locate the emulator-manager runner the same way as the Phase 1 pre-check (same lookup blocks),
    but with the runner file name `emulator-manager-cli.js`.
 2. Run `node "$CLI" list-vm --detail` once, then check `result.vms` once per
-   `tizen`-profile image of the **target version** — the `--platform-version`
-   this run passed, or, without it, the highest `platform` among the
-   `tizen` entries (the installer installs the latest platform).
+   `tizen`-profile image of the **target version** — the Phase 1 envelope's
+   `result.platform_version` (the requested version, or the newest one this
+   skill's marker records; when it is `null`, skip this step).
    `result.installed_images` lists every image on disk, older platforms
    included, so never ensure VMs for the other versions. Platforms can ship
    more than one architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86`

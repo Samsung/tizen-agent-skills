@@ -90,7 +90,9 @@ below use those release tags.
   through this mode when it is missing. Only the target version's images
   count (other platforms already on disk are left alone); platforms that ship
   several architectures (tizen 9.0 has `x86` and `x86_64`) get one default VM
-  per image (`tizen-9.0-x86` → `T-9.0-x86` too).
+  per image (`tizen-9.0-x86` → `T-9.0-x86` too). The target version comes from
+  the new `result.platform_version` of `download-emulator-package` (the
+  requested version, else the newest one its marker records).
 
 ## [1.10.0] — 2026-11-20
 

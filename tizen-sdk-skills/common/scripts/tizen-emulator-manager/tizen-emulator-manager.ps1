@@ -1126,6 +1126,11 @@ if ($Action -eq "create") {
             Write-Err "Cannot derive a default VM name from platform '$Platform' (no '-' separator)."
             exit 1
         }
+        # tizen and tv both derive the 'T-' prefix; same guard as validateCreateOptions().
+        if ($Platform.StartsWith("tv-samsung-") -and $Profile -ne "tv") {
+            Write-Err "Default-name creation with TV platform '$Platform' requires -Profile tv."
+            exit 1
+        }
         # Same derivation as deriveDefaultVmName() in common/lib/core/emulator.js
         # and the .sh's ${PROFILE:0:1}+${PLATFORM#*-} — the three copies must
         # produce identical names; keep them in sync.

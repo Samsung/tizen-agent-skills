@@ -2199,6 +2199,15 @@ if [ "$ACTION" = "create" ]; then
         exit 1
         ;;
     esac
+    # tizen and tv both derive the 'T-' prefix; same guard as validateCreateOptions().
+    case "$PLATFORM" in
+      tv-samsung-*)
+        if [ "$PROFILE" != "tv" ]; then
+          log_error "Default-name creation with TV platform '$PLATFORM' requires -p tv."
+          exit 1
+        fi
+        ;;
+    esac
     # Same derivation as deriveDefaultVmName() in common/lib/core/emulator.js
     # and the .ps1's Substring(0,1)+Substring(IndexOf("-")+1) — the three
     # copies must produce identical names; keep them in sync.

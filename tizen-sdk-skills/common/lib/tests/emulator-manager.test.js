@@ -226,6 +226,14 @@ checkTrue(
     /\$Platform\.IndexOf\("-"\)/.test(ps1Script),
   "missing the Substring derivation",
 );
+checkTrue(
+  "sh and ps1 refuse a tv-samsung platform without the tv profile",
+  /tv-samsung-\*\)\s+if \[ "\$PROFILE" != "tv" \]/.test(shScript) &&
+    /\$Platform\.StartsWith\("tv-samsung-"\) -and \$Profile -ne "tv"/.test(
+      ps1Script,
+    ),
+  "missing the tv-samsung profile guard",
+);
 
 const launchArgs = buildEmulatorArgs({
   action: "launch",

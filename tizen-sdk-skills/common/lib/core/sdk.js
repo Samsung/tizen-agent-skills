@@ -3260,6 +3260,21 @@ function isEmulatorMarkerSatisfied(markerBody, platformVersion) {
   return { satisfied, recorded };
 }
 
+/**
+ * The platform an emulator-package run targets: the requested version, or —
+ * for auto-detect — the newest version the marker records. The marker only
+ * holds this skill's repository installs, so an image dropped from a ZIP does
+ * not count.
+ *
+ * @param {string} platformVersion - requested version, or "" for auto-detect
+ * @param {string[]} recorded - platforms recorded in the marker
+ * @returns {string|null}
+ */
+function targetEmulatorPlatform(platformVersion, recorded) {
+  if (platformVersion) return platformVersion;
+  return [...recorded].sort(comparePlatformVersions).pop() || null;
+}
+
 async function downloadEmulatorPackage(
   platformVersion = "",
   force = false,
@@ -3352,6 +3367,7 @@ async function downloadEmulatorPackage(
           startTime,
           command,
           installedImages,
+          targetEmulatorPlatform(platformVersion, recordedPlatforms),
         );
       }
 
@@ -3430,6 +3446,12 @@ async function downloadEmulatorPackage(
             startTime,
             command,
             imagesAfterInstall,
+            targetEmulatorPlatform(
+              platformVersion,
+              parseEmulatorMarkerPlatforms(
+                fs.readFileSync(emulPkgMarker, "utf-8"),
+              ),
+            ),
           );
         } else {
           return formatError(
@@ -4610,6 +4632,7 @@ module.exports = {
   // Exported for tests
   parseEmulatorMarkerPlatforms,
   isEmulatorMarkerSatisfied,
+  targetEmulatorPlatform,
   listInstalledEmulatorImages,
   describeEmulatorImages,
   comparePlatformVersions,

@@ -23,6 +23,7 @@ const path = require("path");
 const {
   parseEmulatorMarkerPlatforms,
   isEmulatorMarkerSatisfied,
+  targetEmulatorPlatform,
   listInstalledEmulatorImages,
   describeEmulatorImages,
 } = require("../core/sdk");
@@ -305,6 +306,23 @@ test("dedupes a profile listed twice for the same platform", () => {
 test("empty / missing list reads as 'none'", () => {
   assert.strictEqual(describeEmulatorImages([]), "none");
   assert.strictEqual(describeEmulatorImages(undefined), "none");
+});
+
+console.log("\n=== targetEmulatorPlatform ===");
+
+test("an explicit request is the target", () => {
+  assert.strictEqual(targetEmulatorPlatform("10.0", ["9.0", "11.0"]), "10.0");
+});
+
+test("auto-detect targets the newest recorded platform (numeric order)", () => {
+  assert.strictEqual(
+    targetEmulatorPlatform("", ["11.0", "9.0", "10.0"]),
+    "11.0",
+  );
+});
+
+test("auto-detect with nothing recorded → null", () => {
+  assert.strictEqual(targetEmulatorPlatform("", []), null);
 });
 
 console.log(`\n${passed} passed, ${failed} failed`);

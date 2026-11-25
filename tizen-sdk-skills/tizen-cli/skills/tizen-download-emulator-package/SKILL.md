@@ -62,8 +62,8 @@ ensure a default standard emulator VM exists:
 1. Check for the default VMs by name:
    `tizen-cli tizen-sdk emulator-manager --action list-vm --detail`
    Check only the `tizen`-profile images of the **target version** — the
-   `--platform-version` this run passed, or, without it, the highest `platform`
-   among the `tizen` entries (the installer installs the latest platform).
+   envelope's `result.platform_version` (the requested version, or the newest
+   one this skill's marker records; when it is `null`, skip this step).
    `result.installed_images` lists every image on disk, older platforms
    included, so never ensure VMs for the other versions. Platforms can ship
    more than one architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86`
