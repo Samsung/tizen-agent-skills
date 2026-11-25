@@ -1731,6 +1731,15 @@ function validateCreateOptions(state, opts, command) {
         `--raw-image-path is not applicable with --default.`,
       );
     }
+    // tizen and tv both derive the 'T-' prefix, so a TV image without
+    // --profile tv would get the right name but run the tizen-profile path.
+    if (state.platform.startsWith("tv-samsung-") && state.profile !== "tv") {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--default with TV platform '${state.platform}' requires --profile tv.`,
+      );
+    }
   }
 
   if (

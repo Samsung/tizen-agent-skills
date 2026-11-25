@@ -1226,6 +1226,15 @@ async function checkDefaultNameValidation() {
       match: /--raw-image-path is not applicable/,
     },
     {
+      name: "--default with a tv-samsung platform and no --profile tv is refused",
+      opts: {
+        action: "create",
+        defaultName: true,
+        platform: "tv-samsung-10.0-x86_64",
+      },
+      match: /requires --profile tv/,
+    },
+    {
       name: "--default on a non-create action is refused",
       opts: {
         action: "delete",

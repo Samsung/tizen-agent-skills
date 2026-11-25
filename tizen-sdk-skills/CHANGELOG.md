@@ -84,13 +84,13 @@ below use those release tags.
   where a plain `create --vm-name T-10.0-x86_64` is rejected by that check.
   `--default` requires `--platform`, applies the platform's default template
   (1080), and refuses `--vm-name`, `--size`, `--template` and
-  `--raw-image-path`. `tizen-download-emulator-package` and
-  `tizen-tv-sdk-install` now ensure their default VM through this mode —
-  one default VM per installed `tizen`-profile image, so platforms that ship
-  several architectures (tizen 9.0 has `x86` and `x86_64`) get each image's
-  default VM (`tizen-9.0-x86` → `T-9.0-x86` too) — previously their
-  post-install create used the dotted name through the strict path and failed
-  on every SDK with `invalid character`.
+  `--raw-image-path`, and a `tv-samsung-*` platform without `--profile tv`.
+  New: `tizen-download-emulator-package` and `tizen-tv-sdk-install` now end
+  with a post-install step that creates the installed platform's default VM
+  through this mode when it is missing. Only the target version's images
+  count (other platforms already on disk are left alone); platforms that ship
+  several architectures (tizen 9.0 has `x86` and `x86_64`) get one default VM
+  per image (`tizen-9.0-x86` → `T-9.0-x86` too).
 
 ## [1.10.0] — 2026-11-20
 

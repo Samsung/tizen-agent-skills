@@ -77,13 +77,13 @@
   점이 들어간 기본 VM 이름을 러너로도 만들 수 있습니다 — 일반
   `create --vm-name T-10.0-x86_64`은 이 검사에 걸려 거절됩니다. `--default`는
   `--platform`이 필요하고 플랫폼의 기본 템플릿(1080)을 적용하며,
-  `--vm-name`, `--size`, `--template`, `--raw-image-path`와 함께 쓰면
-  거절됩니다. `tizen-download-emulator-package`와 `tizen-tv-sdk-install`은
-  이제 이 모드로 기본 VM을 확보합니다 — 설치된 `tizen` 프로필 이미지마다 하나씩
-  기본 VM을 확보하므로, 여러 아키텍처 이미지를 제공하는 플랫폼(tizen 9.0은
-  `x86`과 `x86_64`)에서는 이미지별 기본 VM이 모두 만들어집니다
-  (`tizen-9.0-x86` → `T-9.0-x86` 포함) — 이전에는 점이 든 이름을 엄격한
-  검사 경로로 만들려다 모든 SDK에서 `invalid character`로 실패했습니다.
+  `--vm-name`, `--size`, `--template`, `--raw-image-path`와 함께 쓰거나
+  `--profile tv` 없이 `tv-samsung-*` 플랫폼을 주면 거절됩니다. 새 동작:
+  `tizen-download-emulator-package`와 `tizen-tv-sdk-install`은 이제 설치 후
+  단계에서, 설치한 플랫폼의 기본 VM이 없으면 이 모드로 만듭니다. 대상 버전의
+  이미지만 해당하며(디스크에 이미 있는 다른 플랫폼은 건드리지 않음), 여러
+  아키텍처 이미지를 제공하는 플랫폼(tizen 9.0은 `x86`과 `x86_64`)에서는
+  이미지마다 기본 VM을 하나씩 만듭니다(`tizen-9.0-x86` → `T-9.0-x86` 포함).
 
 ## [1.10.0] — 2026-11-20
 

@@ -151,11 +151,16 @@ the **agent** ensures a default standard emulator VM exists:
 1. Locate the emulator-manager runner the same way as the Phase 1 pre-check (same lookup blocks),
    but with the runner file name `emulator-manager-cli.js`.
 2. Run `node "$CLI" list-vm --detail` once, then check `result.vms` once per
-   installed `tizen`-profile image. Platforms can ship more than one
-   architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86` and
-   `tizen-9.0-x86_64`), so iterate over ALL entries in the Phase 1 envelope's
-   `result.installed_images` whose `profile` is `tizen` (their `image` field;
-   ignore `tv-samsung` entries, they belong to `tizen-tv-sdk-install`):
+   `tizen`-profile image of the **target version** — the `--platform-version`
+   this run passed, or, without it, the highest `platform` among the
+   `tizen` entries (the installer installs the latest platform).
+   `result.installed_images` lists every image on disk, older platforms
+   included, so never ensure VMs for the other versions. Platforms can ship
+   more than one architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86`
+   and `tizen-9.0-x86_64`), so iterate over ALL entries in the Phase 1
+   envelope's `result.installed_images` whose `profile` is `tizen` and whose
+   `platform` is the target version (their `image` field; ignore `tv-samsung`
+   entries, they belong to `tizen-tv-sdk-install`):
    - Expected default VM name: `T-` + the image minus its first segment —
      `tizen-9.0-x86_64` → `T-9.0-x86_64`, `tizen-9.0-x86` → `T-9.0-x86`.
    - **A VM with that name exists → done for this image.** Skip creation and
