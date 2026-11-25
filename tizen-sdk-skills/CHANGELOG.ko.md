@@ -21,8 +21,9 @@
   `battery level <n>`, `battery charger on|off`, `battery status`입니다.
   배터리 인텐트는 이제 자연어 표현을 이 문법에 맞춰 변환합니다
   ("set the battery level to 50" → `battery level 50`, "battery 75" →
-  `battery level 75`, "turn the battery charger off" → `battery charger off`),
-  그리고 "level"을 필러 단어로 잘라내지 않습니다. 또한 `"help <device>"`가
+  `battery level 75`, "turn the battery charger off" → `battery charger off`)
+  — 배터리 문법에 맞는 표현은 필러 단어 처리 전에 변환되므로 "level"이
+  배터리 구문에서 사라지지 않습니다. 또한 `"help <device>"`가
   디바이스 토큰을 유지해 ecp-cli가 해당 디바이스의 명령을 출력합니다
   (`help battery`) — 이전에는 조용히 버려졌습니다.
 

@@ -190,8 +190,9 @@ function batteryArgs(request, commandWord) {
     return state ? ["charger", state[1].toLowerCase()] : ["charger"];
   }
   if (/\bstatus\b|상태/i.test(request)) return ["status"];
-  // An integer that is not a fragment of a version number ("9.0") is a level.
-  const level = request.match(/\b(\d{1,3})\s*%?\b(?!\.\d)/);
+  // An integer that is not part of a version number ("9.0" on either side of
+  // the dot) is a level.
+  const level = request.match(/(?<!\d\.)\b(\d{1,3})\s*%?\b(?!\.\d)/);
   if (level) return ["level", level[1]];
   return commandArgsAfter(request, commandWord);
 }
@@ -344,7 +345,7 @@ function matchEcpIntent(request, opts = {}) {
           .filter(
             (t) =>
               t &&
-              !/^(version|profile|help|vm|emulator|the|a|an|me|it|this|that|my|your|our|on|for|to)$/i.test(
+              !/^(version|profile|help|vm|emulator|the|a|an|me|it|this|that|my|your|our|on|for|to|with|about|of)$/i.test(
                 t,
               ) &&
               !/^\d+(\.\d+)*$/.test(t),

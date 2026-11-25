@@ -164,8 +164,18 @@ check(
   ["status"],
 );
 check(
+  "'battery version 9.0' does not map a version fragment to a level",
+  matchEcpIntent("battery version 9.0").args,
+  ["version", "9.0"],
+);
+check(
   "'help battery' keeps the device token for per-device help",
   matchEcpIntent("help battery").args,
+  ["battery"],
+);
+check(
+  "'help me with battery' skips prepositions before the device token",
+  matchEcpIntent("help me with battery").args,
   ["battery"],
 );
 check("bare 'help' keeps no arguments", matchEcpIntent("help").args, []);

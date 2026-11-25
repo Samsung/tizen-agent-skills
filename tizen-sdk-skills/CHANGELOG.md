@@ -23,11 +23,10 @@ below use those release tags.
   battery intent now maps natural-language phrasing to that grammar
   ("set the battery level to 50" → `battery level 50`, "battery 75" →
   `battery level 75`, "turn the battery charger off" → `battery charger off`)
-  and no longer strips the word "level" as a filler. `"help <device>"` also
+  before filler-word stripping runs, so the word "level" is no longer dropped
+  from battery phrases. `"help <device>"` also
   keeps the device token so ecp-cli prints that device's commands
   (`help battery`), which it silently dropped before.
-
-### Added
 
 - **`tizen-sdk --doctor` no longer prints a Node.js `DEP0190`
   DeprecationWarning to stderr.** The command check in
