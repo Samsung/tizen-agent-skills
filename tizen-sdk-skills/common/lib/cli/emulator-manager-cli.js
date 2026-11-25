@@ -96,6 +96,10 @@ const USAGE =
   "[--skin 1|2] [--ram-size 512|768|1024] [--file-sharing-path <path>] " +
   "[--hw-virtualization yes|no] [--hw-gl-acceleration yes|no] " +
   "[--custom-path <path>] [--raw-image-path <path>] [--clear-quarantine] | " +
+  "create --default --platform <name> [--launch] (em-cli's own default-VM mode: " +
+  "the name is derived from the platform — default-tizen-10.0-x86_64 becomes " +
+  "T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — " +
+  "and the platform's default template sets the resolution; no --vm-name/--size) | " +
   "delete --vm-name <name> | " +
   "launch [--vm-name <name>] [--profile tizen|tv] [--timeout <sec>] [--emulator-path <path>] " +
   "[--clear-quarantine] [--rebase-disk] | " +
@@ -138,6 +142,7 @@ const BOOLEAN_FLAGS = {
   "--count": "count",
   "--clear-quarantine": "clearQuarantine",
   "--rebase-disk": "rebaseDisk",
+  "--default": "defaultName",
 };
 
 const { options, positional } = parseArgsOrExit(
@@ -181,7 +186,11 @@ switch (action) {
   case "reset":
   case "create-image":
   case "fix-homescreen": // needs no --vm-name: defaults to the connected emulator
-    if (VM_NAME_REQUIRED.includes(action) && !options.vmName) {
+    if (
+      VM_NAME_REQUIRED.includes(action) &&
+      !options.vmName &&
+      !(action === "create" && options.defaultName)
+    ) {
       usageError(`${action} requires --vm-name`);
     }
     runCli(COMMAND, () =>

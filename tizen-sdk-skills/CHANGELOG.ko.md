@@ -34,6 +34,26 @@
   `tizen-sdk ecp` 커맨드 추가, 직접 `ecp-cli` 실행을 차단하는 PreToolUse 훅 규칙
   (Rule 21), tizen-cli용 `tizen-ecp` 미러 스킬도 함께 추가했습니다.
 
+- **`--default` 생성 — SDK 자체 기본 에뮬레이터 VM을 정식 점(dotted) 이름으로.**
+  `emulator-manager-cli.js create --default --platform <image>` (스탠드얼론
+  CLI의 `tizen-sdk create-emulator --default` / `tizen-sdk emulator-manager
+--default`, 그리고 `tizen-emulator-manager.{ps1,sh}`의 `-DefaultName`/`-D`
+  플래그)은 em-cli 자체의 기본 VM 모드(`em-cli create -d`)를 사용합니다:
+  em-cli가 `default-<platform>`이라는 이름을 SDK의 정식 기본 VM 이름으로
+  바꾸고(`tizen-10.0-x86_64` → `T-10.0-x86_64`, `tv-samsung-10.0-x86_64` →
+  `T-samsung-10.0-x86_64`), 이때 em-cli의 `A-Za-z0-9-_` VM 이름 문자 검사를
+  건너뜁니다. 따라서 네이티브 Emulator Manager와 Tizen VS Code 확장이 만드는
+  점이 들어간 기본 VM 이름을 러너로도 만들 수 있습니다 — 일반
+  `create --vm-name T-10.0-x86_64`은 이 검사에 걸려 거절됩니다. `--default`는
+  `--platform`이 필요하고 플랫폼의 기본 템플릿(1080)을 적용하며,
+  `--vm-name`, `--size`, `--template`, `--raw-image-path`와 함께 쓰면
+  거절됩니다. `tizen-download-emulator-package`와 `tizen-tv-sdk-install`은
+  이제 이 모드로 기본 VM을 확보합니다 — 설치된 `tizen` 프로필 이미지마다 하나씩
+  기본 VM을 확보하므로, 여러 아키텍처 이미지를 제공하는 플랫폼(tizen 9.0은
+  `x86`과 `x86_64`)에서는 이미지별 기본 VM이 모두 만들어집니다
+  (`tizen-9.0-x86` → `T-9.0-x86` 포함) — 이전에는 점이 든 이름을 엄격한
+  검사 경로로 만들려다 모든 SDK에서 `invalid character`로 실패했습니다.
+
 ## [1.10.0] — 2026-11-20
 
 ### 추가

@@ -16,6 +16,11 @@
 #       list-template, detail, modify, reset, create-image, fix-homescreen
 #   -n  Emulator VM name
 #   -P  Platform image name (auto-detect if omitted for create)
+#   -D  Default-name creation (create only): requires -P; em-cli's own
+#       default-VM mode (create -d) derives the name from the platform —
+#       'default-tizen-10.0-x86_64' becomes 'T-10.0-x86_64',
+#       'default-tv-samsung-10.0-x86_64' becomes 'T-samsung-10.0-x86_64' —
+#       and the platform's default template sets the resolution
 #   -T  Template name — this is what selects the screen resolution
 #   -p  Profile: tizen (default) or tv (Samsung TV)
 #   -l  Launch the VM after creating (create action only)
@@ -181,11 +186,12 @@ WAIT_TIMEOUT=300
 EMULATOR_PATH=""
 CLEAR_QUARANTINE=false
 REBASE_DISK=false
+DEFAULT_NAME=false
 
 # ---------------------------------------------------------------------------
 # Parse options
 # ---------------------------------------------------------------------------
-while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdCQBh" opt; do
+while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdDCQBh" opt; do
   case "$opt" in
     a) ACTION="$OPTARG" ;;
     n) VM_NAME="$OPTARG" ;;
@@ -205,6 +211,7 @@ while getopts "a:n:P:T:p:s:r:f:w:g:c:R:o:t:E:lzdCQBh" opt; do
     l) LAUNCH=true ;;
     z) COMPRESS=true ;;
     d) DETAIL=true ;;
+    D) DEFAULT_NAME=true ;;
     C) COUNT=true ;;
     Q) CLEAR_QUARANTINE=true ;;
     B) REBASE_DISK=true ;;
@@ -2169,7 +2176,36 @@ fi
 # Action: create
 # ---------------------------------------------------------------------------
 if [ "$ACTION" = "create" ]; then
-  require_vm_name
+  # Default-name mode (-D): em-cli's own default-VM creation (em-cli create -d).
+  # em-cli rewrites the name 'default-<platform>' into the SDK's canonical
+  # default VM name — <profile letter>-<platform minus its first segment>
+  # (tizen-10.0-x86_64 → T-10.0-x86_64; tv-samsung-10.0-x86_64 →
+  # T-samsung-10.0-x86_64) — and skips its A-Za-z0-9-_ character check while
+  # doing it, so the dotted default names the native Emulator Manager and the
+  # VS Code extension create are created here too. The platform is required
+  # (the name is derived from it), and the final name must be known before the
+  # exists-check below, so it is derived here rather than after auto-detect.
+  CREATE_N_NAME="$VM_NAME"
+  CREATE_DEFAULT_ARGS=()
+  if [ "$DEFAULT_NAME" = true ]; then
+    if [ -z "$PLATFORM" ]; then
+      log_error "Default-name creation (-D) requires -P <platform>: the VM name is derived from it."
+      exit 1
+    fi
+    case "$PLATFORM" in
+      *-*) : ;;
+      *)
+        log_error "Cannot derive a default VM name from platform '$PLATFORM' (no '-' separator)."
+        exit 1
+        ;;
+    esac
+    VM_NAME="$(printf '%s' "${PROFILE:0:1}" | tr '[:lower:]' '[:upper:]')-${PLATFORM#*-}"
+    CREATE_N_NAME="default-$PLATFORM"
+    CREATE_DEFAULT_ARGS=(-d)
+    log_info "Default-name mode: em-cli rewrites 'default-$PLATFORM' to '$VM_NAME'"
+  else
+    require_vm_name
+  fi
 
   # Check if VM already exists. run_list_vm (not $(get_vm_list)) so this first
   # em-cli call also serves as the version-mismatch gate: report_emcli_failure
@@ -2300,7 +2336,7 @@ if [ "$ACTION" = "create" ]; then
 
   if [ "$TEMPLATE_EXPLICIT" = true ]; then
     log_info "Creating VM '$VM_NAME' on platform '$PLATFORM' with template '$TEMPLATE'..."
-    if ! "$EMCLI" create -n "$VM_NAME" -p "$PLATFORM" -t "$TEMPLATE" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+    if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" -t "$TEMPLATE" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
       log_error "Failed to create emulator VM '$VM_NAME' on platform '$PLATFORM' with template '$TEMPLATE'."
 
       # TV fallback: em-cli has historically hit Java/JNA errors when -t is passed
@@ -2329,7 +2365,7 @@ if [ "$ACTION" = "create" ]; then
           ;;
       esac
 
-      if ! "$EMCLI" create -n "$VM_NAME" -p "$PLATFORM" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+      if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
         cleanup_and_fail "without_template"
       fi
       log_warn "VM '$VM_NAME' created WITHOUT template '$TEMPLATE' — em-cli chose the size."
@@ -2338,7 +2374,7 @@ if [ "$ACTION" = "create" ]; then
     fi
   else
     log_info "Creating VM '$VM_NAME' on platform '$PLATFORM'..."
-    if ! "$EMCLI" create -n "$VM_NAME" -p "$PLATFORM" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+    if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
       log_error "Failed to create emulator VM '$VM_NAME' on platform '$PLATFORM'."
       # No template was passed, so the guidance must not talk about one — with
       # $TEMPLATE empty, the "with_template" phase would suggest `-t ""`.

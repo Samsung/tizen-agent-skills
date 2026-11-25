@@ -38,6 +38,7 @@ const {
   MANAGE_ACTIONS,
   ACTION_ALIASES,
   normalizeAction,
+  deriveDefaultVmName,
 } = require("../core/emulator");
 
 console.log("=== Emulator Manager Test ===\n");
@@ -151,6 +152,45 @@ check("list flags map to -d and -C", listArgs.unixArgs, [
   "-d",
   "-C",
 ]);
+
+// Default-name creation: -D on unix, -DefaultName on PowerShell, and the final
+// name is derived in the core (em-cli rewrites 'default-<platform>' itself).
+const defaultArgs = buildEmulatorArgs({
+  action: "create",
+  profile: "tizen",
+  platform: "tizen-10.0-x86_64",
+  defaultName: true,
+});
+checkTrue(
+  "default-name mode maps to -D on unix",
+  defaultArgs.unixArgs.includes("-D"),
+  JSON.stringify(defaultArgs.unixArgs),
+);
+checkTrue(
+  "default-name mode maps to -DefaultName on Windows",
+  defaultArgs.winArgs.includes("-DefaultName"),
+  JSON.stringify(defaultArgs.winArgs),
+);
+checkTrue(
+  "no -D without --default",
+  !buildEmulatorArgs({ action: "create", profile: "tizen" }).unixArgs.includes(
+    "-D",
+  ),
+);
+check(
+  "deriveDefaultVmName tizen",
+  deriveDefaultVmName("tizen-10.0-x86_64", "tizen"),
+  "T-10.0-x86_64",
+);
+check(
+  "deriveDefaultVmName tv-samsung",
+  deriveDefaultVmName("tv-samsung-10.0-x86_64", "tv"),
+  "T-samsung-10.0-x86_64",
+);
+checkTrue(
+  "deriveDefaultVmName rejects a platform without '-'",
+  deriveDefaultVmName("badplatform", "tv") === null,
+);
 
 const launchArgs = buildEmulatorArgs({
   action: "launch",
@@ -926,6 +966,7 @@ if (getoptsMatch) {
         ...imageArgs.unixArgs,
         ...listArgs.unixArgs,
         ...launchArgs.unixArgs,
+        ...defaultArgs.unixArgs,
       ]
         .map((arg) => arg.match(/^-([A-Za-z])/))
         .filter(Boolean)
@@ -1099,8 +1140,75 @@ async function checkOptionScreening() {
   }
 }
 
+// Default-name creation (--default / em-cli create -d): the name comes from the
+// platform, so the user-chosen options must be refused before anything runs.
+async function checkDefaultNameValidation() {
+  console.log("\n--- default-name creation validation ---");
+  const cases = [
+    {
+      name: "--default without --platform is refused",
+      opts: { action: "create", defaultName: true },
+      match: /requires --platform/,
+    },
+    {
+      name: "--default with --size is refused",
+      opts: {
+        action: "create",
+        defaultName: true,
+        platform: "tizen-10.0-x86_64",
+        size: "1080",
+      },
+      match: /--size is not applicable/,
+    },
+    {
+      name: "--default with --template is refused",
+      opts: {
+        action: "create",
+        defaultName: true,
+        platform: "tizen-10.0-x86_64",
+        template: "HD1080 Tizen",
+      },
+      match: /--template is not applicable/,
+    },
+    {
+      name: "--default with --vm-name is refused",
+      opts: {
+        action: "create",
+        defaultName: true,
+        platform: "tizen-10.0-x86_64",
+        vmName: "my-vm",
+      },
+      match: /--vm-name is not applicable/,
+    },
+    {
+      name: "--default on a non-create action is refused",
+      opts: {
+        action: "delete",
+        defaultName: true,
+        platform: "tizen-10.0-x86_64",
+      },
+      match: /--default only applies to the create action/,
+    },
+    {
+      name: "--default with a platform lacking '-' is refused",
+      opts: { action: "create", defaultName: true, platform: "badplatform" },
+      match: /Cannot derive a default VM name/,
+    },
+  ];
+  for (const c of cases) {
+    const envelope = await manageEmulator(c.opts, "test");
+    checkTrue(
+      c.name,
+      isParameterRejection(envelope) &&
+        c.match.test(envelope.errors[0].message),
+      `Got ${envelope.status}: ${JSON.stringify(envelope.errors)}`,
+    );
+  }
+}
+
 checkOptionScreening()
   .then(checkLaunchProfileValidation)
+  .then(checkDefaultNameValidation)
   .then(() => {
     console.log(
       `\n=== ${failures === 0 ? "ALL PASSED" : `${failures} FAILED`} ===`,

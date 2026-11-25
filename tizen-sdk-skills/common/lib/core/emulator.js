@@ -833,6 +833,7 @@ function buildEmulatorArgs({
   emulatorPath,
   clearQuarantine,
   rebaseDisk,
+  defaultName,
 }) {
   const winArgs = [`-Action ${action}`, `-Profile ${profile}`];
   const unixArgs = [`-a ${action}`, `-p ${profile}`];
@@ -909,6 +910,13 @@ function buildEmulatorArgs({
   // the path exists only on macOS, and the .ps1 has no such parameters.
   if (isTrue(clearQuarantine)) unixArgs.push(`-Q`);
   if (isTrue(rebaseDisk)) unixArgs.push(`-B`);
+  // Default-name creation (em-cli create -d): the script derives the final VM
+  // name from -Platform/-P and passes em-cli the literal 'default-<platform>'
+  // name with em-cli's own -d flag. Both wrapper scripts support it.
+  if (isTrue(defaultName)) {
+    winArgs.push(`-DefaultName`);
+    unixArgs.push(`-D`);
+  }
 
   return { winArgs, unixArgs };
 }
@@ -1494,6 +1502,25 @@ async function createEmulator(
       return formatError(command, "io_error", resolved.error);
     }
 
+    // Default-name mode: em-cli create -d rewrites the name 'default-<platform>'
+    // into the SDK's canonical default VM name — <profile letter>-<platform minus
+    // its first segment> (tizen-10.0-x86_64 → T-10.0-x86_64; tv-samsung-10.0-x86_64
+    // → T-samsung-10.0-x86_64) — and skips its own A-Za-z0-9-_ character check, so
+    // the dotted default names the native Emulator Manager and the VS Code
+    // extension create are created here too. Derive that final name up front:
+    // every later phase (already-exists check, cleanup, detail, launch) keys on
+    // it, while the script passes the literal 'default-<platform>' to em-cli.
+    if (state.defaultName && state.action === "create") {
+      state.vmName = deriveDefaultVmName(state.platform, state.profile);
+      if (!state.vmName) {
+        return formatError(
+          command,
+          "invalid_parameters",
+          `Cannot derive a default VM name from platform '${state.platform}' (no '-' separator).`,
+        );
+      }
+    }
+
     // Resolve the requested size to a template. em-cli create has no
     // width/height flag — resolution is a property of the device template — so
     // the size is applied by picking the template that carries it.
@@ -1501,13 +1528,20 @@ async function createEmulator(
     // When a raw image path is given, the disk image comes from the raw image,
     // so no template/size resolution is needed — em-cli create -a bypasses the
     // template entirely.
+    // Default-name mode needs neither: em-cli create -d applies the platform's
+    // own default template.
     state.explicitTemplate = Boolean(state.template);
     if (state.explicitTemplate && state.requestedSize) {
       state.sizeWarnings.push(
         templateWinsWarning(state.template, state.requestedSize),
       );
     }
-    if (state.action === "create" && !state.template && !opts.rawImagePath) {
+    if (
+      state.action === "create" &&
+      !state.template &&
+      !opts.rawImagePath &&
+      !state.defaultName
+    ) {
       const sizeError = resolveSizeTemplate(
         state,
         resolved.scriptPath,
@@ -1532,6 +1566,7 @@ async function createEmulator(
         platform: state.platform,
         template: state.template,
         launch: state.launch,
+        defaultName: state.defaultName,
         timeoutSec: state.launchTimeoutSec,
         detail: opts.detail,
         count: opts.count,
@@ -1606,6 +1641,9 @@ function parseCreateOptions(opts) {
     explicitTemplate: false,
     matchedTemplate: null,
     sizeWarnings: [],
+    // em-cli's own default-VM mode (create -d): the name is derived from the
+    // platform, not chosen by the user.
+    defaultName: isTrue(opts.defaultName),
   };
 }
 
@@ -1643,7 +1681,63 @@ function validateCreateOptions(state, opts, command) {
     if (timeoutError) return timeoutError;
   }
 
-  if ((action === "create" || action === "delete") && !vmName) {
+  // Default-name creation (--default / create -d): em-cli derives the VM name
+  // from the platform, so the user-facing options that assume a chosen name or
+  // size do not apply.
+  if (state.defaultName) {
+    if (action !== "create") {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--default only applies to the create action.`,
+      );
+    }
+    if (!state.platform) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `Default-name creation (--default) requires --platform: the VM name is derived ` +
+          `from it (em-cli rewrites 'default-<platform>' into the SDK's canonical default ` +
+          `name, e.g. default-tizen-10.0-x86_64 → T-10.0-x86_64).`,
+      );
+    }
+    if (state.template || opts.template) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--template is not applicable with --default: the platform's default template is used.`,
+      );
+    }
+    if (opts.vmName) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--vm-name is not applicable with --default: the name is derived from --platform ` +
+          `(em-cli rewrites 'default-<platform>' into the SDK's canonical default name).`,
+      );
+    }
+    if (opts.size !== undefined && opts.size !== null && opts.size !== "") {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--size is not applicable with --default: the platform's default template ` +
+          `(${DEFAULT_SIZE}) sets the resolution.`,
+      );
+    }
+    if (opts.rawImagePath) {
+      return formatError(
+        command,
+        "invalid_parameters",
+        `--raw-image-path is not applicable with --default.`,
+      );
+    }
+  }
+
+  if (
+    (action === "create" || action === "delete") &&
+    !vmName &&
+    !(action === "create" && state.defaultName)
+  ) {
     return vmNameRequiredError(command, action);
   }
 
@@ -2667,6 +2761,30 @@ async function launchEmulator(
 }
 
 /**
+ * Derive the SDK's canonical default VM name for em-cli's -d mode.
+ *
+ * em-cli create -d takes the literal name 'default-<platform>', rewrites it to
+ * <profile letter>-<platform minus its first segment> and skips its own
+ * A-Za-z0-9-_ character check — which is how the dotted default names the
+ * native Emulator Manager and the VS Code extension create (T-10.0-x86_64,
+ * T-samsung-10.0-x86_64) come into existence.
+ *
+ * @returns {string|null} The final VM name, or null when the platform has no
+ *   '-' separator to split on.
+ */
+function deriveDefaultVmName(platform, profile) {
+  const sep = String(platform || "").indexOf("-");
+  if (sep < 1) return null;
+  return (
+    String(profile || "")
+      .charAt(0)
+      .toUpperCase() +
+    "-" +
+    String(platform).slice(sep + 1)
+  );
+}
+
+/**
  * Every action manageEmulator() accepts — the full em-cli command surface.
  */
 const MANAGE_ACTIONS = [
@@ -3232,6 +3350,7 @@ module.exports = {
   buildEmulatorArgs,
   normalizeSize,
   matchTemplateForSize,
+  deriveDefaultVmName,
   parsePlatformList,
   pickPlatform,
   TV_V2_CONSENT,

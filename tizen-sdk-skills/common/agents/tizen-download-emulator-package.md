@@ -291,6 +291,39 @@ If already installed:
 }
 ```
 
+## Post-install — ensure the default standard emulator VM (agent step, not the script)
+
+The download script only puts packages on disk; it never creates a VM. After the install is
+verified (both paths: a fresh install, and the idempotent "already installed" pre-check result),
+you MUST ensure a default standard emulator VM exists:
+
+1. Locate the emulator-manager runner the same way as the Phase 1 pre-check (same lookup blocks),
+   but with the runner file name `emulator-manager-cli.js`.
+2. Run `node "$CLI" list-vm --detail` once, then check `result.vms` once per
+   installed `tizen`-profile image. Platforms can ship more than one
+   architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86` and
+   `tizen-9.0-x86_64`), so iterate over ALL entries in the Phase 1 envelope's
+   `result.installed_images` whose `profile` is `tizen` (their `image` field;
+   ignore `tv-samsung` entries, they belong to `tizen-tv-sdk-install`):
+   - Expected default VM name: `T-` + the image minus its first segment —
+     `tizen-9.0-x86_64` → `T-9.0-x86_64`, `tizen-9.0-x86` → `T-9.0-x86`.
+   - **A VM with that name exists → done for this image.** Skip creation and
+     say so in one line.
+   - **Not present → always create it** with em-cli's own default-VM mode:
+     `node "$CLI" create --default --platform <image>`
+     em-cli rewrites `default-<image>` into the SDK's canonical default VM name
+     (e.g. `default-tizen-9.0-x86_64` → `T-9.0-x86_64`) — the same dotted name
+     the native Emulator Manager and the Tizen VS Code extension create (the
+     `-d` mode bypasses em-cli's VM-name character check, so the dots are
+     valid). No `--size`: the platform's default template (1080) applies. No
+     `--vm-name`: it is derived from the platform.
+     The decision is by name only — other `tizen`-profile VMs (user-created or
+     leftover) do not suppress the default VM.
+     Do NOT pass `--launch` — booting is `tizen-launch-emulator`'s job.
+3. Best-effort: a VM-creation failure is reported as a **warning** in the summary and never
+   changes the download result — the package install already succeeded.
+4. Include the create/list envelope **after** the download envelope in your final message.
+
 ## Final message — envelope JSON ONLY
 
 **Your final message must be the envelope JSON ONLY** — one ```json code block,
@@ -305,11 +338,12 @@ output. If the runner ran more than once, return the envelope of the **last** ru
 
 **⚠️ Scope check before proceeding:**
 
-- **Single-task request** (e.g., "에뮬레이터 패키지 다운로드해줘", "download emulator package") → Your task is DONE. Report the envelope and **suggest** next steps, but do NOT auto-proceed.
+- **Single-task request** (e.g., "에뮬레이터 패키지 다운로드해줘", "download emulator package") → Your task is DONE after the "Post-install — ensure the default standard emulator VM" step: report the download envelope (and the create/list envelope if a VM was created), then **suggest** next steps, but do NOT auto-proceed.
 - **Multi-step request** (e.g., "에뮬레이터 패키지 다운로드하고 에뮬레이터 만들어줘") → Continue to the next step the user requested.
 
 **Suggested next steps (only when the user asks):**
 
+- `tizen-launch-emulator` (to launch the default VM that was just ensured)
 - `tizen-create-emulator` (to create a new emulator VM)
 - `tizen-launch-emulator` (to launch an existing emulator VM)
 - `tizen-device-manager` (to verify device/emulator connection)
