@@ -328,7 +328,7 @@ tizen-sdk-skills/
 ├── _repo-root/             # tizen-agent-skills 저장소 루트용 파일 스테이징 (.claude-plugin/marketplace.json → ./tizen-sdk-skills/common, .github/, LICENSE 등 — _repo-root/UPLOAD.md 참고)
 ├── common/                 # 모든 하네스가 공유 (단일 소스)
 │   ├── .claude-plugin/     #   Claude Code 플러그인 메타데이터 (plugin.json)
-│   ├── agents/             #   24개 agent .md (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
+│   ├── agents/             #   27개 agent .md (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
 │   ├── skills/             #   33개 SKILL.md 디렉토리 (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
 │   ├── lib/                #   CommonJS 도메인 로직 — CLI 러너, core, envelope, 테스트
 │   │   ├── cli/            #     CLI 진입점 (명령어별 1개, `node <파일>`로 실행)
