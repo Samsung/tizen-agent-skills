@@ -12,17 +12,17 @@
 
 | 항목 | 값 |
 | --- | --- |
-| YAML 테스트 케이스 총 개수 | **297** |
+| YAML 테스트 케이스 총 개수 | **301** |
 | CSV TC ID 가 매핑된 케이스 | **256** |
 | ├─ CLI 레인 (`TC-CLI-*`) | 136 |
 | └─ Prompt 레인 (`TC-P-*`) | 120 |
-| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **41** |
+| CSV TC ID 가 없는 케이스 (YAML 자체 추가분) | **45** |
 
 ### 도메인별 분포
 
 | 도메인 (`tc/<group>/`) | 케이스 수 |
 | --- | ---: |
-| `device` | 105 |
+| `device` | 109 |
 | `sdk` | 66 |
 | `debug` | 32 |
 | `project` | 28 |
@@ -35,9 +35,9 @@
 
 | tier | 케이스 수 |
 | --- | ---: |
-| `device` | 144 |
+| `device` | 146 |
 | `mutating` | 79 |
-| `safe` | 74 |
+| `safe` | 76 |
 
 ---
 
@@ -327,7 +327,11 @@ CSV 원본에 대응 행이 없고, YAML 쪽에서 자체적으로 추가한 케
 | [tc/debug/dotnet-debug.missing-required.yaml](tc/debug/dotnet-debug.missing-required.yaml) | `tizen-sdk.dotnet-debug.missing-required` | `dotnet-debug` | device | CLI | dotnet-debug fails with invalid_argument when --app-id is missing |
 | [tc/debug/gdb-debug.missing-required.yaml](tc/debug/gdb-debug.missing-required.yaml) | `tizen-sdk.gdb-debug.missing-required` | `gdb-debug` | device | CLI | gdb-debug fails with invalid_argument when --app-id and --binary are missing |
 | [tc/debug/webapp-debug.missing-required.yaml](tc/debug/webapp-debug.missing-required.yaml) | `tizen-sdk.webapp-debug.missing-required` | `webapp-debug` | device | CLI | webapp-debug fails with invalid_argument when --app-id is missing |
+| [tc/device/create-emulator.default-missing-platform.yaml](tc/device/create-emulator.default-missing-platform.yaml) | `tizen-sdk.create-emulator.default-missing-platform` | `create-emulator` | safe | CLI | create-emulator --action create --default without --platform fails with invalid_parameters |
+| [tc/device/create-emulator.default.yaml](tc/device/create-emulator.default.yaml) | `tizen-sdk.create-emulator.default` | `create-emulator` | device | CLI | create-emulator --action create --default --platform tizen-10.0-x86_64 creates T-10.0-x86_64 |
 | [tc/device/create-emulator.missing-required.yaml](tc/device/create-emulator.missing-required.yaml) | `tizen-sdk.create-emulator.missing-required` | `create-emulator` | device | CLI | create-emulator fails with user_input_required when --size is missing for create action |
+| [tc/device/emulator-manager.default-tv-without-profile.yaml](tc/device/emulator-manager.default-tv-without-profile.yaml) | `tizen-sdk.emulator-manager.default-tv-without-profile` | `emulator-manager` | safe | CLI | emulator-manager --action create --default with a tv-samsung platform and no --profile tv fails with invalid_parameters |
+| [tc/device/emulator-manager.delete-default.yaml](tc/device/emulator-manager.delete-default.yaml) | `tizen-sdk.emulator-manager.delete-default` | `emulator-manager` | device | CLI | emulator-manager --action delete --vm-name T-10.0-x86_64 removes the default VM |
 | [tc/device/emulator-manager.missing-required.yaml](tc/device/emulator-manager.missing-required.yaml) | `tizen-sdk.emulator-manager.missing-required` | `emulator-manager` | device | CLI | emulator-manager create fails with user_input_required when --size is missing |
 | [tc/device/file-transfer.missing-required.yaml](tc/device/file-transfer.missing-required.yaml) | `tizen-sdk.file-transfer.missing-required` | `file-transfer` | device | CLI | file-transfer fails with invalid_argument when --direction and --remote are missing |
 | [tc/device/file-transfer.pull-missing-remote.yaml](tc/device/file-transfer.pull-missing-remote.yaml) | `tizen-sdk.file-transfer.pull-missing-remote` | `file-transfer` | device | CLI | pull of a non-existent device path fails with remote_path_not_found (issue #95) |

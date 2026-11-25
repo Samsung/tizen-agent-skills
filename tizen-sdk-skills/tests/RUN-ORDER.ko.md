@@ -134,6 +134,7 @@ node scripts/run-device-tier.mjs --yes      # 실제 실행 (~20분)
 | `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
 | `d-boot-2` | launch-emulator happy / first-available, stop, delete | `test-vm`만 존재 |
 | `e-network` | remote-device 북마크 체인, 네트워크 스캔 | hook: .50/.51 북마크 제거 |
+| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | `T-10.0-x86_64` 없음 |
 | `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
 | (스크립트 단계) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
 | `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | 온라인 tv-* VM 필요 |

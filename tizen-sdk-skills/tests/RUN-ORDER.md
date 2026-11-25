@@ -140,6 +140,7 @@ the driver.
 | `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
 | `d-boot-2` | launch-emulator happy / first-available, stop, delete | only `test-vm` exists |
 | `e-network` | remote-device bookmark chain, network scans | hook: strip .50/.51 bookmarks |
+| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | `T-10.0-x86_64` absent |
 | `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
 | (script step) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
 | `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | needs an online tv-* VM |

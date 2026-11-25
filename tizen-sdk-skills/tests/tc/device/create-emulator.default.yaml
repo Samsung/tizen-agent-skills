@@ -1,0 +1,27 @@
+# em-cli's own default-VM mode (create -d): default-tizen-10.0-x86_64 becomes
+# the canonical dotted name T-10.0-x86_64. Needs the tizen-10.0-x86_64 image.
+id: tizen-sdk.create-emulator.default
+plugin: tizen-sdk
+command: create-emulator
+tier: device
+status: approved
+since_cli: 1.10.0
+description: "create-emulator --action create --default --platform tizen-10.0-x86_64 creates T-10.0-x86_64"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "create-emulator",
+        "--action",
+        "create",
+        "--default",
+        "--platform",
+        "tizen-10.0-x86_64",
+      ]
+    timeout_sec: 120
+    expect:
+      status: success
+      jsonpath:
+        - { path: "$.result.vm_name", matches: "^T-10\\.0-x86_64$" }

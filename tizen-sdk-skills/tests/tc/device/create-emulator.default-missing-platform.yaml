@@ -1,0 +1,18 @@
+# --default derives the VM name from --platform, so it is refused without one
+# before any SDK lookup (validateCreateOptions in common/lib/core/emulator.js).
+id: tizen-sdk.create-emulator.default-missing-platform
+plugin: tizen-sdk
+command: create-emulator
+tier: safe
+status: approved
+since_cli: 1.10.0
+description: "create-emulator --action create --default without --platform fails with invalid_parameters"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "create-emulator", "--action", "create", "--default"]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_code: "TIZEN_SDK_PARAM_E001", error_category: "invalid_parameters" }

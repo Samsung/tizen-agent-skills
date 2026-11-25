@@ -1,0 +1,16 @@
+# Cleans up the default VM create-emulator.default made: the dotted canonical
+# name (T-10.0-x86_64) passes NAME_PATTERN and the delete action.
+id: tizen-sdk.emulator-manager.delete-default
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: approved
+since_cli: 1.10.0
+description: "emulator-manager --action delete --vm-name T-10.0-x86_64 removes the default VM"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "delete", "--vm-name", "T-10.0-x86_64"]
+    timeout_sec: 60
+    expect:
+      status: success

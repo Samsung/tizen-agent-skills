@@ -1,0 +1,27 @@
+# tizen and tv both derive the 'T-' prefix, so --default refuses a tv-samsung-*
+# platform without --profile tv before any SDK lookup.
+id: tizen-sdk.emulator-manager.default-tv-without-profile
+plugin: tizen-sdk
+command: emulator-manager
+tier: safe
+status: approved
+since_cli: 1.10.0
+description: "emulator-manager --action create --default with a tv-samsung platform and no --profile tv fails with invalid_parameters"
+
+lanes:
+  cli:
+    argv:
+      [
+        "tizen-sdk",
+        "emulator-manager",
+        "--action",
+        "create",
+        "--default",
+        "--platform",
+        "tv-samsung-10.0-x86_64",
+      ]
+    timeout_sec: 30
+    expect:
+      status: failure
+      errors:
+        - { error_code: "TIZEN_SDK_PARAM_E001", error_category: "invalid_parameters" }
