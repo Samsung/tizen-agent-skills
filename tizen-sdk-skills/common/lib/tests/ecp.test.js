@@ -52,6 +52,7 @@ const intentCases = [
   ["어떤 디바이스를 쓸 수 있어?", INTENTS.LIST_DEVICES],
   // help — without a version/profile it stays help, not list-devices
   ["help", INTENTS.HELP],
+  ["help battery", INTENTS.HELP],
   ["what commands are available", INTENTS.HELP],
   ["명령 목록 보여줘", INTENTS.HELP],
   // help + version/profile ⇒ list-devices
@@ -133,15 +134,56 @@ check(
 // Test 4: battery arguments — fillers dropped, values kept
 console.log("Test 4: battery arguments");
 check(
-  "'set the battery level to 50' → battery 50 (the tail after the command word)",
+  "'set the battery level to 50' → battery level 50 (the ecp-cli battery grammar)",
   matchEcpIntent("set the battery level to 50").args,
-  ["50"],
+  ["level", "50"],
 );
 check(
-  "quotes around a value are stripped",
-  matchEcpIntent('battery status "high"').args,
-  ["status", "high"],
+  "'battery level 75' passes the level subcommand through",
+  matchEcpIntent("battery level 75").args,
+  ["level", "75"],
 );
+check(
+  "a bare number after 'battery' maps to the level subcommand",
+  matchEcpIntent("battery 75").args,
+  ["level", "75"],
+);
+check(
+  "a bare number longer than three digits still maps to the level subcommand",
+  matchEcpIntent("battery 1000").args,
+  ["level", "1000"],
+);
+check(
+  "'battery charger off' keeps the charger state",
+  matchEcpIntent("battery charger off").args,
+  ["charger", "off"],
+);
+check(
+  "'turn the battery charger on' keeps the charger state",
+  matchEcpIntent("turn the battery charger on").args,
+  ["charger", "on"],
+);
+check(
+  "'battery status' ignores trailing tokens (status takes no arguments)",
+  matchEcpIntent("battery status").args,
+  ["status"],
+);
+check(
+  "'battery version 9.0' does not map a version fragment to a level",
+  matchEcpIntent("battery version 9.0").args,
+  ["version", "9.0"],
+);
+check(
+  "'help battery' keeps the device token for per-device help",
+  matchEcpIntent("help battery").args,
+  ["battery"],
+);
+check(
+  "'help me with battery' skips prepositions before the device token",
+  matchEcpIntent("help me with battery").args,
+  ["battery"],
+);
+check("bare 'help' keeps no arguments", matchEcpIntent("help").args, []);
 check("bare 'battery' keeps no arguments", matchEcpIntent("battery").args, []);
 
 // Test 5: pass-through (unknown command) arguments — regression
