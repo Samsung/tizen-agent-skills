@@ -59,7 +59,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
       {
         flags: "--default",
         description:
-          "Default-name creation (em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform.",
+          "Default-name creation (em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform; a tv-samsung-* platform also needs --profile tv.",
         default: false,
       },
       {
@@ -188,7 +188,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
       {
         flags: "--default",
         description:
-          "Default-name creation (create only; em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform.",
+          "Default-name creation (create only; em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform; a tv-samsung-* platform also needs --profile tv.",
         default: false,
       },
       {
