@@ -5,7 +5,7 @@ plugin: tizen-sdk
 command: create-emulator
 tier: device
 status: approved
-since_cli: 1.10.0
+since_cli: 1.11.0
 description: "create-emulator --action create --default --platform tizen-10.0-x86_64 creates T-10.0-x86_64"
 
 lanes:

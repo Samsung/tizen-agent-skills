@@ -193,7 +193,8 @@ phases:
       - tizen-sdk.remote-device.disconnect
 
   # Default-name creation (create --default): T-10.0-x86_64 must not exist
-  # beforehand (already-exists is a failure). Runs after d-boot-2 so
+  # beforehand (already-exists is a failure) — hook deleteDefaultVm removes
+  # it first. Runs after d-boot-2 so
   # launch-emulator.first-available only ever sees test-vm.
   - name: e2-default-vm
     tcs:

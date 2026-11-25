@@ -13,7 +13,7 @@ Run every command from the `tests/` directory.
 | --- | --- | --- | --- |
 | safe | `runner.mjs --tier=safe` | ~1 min | None (only `sdk-init.explicit-path` writes `~/.tizen.sdk.path.config`) |
 | mutating | `scripts/run-mutating-tier.mjs` | ~5 min (60-90 min with installers) | keystore, profile fixtures, project scratch dir |
-| device | `scripts/run-device-tier.mjs` | ~20 min | deletes/recreates `test-vm` and `tv-vm`, stops every emulator, network scan, rewrites and restores the bookmark file |
+| device | `scripts/run-device-tier.mjs` | ~20 min | deletes/recreates `test-vm` and `tv-vm`, deletes `T-10.0-x86_64`, stops every emulator, network scan, rewrites and restores the bookmark file |
 
 ---
 
@@ -105,6 +105,9 @@ The canonical order lives in `policy/mutating-run-order.yaml`.
   online at once the TCs fail with `multiple_devices`.
 - VMs named `test-vm` and `tv-vm` are deleted and recreated. Rename your own VM if it uses one
   of those names.
+- The SDK default VM `T-10.0-x86_64` is deleted before `e2-default-vm`, then created and
+  deleted again by its TCs, so it does not exist after the run. Recreate it afterwards if
+  you use it (`create-emulator --default --platform tizen-10.0-x86_64`).
 - The Device Manager bookmark file (`remote_device_scan.list`) is backed up, modified, and
   restored after the run.
 - With `--yes` the driver sweeps the local /24 on TCP 26101 three times.
@@ -140,7 +143,7 @@ the driver.
 | `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
 | `d-boot-2` | launch-emulator happy / first-available, stop, delete | only `test-vm` exists |
 | `e-network` | remote-device bookmark chain, network scans | hook: strip .50/.51 bookmarks |
-| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | `T-10.0-x86_64` absent |
+| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | hook `deleteDefaultVm`: deletes `T-10.0-x86_64` if present |
 | `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
 | (script step) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
 | `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | needs an online tv-* VM |

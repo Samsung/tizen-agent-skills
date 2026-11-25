@@ -5,7 +5,7 @@ plugin: tizen-sdk
 command: emulator-manager
 tier: safe
 status: approved
-since_cli: 1.10.0
+since_cli: 1.11.0
 description: "emulator-manager --action create --default with a tv-samsung platform and no --profile tv fails with invalid_parameters"
 
 lanes:

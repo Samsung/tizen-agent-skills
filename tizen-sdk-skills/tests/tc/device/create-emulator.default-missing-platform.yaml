@@ -5,7 +5,7 @@ plugin: tizen-sdk
 command: create-emulator
 tier: safe
 status: approved
-since_cli: 1.10.0
+since_cli: 1.11.0
 description: "create-emulator --action create --default without --platform fails with invalid_parameters"
 
 lanes:

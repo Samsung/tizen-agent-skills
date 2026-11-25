@@ -5,7 +5,7 @@ plugin: tizen-sdk
 command: emulator-manager
 tier: device
 status: approved
-since_cli: 1.10.0
+since_cli: 1.11.0
 description: "emulator-manager --action delete --vm-name T-10.0-x86_64 removes the default VM"
 
 lanes:

@@ -462,7 +462,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 | 단위 테스트 (`common/lib/tests/`) | 100 파일 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 122 케이스 | `cd vscode && npm test` |
 | 훅 테스트 | 261 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 296 TC / 289 YAML — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 통합 TC (`tests/tc/`) | 301 TC / 294 YAML — safe 76 / mutating 79 / device 146; approved 291 | `cd tests && node scripts/verify-doc-stats.mjs` |
 | 문서 | Markdown 219개 (`docs/` 93개, en/ko 쌍), SKILL.md 63개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈

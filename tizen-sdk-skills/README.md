@@ -482,7 +482,7 @@ or test suite is added.
 | Unit tests (`common/lib/tests/`) | 100 files | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 122 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 261 cases | `bash common/hooks/hooks.test.sh` |
-| Integration TCs (`tests/tc/`) | 296 TCs in 289 YAML files — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| Integration TCs (`tests/tc/`) | 301 TCs in 294 YAML files — safe 76 / mutating 79 / device 146; approved 291 | `cd tests && node scripts/verify-doc-stats.mjs` |
 | Documentation | 219 Markdown files (`docs/` 93 in en/ko pairs), 63 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases

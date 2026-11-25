@@ -13,7 +13,7 @@ mutating·device 티어는 그 순서로는 어떤 호스트에서도 통과하�
 | --- | --- | --- | --- |
 | safe | `runner.mjs --tier=safe` | ~1분 | 없음 (`sdk-init.explicit-path`만 `~/.tizen.sdk.path.config` 기록) |
 | mutating | `scripts/run-mutating-tier.mjs` | ~5분 (installer 포함 시 60~90분) | keystore, 프로필 fixture, 프로젝트 스크래치 디렉터리 |
-| device | `scripts/run-device-tier.mjs` | ~20분 | `test-vm`/`tv-vm` 삭제·재생성, 모든 에뮬레이터 종료, 네트워크 스캔, 북마크 파일 수정 후 복원 |
+| device | `scripts/run-device-tier.mjs` | ~20분 | `test-vm`/`tv-vm` 삭제·재생성, `T-10.0-x86_64` 삭제, 모든 에뮬레이터 종료, 네트워크 스캔, 북마크 파일 수정 후 복원 |
 
 ---
 
@@ -102,6 +102,8 @@ node scripts/run-mutating-tier.mjs --restore-user-env=<scratch>/user-env.json   
 - 실행 중인 에뮬레이터가 **없어야** 합니다. 드라이버가 실행 중인 에뮬레이터를 모두 종료하고, 동시에 두 대가 온라인이면
   `multiple_devices`로 TC가 실패합니다.
 - `test-vm`, `tv-vm`이라는 이름의 VM은 삭제·재생성됩니다. 같은 이름의 VM을 따로 쓰고 있다면 이름을 바꾸세요.
+- SDK 기본 VM `T-10.0-x86_64`는 `e2-default-vm` 전에 삭제되고, 그 단계의 TC가 다시 만들었다가 지우므로 실행 후에는
+  남지 않습니다. 이 VM을 쓰고 있다면 실행 후 다시 만드세요(`create-emulator --default --platform tizen-10.0-x86_64`).
 - Device Manager 북마크 파일(`remote_device_scan.list`)은 백업 후 수정되고 실행 후 복원됩니다.
 - `--yes`를 붙이면 로컬 /24 대역을 TCP 26101 포트로 세 번 스캔합니다.
 
@@ -134,7 +136,7 @@ node scripts/run-device-tier.mjs --yes      # 실제 실행 (~20분)
 | `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
 | `d-boot-2` | launch-emulator happy / first-available, stop, delete | `test-vm`만 존재 |
 | `e-network` | remote-device 북마크 체인, 네트워크 스캔 | hook: .50/.51 북마크 제거 |
-| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | `T-10.0-x86_64` 없음 |
+| `e2-default-vm` | `create-emulator.default` (`T-10.0-x86_64`), `emulator-manager.delete-default` | hook `deleteDefaultVm`: `T-10.0-x86_64`가 있으면 삭제 |
 | `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
 | (스크립트 단계) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
 | `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | 온라인 tv-* VM 필요 |

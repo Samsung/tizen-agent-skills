@@ -36,6 +36,7 @@
  *              device before c2; drop port forwards, kill debuggers/apps before every
  *              debug phase and before c6; delete the scaffolded test file
  *              before c3; strip 192.168.1.50/.51 bookmarks before e-network;
+ *              delete T-10.0-x86_64 if present before e2-default-vm;
  *              boot tv-vm between f1-tv-create and f2-tv-detect
  *   teardown   stop all emulators, delete test-vm, restore the bookmark list
  *
@@ -45,6 +46,7 @@
  * documentation defaults.
  *
  * DESTRUCTIVE with --yes: deletes/recreates the VMs named test-vm and tv-vm,
+ * deletes the SDK default VM T-10.0-x86_64 (e2 creates and removes it again),
  * factory-resets test-vm, stops EVERY running emulator, sweeps the local /24
  * on TCP 26101 three times, rewrites the Device Manager bookmark list
  * (restored from the backup afterwards), and installs / launches / kills the
@@ -98,6 +100,7 @@ const ORDER = join(TESTS, "policy", "device-run-order.yaml");
 
 const VM_TEST = "test-vm";
 const VM_TV = "tv-vm";
+const VM_DEFAULT = "T-10.0-x86_64";
 const BOOKMARK_IPS = new Set(["192.168.1.50", "192.168.1.51"]);
 const TV_BOOT_TIMEOUT_SEC = 480;
 
@@ -407,6 +410,17 @@ function stripBookmarksHook({ paths }) {
   return true;
 }
 
+/** e2: create-emulator.default fails with "already exists" when the default VM is there. */
+function deleteDefaultVm() {
+  const vms = listVms();
+  if (!vms) return false;
+  if (!vms.includes(VM_DEFAULT)) {
+    ok(`${VM_DEFAULT} not present`);
+    return true;
+  }
+  return deleteVm(VM_DEFAULT);
+}
+
 function bootTvVm({ opts }) {
   if (opts.skipTvBoot) {
     // Requested by the caller, so not a hook failure.
@@ -451,6 +465,7 @@ const PHASE_HOOKS = {
   "c5d-gdb-serial": [debugCleanup],
   "c6-stop": [debugCleanup],
   "e-network": [stripBookmarksHook],
+  "e2-default-vm": [deleteDefaultVm],
   "f2-tv-detect": [bootTvVm],
 };
 
