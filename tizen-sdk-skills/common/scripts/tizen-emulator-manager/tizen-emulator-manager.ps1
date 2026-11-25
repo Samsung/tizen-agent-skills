@@ -1115,7 +1115,7 @@ if ($Action -eq "create") {
     # VS Code extension create are created here too. The platform is required
     # (the name is derived from it), and the final name must be known before the
     # exists-check below, so it is derived here rather than after auto-detect.
-    $CreateNName = $VmName
+    $CreateName = $VmName
     $defaultArgs = @()
     if ($DefaultName) {
         if (-not $Platform) {
@@ -1126,8 +1126,11 @@ if ($Action -eq "create") {
             Write-Err "Cannot derive a default VM name from platform '$Platform' (no '-' separator)."
             exit 1
         }
+        # Same derivation as deriveDefaultVmName() in common/lib/core/emulator.js
+        # and the .sh's ${PROFILE:0:1}+${PLATFORM#*-} — the three copies must
+        # produce identical names; keep them in sync.
         $VmName = $Profile.Substring(0, 1).ToUpper() + "-" + $Platform.Substring($Platform.IndexOf("-") + 1)
-        $CreateNName = "default-$Platform"
+        $CreateName = "default-$Platform"
         $defaultArgs = @("-d")
         Write-Info "Default-name mode: em-cli rewrites 'default-$Platform' to '$VmName'"
     } else {
@@ -1249,7 +1252,7 @@ if ($Action -eq "create") {
     # it is passed for every profile, TV included.
     if ($TemplateExplicit) {
         Write-Info "Creating VM '$VmName' on platform '$Platform' with template '$Template'..."
-        Invoke-EmCli (@("create", "-n", $CreateNName, "-p", $Platform, "-t", $Template) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
+        Invoke-EmCli (@("create", "-n", $CreateName, "-p", $Platform, "-t", $Template) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
 
         if ($LASTEXITCODE -ne 0) {
             Write-Err "Failed to create emulator VM '$VmName' on platform '$Platform' with template '$Template'."
@@ -1275,7 +1278,7 @@ if ($Action -eq "create") {
                 }
             }
 
-            Invoke-EmCli (@("create", "-n", $CreateNName, "-p", $Platform) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
+            Invoke-EmCli (@("create", "-n", $CreateName, "-p", $Platform) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
             if ($LASTEXITCODE -ne 0) {
                 Invoke-CleanupAndFail "without_template"
             }
@@ -1285,7 +1288,7 @@ if ($Action -eq "create") {
         }
     } else {
         Write-Info "Creating VM '$VmName' on platform '$Platform'..."
-        Invoke-EmCli (@("create", "-n", $CreateNName, "-p", $Platform) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
+        Invoke-EmCli (@("create", "-n", $CreateName, "-p", $Platform) + $defaultArgs + $extraArgs) -Stdin $createStdin 2>$null
         if ($LASTEXITCODE -ne 0) {
             Write-Err "Failed to create emulator VM '$VmName' on platform '$Platform'."
             # No template was passed, so the guidance must not talk about one - with

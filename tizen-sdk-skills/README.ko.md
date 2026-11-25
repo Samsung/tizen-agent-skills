@@ -455,7 +455,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 |------|------|-------------|
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
 | 스킬 (`common/skills/`) | 31개 (`tizen-cli/skills/`는 32개: `tizen-handoff`를 뺀 30개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
-| 에이전트 (`common/agents/`) | 25개 | `ls common/agents/*.md \| wc -l` |
+| 에이전트 (`common/agents/`) | 26개 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI 커맨드 | 37개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 64개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 훅 | PreToolUse 가드 스크립트 3개(가드 규칙 15개)와 세션 시작 업데이트 확인(`check-update.js`) | `common/hooks/` |

@@ -326,13 +326,15 @@ you MUST ensure a default standard emulator VM exists:
 
 ## Final message — envelope JSON ONLY
 
-**Your final message must be the envelope JSON ONLY** — one ```json code block,
-VERBATIM, with NO surrounding prose, greeting, or summary. Your final message is a
-DATA RETURN consumed by the caller (which writes the user-facing summary); any extra
-text around it just duplicates what the caller will say. The Bash tool result you saw
-is hidden from the user — if the JSON is not in your final message, the user never
-sees it. Do NOT hand-write a text report or a fake JSON in place of the runner's
-output. If the runner ran more than once, return the envelope of the **last** run.
+**Your final message must be the envelope JSON ONLY** — one ```json code block, or
+two when the post-install step ran: the **download envelope first**, then the
+**create/list envelope** (step 4 above), each VERBATIM, with NO surrounding prose,
+greeting, or summary. Your final message is a DATA RETURN consumed by the caller
+(which writes the user-facing summary); any extra text around it just duplicates
+what the caller will say. The Bash tool result you saw is hidden from the user — if
+the JSON is not in your final message, the user never sees it. Do NOT hand-write a
+text report or a fake JSON in place of the runner's output. If a runner ran more
+than once, each block carries the envelope of the **last** run of that runner.
 
 ## Handoff
 
@@ -343,7 +345,6 @@ output. If the runner ran more than once, return the envelope of the **last** ru
 
 **Suggested next steps (only when the user asks):**
 
-- `tizen-launch-emulator` (to launch the default VM that was just ensured)
+- `tizen-launch-emulator` (to launch the default VM that was just ensured, or any existing emulator VM)
 - `tizen-create-emulator` (to create a new emulator VM)
-- `tizen-launch-emulator` (to launch an existing emulator VM)
 - `tizen-device-manager` (to verify device/emulator connection)

@@ -22,7 +22,7 @@ flowchart LR
         direction TB
         Dev["Developer<br/>① 자연어 요청<br/>② tizen-sdk CLI 직접 실행"]
         Host["AI 호스트<br/>Claude Code · Cline<br/>Codex CLI · Gemini CLI"]
-        Skill["스킬 31개 · 에이전트 25개<br/>요청 → 스킬 라우팅"]
+        Skill["스킬 31개 · 에이전트 26개<br/>요청 → 스킬 라우팅"]
         Runner["CLI 러너 (common/lib/cli)<br/>명령 37개"]
         Tools["Tizen SDK 도구<br/>tz · sdb · em-cli<br/>gbs (Platform 빌드만)"]
         Dev -->|①| Host --> Skill --> Runner

@@ -343,7 +343,7 @@ tizen-sdk-skills/           # lives at tizen-agent-skills/tizen-sdk-skills/ in t
 │                           #   see _repo-root/UPLOAD.md)
 ├── common/                 # Shared by all harnesses (single source of truth)
 │   ├── .claude-plugin/     #   Claude Code plugin metadata (plugin.json)
-│   ├── agents/             #   25 agent .md files (runner lookup covers .claude/.cline/.codex/.gemini)
+│   ├── agents/             #   26 agent .md files (runner lookup covers .claude/.cline/.codex/.gemini)
 │   ├── skills/             #   30 SKILL.md directories (runner lookup covers .claude/.cline/.codex/.gemini)
 │   ├── lib/                #   CommonJS domain logic — CLI runners, core, envelope, tests
 │   │   ├── cli/            #     CLI entry points (one per command, run via `node <file>`)
@@ -475,7 +475,7 @@ or test suite is added.
 |------|-------|-------------------|
 | Harnesses | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, standalone tizen-sdk CLI, VS Code extension | `ls common/setup/hosts` (4 dot-dir hosts × sh/ps1) + `tizen-cli/` + `vscode/` |
 | Skills (`common/skills/`) | 31 (`tizen-cli/skills/` has 32: 30 of these — all but `tizen-handoff` — plus 2 CLI-only) | `ls -d common/skills/*/ \| wc -l` |
-| Agents (`common/agents/`) | 25 | `ls common/agents/*.md \| wc -l` |
+| Agents (`common/agents/`) | 26 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI commands | 37 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | Error codes | 64 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Hooks | 3 PreToolUse guard scripts with 15 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |

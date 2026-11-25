@@ -174,6 +174,7 @@ The action is the first positional argument; everything else is a flag.
 | `--profile <profile>` | no            | `tizen`  | `tizen` (standard) or `tv` (Samsung TV)                                                                              |
 | `--launch`            | no            | `false`  | Launch the VM after creating (create only). **Omit entirely for create-only** — do NOT pass `--launch false`.         |
 | `--raw-image-path <path>` | no       | —        | Directory holding raw disk images (create only). Creates a VM from a raw disk image instead of a template. **Skips size/template selection** — the disk image determines the VM. em-cli prompts for confirmation; the runner auto-answers "y". |
+| `--default`          | no            | `false`  | Default-name creation (create only; em-cli's own `create -d` mode): derives the VM name from `--platform` — `tizen-10.0-x86_64` → `T-10.0-x86_64`, `tv-samsung-10.0-x86_64` → `T-samsung-10.0-x86_64` — and applies the platform's default template (1080), so no `--vm-name`/`--size`/`--template` is needed. **Requires `--platform`.** This is what the installer skills' post-install step uses. |
 
 > **⚠️ This runner accepts only `--profile tizen` or `tv` — never narrate a `mobile`
 > profile.** The tizen|tv restriction is this runner's (and its wrapper script's) own
@@ -197,6 +198,10 @@ node "$CLI" create --vm-name my-vm --assume-defaults
 
 # Create with a specific platform
 node "$CLI" create --vm-name my-vm --size 1080 --platform tizen-10.0-x86_64
+
+# Ensure the platform's default VM (the installer skills' post-install step):
+# the name is derived from the platform — em-cli's own -d mode
+node "$CLI" create --default --platform tizen-10.0-x86_64
 
 # Create a TV emulator VM at 3840x1080
 node "$CLI" create --vm-name my-tv-vm --profile tv --size 3840

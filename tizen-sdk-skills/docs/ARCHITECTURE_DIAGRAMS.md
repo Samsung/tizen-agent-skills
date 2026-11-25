@@ -27,7 +27,7 @@ graph TB
 
     subgraph COMMON["common/ — 단일 진실 공급원"]
         SKILLS["skills/<br/>30개 SKILL.md<br/>(트리거 문구 + 러너 호출법)"]
-        AGENTS["agents/<br/>25개 agent .md<br/>(서브에이전트 위임용)"]
+        AGENTS["agents/<br/>26개 agent .md<br/>(서브에이전트 위임용)"]
         HOOKS["hooks/<br/>3개 가드 스크립트 + 13개 규칙"]
         LIB["lib/<br/>cli/ → core/ → envelope/"]
         SCRIPTS["scripts/<br/>tizen-*/ .ps1 + .sh 기능 스크립트"]

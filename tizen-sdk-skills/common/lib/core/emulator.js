@@ -1701,7 +1701,7 @@ function validateCreateOptions(state, opts, command) {
           `name, e.g. default-tizen-10.0-x86_64 → T-10.0-x86_64).`,
       );
     }
-    if (state.template || opts.template) {
+    if (state.template) {
       return formatError(
         command,
         "invalid_parameters",
@@ -2768,6 +2768,12 @@ async function launchEmulator(
  * A-Za-z0-9-_ character check — which is how the dotted default names the
  * native Emulator Manager and the VS Code extension create (T-10.0-x86_64,
  * T-samsung-10.0-x86_64) come into existence.
+ *
+ * Keep in sync with the standalone copies in
+ * common/scripts/tizen-emulator-manager/tizen-emulator-manager.sh
+ * (VM_NAME="${PROFILE:0:1}…-${PLATFORM#*-}") and
+ * tizen-emulator-manager.ps1 ($VmName = $Profile.Substring(0,1)…): the wrapper
+ * scripts must derive the same name on their own before the exists-check.
  *
  * @returns {string|null} The final VM name, or null when the platform has no
  *   '-' separator to split on.

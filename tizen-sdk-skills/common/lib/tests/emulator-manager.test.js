@@ -191,6 +191,41 @@ checkTrue(
   "deriveDefaultVmName rejects a platform without '-'",
   deriveDefaultVmName("badplatform", "tv") === null,
 );
+check(
+  "deriveDefaultVmName tizen x86 (multi-arch platform)",
+  deriveDefaultVmName("tizen-9.0-x86", "tizen"),
+  "T-9.0-x86",
+);
+
+// The wrapper scripts re-implement the derivation on their own — they must know
+// the final name before the exists-check and cannot import this module. A true
+// cross-execution parity test needs bash/PowerShell (device tier); here we
+// assert the exact derivation expressions are still present in both scripts.
+const shScript = fs.readFileSync(
+  path.join(
+    __dirname,
+    "../../scripts/tizen-emulator-manager/tizen-emulator-manager.sh",
+  ),
+  "utf8",
+);
+const ps1Script = fs.readFileSync(
+  path.join(
+    __dirname,
+    "../../scripts/tizen-emulator-manager/tizen-emulator-manager.ps1",
+  ),
+  "utf8",
+);
+checkTrue(
+  "sh script derives the default VM name from PLATFORM",
+  /PLATFORM#\*-\}/.test(shScript) && /\$\{PROFILE:0:1\}/.test(shScript),
+  "missing the ${PROFILE:0:1}+${PLATFORM#*-} derivation",
+);
+checkTrue(
+  "ps1 script derives the default VM name from $Profile/$Platform",
+  /\$Profile\.Substring\(0, 1\)/.test(ps1Script) &&
+    /\$Platform\.IndexOf\("-"\)/.test(ps1Script),
+  "missing the Substring derivation",
+);
 
 const launchArgs = buildEmulatorArgs({
   action: "launch",
@@ -1179,6 +1214,16 @@ async function checkDefaultNameValidation() {
         vmName: "my-vm",
       },
       match: /--vm-name is not applicable/,
+    },
+    {
+      name: "--default with --raw-image-path is refused",
+      opts: {
+        action: "create",
+        defaultName: true,
+        platform: "tizen-10.0-x86_64",
+        rawImagePath: "some/raw-images",
+      },
+      match: /--raw-image-path is not applicable/,
     },
     {
       name: "--default on a non-create action is refused",

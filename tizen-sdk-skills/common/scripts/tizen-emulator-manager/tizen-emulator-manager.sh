@@ -2185,7 +2185,7 @@ if [ "$ACTION" = "create" ]; then
   # VS Code extension create are created here too. The platform is required
   # (the name is derived from it), and the final name must be known before the
   # exists-check below, so it is derived here rather than after auto-detect.
-  CREATE_N_NAME="$VM_NAME"
+  CREATE_NAME="$VM_NAME"
   CREATE_DEFAULT_ARGS=()
   if [ "$DEFAULT_NAME" = true ]; then
     if [ -z "$PLATFORM" ]; then
@@ -2199,8 +2199,11 @@ if [ "$ACTION" = "create" ]; then
         exit 1
         ;;
     esac
+    # Same derivation as deriveDefaultVmName() in common/lib/core/emulator.js
+    # and the .ps1's Substring(0,1)+Substring(IndexOf("-")+1) — the three
+    # copies must produce identical names; keep them in sync.
     VM_NAME="$(printf '%s' "${PROFILE:0:1}" | tr '[:lower:]' '[:upper:]')-${PLATFORM#*-}"
-    CREATE_N_NAME="default-$PLATFORM"
+    CREATE_NAME="default-$PLATFORM"
     CREATE_DEFAULT_ARGS=(-d)
     log_info "Default-name mode: em-cli rewrites 'default-$PLATFORM' to '$VM_NAME'"
   else
@@ -2336,7 +2339,7 @@ if [ "$ACTION" = "create" ]; then
 
   if [ "$TEMPLATE_EXPLICIT" = true ]; then
     log_info "Creating VM '$VM_NAME' on platform '$PLATFORM' with template '$TEMPLATE'..."
-    if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" -t "$TEMPLATE" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+    if ! "$EMCLI" create -n "$CREATE_NAME" -p "$PLATFORM" -t "$TEMPLATE" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
       log_error "Failed to create emulator VM '$VM_NAME' on platform '$PLATFORM' with template '$TEMPLATE'."
 
       # TV fallback: em-cli has historically hit Java/JNA errors when -t is passed
@@ -2365,7 +2368,7 @@ if [ "$ACTION" = "create" ]; then
           ;;
       esac
 
-      if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+      if ! "$EMCLI" create -n "$CREATE_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
         cleanup_and_fail "without_template"
       fi
       log_warn "VM '$VM_NAME' created WITHOUT template '$TEMPLATE' — em-cli chose the size."
@@ -2374,7 +2377,7 @@ if [ "$ACTION" = "create" ]; then
     fi
   else
     log_info "Creating VM '$VM_NAME' on platform '$PLATFORM'..."
-    if ! "$EMCLI" create -n "$CREATE_N_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
+    if ! "$EMCLI" create -n "$CREATE_NAME" -p "$PLATFORM" "${CREATE_DEFAULT_ARGS[@]+"${CREATE_DEFAULT_ARGS[@]}"}" "${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"}" <"$CREATE_STDIN" 2>&1; then
       log_error "Failed to create emulator VM '$VM_NAME' on platform '$PLATFORM'."
       # No template was passed, so the guidance must not talk about one — with
       # $TEMPLATE empty, the "with_template" phase would suggest `-t ""`.
