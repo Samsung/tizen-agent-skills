@@ -195,7 +195,8 @@ phases:
   # Default-name creation (create --default) on the newest installed tizen
   # image: hook prepareDefaultVm picks it, sets DEFAULT_VM_PLATFORM /
   # DEFAULT_VM_NAME, and deletes that default VM if present (already-exists
-  # is a failure). Runs after d-boot-2 so
+  # is a failure). If it existed before the run, run-device-tier.mjs's
+  # teardown recreates it (empty) afterwards. Runs after d-boot-2 so
   # launch-emulator.first-available only ever sees test-vm.
   - name: e2-default-vm
     tcs:

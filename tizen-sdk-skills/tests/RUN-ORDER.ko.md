@@ -9,11 +9,11 @@ mutating·device 티어는 그 순서로는 어떤 호스트에서도 통과하�
 
 모든 명령은 `tests/` 디렉터리에서 실행합니다.
 
-| 티어 | 실행 도구 | 소요 시간 | 부작용 |
-| --- | --- | --- | --- |
-| safe | `runner.mjs --tier=safe` | ~1분 | 없음 (`sdk-init.explicit-path`만 `~/.tizen.sdk.path.config` 기록) |
-| mutating | `scripts/run-mutating-tier.mjs` | ~5분 (installer 포함 시 60~90분) | keystore, 프로필 fixture, 프로젝트 스크래치 디렉터리 |
-| device | `scripts/run-device-tier.mjs` | ~20분 | `test-vm`/`tv-vm` 삭제·재생성, 최신 tizen 이미지의 기본 VM 삭제, 모든 에뮬레이터 종료, 네트워크 스캔, 북마크 파일 수정 후 복원 |
+| 티어     | 실행 도구                       | 소요 시간                        | 부작용                                                                                                                         |
+| -------- | ------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| safe     | `runner.mjs --tier=safe`        | ~1분                             | 없음 (`sdk-init.explicit-path`만 `~/.tizen.sdk.path.config` 기록)                                                              |
+| mutating | `scripts/run-mutating-tier.mjs` | ~5분 (installer 포함 시 60~90분) | keystore, 프로필 fixture, 프로젝트 스크래치 디렉터리                                                                           |
+| device   | `scripts/run-device-tier.mjs`   | ~20분                            | `test-vm`/`tv-vm` 삭제·재생성, 최신 tizen 이미지의 기본 VM 삭제, 모든 에뮬레이터 종료, 네트워크 스캔, 북마크 파일 수정 후 복원 |
 
 ---
 
@@ -71,15 +71,15 @@ node scripts/run-mutating-tier.mjs --yes      # 실제 실행 (~5분)
 
 ### 2-3. 단계(phase)
 
-| Phase | 내용 | 기본 실행 |
-| --- | --- | --- |
-| `s1-sdk-idempotent` | 이미 설치된 SDK의 short-circuit 경로 (다운로드 없음) | O |
-| `k1-cert-readonly` | list-profiles, list-distributors, inspect-certificate | O |
-| `k2-cert-keystore` | generate-author ×3, import-certificate ×2 (hook `cleanKeystore`) | O |
-| `k3-cert-profiles` | create/set-active/remove-profile (hook `resetProfileFixtures`) | O |
-| `p1-projects` | create-project → build-project → project-delete (hook `resetProjectsDir`) | O |
-| `s2-sdk-installers` | 실제 SDK/플랫폼/에뮬레이터 패키지 설치, 임시 HOME 사용 (60~90분, ~10GB) | `--with-installers` |
-| `s3-dotnet-workload` | `dotnet-setup --force` (실제 dotnet 설치에 워크로드 추가) | `--with-installers` |
+| Phase                | 내용                                                                      | 기본 실행           |
+| -------------------- | ------------------------------------------------------------------------- | ------------------- |
+| `s1-sdk-idempotent`  | 이미 설치된 SDK의 short-circuit 경로 (다운로드 없음)                      | O                   |
+| `k1-cert-readonly`   | list-profiles, list-distributors, inspect-certificate                     | O                   |
+| `k2-cert-keystore`   | generate-author ×3, import-certificate ×2 (hook `cleanKeystore`)          | O                   |
+| `k3-cert-profiles`   | create/set-active/remove-profile (hook `resetProfileFixtures`)            | O                   |
+| `p1-projects`        | create-project → build-project → project-delete (hook `resetProjectsDir`) | O                   |
+| `s2-sdk-installers`  | 실제 SDK/플랫폼/에뮬레이터 패키지 설치, 임시 HOME 사용 (60~90분, ~10GB)   | `--with-installers` |
+| `s3-dotnet-workload` | `dotnet-setup --force` (실제 dotnet 설치에 워크로드 추가)                 | `--with-installers` |
 
 ### 2-4. 옵션
 
@@ -103,8 +103,8 @@ node scripts/run-mutating-tier.mjs --restore-user-env=<scratch>/user-env.json   
   `multiple_devices`로 TC가 실패합니다.
 - `test-vm`, `tv-vm`이라는 이름의 VM은 삭제·재생성됩니다. 같은 이름의 VM을 따로 쓰고 있다면 이름을 바꾸세요.
 - 설치된 가장 높은 tizen 이미지의 SDK 기본 VM(예: `T-10.0-x86_64`)은 `e2-default-vm` 전에 삭제되고, 그 단계의 TC가
-  다시 만들었다가 지우므로 실행 후에는 남지 않습니다. 이 VM을 쓰고 있다면 실행 후 다시 만드세요
-  (`create-emulator --default --platform <그 이미지>`).
+  다시 만들었다가 지웁니다. 실행 전에 이 VM이 있었다면 티어다운이 빈 상태로 다시 만들어 주지만, VM의 디스크
+  내용은 백업되지 않으니 필요한 데이터는 미리 빼두세요.
 - Device Manager 북마크 파일(`remote_device_scan.list`)은 백업 후 수정되고 실행 후 복원됩니다.
 - `--yes`를 붙이면 로컬 /24 대역을 TCP 26101 포트로 세 번 스캔합니다.
 
@@ -125,22 +125,22 @@ node scripts/run-device-tier.mjs --yes      # 실제 실행 (~20분)
 
 ### 3-3. 단계(phase)
 
-| Phase | 내용 | 전제 / hook |
-| --- | --- | --- |
-| `a-no-device` | missing-required, list-*, handoff 봉투 | 부팅된 VM 없음 |
-| `b-vm-lifecycle` | `test-vm` create/detail/modify-ram/reset/delete, create-image | VM 정지 상태; hook `resetImageDir` |
-| `c-boot-1` | `create-emulator.launch`, device-manager, screenshot, sdb-helper | `test-vm` 부팅 후 c6까지 유지 |
-| `c2-fixture-apps` | install-app ×3, file-transfer push/pull, screenshot.output-path | hook `deviceFixtures`: root on, .NET/웹 fixture 앱 설치 |
-| `c3-web-debug` | webapp-debug ×4, playwright-test ×6 (RWI/CDP 9222, 9223) | hook `debugCleanup`, `resetTestProject` |
-| `c4-dotnet-debug` | dotnet-debug ×5 (netcoredbg DAP 4711) | hook `debugCleanup` |
-| `c5a` ~ `c5d` | gdb-debug launch / attach / breakpoints / serial, 단계당 1개 | 각 단계 전 hook `debugCleanup` |
-| `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
-| `d-boot-2` | launch-emulator happy / first-available, stop, delete | `test-vm`만 존재 |
-| `e-network` | remote-device 북마크 체인, 네트워크 스캔 | hook: .50/.51 북마크 제거 |
-| `e2-default-vm` | 설치된 가장 높은 tizen 이미지(예: `T-10.0-x86_64`)로 `create-emulator.default`, `emulator-manager.delete-default` | hook `prepareDefaultVm`: 이미지를 고르고, 그 기본 VM이 있으면 삭제 |
-| `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
-| (스크립트 단계) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
-| `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | 온라인 tv-* VM 필요 |
+| Phase             | 내용                                                                                                              | 전제 / hook                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `a-no-device`     | missing-required, list-*, handoff 봉투                                                                            | 부팅된 VM 없음                                                                                 |
+| `b-vm-lifecycle`  | `test-vm` create/detail/modify-ram/reset/delete, create-image                                                     | VM 정지 상태; hook `resetImageDir`                                                             |
+| `c-boot-1`        | `create-emulator.launch`, device-manager, screenshot, sdb-helper                                                  | `test-vm` 부팅 후 c6까지 유지                                                                  |
+| `c2-fixture-apps` | install-app ×3, file-transfer push/pull, screenshot.output-path                                                   | hook `deviceFixtures`: root on, .NET/웹 fixture 앱 설치                                        |
+| `c3-web-debug`    | webapp-debug ×4, playwright-test ×6 (RWI/CDP 9222, 9223)                                                          | hook `debugCleanup`, `resetTestProject`                                                        |
+| `c4-dotnet-debug` | dotnet-debug ×5 (netcoredbg DAP 4711)                                                                             | hook `debugCleanup`                                                                            |
+| `c5a` ~ `c5d`     | gdb-debug launch / attach / breakpoints / serial, 단계당 1개                                                      | 각 단계 전 hook `debugCleanup`                                                                 |
+| `c6-stop`         | `device-manager.stop`                                                                                             | hook `debugCleanup`                                                                            |
+| `d-boot-2`        | launch-emulator happy / first-available, stop, delete                                                             | `test-vm`만 존재                                                                               |
+| `e-network`       | remote-device 북마크 체인, 네트워크 스캔                                                                          | hook: .50/.51 북마크 제거                                                                      |
+| `e2-default-vm`   | 설치된 가장 높은 tizen 이미지(예: `T-10.0-x86_64`)로 `create-emulator.default`, `emulator-manager.delete-default` | hook `prepareDefaultVm`: 이미지를 고르고, 그 기본 VM이 있으면 삭제 (티어다운이 빈 VM으로 복원) |
+| `f1-tv-create`    | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`)                                                              | —                                                                                              |
+| (스크립트 단계)   | `launch-emulator --vm-name tv-vm --timeout 480`                                                                   | hook `bootTvVm`                                                                                |
+| `f2-tv-detect`    | `device-manager.tv`, `device-manager.stop`                                                                        | 온라인 tv-* VM 필요                                                                            |
 
 ### 3-4. 옵션
 
@@ -175,11 +175,11 @@ node scripts/run-device-tier.mjs --yes
 
 ## 5. 자주 보는 실패와 원인
 
-| 메시지 | 원인 | 조치 |
-| --- | --- | --- |
-| `TIZEN_SDK_DEVICE_E001: No connected device or emulator` | 에뮬레이터 없이 device 티어 TC 실행 (bare `runner.mjs`) | `run-device-tier.mjs --yes` 사용 |
-| `An emulator VM named 'test-vm' already exists` | create-emulator TC 3개가 같은 이름을 만듦 | 정식 순서에는 사이에 `emulator-manager.delete`가 있음 |
-| `'XXXXXXXXXX.MyWebApp01' is not a Web app` | `fixtures.generated.env`를 읽지 않아 문서용 기본 앱 ID 사용 | 드라이버로 실행 |
-| `dist/ is older than ...` (preflight 거부) | 소스 변경 후 재빌드 안 함 | `cd tizen-cli && pnpm build` |
-| `fixtures/profiles has uncommitted changes` | mutating 드라이버가 백업·복원할 fixture가 수정됨 | `git checkout -- fixtures/profiles/` 또는 커밋 |
-| `multiple_devices` | 에뮬레이터 두 대 이상 온라인 | 다른 에뮬레이터 종료 후 재실행 |
+| 메시지                                                   | 원인                                                        | 조치                                                  |
+| -------------------------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------- |
+| `TIZEN_SDK_DEVICE_E001: No connected device or emulator` | 에뮬레이터 없이 device 티어 TC 실행 (bare `runner.mjs`)     | `run-device-tier.mjs --yes` 사용                      |
+| `An emulator VM named 'test-vm' already exists`          | create-emulator TC 3개가 같은 이름을 만듦                   | 정식 순서에는 사이에 `emulator-manager.delete`가 있음 |
+| `'XXXXXXXXXX.MyWebApp01' is not a Web app`               | `fixtures.generated.env`를 읽지 않아 문서용 기본 앱 ID 사용 | 드라이버로 실행                                       |
+| `dist/ is older than ...` (preflight 거부)               | 소스 변경 후 재빌드 안 함                                   | `cd tizen-cli && pnpm build`                          |
+| `fixtures/profiles has uncommitted changes`              | mutating 드라이버가 백업·복원할 fixture가 수정됨            | `git checkout -- fixtures/profiles/` 또는 커밋        |
+| `multiple_devices`                                       | 에뮬레이터 두 대 이상 온라인                                | 다른 에뮬레이터 종료 후 재실행                        |

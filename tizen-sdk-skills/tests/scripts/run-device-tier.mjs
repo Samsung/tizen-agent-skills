@@ -39,7 +39,9 @@
  *              pick the newest installed tizen image and delete its default
  *              VM if present before e2-default-vm;
  *              boot tv-vm between f1-tv-create and f2-tv-detect
- *   teardown   stop all emulators, delete test-vm, restore the bookmark list
+ *   teardown   stop all emulators, delete test-vm, recreate the default VM
+ *              that prepareDefaultVm deleted (empty — contents are not backed
+ *              up) when it existed before the run, restore the bookmark list
  *
  * The ${FIXTURE_*} placeholders in the TC argv resolve from
  * fixtures/apps/fixtures.generated.env (written by prepare-device-fixtures.mjs),
@@ -48,7 +50,8 @@
  *
  * DESTRUCTIVE with --yes: deletes/recreates the VMs named test-vm and tv-vm,
  * deletes the SDK default VM of the newest installed tizen image (e.g.
- * T-10.0-x86_64; e2 creates and removes it again),
+ * T-10.0-x86_64; e2 creates and removes it again; the teardown recreates it
+ * empty when it existed before the run — its disk contents are not backed up),
  * factory-resets test-vm, stops EVERY running emulator, sweeps the local /24
  * on TCP 26101 three times, rewrites the Device Manager bookmark list
  * (restored from the backup afterwards), and installs / launches / kills the
@@ -416,7 +419,8 @@ function stripBookmarksHook({ paths }) {
  * the VM name from ${DEFAULT_VM_NAME}. Use the newest installed tizen image
  * (x86_64 first within a version) rather than a fixed version, and delete
  * its default VM when present — create-emulator.default fails with
- * "already exists" otherwise.
+ * "already exists" otherwise. When it existed, the run records it in
+ * defaultVmToRestore so the teardown recreates it (empty) afterwards.
  */
 function prepareDefaultVm({ runnerEnv }) {
   const env = sdk(["emulator-manager", "--action", "list-platform"], {
@@ -451,6 +455,9 @@ function prepareDefaultVm({ runnerEnv }) {
     ok(`${vm} not present`);
     return true;
   }
+  // It existed before the run: the teardown recreates it (empty — the disk
+  // contents are gone for good) so a contributor's setup comes back.
+  defaultVmToRestore = { platform, vm };
   return deleteVm(vm);
 }
 
@@ -510,6 +517,9 @@ const PHASE_HOOKS = {
 // resolves with 130, the loop stops, and `finally` cleans up as usual.
 let currentChild = null;
 let aborted = false;
+// Set by prepareDefaultVm when the default VM existed before the run; the
+// teardown recreates it (empty) via create --default.
+let defaultVmToRestore = null;
 function onInterrupt(signal) {
   if (aborted) return;
   aborted = true;
@@ -652,11 +662,11 @@ async function main() {
     );
   if (fullRun)
     log(
-      `  teardown: device-manager stop; ${opts.keepTestVm ? "keep" : "delete"} ${VM_TEST}; keep ${VM_TV}; restore bookmark list`,
+      `  teardown: device-manager stop; ${opts.keepTestVm ? "keep" : "delete"} ${VM_TEST}; keep ${VM_TV}; restore default VM if it existed; restore bookmark list`,
     );
   else {
     warn(
-      `--phase: no VM pre-clean and no VM teardown — only the bookmark list is restored. Existing VMs: ${vms.length ? vms.join(", ") : "(none)"}`,
+      `--phase: no VM pre-clean and no VM teardown — only the bookmark list (and, for e2-default-vm, a default VM that existed before the run) is restored. Existing VMs: ${vms.length ? vms.join(", ") : "(none)"}`,
     );
     if (
       ["c-boot-1", "d-boot-2"].includes(opts.phase) &&
@@ -763,6 +773,34 @@ async function main() {
         return true;
       });
     }
+    td("restore default VM", () => {
+      if (!defaultVmToRestore) return true;
+      const { platform, vm } = defaultVmToRestore;
+      defaultVmToRestore = null; // recreate at most once per run
+      if ((listVms() || []).includes(vm)) {
+        ok(`default VM ${vm} already present — not recreated`);
+        return true;
+      }
+      // Same create mode the e2 TC just tested; restores only the empty VM,
+      // never its previous disk contents.
+      const env = sdk(
+        [
+          "create-emulator",
+          "--action",
+          "create",
+          "--default",
+          "--platform",
+          platform,
+        ],
+        { timeoutSec: 300 },
+      );
+      if (env.status === "success") {
+        ok(`default VM recreated (empty): ${env.result?.vm_name ?? vm}`);
+        return true;
+      }
+      bad(`recreate default VM ${vm}: ${firstError(env)}`);
+      return false;
+    });
     td("restore bookmark list", () => {
       if (bookmarksExisted) {
         // The backup was written before any phase ran (step 3); restore it
