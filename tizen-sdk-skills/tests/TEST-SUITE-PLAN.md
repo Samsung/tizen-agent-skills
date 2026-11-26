@@ -9,11 +9,11 @@
 `tizen-sdk-skills` 저장소 내부에 자체 완결형 테스트 스위트를 구축한다.
 
 - 외부 저장소에 대한 의존성이 없다.
-- `tizen-sdk` 플러그인의 36개 명령어가 올바른 JSON envelope를 출력하는지 검증한다 (**cli lane**).
+- `tizen-sdk` 플러그인의 37개 명령어가 올바른 JSON envelope를 출력하는지 검증한다 (**cli lane**).
 - LLM 에이전트(Cline, Claude)가 자연어 프롬프트를 올바른 명령어 호출로 해석하는지 검증한다 (**prompt lane**).
 - 부작용 크기에 따라 TC를 tier(`safe` / `mutating` / `device`)로 나누어, CI에서는 `safe`만 돌리고 나머지는 전용 드라이버로 순서를 보장해 실행한다.
 
-현재 규모: **296 TC / 289 YAML 파일**, 8개 도메인, 36개 명령어 중 34개 + CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`) 커버. `tv-sdk-install-from-zip`(mutating)과 `platform-list`(safe)는 `policy/tiers.yaml`에 분류만 되어 있고 TC는 아직 없다. `platform-list`는 설치된 SDK가 있어야 하므로 SDK 없이 도는 safe 티어에서 실행할 수 없다.
+현재 규모: **301 TC / 294 YAML 파일**, 8개 도메인, 37개 명령어 중 34개 + CLI 메타 인터페이스(`--capabilities`, `--doctor`, `--schema`) 커버. `tv-sdk-install-from-zip`(mutating), `ecp`(device), `platform-list`(safe)는 `policy/tiers.yaml`에 분류만 되어 있고 TC는 아직 없다. `platform-list`는 설치된 SDK가 있어야 하므로 SDK 없이 도는 safe 티어에서 실행할 수 없다.
 
 ## 기존 Unit Test와의 차이
 
@@ -32,7 +32,7 @@
 | ---------------------------- | -------------------------------------------------------------------- |
 | `tc/**/*.yaml`               | 테스트 케이스. 파일 하나에 여러 TC를 담을 수 있다 (`meta/` 등)       |
 | `schema/tc-schema.json`      | TC YAML의 JSON Schema. `--dry-run`과 실제 실행 모두 이 스키마로 검증 |
-| `policy/tiers.yaml`          | 36개 명령어의 tier 분류 (미분류 명령어는 `skip`)                     |
+| `policy/tiers.yaml`          | 37개 명령어의 tier 분류 (미분류 명령어는 `skip`)                     |
 | `policy/*-run-order.yaml`    | device / mutating tier의 phase별 실행 순서                           |
 | `runner.mjs`                 | cli lane 자동 실행 러너                                              |
 | `scripts/run-*-tier.mjs`     | device / mutating tier 드라이버 (preflight, hook, teardown 포함)     |
@@ -72,7 +72,7 @@ tests/
   schema/
     tc-schema.json        ← TC YAML JSON Schema
   policy/
-    tiers.yaml            ← 36개 명령어 tier 분류
+    tiers.yaml            ← 37개 명령어 tier 분류
     device-run-order.yaml    ← device tier phase별 실행 순서
     mutating-run-order.yaml  ← mutating tier phase별 실행 순서
   fixtures/               ← 커밋된 상태 파일 (테스트 인증서, profiles.xml)
@@ -200,7 +200,7 @@ readdir 순서로는 device / mutating tier가 어느 호스트에서도 통과�
 
 세부 hook 표, 불변 조건, 옵트인 installer phase의 환경 격리(`USERPROFILE`/`HOME` 리다이렉트, User `Path` 스냅샷/복원)는 README.md의 "Device tier" / "Mutating tier" 절을 따른다.
 
-## policy/tiers.yaml (36개 명령어)
+## policy/tiers.yaml (37개 명령어)
 
 tier = 부작용 크기, requires = 필요한 권한. 두 축은 독립적이다. 미분류 명령어는 `skip`이 기본값이라 사람이 분류하기 전에는 아무것도 실행되지 않는다.
 
@@ -242,6 +242,7 @@ commands:
   tizen-sdk.device-manager: { tier: device, requires: [kvm] }
   tizen-sdk.install-app: { tier: device, requires: [kvm] }
   tizen-sdk.sdb-helper: { tier: device, requires: [kvm] }
+  tizen-sdk.ecp: { tier: device, requires: [kvm] }
   tizen-sdk.screenshot: { tier: device, requires: [kvm] }
   tizen-sdk.file-transfer: { tier: device, requires: [kvm] }
   tizen-sdk.remote-device: { tier: device, requires: [net-device] }
@@ -254,10 +255,10 @@ commands:
 
 | Tier      | Commands | TCs     | CI-safe?      |
 | --------- | -------- | ------- | ------------- |
-| safe      | 7        | 74      | ✅ Yes        |
+| safe      | 7        | 76      | ✅ Yes        |
 | mutating  | 15       | 79      | ⚠️ With setup |
-| device    | 14       | 143     | ❌ Manual     |
-| **Total** | **36**   | **296** |               |
+| device    | 15       | 146     | ❌ Manual     |
+| **Total** | **37**   | **301** |               |
 
 ## 상태 분류
 

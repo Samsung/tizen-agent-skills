@@ -9,11 +9,11 @@ project they build has been created. Follow the per-tier order below.
 
 Run every command from the `tests/` directory.
 
-| Tier | Driver | Duration | Side effects |
-| --- | --- | --- | --- |
-| safe | `runner.mjs --tier=safe` | ~1 min | None (only `sdk-init.explicit-path` writes `~/.tizen.sdk.path.config`) |
-| mutating | `scripts/run-mutating-tier.mjs` | ~5 min (60-90 min with installers) | keystore, profile fixtures, project scratch dir |
-| device | `scripts/run-device-tier.mjs` | ~20 min | deletes/recreates `test-vm` and `tv-vm`, stops every emulator, network scan, rewrites and restores the bookmark file |
+| Tier     | Driver                          | Duration                           | Side effects                                                                                                                                                                                                  |
+| -------- | ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| safe     | `runner.mjs --tier=safe`        | ~1 min                             | None (only `sdk-init.explicit-path` writes `~/.tizen.sdk.path.config`)                                                                                                                                        |
+| mutating | `scripts/run-mutating-tier.mjs` | ~5 min (60-90 min with installers) | keystore, profile fixtures, project scratch dir                                                                                                                                                               |
+| device   | `scripts/run-device-tier.mjs`   | ~20 min                            | deletes/recreates `test-vm` and `tv-vm`, deletes the newest tizen image's default VM (recreated empty in teardown if it existed), stops every emulator, network scan, rewrites and restores the bookmark file |
 
 ---
 
@@ -73,15 +73,15 @@ Aliases: `npm run prepare:mutating`, `npm run test:mutating` (plan only; add `--
 
 ### 2-3. Phases
 
-| Phase | Content | Default run |
-| --- | --- | --- |
-| `s1-sdk-idempotent` | Already-installed short-circuit of the SDK installers (no download) | yes |
-| `k1-cert-readonly` | list-profiles, list-distributors, inspect-certificate | yes |
-| `k2-cert-keystore` | generate-author ×3, import-certificate ×2 (hook `cleanKeystore`) | yes |
-| `k3-cert-profiles` | create/set-active/remove-profile (hook `resetProfileFixtures`) | yes |
-| `p1-projects` | create-project → build-project → project-delete (hook `resetProjectsDir`) | yes |
-| `s2-sdk-installers` | Real SDK / platform / emulator package installs into a throwaway HOME (60-90 min, ~10 GB) | `--with-installers` |
-| `s3-dotnet-workload` | `dotnet-setup --force` (adds the workload to the real dotnet install) | `--with-installers` |
+| Phase                | Content                                                                                   | Default run         |
+| -------------------- | ----------------------------------------------------------------------------------------- | ------------------- |
+| `s1-sdk-idempotent`  | Already-installed short-circuit of the SDK installers (no download)                       | yes                 |
+| `k1-cert-readonly`   | list-profiles, list-distributors, inspect-certificate                                     | yes                 |
+| `k2-cert-keystore`   | generate-author ×3, import-certificate ×2 (hook `cleanKeystore`)                          | yes                 |
+| `k3-cert-profiles`   | create/set-active/remove-profile (hook `resetProfileFixtures`)                            | yes                 |
+| `p1-projects`        | create-project → build-project → project-delete (hook `resetProjectsDir`)                 | yes                 |
+| `s2-sdk-installers`  | Real SDK / platform / emulator package installs into a throwaway HOME (60-90 min, ~10 GB) | `--with-installers` |
+| `s3-dotnet-workload` | `dotnet-setup --force` (adds the workload to the real dotnet install)                     | `--with-installers` |
 
 ### 2-4. Options
 
@@ -105,6 +105,10 @@ The canonical order lives in `policy/mutating-run-order.yaml`.
   online at once the TCs fail with `multiple_devices`.
 - VMs named `test-vm` and `tv-vm` are deleted and recreated. Rename your own VM if it uses one
   of those names.
+- The SDK default VM of the newest installed tizen image (e.g. `T-10.0-x86_64`) is deleted
+  before `e2-default-vm`, then created and deleted again by its TCs. When it existed before
+  the run, the teardown recreates it empty (`create-emulator --default --platform <that
+image>`); its disk contents are not backed up, so copy anything you need off it first.
 - The Device Manager bookmark file (`remote_device_scan.list`) is backed up, modified, and
   restored after the run.
 - With `--yes` the driver sweeps the local /24 on TCP 26101 three times.
@@ -128,21 +132,22 @@ the driver.
 
 ### 3-3. Phases
 
-| Phase | Content | Precondition / hook |
-| --- | --- | --- |
-| `a-no-device` | missing-required, list-*, handoff envelopes | nothing booted |
-| `b-vm-lifecycle` | `test-vm` create/detail/modify-ram/reset/delete, create-image | VM stopped; hook `resetImageDir` |
-| `c-boot-1` | `create-emulator.launch`, device-manager, screenshot, sdb-helper | boots `test-vm`, kept running through c6 |
-| `c2-fixture-apps` | install-app ×3, file-transfer push/pull, screenshot.output-path | hook `deviceFixtures`: root on, install the .NET/web fixture apps |
-| `c3-web-debug` | webapp-debug ×4, playwright-test ×6 (RWI/CDP 9222, 9223) | hooks `debugCleanup`, `resetTestProject` |
-| `c4-dotnet-debug` | dotnet-debug ×5 (netcoredbg DAP 4711) | hook `debugCleanup` |
-| `c5a` – `c5d` | gdb-debug launch / attach / breakpoints / serial, one per phase | hook `debugCleanup` before each |
-| `c6-stop` | `device-manager.stop` | hook `debugCleanup` |
-| `d-boot-2` | launch-emulator happy / first-available, stop, delete | only `test-vm` exists |
-| `e-network` | remote-device bookmark chain, network scans | hook: strip .50/.51 bookmarks |
-| `f1-tv-create` | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`) | — |
-| (script step) | `launch-emulator --vm-name tv-vm --timeout 480` | hook `bootTvVm` |
-| `f2-tv-detect` | `device-manager.tv`, `device-manager.stop` | needs an online tv-* VM |
+| Phase             | Content                                                                                                                 | Precondition / hook                                                                                                  |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `a-no-device`     | missing-required, list-*, handoff envelopes                                                                             | nothing booted                                                                                                       |
+| `b-vm-lifecycle`  | `test-vm` create/detail/modify-ram/reset/delete, create-image                                                           | VM stopped; hook `resetImageDir`                                                                                     |
+| `c-boot-1`        | `create-emulator.launch`, device-manager, screenshot, sdb-helper                                                        | boots `test-vm`, kept running through c6                                                                             |
+| `c2-fixture-apps` | install-app ×3, file-transfer push/pull, screenshot.output-path                                                         | hook `deviceFixtures`: root on, install the .NET/web fixture apps                                                    |
+| `c3-web-debug`    | webapp-debug ×4, playwright-test ×6 (RWI/CDP 9222, 9223)                                                                | hooks `debugCleanup`, `resetTestProject`                                                                             |
+| `c4-dotnet-debug` | dotnet-debug ×5 (netcoredbg DAP 4711)                                                                                   | hook `debugCleanup`                                                                                                  |
+| `c5a` – `c5d`     | gdb-debug launch / attach / breakpoints / serial, one per phase                                                         | hook `debugCleanup` before each                                                                                      |
+| `c6-stop`         | `device-manager.stop`                                                                                                   | hook `debugCleanup`                                                                                                  |
+| `d-boot-2`        | launch-emulator happy / first-available, stop, delete                                                                   | only `test-vm` exists                                                                                                |
+| `e-network`       | remote-device bookmark chain, network scans                                                                             | hook: strip .50/.51 bookmarks                                                                                        |
+| `e2-default-vm`   | `create-emulator.default`, `emulator-manager.delete-default` on the newest installed tizen image (e.g. `T-10.0-x86_64`) | hook `prepareDefaultVm`: picks the image, deletes its default VM if present (teardown recreates it empty afterwards) |
+| `f1-tv-create`    | `create-emulator.tv` (`tv-vm`, 3840, `--profile tv`)                                                                    | —                                                                                                                    |
+| (script step)     | `launch-emulator --vm-name tv-vm --timeout 480`                                                                         | hook `bootTvVm`                                                                                                      |
+| `f2-tv-detect`    | `device-manager.tv`, `device-manager.stop`                                                                              | needs an online tv-* VM                                                                                              |
 
 ### 3-4. Options
 
@@ -177,11 +182,11 @@ fixtures the mutating tier needs, so the separate `--only=...` step is unnecessa
 
 ## 5. Common failures and their causes
 
-| Message | Cause | Action |
-| --- | --- | --- |
-| `TIZEN_SDK_DEVICE_E001: No connected device or emulator` | device-tier TC executed with no emulator (bare `runner.mjs`) | use `run-device-tier.mjs --yes` |
-| `An emulator VM named 'test-vm' already exists` | the three create-emulator TCs create the same name | the canonical order has `emulator-manager.delete` between them |
-| `'XXXXXXXXXX.MyWebApp01' is not a Web app` | `fixtures.generated.env` not loaded, documentation default app id used | run through the driver |
-| `dist/ is older than ...` (preflight refusal) | sources changed without a rebuild | `cd tizen-cli && pnpm build` |
-| `fixtures/profiles has uncommitted changes` | fixtures the mutating driver backs up/restores are modified | `git checkout -- fixtures/profiles/` or commit |
-| `multiple_devices` | two or more emulators online | stop the other emulator and rerun |
+| Message                                                  | Cause                                                                  | Action                                                         |
+| -------------------------------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `TIZEN_SDK_DEVICE_E001: No connected device or emulator` | device-tier TC executed with no emulator (bare `runner.mjs`)           | use `run-device-tier.mjs --yes`                                |
+| `An emulator VM named 'test-vm' already exists`          | the three create-emulator TCs create the same name                     | the canonical order has `emulator-manager.delete` between them |
+| `'XXXXXXXXXX.MyWebApp01' is not a Web app`               | `fixtures.generated.env` not loaded, documentation default app id used | run through the driver                                         |
+| `dist/ is older than ...` (preflight refusal)            | sources changed without a rebuild                                      | `cd tizen-cli && pnpm build`                                   |
+| `fixtures/profiles has uncommitted changes`              | fixtures the mutating driver backs up/restores are modified            | `git checkout -- fixtures/profiles/` or commit                 |
+| `multiple_devices`                                       | two or more emulators online                                           | stop the other emulator and rerun                              |

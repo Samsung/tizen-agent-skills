@@ -362,6 +362,8 @@ function formatRepoInfo(
  * @param {string} [command]
  * @param {Array} [installedImages] - Emulator image directories found on disk
  *   [{platform, profile, image}], independent of the install marker
+ * @param {string|null} [platformVersion] - The platform this run targets: the
+ *   requested version, else the newest one the marker records
  */
 function formatEmulatorPackageDownload(
   packages,
@@ -369,6 +371,7 @@ function formatEmulatorPackageDownload(
   startTime,
   command = "tizen-sdk download-emulator-package",
   installedImages = [],
+  platformVersion = null,
 ) {
   const envelope = new Envelope(command);
   if (typeof startTime === "number") {
@@ -378,6 +381,7 @@ function formatEmulatorPackageDownload(
     {
       packages: packages || [],
       installed_images: installedImages || [],
+      platform_version: platformVersion || null,
       installation_status: "completed",
     },
     { warnings },

@@ -70,6 +70,30 @@ below use those release tags.
   rule that denies hand-typed raw `ecp-cli` calls (Rule 21), and a
   `tizen-ecp` mirror skill for tizen-cli.
 
+- **`--default` creation — the SDK's own default emulator VM, by its canonical
+  dotted name.** `emulator-manager-cli.js create --default --platform <image>`
+  (plus `tizen-sdk create-emulator --default` / `tizen-sdk emulator-manager
+--default` in the standalone CLI and a `-DefaultName`/`-D` flag in
+  `tizen-emulator-manager.{ps1,sh}`) drives em-cli's own default-VM mode
+  (`em-cli create -d`): em-cli takes the literal name `default-<platform>`,
+  rewrites it into the SDK's canonical default VM name —
+  `tizen-10.0-x86_64` → `T-10.0-x86_64`, `tv-samsung-10.0-x86_64` →
+  `T-samsung-10.0-x86_64` — and skips its `A-Za-z0-9-_` VM-name character check
+  while doing it. The dotted default names the native Emulator Manager and the
+  Tizen VS Code extension create are therefore reachable through the runner,
+  where a plain `create --vm-name T-10.0-x86_64` is rejected by that check.
+  `--default` requires `--platform`, applies the platform's default template
+  (1080), and refuses `--vm-name`, `--size`, `--template` and
+  `--raw-image-path`, and a `tv-samsung-*` platform without `--profile tv`.
+  New: `tizen-download-emulator-package` and `tizen-tv-sdk-install` now end
+  with a post-install step that creates the installed platform's default VM
+  through this mode when it is missing. Only the target version's images
+  count (other platforms already on disk are left alone); platforms that ship
+  several architectures (tizen 9.0 has `x86` and `x86_64`) get one default VM
+  per image (`tizen-9.0-x86` → `T-9.0-x86` too). The target version comes from
+  the new `result.platform_version` of `download-emulator-package` (the
+  requested version, else the newest one its marker records).
+
 ## [1.10.0] — 2026-11-20
 
 ### Added

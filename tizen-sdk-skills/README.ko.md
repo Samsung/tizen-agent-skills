@@ -328,7 +328,7 @@ tizen-sdk-skills/
 ├── _repo-root/             # tizen-agent-skills 저장소 루트용 파일 스테이징 (.claude-plugin/marketplace.json → ./tizen-sdk-skills/common, .github/, LICENSE 등 — _repo-root/UPLOAD.md 참고)
 ├── common/                 # 모든 하네스가 공유 (단일 소스)
 │   ├── .claude-plugin/     #   Claude Code 플러그인 메타데이터 (plugin.json)
-│   ├── agents/             #   24개 agent .md (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
+│   ├── agents/             #   27개 agent .md (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
 │   ├── skills/             #   33개 SKILL.md 디렉토리 (러너 탐색이 .claude/.cline/.codex/.gemini 포괄)
 │   ├── lib/                #   CommonJS 도메인 로직 — CLI 러너, core, envelope, 테스트
 │   │   ├── cli/            #     CLI 진입점 (명령어별 1개, `node <파일>`로 실행)
@@ -455,14 +455,14 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC �
 |------|------|-------------|
 | 하네스 | 6 — Claude Code, Cline, Codex CLI, Gemini CLI, 독립 실행형 tizen-sdk CLI, VS Code 확장 | `ls common/setup/hosts` (dot-dir 호스트 4 × sh/ps1) + `tizen-cli/` + `vscode/` |
 | 스킬 (`common/skills/`) | 33개 (`tizen-cli/skills/`는 32개: `tizen-handoff`, `tizen-guide`, `tizen-gtest`를 뺀 30개 + CLI 전용 2개) | `ls -d common/skills/*/ \| wc -l` |
-| 에이전트 (`common/agents/`) | 25개 | `ls common/agents/*.md \| wc -l` |
+| 에이전트 (`common/agents/`) | 27개 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI 커맨드 | 37개, command-spec 도메인 8개 | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
 | 에러 코드 | envelope 레지스트리 64개 | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | 훅 | PreToolUse 가드 스크립트 3개(가드 규칙 15개)와 세션 시작 업데이트 확인(`check-update.js`) | `common/hooks/` |
 | 단위 테스트 (`common/lib/tests/`) | 100 파일 | `node common/lib/tests/run-all.js` |
 | VS Code 확장 테스트 | 3 파일, 122 케이스 | `cd vscode && npm test` |
 | 훅 테스트 | 261 케이스 | `bash common/hooks/hooks.test.sh` |
-| 통합 TC (`tests/tc/`) | 296 TC / 289 YAML — safe 74 / mutating 79 / device 143; approved 286 | `cd tests && node scripts/verify-doc-stats.mjs` |
+| 통합 TC (`tests/tc/`) | 301 TC / 294 YAML — safe 76 / mutating 79 / device 146; approved 291 | `cd tests && node scripts/verify-doc-stats.mjs` |
 | 문서 | Markdown 219개 (`docs/` 93개, en/ko 쌍), SKILL.md 63개 | `git ls-files \| grep -c '\.md$'` |
 
 ### 릴리즈

@@ -57,6 +57,12 @@ export const DEVICE_SPECS: CommandSpec[] = [
           "Exact template name (e.g. 'HD1080 Tizen'). Overrides --size; normally prefer --size.",
       },
       {
+        flags: "--default",
+        description:
+          "Default-name creation (em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform; a tv-samsung-* platform also needs --profile tv.",
+        default: false,
+      },
+      {
         flags: "--profile <profile>",
         description:
           "Emulator profile: tizen (standard) or tv (Samsung TV; requires TV SDK extension)",
@@ -89,6 +95,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
           template: o.template,
           size: o.size,
           assumeDefaults: o.assumeDefaults,
+          defaultName: o.default,
           profile: o.profile,
           launch: o.launch,
           timeoutSec: o.timeout,
@@ -177,6 +184,12 @@ export const DEVICE_SPECS: CommandSpec[] = [
         flags: "--template <name>",
         description:
           "Exact template name, e.g. 'HD1080 Tizen' (create, modify). Overrides --size; normally prefer --size.",
+      },
+      {
+        flags: "--default",
+        description:
+          "Default-name creation (create only; em-cli's own create -d mode): derives the VM name from --platform — default-tizen-10.0-x86_64 becomes T-10.0-x86_64, default-tv-samsung-10.0-x86_64 becomes T-samsung-10.0-x86_64 — and applies the platform's default template, so no --vm-name/--size/--template is needed. Requires --platform; a tv-samsung-* platform also needs --profile tv.",
+        default: false,
       },
       {
         flags: "--platform <name>",
@@ -276,6 +289,7 @@ export const DEVICE_SPECS: CommandSpec[] = [
           template: o.template,
           size: o.size,
           assumeDefaults: o.assumeDefaults,
+          defaultName: o.default,
           profile: o.profile,
           launch: o.launch,
           skin: o.skin,

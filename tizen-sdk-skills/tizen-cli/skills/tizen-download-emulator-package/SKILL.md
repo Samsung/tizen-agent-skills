@@ -3,7 +3,7 @@ name: tizen-download-emulator-package
 description: Download Tizen emulator package, emulator package download, 에뮬레이터 패키지 다운로드, 에뮬레이터 패키지 다운로드해줘, TIZEN Emulator package, install emulator package, emulator package install, 에뮬레이터 패키지 설치. Use this skill to download and install the Tizen emulator package (TIZEN-{platform_version}-Emulator) from the Tizen package repository. Reads the repository URL from repository.info. Requires Tizen SDK to be installed first.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-08-03"
+  last-updated: "2026-11-24"
   keywords:
     - emulator package
     - emulator package download
@@ -52,6 +52,43 @@ tizen-cli tizen-sdk download-emulator-package
 ## Output
 - Success `result`: emulator package/installation status.
 - Failure: `error_code`, `message`, optional `suggested_fix.command`.
+
+## Post-install — ensure the default standard emulator VM (agent step)
+
+The download command only puts packages on disk; it never creates a VM. After the install is
+verified (both paths: a fresh install, and the idempotent "already installed" pre-check result),
+ensure a default standard emulator VM exists:
+
+1. Check for the default VMs by name:
+   `tizen-cli tizen-sdk emulator-manager --action list-vm --detail`
+   Check only the `tizen`-profile images of the **target version** — the
+   envelope's `result.platform_version` (the requested version, or the newest
+   one this skill's marker records; when it is `null`, skip this step).
+   `result.installed_images` lists every image on disk, older platforms
+   included, so never ensure VMs for the other versions. Platforms can ship
+   more than one architecture image (e.g. tizen 9.0 has both `tizen-9.0-x86`
+   and `tizen-9.0-x86_64`), so check once per such image — iterate over ALL
+   entries in the envelope's `result.installed_images` whose `profile` is
+   `tizen` and whose `platform` is the target version (their `image` field;
+   ignore `tv-samsung` entries, they belong to `tizen-tv-sdk-install`):
+   - Expected default VM name: `T-` + the image minus its first segment —
+     `tizen-9.0-x86_64` → `T-9.0-x86_64`, `tizen-9.0-x86` → `T-9.0-x86`.
+   - **A VM with that name exists → done for this image.** Skip creation and
+     say so in one line.
+   - **Not present → always create it** with em-cli's own default-VM mode:
+     `tizen-cli tizen-sdk create-emulator --default --platform <image>`
+     em-cli rewrites `default-<image>` into the SDK's canonical default VM name
+     (e.g. `default-tizen-9.0-x86_64` → `T-9.0-x86_64`) — the same dotted name
+     the native Emulator Manager and the Tizen VS Code extension create (the
+     `-d` mode bypasses em-cli's VM-name character check, so the dots are
+     valid). No `--size`: the platform's default template (1080) applies. No
+     `--vm-name`: it is derived from the platform.
+     The decision is by name only — other `tizen`-profile VMs (user-created or
+     leftover) do not suppress the default VM. Do NOT pass `--launch` — booting
+     is `tizen-cli tizen-sdk launch-emulator`'s job.
+2. Best-effort: a VM-creation failure is reported as a **warning** in the summary and never
+   changes the download result — the package install already succeeded.
+3. Report the create/list envelope **after** the download envelope (two fenced `json` blocks).
 
 ## Result reporting — the envelope MUST be shown to the user
 

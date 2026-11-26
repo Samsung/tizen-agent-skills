@@ -1,0 +1,17 @@
+# Cleans up the default VM create-emulator.default made. ${DEFAULT_VM_NAME} is
+# set by run-device-tier.mjs's prepareDefaultVm hook (e.g. T-10.0-x86_64); the
+# dotted name passes NAME_PATTERN and the delete action.
+id: tizen-sdk.emulator-manager.delete-default
+plugin: tizen-sdk
+command: emulator-manager
+tier: device
+status: approved
+since_cli: 1.11.0
+description: "emulator-manager --action delete --vm-name <default VM> removes the default VM"
+
+lanes:
+  cli:
+    argv: ["tizen-sdk", "emulator-manager", "--action", "delete", "--vm-name", "${DEFAULT_VM_NAME}"]
+    timeout_sec: 60
+    expect:
+      status: success

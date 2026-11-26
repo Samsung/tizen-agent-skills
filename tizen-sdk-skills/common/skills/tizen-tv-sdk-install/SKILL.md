@@ -3,7 +3,7 @@ name: tizen-tv-sdk-install
 description: Install TV SDK, TV SDK install, TV SDK 설치, TV SDK 설치해줘, 타이젠 TV SDK 설치, Samsung TV SDK, TV extension install. Use this skill to install the Tizen TV SDK extension (TV-SAMSUNG-Public package) on top of an existing Tizen SDK installation. Requires Tizen SDK to be installed first.
 metadata:
   author: Samsung Electronics
-  last-updated: "2026-07-15"
+  last-updated: "2026-11-24"
   keywords:
     - TV SDK
     - TV SDK install
@@ -223,6 +223,40 @@ Use the following methods to check whether the TV SDK is installed:
 | Re-run `tv-sdk-install`        | ✅ Reliable        | idempotency guaranteed, judged by the TV record in `.platform-installed` |
 | `list-platform --profile tv`   | ❌ Risk of misjudgment | `--profile` ignored, causes false positives |
 
+## Post-install — ensure the default TV emulator VM (agent step, not the script)
+
+The TV SDK installer only puts packages on disk; it never creates a VM. After the TV install is
+verified (both paths: a fresh install, and the idempotent "already installed" pre-check result),
+the **agent** ensures a default TV emulator VM exists:
+
+1. Locate the emulator-manager runner the same way as the Phase 1 pre-check (same lookup blocks),
+   but with the runner file name `emulator-manager-cli.js`.
+2. Run `node "$CLI" list-vm --detail` and check `result.vms`:
+   - **A VM named `T-samsung-<version>-x86_64` exists → done.** Skip creation and say so in one line.
+   - **Not present → always create it** with em-cli's own default-VM mode:
+     `node "$CLI" create --default --profile tv --platform tv-samsung-<version>-x86_64`
+     where `<version>` is the TV platform version from the Phase 1 envelope's
+     `result.packages[].version` (e.g. version `10.0` → platform `tv-samsung-10.0-x86_64`).
+     em-cli rewrites `default-tv-samsung-<version>-x86_64` into the SDK's canonical default VM
+     name `T-samsung-<version>-x86_64` — the same dotted name the native Emulator Manager and the
+     Tizen VS Code extension create (the `-d` mode bypasses em-cli's VM-name character check, so
+     the dots are valid). No `--size`: the platform's default template (1080) applies. No
+     `--vm-name`: it is derived from the platform.
+     The TV repository currently ships one image per version (x86_64). Should a
+     future TV SDK ship several architecture images, ensure one default VM per
+     installed `tv-samsung` image — the derivation is identical
+     (`tv-samsung-<version>-<arch>` → `T-samsung-<version>-<arch>`).
+     The decision is by name only — other `tv`-profile VMs (user-created or leftover) do not
+     suppress the default VM. Do NOT pass `--launch` — booting is `tizen-launch-emulator`'s job.
+3. Best-effort: a VM-creation failure is reported as a **warning** in the summary and never
+   changes the TV SDK install result — the extension install already succeeded.
+4. Report the create/list envelope **after** the install envelope (two fenced `json` blocks).
+
+This step is agent-orchestrated on purpose: it reuses `tizen-create-emulator`'s runner instead of
+duplicating VM-creation logic in the installer scripts, and it stays out of standalone/headless
+runs of the installer. (The mandatory size question of `tizen-create-emulator` does not apply
+here — 1080 is fixed by this skill as the default-VM resolution.)
+
 ## Result reporting — the envelope must always be shown to the user
 
 The runner's stdout JSON Envelope is **inside the tool result, so the user cannot see it**
@@ -245,11 +279,14 @@ answer text is visible to the user, so the final answer must follow the format b
 
 ## Handoff
 
-- **Single-task** (e.g., "TV SDK 설치해줘") → DONE. Report envelope, suggest next steps.
+- **Single-task** (e.g., "TV SDK 설치해줘") → DONE after the "Post-install — ensure the default TV
+  emulator VM" step: report the install envelope (and the create/list envelope if a VM was
+  created), then suggest next steps.
 - **Multi-step** (e.g., "TV SDK 설치하고 앱 만들어줘") → Continue to next step.
 
 **Suggested next steps (only when user asks):**
 
+- `tizen-launch-emulator` (launch the default TV VM that was just ensured)
 - `tizen-create-project` (create a new TV project)
 - `tizen-build-project` (build the project)
 - `tizen-install-app` (install on device/emulator)
