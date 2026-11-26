@@ -9,11 +9,11 @@ project they build has been created. Follow the per-tier order below.
 
 Run every command from the `tests/` directory.
 
-| Tier     | Driver                          | Duration                           | Side effects                                                                                                                                                      |
-| -------- | ------------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| safe     | `runner.mjs --tier=safe`        | ~1 min                             | None (only `sdk-init.explicit-path` writes `~/.tizen.sdk.path.config`)                                                                                            |
-| mutating | `scripts/run-mutating-tier.mjs` | ~5 min (60-90 min with installers) | keystore, profile fixtures, project scratch dir                                                                                                                   |
-| device   | `scripts/run-device-tier.mjs`   | ~20 min                            | deletes/recreates `test-vm` and `tv-vm`, deletes the newest tizen image's default VM, stops every emulator, network scan, rewrites and restores the bookmark file |
+| Tier     | Driver                          | Duration                           | Side effects                                                                                                                                                                                                  |
+| -------- | ------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| safe     | `runner.mjs --tier=safe`        | ~1 min                             | None (only `sdk-init.explicit-path` writes `~/.tizen.sdk.path.config`)                                                                                                                                        |
+| mutating | `scripts/run-mutating-tier.mjs` | ~5 min (60-90 min with installers) | keystore, profile fixtures, project scratch dir                                                                                                                                                               |
+| device   | `scripts/run-device-tier.mjs`   | ~20 min                            | deletes/recreates `test-vm` and `tv-vm`, deletes the newest tizen image's default VM (recreated empty in teardown if it existed), stops every emulator, network scan, rewrites and restores the bookmark file |
 
 ---
 
