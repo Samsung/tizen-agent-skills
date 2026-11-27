@@ -14,6 +14,8 @@ below use those release tags.
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-27
+
 ### Fixed
 
 - **`tizen-ecp` battery commands no longer fail with "Not supported
@@ -2513,7 +2515,8 @@ Fixes for the Codex CLI host and for Windows 11 24H2.
 - Initial release of the VS Code extension (`vscode/CHANGELOG.md`) and the Claude Code / Cline /
   tizen-cli harnesses.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.7.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.8.0...HEAD
+[1.11.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.7.0...tizen-agent-skills-v1.8.0
 [1.10.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.6.0...tizen-agent-skills-v1.7.0
 [1.9.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.5.0...tizen-agent-skills-v1.6.0
 [1.8.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.4.0...tizen-agent-skills-v1.5.0
