@@ -32,7 +32,9 @@
   새 터미널을 열라는 `env_note`가 붙습니다. SDK 설치 스크립트도 같은 일을
   합니다: `tizen-sdk-install.sh`는 낡은 프로필 export를 건너뛰지 않고 고쳐 쓰고,
   `tizen-sdk-install.ps1`은 사용자 `Path`의 이전 SDK 항목을 덧붙이기만 하지 않고
-  바꿉니다.
+  바꿉니다. TC 실행기(`tests/runner.mjs`)는 `TIZEN_SDK_ENV_SYNC=0`을 넘기므로
+  `sdk-init.explicit-path`(`--sdk-path /tmp`) 같은 `sdk-init` TC가 실제 사용자
+  환경변수를 바꾸지 않습니다.
 
 - **`tizen-ecp` 배터리 명령이 더 이상 "Not supported commands."로 실패하지
   않습니다.** 러너가 현재 플랫폼 빌드에는 존재하지 않는 ecp-cli 문법

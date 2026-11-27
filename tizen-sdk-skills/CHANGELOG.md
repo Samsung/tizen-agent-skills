@@ -34,7 +34,10 @@ below use those release tags.
   `env_updated` and adds an `env_note` to open a new terminal. The SDK
   installers do the same: `tizen-sdk-install.sh` rewrites a stale profile
   export instead of skipping it, and `tizen-sdk-install.ps1` replaces the
-  previous SDK's user `Path` entries instead of only appending.
+  previous SDK's user `Path` entries instead of only appending. The TC runner
+  (`tests/runner.mjs`) sets `TIZEN_SDK_ENV_SYNC=0`, so an `sdk-init` TC such as
+  `sdk-init.explicit-path` (`--sdk-path /tmp`) no longer repoints the real
+  user environment.
 
 - **`tizen-ecp` battery commands no longer fail with "Not supported
   commands."** The runner assumed an ecp-cli grammar (`battery set <n>`) that

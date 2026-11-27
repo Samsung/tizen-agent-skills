@@ -17,7 +17,9 @@ lanes:
     # NOTE: sdk-init really does write ~/.tizen.sdk.path.config on every run
     # despite tier: safe — running this TC changes the machine's configured
     # Tizen SDK path as a side effect. Re-run `sdk-init` with the real path
-    # afterward if you need the machine's SDK path restored.
+    # afterward if you need the machine's SDK path restored. runner.mjs sets
+    # TIZEN_SDK_ENV_SYNC=0, so the run does NOT also repoint the user's
+    # TIZEN_SDK_PATH (shell profiles, Windows user environment / Path).
     argv: ["tizen-sdk", "sdk-init", "--sdk-path", "/tmp"]
     timeout_sec: 30
     expect:
