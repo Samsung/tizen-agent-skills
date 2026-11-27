@@ -467,7 +467,7 @@ cd tests && npm ci && node runner.mjs --dry-run                           # TC s
 
 ### Project at a Glance
 
-Measured on 2026-11-23 against v1.10.0. Every row can be re-measured with the
+Measured on 2026-11-27 against v1.11.0. Every row can be re-measured with the
 command in the last column; update this table whenever a skill, agent, command
 or test suite is added.
 
@@ -477,13 +477,13 @@ or test suite is added.
 | Skills (`common/skills/`) | 33 (`tizen-cli/skills/` has 32: 30 of these — all but `tizen-handoff`, `tizen-guide` and `tizen-gtest` — plus 2 CLI-only) | `ls -d common/skills/*/ \| wc -l` |
 | Agents (`common/agents/`) | 27 | `ls common/agents/*.md \| wc -l` |
 | tizen-sdk CLI commands | 37 across 8 command-spec domains | `node -e "console.log(require('./tizen-cli/plugin.json').commands.length)"` |
-| Error codes | 64 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
+| Error codes | 67 in the envelope registry | `node -e "console.log(Object.keys(require('./common/lib/envelope/envelope.js').ERROR_CODES).length)"` |
 | Hooks | 3 PreToolUse guard scripts with 15 guard rules, plus the session-start update check (`check-update.js`) | `common/hooks/` |
-| Unit tests (`common/lib/tests/`) | 100 files | `node common/lib/tests/run-all.js` |
+| Unit tests (`common/lib/tests/`) | 102 files | `node common/lib/tests/run-all.js` |
 | VS Code extension tests | 122 cases in 3 files | `cd vscode && npm test` |
 | Hook tests | 261 cases | `bash common/hooks/hooks.test.sh` |
 | Integration TCs (`tests/tc/`) | 301 TCs in 294 YAML files — safe 76 / mutating 79 / device 146; approved 291 | `cd tests && node scripts/verify-doc-stats.mjs` |
-| Documentation | 219 Markdown files (`docs/` 93 in en/ko pairs), 63 SKILL.md | `git ls-files \| grep -c '\.md$'` |
+| Documentation | 223 Markdown files (`docs/` 93 in en/ko pairs), 65 SKILL.md | `git ls-files \| grep -c '\.md$'` |
 
 ### Releases
 
