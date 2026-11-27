@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-27
+
 ### 수정
 
 - **`tizen-ecp` 배터리 명령이 더 이상 "Not supported commands."로 실패하지
@@ -44,7 +46,7 @@
   이를 명시합니다. `common/skills/tizen-gtest/SKILL.md`와
   `common/agents/tizen-gtest.md`를 추가했고, 러너·CLI 커맨드는 새로 없습니다.
   `README*.md`, `llms.txt`, `docs/`의 개수 표기도 함께 갱신했습니다
-  (스킬 33개 / 에이전트 26개).
+  (스킬 33개 / 에이전트 27개).
 
 - **`tizen-guide` 스킬 — 문서 안내.** tizen-agent-skills 플러그인 사용법을
   묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에
@@ -2336,7 +2338,8 @@ Codex CLI 호스트와 Windows 11 24H2 관련 수정입니다.
 
 - VS Code 확장(`vscode/CHANGELOG.md`)과 Claude Code / Cline / tizen-cli 하네스의 첫 릴리스입니다.
 
-[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.7.0...HEAD
+[Unreleased]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.8.0...HEAD
+[1.11.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.7.0...tizen-agent-skills-v1.8.0
 [1.10.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.6.0...tizen-agent-skills-v1.7.0
 [1.9.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.5.0...tizen-agent-skills-v1.6.0
 [1.8.0]: https://github.com/Samsung/tizen-agent-skills/compare/tizen-agent-skills-v1.4.0...tizen-agent-skills-v1.5.0

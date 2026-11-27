@@ -12,6 +12,34 @@ Each plugin also keeps its own `CHANGELOG.md` with its independent version histo
 
 ## [Unreleased]
 
+## [1.8.0] — 2026-11-27
+
+Repository-wide release that ships `tizen-sdk-skills` 1.11.0 and `tizen-action-skills` 1.0.0.
+The plugin moved by a minor version, so the release does too.
+
+### Changed
+
+- `tizen-sdk-skills` plugin advanced from 1.10.0 to 1.11.0. Highlights:
+  - New `tizen-ecp` skill and agent: run one Emulator Control Panel (ecp-cli) request
+    against a running emulator — list the devices a platform version supports, or control
+    a device such as the battery (`battery level <n>`, `battery charger on|off`,
+    `battery status`). New `tizen-sdk ecp` command in the standalone CLI.
+  - New `tizen-gtest` skill and agent: create, build, install and run Google Test apps for
+    native Tizen projects through the existing runners.
+  - New `tizen-guide` skill: answers how-to questions from the published guides indexed by
+    `llms.txt` and cites each document used; `llms.txt` now also lists the
+    `tizen-action-skills` documents.
+  - Emulator creation accepts `--default` to create the SDK's own default VM by its
+    canonical dotted name (`T-10.0-x86_64`), and `tizen-download-emulator-package` /
+    `tizen-tv-sdk-install` create the installed platform's default VM when it is missing.
+  - `tizen-sdk --doctor` no longer prints a Node.js `DEP0190` DeprecationWarning.
+
+  See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
+  assets stamped with the plugin version are therefore `tizen-sdk-v1.11.0.zip`,
+  `tizen-ai-extension-v1.11.0.vsix` and `tizen-sdk-skills-source-v1.11.0.zip`, plus
+  `tizen-action-skills-source-v1.0.0.zip` for the unchanged action plugin.
+- The marketplace catalog version follows `tizen-sdk-skills` and is now 1.11.0.
+
 ## [1.7.0] — 2026-11-20
 
 Repository-wide release that ships `tizen-sdk-skills` 1.10.0 and `tizen-action-skills` 1.0.0.

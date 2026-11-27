@@ -4,7 +4,7 @@ English | [한국어](ARCHITECTURE_DIAGRAMS.md)
 
 A set of diagrams that shows the whole `tizen-sdk-skills` repository at a glance: how the AI coding assistants (Claude Code, Cline, Codex CLI, Gemini CLI, the VS Code extension) and the standalone `tizen-sdk` CLI share **one `common/`**, which layers a natural-language request passes through before it reaches the real Tizen SDK tools (`tizen`/`tz`, `sdb`, `em-cli`, `dotnet`, `gbs`), and how the result comes back as a Standard JSON Envelope.
 
-> The counts in the diagrams (33 skills, 27 agents, 37 commands, 61 error codes, 301 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.6.1). Re-measure them with the commands in that table's last column.
+> The counts in the diagrams (33 skills, 27 agents, 37 commands, 67 error codes, 301 TCs) describe the public release tree and match the "Project at a Glance" table in [README.md](../README.md) (v1.11.0). Re-measure them with the commands in that table's last column.
 
 ---
 
@@ -177,7 +177,7 @@ graph LR
         ERRS["errors[]"]
     end
 
-    ERRS --> E1["error_code<br/>TIZEN_SDK_*_E###<br/>(61 in the registry)"]
+    ERRS --> E1["error_code<br/>TIZEN_SDK_*_E###<br/>(67 in the registry)"]
     ERRS --> E2["error_category<br/>device_not_found · build_failed<br/>sdk_path_not_set · invalid_argument ..."]
     ERRS --> E3["message"]
     ERRS --> E4["suggested_fix<br/>{ command, auto_fixable, description }"]
