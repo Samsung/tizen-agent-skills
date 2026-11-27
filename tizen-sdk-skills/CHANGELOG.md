@@ -14,6 +14,8 @@ below use those release tags.
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-27
+
 ### Fixed
 
 - **`TIZEN_SDK_PATH` now follows `~/.tizen.sdk.path.config`.** Runners read
@@ -33,10 +35,6 @@ below use those release tags.
   installers do the same: `tizen-sdk-install.sh` rewrites a stale profile
   export instead of skipping it, and `tizen-sdk-install.ps1` replaces the
   previous SDK's user `Path` entries instead of only appending.
-
-## [1.11.0] — 2026-11-27
-
-### Fixed
 
 - **`tizen-ecp` battery commands no longer fail with "Not supported
   commands."** The runner assumed an ecp-cli grammar (`battery set <n>`) that

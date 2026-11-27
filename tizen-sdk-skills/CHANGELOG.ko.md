@@ -13,6 +13,8 @@
 
 ## [Unreleased]
 
+## [1.11.0] — 2026-11-27
+
 ### 수정
 
 - **`TIZEN_SDK_PATH`가 이제 `~/.tizen.sdk.path.config`를 따릅니다.** 러너는
@@ -31,10 +33,6 @@
   합니다: `tizen-sdk-install.sh`는 낡은 프로필 export를 건너뛰지 않고 고쳐 쓰고,
   `tizen-sdk-install.ps1`은 사용자 `Path`의 이전 SDK 항목을 덧붙이기만 하지 않고
   바꿉니다.
-
-## [1.11.0] — 2026-11-27
-
-### 수정
 
 - **`tizen-ecp` 배터리 명령이 더 이상 "Not supported commands."로 실패하지
   않습니다.** 러너가 현재 플랫폼 빌드에는 존재하지 않는 ecp-cli 문법

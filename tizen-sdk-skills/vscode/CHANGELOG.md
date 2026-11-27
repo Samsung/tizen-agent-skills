@@ -6,7 +6,7 @@ The extension ships the skill and agent asset tree, so entries below cover both 
 
 ## [1.11.0] — 2026-11-27
 
-The extension version tracks the updated skill and agent asset tree. **(skills)** New `tizen-ecp` skill and agent run Emulator Control Panel (ecp-cli) requests on a running emulator, and its battery commands use the real `battery level` / `battery charger` / `battery status` grammar; new `tizen-gtest` skill and agent create, build, install and run native Google Test apps; new `tizen-guide` skill answers how-to questions from the published guides indexed by `llms.txt`; emulator creation accepts `--default` for the SDK's own default VM, which the emulator-package and TV SDK installers now create after install; and `tizen-sdk --doctor` no longer prints a `DEP0190` warning. See the project CHANGELOG for details.
+The extension version tracks the updated skill and agent asset tree. **(skills)** New `tizen-ecp` skill and agent run Emulator Control Panel (ecp-cli) requests on a running emulator, and its battery commands use the real `battery level` / `battery charger` / `battery status` grammar; new `tizen-gtest` skill and agent create, build, install and run native Google Test apps; new `tizen-guide` skill answers how-to questions from the published guides indexed by `llms.txt`; emulator creation accepts `--default` for the SDK's own default VM, which the emulator-package and TV SDK installers now create after install; `sdk-init` and the SDK installers sync `TIZEN_SDK_PATH` (and the previous SDK's user `Path` entries on Windows) to `~/.tizen.sdk.path.config`; and `tizen-sdk --doctor` no longer prints a `DEP0190` warning. See the project CHANGELOG for details.
 
 ## [1.10.0] — 2026-11-20
 

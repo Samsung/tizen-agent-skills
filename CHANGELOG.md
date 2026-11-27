@@ -33,6 +33,10 @@ The plugin moved by a minor version, so the release does too.
     canonical dotted name (`T-10.0-x86_64`), and `tizen-download-emulator-package` /
     `tizen-tv-sdk-install` create the installed platform's default VM when it is missing.
   - `tizen-sdk --doctor` no longer prints a Node.js `DEP0190` DeprecationWarning.
+  - `TIZEN_SDK_PATH` follows `~/.tizen.sdk.path.config`: `sdk-init` and the SDK installers
+    sync the user `TIZEN_SDK_PATH` (and, on Windows, the previous SDK's entries in the user
+    `Path`) to the configured SDK, so shells and a hand-typed `sdb` agree with the runners
+    (#169).
 
   See [tizen-sdk-skills/CHANGELOG.md](tizen-sdk-skills/CHANGELOG.md) for details. The release
   assets stamped with the plugin version are therefore `tizen-sdk-v1.11.0.zip`,
