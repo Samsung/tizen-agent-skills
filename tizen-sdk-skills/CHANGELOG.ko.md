@@ -13,6 +13,25 @@
 
 ## [Unreleased]
 
+### 수정
+
+- **`TIZEN_SDK_PATH`가 이제 `~/.tizen.sdk.path.config`를 따릅니다.** 러너는
+  설정 파일에서만 SDK 경로를 읽기 때문에, 이전 설치가 남긴 `TIZEN_SDK_PATH`가
+  셸(그리고 직접 입력한 `sdb`)을 다른 SDK로 계속 가리켰고 모든 러너가
+  "Ignoring TIZEN_SDK_PATH=…"를 출력했습니다. 이제 `sdk-init`과 설치 흐름이
+  영구 값을 맞추며, 설정 파일에 이미 같은 경로가 있을 때도 맞춥니다
+  (`common/lib/core/sdk-env.js`). Windows는 사용자 `TIZEN_SDK_PATH`와 사용자
+  `Path`의 이전 SDK `bin` / `tools` / `tools\tizen-core` 항목을 바꿉니다.
+  `Path`는 변수를 풀지 않은 원문 그대로 레지스트리 값 형식을 유지해 읽고 쓰므로
+  `%VAR%` 항목이 보존되고, Base64로 읽어 오므로 콘솔 코드페이지 때문에 한글
+  같은 비ASCII 항목이 깨지지 않습니다. Linux/macOS는 `~/.zshrc`, `~/.bashrc`,
+  `~/.bash_profile`, `~/.profile`에 이미 있는 `export TIZEN_SDK_PATH=…`의 값만
+  바꾸고 줄의 나머지는 그대로 둡니다. 결과의 `env_updated`에 바뀐 항목이 나오고,
+  새 터미널을 열라는 `env_note`가 붙습니다. SDK 설치 스크립트도 같은 일을
+  합니다: `tizen-sdk-install.sh`는 낡은 프로필 export를 건너뛰지 않고 고쳐 쓰고,
+  `tizen-sdk-install.ps1`은 사용자 `Path`의 이전 SDK 항목을 덧붙이기만 하지 않고
+  바꿉니다.
+
 ## [1.11.0] — 2026-11-27
 
 ### 수정

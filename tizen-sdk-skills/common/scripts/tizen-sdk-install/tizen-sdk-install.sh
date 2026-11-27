@@ -723,8 +723,45 @@ setup_environment() {
 
   # Already added? Only an ACTIVE (non-commented) export counts — a commented
   # placeholder like "#export TIZEN_SDK_PATH=..." must NOT block the real write.
+  # An export left by an earlier install at another path is rewritten to
+  # INSTALL_PATH, so the shell agrees with ~/.tizen.sdk.path.config.
   if grep -qE '^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH' "$profile_file" 2>/dev/null; then
-    log_warning "Environment variables already set: $profile_file"
+    local tmp; tmp="$(mktemp)"
+    # Only the value is replaced (a quoted string, or a word up to whitespace
+    # or ';'), so the rest of the line — `; export PATH=...`, a comment — stays.
+    # A value that already expands to INSTALL_PATH ($HOME/..., ~/...) is kept.
+    if ! awk -v p="$INSTALL_PATH" -v home="$HOME" -v sq="'" '
+         function trim(s) { while (length(s) > 1 && substr(s, length(s)) == "/") s = substr(s, 1, length(s) - 1); return s }
+         BEGIN {
+           re = "^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH=(\"[^\"]*\"|" sq "[^" sq "]*" sq "|[^[:space:];]*)"
+         }
+         match($0, re) {
+           head = substr($0, 1, RLENGTH)
+           eq = index(head, "=")
+           v = substr(head, eq + 1)
+           q = substr(v, 1, 1)
+           if (q == "\"" || q == sq) v = substr(v, 2, length(v) - 2)
+           if (q != sq) {
+             if (substr(v, 1, 7) == "${HOME}") v = home substr(v, 8)
+             else if (substr(v, 1, 5) == "$HOME" && substr(v, 6, 1) !~ /[A-Za-z0-9_]/) v = home substr(v, 6)
+           }
+           if (q != "\"" && q != sq && (v == "~" || substr(v, 1, 2) == "~/")) v = home substr(v, 2)
+           if (trim(v) == trim(p)) { print; next }
+           print substr(head, 1, eq) "\"" p "\"" substr($0, RLENGTH + 1)
+           next
+         }
+         { print }' "$profile_file" > "$tmp"; then
+      log_warning "Could not update TIZEN_SDK_PATH in $profile_file; set it to $INSTALL_PATH by hand"
+    elif cmp -s "$tmp" "$profile_file"; then
+      log_success "Environment variables already set: $profile_file"
+    elif cat "$tmp" > "$profile_file"; then
+      log_success "TIZEN_SDK_PATH updated in $profile_file → $INSTALL_PATH"
+      log_warning "Open a new terminal or run: source $profile_file"
+      SETUP_ENV=true
+    else
+      log_warning "Could not write $profile_file; set TIZEN_SDK_PATH to $INSTALL_PATH by hand"
+    fi
+    rm -f "$tmp"
     return 0
   fi
 

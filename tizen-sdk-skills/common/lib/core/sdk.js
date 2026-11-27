@@ -54,6 +54,7 @@ const {
 
 const { resolveScript, execPluginScript } = require("./plugin-cache");
 const { checkShellSafe } = require("./shell-safety");
+const { syncSdkPathEnv } = require("./sdk-env");
 const { checkNode, checkDiskSpace } = require("./preflight");
 
 /**
@@ -129,6 +130,13 @@ async function initSdk(sdkPath, command = "tizen-sdk sdk-init") {
       );
     }
 
+    let previousPath = null;
+    try {
+      previousPath = fs.readFileSync(CONFIG_FILE, "utf-8").trim() || null;
+    } catch (_e) {
+      // No previous config.
+    }
+
     fs.writeFileSync(CONFIG_FILE, sdkPath, "utf-8");
 
     // POSIX: user-only permissions (Windows does not support chmod, so just create)
@@ -136,7 +144,12 @@ async function initSdk(sdkPath, command = "tizen-sdk sdk-init") {
       fs.chmodSync(CONFIG_FILE, 0o600);
     }
 
-    return formatSdkInit(sdkPath, CONFIG_FILE, command);
+    return formatSdkInit(
+      sdkPath,
+      CONFIG_FILE,
+      command,
+      syncSdkPathEnv(sdkPath, previousPath),
+    );
   } catch (error) {
     return formatError(
       command,
@@ -1164,6 +1177,15 @@ async function ensureSdkPathConfig(sdkPath, command) {
     if (fs.existsSync(CONFIG_FILE)) {
       const current = fs.readFileSync(CONFIG_FILE, "utf-8").trim();
       if (current && path.resolve(current) === path.resolve(sdkPath)) {
+        // The config is already right, but TIZEN_SDK_PATH may still be stale
+        // from an earlier install — sync it here too (initSdk is skipped).
+        const { updated, warnings } = syncSdkPathEnv(sdkPath, current);
+        for (const line of [
+          ...updated.map((u) => `updated ${u}`),
+          ...warnings,
+        ]) {
+          console.error(`[tizen-sdk] ${line}`);
+        }
         return { written: false, result: null };
       }
     }
@@ -1768,7 +1790,8 @@ function readSdkPath() {
     if (envPath && path.resolve(envPath) !== path.resolve(resolved)) {
       console.error(
         `[tizen-sdk] Ignoring TIZEN_SDK_PATH=${envPath}; the SDK path comes from ${CONFIG_FILE} (${resolved}). ` +
-          "Run tizen-sdk-init to change it.",
+          "Running tizen-sdk-init (or the SDK installer) updates TIZEN_SDK_PATH to match; " +
+          "a shell started before that keeps the old value until a new terminal is opened.",
       );
     }
     return resolved;

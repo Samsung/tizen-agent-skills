@@ -119,6 +119,7 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
 3. 권한 확인 — SDK 경로에 읽기/쓰기 권한 검증
 4. 설정 파일 쓰기 — SDK 경로를 `~/.tizen.sdk.path.config`에 저장
 5. POSIX 권한 — 설정 파일에 `0o600` 권한 설정 (Linux/macOS만; Windows는 chmod 생략)
+6. TIZEN_SDK_PATH 동기화 — 영구 `TIZEN_SDK_PATH`를 새 경로로 맞춤: Windows는 사용자 환경변수와 사용자 `Path`의 이전 SDK `bin` / `tools` / `tools\tizen-core` 항목, Linux/macOS는 셸 프로필에 이미 있는 `export TIZEN_SDK_PATH=…` 줄. 바뀐 항목은 `result.env_updated`에 나오며, 이미 열려 있는 셸은 새 터미널을 열 때까지 이전 값을 유지합니다.
 
 **응답 (성공):**
 
@@ -127,7 +128,9 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
   "status": "success",
   "result": {
     "sdk_path": "/home/user/tizen-sdk",
-    "config_file": "/home/user/.tizen.sdk.path.config"
+    "config_file": "/home/user/.tizen.sdk.path.config",
+    "env_updated": ["TIZEN_SDK_PATH in /home/user/.zshrc"],
+    "env_note": "TIZEN_SDK_PATH now matches the config. Shells already open keep the old value; open a new terminal (or restart the agent) to pick it up."
   },
   "command": "tizen-sdk sdk-init"
 }

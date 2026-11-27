@@ -76,7 +76,8 @@ Exit code: `0` = success (SDK path configured), `1` = failure (invalid path, per
 3. **Permission check** — verifies read/write access to the SDK path
 4. **Config file write** — writes the SDK path to `~/.tizen.sdk.path.config`
 5. **POSIX permissions** — sets `0o600` on the config file (Linux/macOS only; Windows skips chmod)
-6. **Standard JSON Envelope** — `sdk_path`, `config_file` on success
+6. **TIZEN_SDK_PATH sync** — points the persistent `TIZEN_SDK_PATH` at the new path so shells agree with the config: on Windows the user environment variable, and the previous SDK's `bin` / `tools` / `tools\tizen-core` entries in the user `Path`; on Linux/macOS an existing `export TIZEN_SDK_PATH=…` line in `~/.zshrc`, `~/.bashrc`, `~/.bash_profile` or `~/.profile` (a profile without one is left alone). What changed is listed in `result.env_updated`; a failure becomes a warning, never an error.
+7. **Standard JSON Envelope** — `sdk_path`, `config_file`, `env_updated` (plus `env_note` when something changed) on success
 
 ## Response
 
@@ -87,10 +88,14 @@ Exit code: `0` = success (SDK path configured), `1` = failure (invalid path, per
   "status": "success",
   "result": {
     "sdk_path": "/home/user/tizen-sdk",
-    "config_file": "/home/user/.tizen.sdk.path.config"
+    "config_file": "/home/user/.tizen.sdk.path.config",
+    "env_updated": ["TIZEN_SDK_PATH in /home/user/.zshrc"],
+    "env_note": "TIZEN_SDK_PATH now matches the config. Shells already open keep the old value; open a new terminal (or restart the agent) to pick it up."
   }
 }
 ```
+
+When `env_note` is present, tell the user in the summary line to open a new terminal: a shell that was already running still has the old `TIZEN_SDK_PATH`.
 
 **Failure (path does not exist):**
 ```json

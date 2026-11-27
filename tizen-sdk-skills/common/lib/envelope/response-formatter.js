@@ -11,12 +11,23 @@ const { Envelope, ERROR_CODES } = require("./envelope");
 /**
  * SDK initialization response formatting
  */
-function formatSdkInit(sdkPath, configFile, command = "tizen-sdk sdk-init") {
+function formatSdkInit(
+  sdkPath,
+  configFile,
+  command = "tizen-sdk sdk-init",
+  envSync = { updated: [], warnings: [] },
+) {
   const envelope = new Envelope(command);
-  return envelope.success({
+  const result = {
     sdk_path: sdkPath,
     config_file: configFile,
-  });
+    env_updated: envSync.updated,
+  };
+  if (envSync.updated.length > 0) {
+    result.env_note =
+      "TIZEN_SDK_PATH now matches the config. Shells already open keep the old value; open a new terminal (or restart the agent) to pick it up.";
+  }
+  return envelope.success(result, { warnings: envSync.warnings });
 }
 
 /**

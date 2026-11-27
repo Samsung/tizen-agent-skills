@@ -44,9 +44,13 @@ function collectTestFiles(dir, filter) {
 
 function runOne(dir, file) {
   const started = Date.now();
+  // TIZEN_SDK_ENV_SYNC=0: tests that call initSdk() redirect HOME to a
+  // sandbox, but the Windows user environment (registry) cannot be redirected,
+  // so never let a test rewrite the real TIZEN_SDK_PATH / Path.
   const result = spawnSync(process.execPath, [file], {
     cwd: dir,
     stdio: "inherit",
+    env: { ...process.env, TIZEN_SDK_ENV_SYNC: "0" },
   });
   const durationMs = Date.now() - started;
 
