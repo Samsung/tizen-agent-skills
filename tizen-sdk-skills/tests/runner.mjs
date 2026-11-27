@@ -431,7 +431,22 @@ function runCommand(argv, timeoutSec, env) {
     };
   }
 
-  const mergedEnv = { ...FIXTURES_ENV, ...process.env, ...env };
+  // TIZEN_SDK_ENV_SYNC=0: sdk-init TCs (sdk-init.explicit-path → /tmp) write
+  // ~/.tizen.sdk.path.config, and since #169 every config write also syncs the
+  // user's TIZEN_SDK_PATH — shell-profile exports, and on Windows the user
+  // environment and Path SDK entries. Keep TC runs from repointing the real
+  // environment; a TC that tests the sync itself can set it in its env block.
+  // The switch gates only that JS sync (common/lib/core/sdk-env.js): the
+  // installer scripts still write the profile export / Windows user Path and
+  // TIZEN_SDK_PATH themselves, so installer TCs stay safe only through the
+  // scratch HOME / USERPROFILE (and the user-env snapshot) that
+  // scripts/run-mutating-tier.mjs sets up for its installer phase.
+  const mergedEnv = {
+    ...FIXTURES_ENV,
+    ...process.env,
+    TIZEN_SDK_ENV_SYNC: "0",
+    ...env,
+  };
   const { expanded, missing } = expandArgv(argv, mergedEnv);
   if (missing.length) {
     return {
