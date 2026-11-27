@@ -21,8 +21,13 @@
  *
  * A running shell keeps its old value either way (a child process cannot
  * change its parent's environment), so the caller tells the user to open a new
- * terminal. TIZEN_SDK_ENV_SYNC=0 turns the sync off (used by the unit tests so
- * they never touch the real user environment).
+ * terminal. TIZEN_SDK_ENV_SYNC=0 turns the sync off (used by the unit tests and
+ * the TC runner so they never touch the real user environment). It gates only
+ * this module: the installer scripts write the environment themselves
+ * (tizen-sdk-install.sh rewrites the profile export, tizen-sdk-install.ps1 the
+ * user Path and TIZEN_SDK_PATH) whatever the variable says — a test that runs
+ * an installer needs a scratch HOME / USERPROFILE instead, as the mutating
+ * tier's installer phase does.
  */
 
 const fs = require("fs");
