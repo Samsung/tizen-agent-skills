@@ -46,7 +46,7 @@
   이를 명시합니다. `common/skills/tizen-gtest/SKILL.md`와
   `common/agents/tizen-gtest.md`를 추가했고, 러너·CLI 커맨드는 새로 없습니다.
   `README*.md`, `llms.txt`, `docs/`의 개수 표기도 함께 갱신했습니다
-  (스킬 33개 / 에이전트 26개).
+  (스킬 33개 / 에이전트 27개).
 
 - **`tizen-guide` 스킬 — 문서 안내.** tizen-agent-skills 플러그인 사용법을
   묻는 질문에 답하고 알맞은 가이드를 안내합니다. 저장소 루트 `llms.txt`에

@@ -48,7 +48,7 @@ below use those release tags.
   crash — the skill says so where the install envelope's warning would
   otherwise mislead. New `common/skills/tizen-gtest/SKILL.md` and
   `common/agents/tizen-gtest.md`; no new runner or CLI command. Count updates
-  across `README*.md`, `llms.txt` and `docs/` (33 skills / 26 agents).
+  across `README*.md`, `llms.txt` and `docs/` (33 skills / 27 agents).
 
 - **`tizen-guide` skill — documentation guide.** Answers questions about how
   to use the tizen-agent-skills plugins and points to the right guide, using
