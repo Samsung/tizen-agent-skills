@@ -729,13 +729,25 @@ setup_environment() {
     local tmp; tmp="$(mktemp)"
     # Only the value is replaced (a quoted string, or a word up to whitespace
     # or ';'), so the rest of the line — `; export PATH=...`, a comment — stays.
-    if ! awk -v p="$INSTALL_PATH" -v sq="'" '
+    # A value that already expands to INSTALL_PATH ($HOME/..., ~/...) is kept.
+    if ! awk -v p="$INSTALL_PATH" -v home="$HOME" -v sq="'" '
+         function trim(s) { while (length(s) > 1 && substr(s, length(s)) == "/") s = substr(s, 1, length(s) - 1); return s }
          BEGIN {
            re = "^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH=(\"[^\"]*\"|" sq "[^" sq "]*" sq "|[^[:space:];]*)"
          }
          match($0, re) {
            head = substr($0, 1, RLENGTH)
-           print substr(head, 1, index(head, "=")) "\"" p "\"" substr($0, RLENGTH + 1)
+           eq = index(head, "=")
+           v = substr(head, eq + 1)
+           q = substr(v, 1, 1)
+           if (q == "\"" || q == sq) v = substr(v, 2, length(v) - 2)
+           if (q != sq) {
+             if (substr(v, 1, 7) == "${HOME}") v = home substr(v, 8)
+             else if (substr(v, 1, 5) == "$HOME" && substr(v, 6, 1) !~ /[A-Za-z0-9_]/) v = home substr(v, 6)
+           }
+           if (q != "\"" && q != sq && (v == "~" || substr(v, 1, 2) == "~/")) v = home substr(v, 2)
+           if (trim(v) == trim(p)) { print; next }
+           print substr(head, 1, eq) "\"" p "\"" substr($0, RLENGTH + 1)
            next
          }
          { print }' "$profile_file" > "$tmp"; then

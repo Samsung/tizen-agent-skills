@@ -58,20 +58,46 @@ function expandWinVars(entry, env = process.env) {
   );
 }
 
+function trimSlash(p) {
+  return p.length > 1 ? p.replace(/\/+$/, "") : p;
+}
+
+/**
+ * Does an export value already name sdkPath once the shell expands it?
+ * Handles quotes, a leading $HOME / ${HOME} (not inside single quotes) and a
+ * leading ~ (unquoted only), the forms installers and users write.
+ *
+ * @param {string} value - the raw value as written in the profile
+ * @param {string} sdkPath
+ * @param {string} home
+ * @returns {boolean}
+ */
+function exportValueMatches(value, sdkPath, home) {
+  const single = value.startsWith("'");
+  const double = value.startsWith('"');
+  let v = single || double ? value.slice(1, -1) : value;
+  if (!single) v = v.replace(/^(\$HOME(?![A-Za-z0-9_])|\$\{HOME\})/, home);
+  if (!single && !double) v = v.replace(/^~(?=\/|$)/, home);
+  return trimSlash(v) === trimSlash(sdkPath);
+}
+
 /**
  * Rewrite the value of every active `export TIZEN_SDK_PATH=…` to sdkPath,
- * keeping the rest of the line (`; export PATH=…`, comments).
+ * keeping the rest of the line (`; export PATH=…`, comments). A value that
+ * already expands to sdkPath (`$HOME/tizen-sdk`, `~/tizen-sdk`) is left as
+ * written.
  *
  * @param {string} text - profile contents
  * @param {string} sdkPath
+ * @param {string} [home] - for $HOME / ~ (os.homedir())
  * @returns {{text: string, changed: boolean}}
  */
-function rewriteProfileExport(text, sdkPath) {
+function rewriteProfileExport(text, sdkPath, home = os.homedir()) {
   let changed = false;
-  const quoted = `"${sdkPath}"`;
   const out = text.replace(EXPORT_VALUE, (match, prefix, value) => {
-    if (value !== quoted) changed = true;
-    return `${prefix}${quoted}`;
+    if (exportValueMatches(value, sdkPath, home)) return match;
+    changed = true;
+    return `${prefix}"${sdkPath}"`;
   });
   return { text: out, changed };
 }
@@ -152,7 +178,7 @@ const PS_WRITE =
   "$ErrorActionPreference = 'Stop'; " +
   "if ($env:TZ_SYNC_PATH_CHANGED -eq '1') { " +
   "$k = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment'); " +
-  "$k.SetValue('Path', $env:TZ_SYNC_PATH, [Microsoft.Win32.RegistryValueKind]::$env:TZ_SYNC_PATH_KIND); " +
+  "$k.SetValue('Path', $env:TZ_SYNC_PATH, ([Microsoft.Win32.RegistryValueKind]$env:TZ_SYNC_PATH_KIND)); " +
   "$k.Close() }; " +
   "[Environment]::SetEnvironmentVariable('TIZEN_SDK_PATH', $env:TZ_SYNC_SDK, 'User')";
 

@@ -88,6 +88,36 @@ console.log("--- rewriteProfileExport ---");
     rewriteProfileExport("export TIZEN_SDK_PATH='/old dir' # sdk", "/new").text,
     'export TIZEN_SDK_PATH="/new" # sdk',
   );
+
+  const home = "/home/me";
+  const sdk = "/home/me/tizen-sdk2";
+  for (const kept of [
+    "export TIZEN_SDK_PATH=$HOME/tizen-sdk2",
+    'export TIZEN_SDK_PATH="${HOME}/tizen-sdk2/"',
+    "export TIZEN_SDK_PATH=~/tizen-sdk2",
+    "export TIZEN_SDK_PATH=/home/me/tizen-sdk2",
+  ]) {
+    check(
+      `already expands to the SDK → kept as written: ${kept}`,
+      rewriteProfileExport(kept, sdk, home),
+      { text: kept, changed: false },
+    );
+  }
+  for (const [input, why] of [
+    [
+      "export TIZEN_SDK_PATH='$HOME/tizen-sdk2'",
+      "no expansion in single quotes",
+    ],
+    ['export TIZEN_SDK_PATH="~/tizen-sdk2"', "no ~ expansion in double quotes"],
+    ["export TIZEN_SDK_PATH=$HOMEDIR/tizen-sdk2", "$HOMEDIR is not $HOME"],
+    ["export TIZEN_SDK_PATH=$HOME/tizen-sdk", "a different SDK"],
+  ]) {
+    check(
+      `rewritten (${why})`,
+      rewriteProfileExport(input, sdk, home).text,
+      `export TIZEN_SDK_PATH="${sdk}"`,
+    );
+  }
 }
 
 // --- 2. replaceSdkPathEntries ----------------------------------------------
