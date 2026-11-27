@@ -120,6 +120,7 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
 3. Permission check — verifies read/write access to the SDK path
 4. Config file write — writes the SDK path to `~/.tizen.sdk.path.config`
 5. POSIX permissions — sets `0o600` on the config file (Linux/macOS only; Windows skips chmod)
+6. TIZEN_SDK_PATH sync — points the persistent `TIZEN_SDK_PATH` at the new path: on Windows the user environment variable and the previous SDK's `bin` / `tools` / `tools\tizen-core` entries in the user `Path`; on Linux/macOS an existing `export TIZEN_SDK_PATH=…` line in the shell profiles. What changed is listed in `result.env_updated`; shells already open keep the old value until a new terminal is opened.
 
 **Response (success):**
 
@@ -128,7 +129,9 @@ node <plugin>/lib/cli/sdk-init-cli.js [sdkPath]
   "status": "success",
   "result": {
     "sdk_path": "/home/user/tizen-sdk",
-    "config_file": "/home/user/.tizen.sdk.path.config"
+    "config_file": "/home/user/.tizen.sdk.path.config",
+    "env_updated": ["TIZEN_SDK_PATH in /home/user/.zshrc"],
+    "env_note": "TIZEN_SDK_PATH now matches the config. Shells already open keep the old value; open a new terminal (or restart the agent) to pick it up."
   },
   "command": "tizen-sdk sdk-init"
 }

@@ -723,8 +723,28 @@ setup_environment() {
 
   # Already added? Only an ACTIVE (non-commented) export counts — a commented
   # placeholder like "#export TIZEN_SDK_PATH=..." must NOT block the real write.
+  # An export left by an earlier install at another path is rewritten to
+  # INSTALL_PATH, so the shell agrees with ~/.tizen.sdk.path.config.
   if grep -qE '^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH' "$profile_file" 2>/dev/null; then
-    log_warning "Environment variables already set: $profile_file"
+    local tmp; tmp="$(mktemp)"
+    if ! awk -v p="$INSTALL_PATH" '
+         /^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH/ {
+           match($0, /^[[:space:]]*/)
+           print substr($0, 1, RLENGTH) "export TIZEN_SDK_PATH=\"" p "\""
+           next
+         }
+         { print }' "$profile_file" > "$tmp"; then
+      log_warning "Could not update TIZEN_SDK_PATH in $profile_file; set it to $INSTALL_PATH by hand"
+    elif cmp -s "$tmp" "$profile_file"; then
+      log_success "Environment variables already set: $profile_file"
+    elif cat "$tmp" > "$profile_file"; then
+      log_success "TIZEN_SDK_PATH updated in $profile_file → $INSTALL_PATH"
+      log_warning "Open a new terminal or run: source $profile_file"
+      SETUP_ENV=true
+    else
+      log_warning "Could not write $profile_file; set TIZEN_SDK_PATH to $INSTALL_PATH by hand"
+    fi
+    rm -f "$tmp"
     return 0
   fi
 

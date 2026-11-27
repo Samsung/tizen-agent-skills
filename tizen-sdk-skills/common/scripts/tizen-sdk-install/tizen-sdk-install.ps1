@@ -972,6 +972,35 @@ $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
 # tools = sdb.exe, tools\tizen-core = tz.exe (so both are callable by name)
 $tizenPath = "$Path\bin;$Path\tools;$Path\tools\tizen-core"
 
+# An earlier install at another path left its bin/tools entries in the user
+# Path; replace them with this install's so `sdb` / `tz` typed in a new
+# terminal resolve to the SDK in ~\.tizen.sdk.path.config. Other entries keep
+# their order; nothing is touched when TIZEN_SDK_PATH already points here.
+$oldSdk = [Environment]::GetEnvironmentVariable("TIZEN_SDK_PATH", "User")
+if ($oldSdk -and ($oldSdk.TrimEnd('\', '/') -ne $Path.TrimEnd('\', '/')) -and $userPath) {
+    $sdkSubdirs = @("bin", "tools", "tools\tizen-core")
+    $newEntries = @()
+    $replaced = $false
+    foreach ($entry in ($userPath -split ';')) {
+        if (-not $entry) { continue }
+        $next = $entry
+        foreach ($sub in $sdkSubdirs) {
+            if ($entry.TrimEnd('\') -ieq (Join-Path $oldSdk $sub).TrimEnd('\')) {
+                $next = Join-Path $Path $sub
+                $replaced = $true
+                break
+            }
+        }
+        if (($next -ne $entry) -and ($newEntries -contains $next)) { continue }
+        $newEntries += $next
+    }
+    if ($replaced) {
+        $userPath = $newEntries -join ';'
+        [Environment]::SetEnvironmentVariable("Path", $userPath, "User")
+        Write-Success "Replaced the previous SDK ($oldSdk) entries in the user Path with $Path"
+    }
+}
+
 if ($userPath -notlike "*$tizenPath*") {
     Write-Info "Adding to environment variables..."
     [Environment]::SetEnvironmentVariable("Path", "$userPath;$tizenPath", "User")

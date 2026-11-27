@@ -16,6 +16,20 @@ below use those release tags.
 
 ### Fixed
 
+- **`TIZEN_SDK_PATH` now follows `~/.tizen.sdk.path.config`.** Runners read
+  the SDK path from the config file only, so a `TIZEN_SDK_PATH` left by an
+  earlier install kept pointing shells (and a hand-typed `sdb`) at another
+  SDK, and every runner printed "Ignoring TIZEN_SDK_PATH=…". `sdk-init` and
+  every flow that writes the config now sync the persistent value
+  (`common/lib/core/sdk-env.js`): on Windows the user `TIZEN_SDK_PATH` and the
+  previous SDK's `bin` / `tools` / `tools\tizen-core` entries in the user
+  `Path`; on Linux/macOS an existing `export TIZEN_SDK_PATH=…` line in
+  `~/.zshrc`, `~/.bashrc`, `~/.bash_profile` or `~/.profile`. The result
+  lists the changes in `env_updated` and adds an `env_note` to open a new
+  terminal. The SDK installers do the same: `tizen-sdk-install.sh` rewrites a
+  stale profile export instead of skipping it, and `tizen-sdk-install.ps1`
+  replaces the previous SDK's user `Path` entries instead of only appending.
+
 - **`tizen-ecp` battery commands no longer fail with "Not supported
   commands."** The runner assumed an ecp-cli grammar (`battery set <n>`) that
   no current platform build ships; the real battery grammar is
