@@ -727,10 +727,15 @@ setup_environment() {
   # INSTALL_PATH, so the shell agrees with ~/.tizen.sdk.path.config.
   if grep -qE '^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH' "$profile_file" 2>/dev/null; then
     local tmp; tmp="$(mktemp)"
-    if ! awk -v p="$INSTALL_PATH" '
-         /^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH/ {
-           match($0, /^[[:space:]]*/)
-           print substr($0, 1, RLENGTH) "export TIZEN_SDK_PATH=\"" p "\""
+    # Only the value is replaced (a quoted string, or a word up to whitespace
+    # or ';'), so the rest of the line — `; export PATH=...`, a comment — stays.
+    if ! awk -v p="$INSTALL_PATH" -v sq="'" '
+         BEGIN {
+           re = "^[[:space:]]*export[[:space:]]+TIZEN_SDK_PATH=(\"[^\"]*\"|" sq "[^" sq "]*" sq "|[^[:space:];]*)"
+         }
+         match($0, re) {
+           head = substr($0, 1, RLENGTH)
+           print substr(head, 1, index(head, "=")) "\"" p "\"" substr($0, RLENGTH + 1)
            next
          }
          { print }' "$profile_file" > "$tmp"; then

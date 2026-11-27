@@ -1177,6 +1177,15 @@ async function ensureSdkPathConfig(sdkPath, command) {
     if (fs.existsSync(CONFIG_FILE)) {
       const current = fs.readFileSync(CONFIG_FILE, "utf-8").trim();
       if (current && path.resolve(current) === path.resolve(sdkPath)) {
+        // The config is already right, but TIZEN_SDK_PATH may still be stale
+        // from an earlier install — sync it here too (initSdk is skipped).
+        const { updated, warnings } = syncSdkPathEnv(sdkPath, current);
+        for (const line of [
+          ...updated.map((u) => `updated ${u}`),
+          ...warnings,
+        ]) {
+          console.error(`[tizen-sdk] ${line}`);
+        }
         return { written: false, result: null };
       }
     }

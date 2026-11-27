@@ -968,48 +968,70 @@ try {
 
 Write-Step "=== Setting environment variables ==="
 
-$userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+# The user Path is read and written through the registry, unexpanded and with
+# its value kind (REG_EXPAND_SZ) kept, so %VAR% entries survive;
+# [Environment]::GetEnvironmentVariable would expand them and
+# SetEnvironmentVariable would store them back as plain REG_SZ.
+$envKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey("Environment")
+$noExpand = [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames
+$userPath = ""
+$pathKind = [Microsoft.Win32.RegistryValueKind]::ExpandString
+if ($envKey.GetValueNames() -contains "Path") {
+    $userPath = $envKey.GetValue("Path", "", $noExpand)
+    $pathKind = $envKey.GetValueKind("Path")
+}
 # tools = sdb.exe, tools\tizen-core = tz.exe (so both are callable by name)
-$tizenPath = "$Path\bin;$Path\tools;$Path\tools\tizen-core"
+$sdkSubdirs = @("bin", "tools", "tools\tizen-core")
+function Get-PathKey([string]$p) {
+    [Environment]::ExpandEnvironmentVariables($p).TrimEnd('\').ToLowerInvariant()
+}
 
 # An earlier install at another path left its bin/tools entries in the user
 # Path; replace them with this install's so `sdb` / `tz` typed in a new
 # terminal resolve to the SDK in ~\.tizen.sdk.path.config. Other entries keep
-# their order; nothing is touched when TIZEN_SDK_PATH already points here.
-$oldSdk = [Environment]::GetEnvironmentVariable("TIZEN_SDK_PATH", "User")
-if ($oldSdk -and ($oldSdk.TrimEnd('\', '/') -ne $Path.TrimEnd('\', '/')) -and $userPath) {
-    $sdkSubdirs = @("bin", "tools", "tools\tizen-core")
+# their exact text and order; nothing is touched when TIZEN_SDK_PATH already
+# points here.
+$oldSdk = $envKey.GetValue("TIZEN_SDK_PATH", "", $noExpand)
+$pathChanged = $false
+if ($oldSdk -and ((Get-PathKey $oldSdk) -ne (Get-PathKey $Path)) -and $userPath) {
     $newEntries = @()
-    $replaced = $false
     foreach ($entry in ($userPath -split ';')) {
         if (-not $entry) { continue }
         $next = $entry
         foreach ($sub in $sdkSubdirs) {
-            if ($entry.TrimEnd('\') -ieq (Join-Path $oldSdk $sub).TrimEnd('\')) {
+            if ((Get-PathKey $entry) -eq (Get-PathKey (Join-Path $oldSdk $sub))) {
                 $next = Join-Path $Path $sub
-                $replaced = $true
+                $pathChanged = $true
                 break
             }
         }
-        if (($next -ne $entry) -and ($newEntries -contains $next)) { continue }
+        if (($next -ne $entry) -and (@($newEntries | ForEach-Object { Get-PathKey $_ }) -contains (Get-PathKey $next))) { continue }
         $newEntries += $next
     }
-    if ($replaced) {
+    if ($pathChanged) {
         $userPath = $newEntries -join ';'
-        [Environment]::SetEnvironmentVariable("Path", $userPath, "User")
         Write-Success "Replaced the previous SDK ($oldSdk) entries in the user Path with $Path"
     }
 }
 
-if ($userPath -notlike "*$tizenPath*") {
+$present = @($userPath -split ';' | Where-Object { $_ } | ForEach-Object { Get-PathKey $_ })
+$missing = @($sdkSubdirs | Where-Object { $present -notcontains (Get-PathKey (Join-Path $Path $_)) })
+if ($missing.Count -gt 0) {
     Write-Info "Adding to environment variables..."
-    [Environment]::SetEnvironmentVariable("Path", "$userPath;$tizenPath", "User")
+    $userPath = (@($userPath -split ';' | Where-Object { $_ }) + @($missing | ForEach-Object { Join-Path $Path $_ })) -join ';'
+    $pathChanged = $true
     Write-Success "Environment variables set"
     Write-Warn "Changes are applied to this PowerShell session; open a new window later to keep them permanently"
 } else {
     Write-Success "Environment variables already set"
 }
+if ($pathChanged) {
+    $envKey.SetValue("Path", $userPath, $pathKind)
+}
+$envKey.Close()
 
+# SetEnvironmentVariable also broadcasts WM_SETTINGCHANGE, so terminals started
+# from now on see the Path written above as well.
 [Environment]::SetEnvironmentVariable("TIZEN_SDK_PATH", $Path, "User")
 Write-Success "TIZEN_SDK_PATH=$Path set"
 

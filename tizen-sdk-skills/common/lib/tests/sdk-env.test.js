@@ -24,6 +24,7 @@ const {
   rewriteProfileExport,
   replaceSdkPathEntries,
   syncSdkPathEnv,
+  expandWinVars,
 } = require("../core/sdk-env");
 
 console.log("=== SDK Env Sync Test ===\n");
@@ -73,6 +74,19 @@ console.log("--- rewriteProfileExport ---");
     "no export line → unchanged",
     rewriteProfileExport("alias ll='ls -l'\n", "/x").changed,
     false,
+  );
+  check(
+    "same-line `; export PATH=…` kept",
+    rewriteProfileExport(
+      'export TIZEN_SDK_PATH=/old; export PATH="$TIZEN_SDK_PATH/tools:$PATH"',
+      "/new",
+    ).text,
+    'export TIZEN_SDK_PATH="/new"; export PATH="$TIZEN_SDK_PATH/tools:$PATH"',
+  );
+  check(
+    "single-quoted value and trailing comment",
+    rewriteProfileExport("export TIZEN_SDK_PATH='/old dir' # sdk", "/new").text,
+    'export TIZEN_SDK_PATH="/new" # sdk',
   );
 }
 
@@ -125,6 +139,36 @@ console.log("\n--- replaceSdkPathEntries ---");
     "null / empty old roots ignored",
     replaceSdkPathEntries("C:\\Windows", [null, ""], newRoot).changed,
     false,
+  );
+
+  const korean = replaceSdkPathEntries(
+    "C:\\Users\\user\\문서\\bin;C:\\Users\\user\\도구\\tizen-sdk\\tools;D:\\도구",
+    ["C:\\Users\\user\\도구\\tizen-sdk"],
+    "C:\\Users\\user\\도구\\tizen-sdk2",
+  );
+  check("non-ASCII entries kept byte for byte", korean.value.split(";"), [
+    "C:\\Users\\user\\문서\\bin",
+    "C:\\Users\\user\\도구\\tizen-sdk2\\tools",
+    "D:\\도구",
+  ]);
+
+  const env = { USERPROFILE: "C:\\Users\\me" };
+  const vars = replaceSdkPathEntries(
+    "%USERPROFILE%\\tizen-sdk\\tools;%USERPROFILE%\\bin;%SystemRoot%\\system32",
+    [oldRoot],
+    newRoot,
+    env,
+  );
+  check("%VAR% entry matched after expansion and replaced", vars.changed, true);
+  check("other %VAR% entries kept unexpanded", vars.value.split(";"), [
+    "C:\\Users\\me\\tizen-sdk2\\tools",
+    "%USERPROFILE%\\bin",
+    "%SystemRoot%\\system32",
+  ]);
+  check(
+    "expandWinVars: case-insensitive, unknown names left as is",
+    expandWinVars("%userprofile%\\x;%NOPE%\\y", env),
+    "C:\\Users\\me\\x;%NOPE%\\y",
   );
 }
 
